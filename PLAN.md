@@ -340,16 +340,17 @@ quelle frontière de phase.
 
 ---
 
-## 7. Questions ouvertes (pour Mehdi)
+## 7. Décisions validées (Mehdi, 2026-07-18)
 
-1. **Nom** : « Atoll » te plaît ? (le repo se renomme en 2 clics, les redirections GitHub suivent)
-2. **Compte Apple Developer (99 $/an)** : tu en as un ? Nécessaire seulement pour distribuer à
-   d'autres ; pour ton usage perso, un build Xcode local suffit.
-3. **Périmètre v1** : Claude Code seul (recommandé) ou multi-agents dès le départ ?
-4. **Open source ou privé** : privé pour l'instant (comme demandé) — à re-décider avant une
-   éventuelle distribution.
-5. **Palette par défaut** : Mono+accent orange (reco), Phosphor vert, Amber, ou Solarized ?
-6. **Xcode** : installé et à jour sur ta machine ?
+1. **Nom** : « Atoll » ✔
+2. **Compte Apple Developer** : Mehdi en a un ✔ (signature/notarisation possibles) ; usage
+   d'abord personnel.
+3. **Périmètre v1** : Claude Code uniquement ✔
+4. **Open source ou privé** : privé pour l'instant — à re-décider avant une éventuelle
+   distribution.
+5. **Palette par défaut** : Mono + accent orange ✔ (Phosphor/Amber/Solarized en presets
+   optionnels)
+6. **Xcode** : 26.0.1 installé ✔
 
 ---
 
