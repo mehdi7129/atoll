@@ -1,0 +1,47 @@
+name: Atoll
+options:
+  bundleIdPrefix: dev.mehdiguiard
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+
+packages:
+  AtollCore:
+    path: AtollCore
+
+targets:
+  Atoll:
+    type: application
+    platform: macOS
+    sources:
+      - App
+    dependencies:
+      - package: AtollCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.mehdiguiard.atoll
+        SWIFT_VERSION: "5.0"
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+        ENABLE_HARDENED_RUNTIME: NO
+        DEAD_CODE_STRIPPING: YES
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleName: Atoll
+        CFBundleDisplayName: Atoll
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        LSMinimumSystemVersion: "$(MACOSX_DEPLOYMENT_TARGET)"
+        LSUIElement: true
+        NSHumanReadableCopyright: "© 2026 Mehdi Guiard — GPL-3.0-or-later"
+
+schemes:
+  Atoll:
+    build:
+      targets:
+        Atoll: all
+    run:
+      config: Debug

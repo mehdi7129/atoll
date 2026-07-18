@@ -336,7 +336,7 @@ quelle frontière de phase.
 | Endpoint OAuth usage = zone grise ToS | Opt-in explicite, lecture seule, jamais de refresh, statusline en primaire |
 | Écrasement de la statusline d'un utilisateur | Détection + chaînage passthrough + refus si config inconnue |
 | App non signée quasi inutilisable sur macOS 15+ | Compte Apple Developer 99 $/an avant toute distribution publique (usage perso : build Xcode local OK) |
-| boring.notch en GPL-3.0 | Architecture réécrite from scratch, zéro copier-coller |
+| boring.notch en GPL-3.0 | Atoll étant lui-même GPL-3.0, adapter du code GPL est permis (avec attribution) ; en pratique on réécrit from scratch |
 
 ---
 
@@ -346,8 +346,9 @@ quelle frontière de phase.
 2. **Compte Apple Developer** : Mehdi en a un ✔ (signature/notarisation possibles) ; usage
    d'abord personnel.
 3. **Périmètre v1** : Claude Code uniquement ✔
-4. **Open source ou privé** : privé pour l'instant — à re-décider avant une éventuelle
-   distribution.
+4. **Gratuit et open source** ✔ — licence **GPL-3.0-or-later** (protège contre les clones
+   commerciaux fermés, comme open-vibe-island ; nous autorise aussi à adapter du code GPL
+   comme boring.notch). Le repo GitHub reste privé jusqu'à nouvel ordre de Mehdi.
 5. **Palette par défaut** : Mono + accent orange ✔ (Phosphor/Amber/Solarized en presets
    optionnels)
 6. **Xcode** : 26.0.1 installé ✔
