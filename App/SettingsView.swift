@@ -8,9 +8,39 @@ struct SettingsView: View {
     @AppStorage("hoverDelay") private var hoverDelay = 0.15
 
     @State private var launchAtLogin = false
+    @State private var hooksInstalled = false
+    @State private var hookError: String?
+
+    private var store: SessionStore { .shared }
 
     var body: some View {
         Form {
+            Section("Claude Code") {
+                LabeledContent("Hooks", value: hooksInstalled ? "installés ✓" : "non installés")
+                LabeledContent(
+                    "Réception",
+                    value: store.serverRunning
+                        ? "active · \(store.eventCount) événement(s)"
+                        : "inactive"
+                )
+                Button(hooksInstalled ? "Désinstaller les hooks" : "Installer les hooks") {
+                    toggleHooks()
+                }
+                if let hookError {
+                    Text(hookError)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+                Text("""
+                Fail-open : Atoll fermé ou planté, Claude Code fonctionne exactement comme avant. \
+                Vos hooks existants sont préservés ; backup unique dans \
+                ~/.claude/settings.json.atoll-backup. Les sessions déjà ouvertes prennent \
+                les hooks à leur prochain démarrage.
+                """)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+
             Section("Apparence") {
                 Picker("Thème", selection: $themePreference) {
                     ForEach(ThemePreference.allCases) { preference in
@@ -57,7 +87,22 @@ struct SettingsView: View {
         .fixedSize()
         .onAppear {
             launchAtLogin = SMAppService.mainApp.status == .enabled
+            hooksInstalled = HookInstaller.isInstalled
         }
+    }
+
+    private func toggleHooks() {
+        hookError = nil
+        do {
+            if hooksInstalled {
+                try HookInstaller.uninstall()
+            } else {
+                try HookInstaller.install()
+            }
+        } catch {
+            hookError = error.localizedDescription
+        }
+        hooksInstalled = HookInstaller.isInstalled
     }
 
     private var appVersion: String {

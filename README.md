@@ -17,7 +17,7 @@ y compris pour les sessions lancées depuis le terminal de Cursor.
 | Phase | Statut |
 |---|---|
 | 1 · Coquille notch + thème ASCII | ✅ |
-| 2 · Monitoring des sessions réelles (hooks) | 🚧 en cours |
+| 2 · Monitoring des sessions réelles (hooks) | ✅ |
 | 3 · Interactions (permissions, plans, questions) | ⬜ |
 | 4 · Jump-back terminal | ⬜ |
 | 5 · Quota exact · 6 · Chat · 7 · Distribution | ⬜ |
@@ -42,10 +42,15 @@ Prérequis : Xcode 16+, [XcodeGen](https://github.com/yonaskolb/XcodeGen)
 
 ```sh
 xcodegen generate
+DD="$HOME/Library/Developer/Atoll-DerivedData"
 xcodebuild -project Atoll.xcodeproj -scheme Atoll -configuration Debug \
-  -derivedDataPath build build
-open build/Build/Products/Debug/Atoll.app
+  -derivedDataPath "$DD" build
+ditto "$DD/Build/Products/Debug/Atoll.app" ~/Applications/Atoll.app
+open ~/Applications/Atoll.app
 ```
+
+(DerivedData hors du projet : si le repo vit dans un dossier synchronisé
+iCloud/Dropbox, les xattrs du file provider cassent CodeSign.)
 
 Atoll apparaît dans la barre de menus (icône vagues) et autour du notch.
 Survoler l'îlot l'étend ; cliquer l'épingle ; cliquer ailleurs le referme.

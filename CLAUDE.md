@@ -9,14 +9,29 @@ anglais, commentaires en français.
 
 ```sh
 xcodegen generate                                  # (re)génère Atoll.xcodeproj — jamais versionné
+DD="$HOME/Library/Developer/Atoll-DerivedData"
 xcodebuild -project Atoll.xcodeproj -scheme Atoll \
-  -configuration Debug -derivedDataPath build build
-open build/Build/Products/Debug/Atoll.app          # lancer
+  -configuration Debug -derivedDataPath "$DD" build
+ditto "$DD/Build/Products/Debug/Atoll.app" ~/Applications/Atoll.app
+open ~/Applications/Atoll.app                      # lancer LA COPIE, jamais le produit de build
 cd AtollCore && swift test                         # tests de la logique pure
 ```
 
-Si CodeSign échoue avec « resource fork / detritus » : `xattr -cr .` puis rebuild
-(métadonnées Finder du Bureau).
+Pièges de build appris à la dure :
+- **DerivedData HORS du Bureau** : ce repo vit sur un Bureau synchronisé iCloud dont le
+  file provider tamponne des xattrs qui cassent CodeSign (« resource fork / detritus »).
+- **Lancer une copie** (~/Applications) : lancer le .app du dossier de build lui colle
+  `com.apple.provenance` (ineffaçable) et casse le CodeSign du build suivant.
+- `~/.local/bin/xattr` est un shim Blender **cassé** — toujours `/usr/bin/xattr`.
+- Debug : `/usr/bin/log stream --predicate 'subsystem == "dev.mehdiguiard.atoll"' --level debug`
+  (les niveaux info/debug ne sont pas persistés — `log show` ne les voit pas) ; état des
+  sessions dans `~/Library/Application Support/Atoll/state.json`.
+- **Vérification VISUELLE obligatoire** après tout changement d'UI :
+  `notifyutil -p dev.mehdiguiard.atoll.debug.expand` étend + épingle l'îlot,
+  `…debug.compact` le replie ; puis `screencapture -x f.png`, rogner la bande
+  supérieure centrale avec sips, et REGARDER l'image (l'outil Read lit les PNG).
+  Piège vu en vrai : la NotchShape insète ses flancs de topRadius → le contenu
+  étendu doit s'écarter de `IslandGeometry.expandedContentInset`.
 
 ## Architecture
 
@@ -48,6 +63,12 @@ Si CodeSign échoue avec « resource fork / detritus » : `xattr -cr .` puis reb
 5. Licences : MIT/Apache réutilisables avec attribution ; GPL compatible (Atoll est GPL) ;
    ne jamais embarquer SF Mono ni Berkeley Mono (licences).
 6. Cible **macOS 14+**, Swift 5 language mode, sandbox OFF / Hardened Runtime ON.
+7. **Détection des processus claude** : avec l'installeur natif, `proc_name` renvoie le
+   numéro de version (« 2.1.214 »), PAS « claude » — matcher par chemin d'exécutable
+   (`ProcessInspector.isClaudeProcess`). Vérifié empiriquement, ne pas « simplifier ».
+8. **Pas de NWListener sur socket Unix** : connexions acceptées par le noyau mais jamais
+   livrées au handler (constaté macOS 26). BSD sockets + DispatchSource, fd non-bloquants
+   partout (un accept bloquant gèle la queue série).
 
 ## État des phases (voir PLAN.md §5)
 

@@ -15,14 +15,18 @@ targets:
     platform: macOS
     sources:
       - App
+      - Shared
     dependencies:
       - package: AtollCore
+      - target: atoll-bridge
+        embed: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.mehdiguiard.atoll
         SWIFT_VERSION: "5.0"
-        MARKETING_VERSION: "0.1.0"
-        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_OBJC_BRIDGING_HEADER: Shared/BridgingHeader.h
+        MARKETING_VERSION: "0.2.0"
+        CURRENT_PROJECT_VERSION: "2"
         CODE_SIGN_STYLE: Manual
         CODE_SIGN_IDENTITY: "-"
         ENABLE_HARDENED_RUNTIME: NO
@@ -37,6 +41,32 @@ targets:
         LSMinimumSystemVersion: "$(MACOSX_DEPLOYMENT_TARGET)"
         LSUIElement: true
         NSHumanReadableCopyright: "© 2026 Mehdi Guiard — GPL-3.0-or-later"
+    postBuildScripts:
+      - name: Embed atoll-bridge helper
+        script: |
+          HELPERS="${TARGET_BUILD_DIR}/${CONTENTS_FOLDER_PATH}/Helpers"
+          mkdir -p "$HELPERS"
+          cp -f "${TARGET_BUILD_DIR}/atoll-bridge" "$HELPERS/atoll-bridge"
+        inputFiles:
+          - $(TARGET_BUILD_DIR)/atoll-bridge
+        outputFiles:
+          - $(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Helpers/atoll-bridge
+
+  atoll-bridge:
+    type: tool
+    platform: macOS
+    sources:
+      - Bridge
+      - Shared
+    dependencies:
+      - package: AtollCore
+    settings:
+      base:
+        PRODUCT_NAME: atoll-bridge
+        SWIFT_VERSION: "5.0"
+        SWIFT_OBJC_BRIDGING_HEADER: Shared/BridgingHeader.h
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
 
 schemes:
   Atoll:

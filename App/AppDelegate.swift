@@ -1,4 +1,5 @@
 import AppKit
+import AtollCore
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -6,10 +7,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var screenObserver: NSObjectProtocol?
     private var rebuildTask: Task<Void, Never>?
     private var lastScreenSignature = ""
+    private var bridgeServer: BridgeServer?
+    private var debugTokens: [Int32] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         ThemeManager.applyStored()
+
+        // Répare le wrapper ~/.atoll/bin si l'app a été déplacée (idempotent).
+        HookInstaller.repairIfInstalled()
+
+        // Démarre la réception des événements de hooks puis le suivi des sessions.
+        let store = SessionStore.shared
+        let server = BridgeServer(
+            onEvent: { event in
+                Task { @MainActor in
+                    SessionStore.shared.apply(event)
+                }
+            },
+            onStateChange: { running in
+                Task { @MainActor in
+                    SessionStore.shared.serverRunning = running
+                }
+            }
+        )
+        bridgeServer = server
+        try? server.start()
+        store.start()
+
         rebuildWindows()
+        registerDebugTriggers()
 
         // didChangeScreenParameters arrive souvent en rafale (réveil, branchement
         // d'écran) : on débounce, et on ne reconstruit que si la configuration
@@ -23,6 +49,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.scheduleRebuild()
             }
         }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        bridgeServer?.stop()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -47,6 +77,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controllers.forEach { $0.tearDown() }
         controllers = NSScreen.screens.map { NotchWindowController(screen: $0) }
         lastScreenSignature = screenSignature()
+    }
+
+    /// Pilotage de debug par notifications Darwin (local, même utilisateur) :
+    ///   notifyutil -p dev.mehdiguiard.atoll.debug.expand    → étend + épingle
+    ///   notifyutil -p dev.mehdiguiard.atoll.debug.compact   → replie
+    /// Permet l'inspection visuelle automatisée (screenshots) sans souris.
+    private func registerDebugTriggers() {
+        var expandToken: Int32 = 0
+        notify_register_dispatch("dev.mehdiguiard.atoll.debug.expand", &expandToken, DispatchQueue.main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.controllers.forEach {
+                    $0.viewModel.isPinned = true
+                    $0.viewModel.open()
+                }
+            }
+        }
+        var compactToken: Int32 = 0
+        notify_register_dispatch("dev.mehdiguiard.atoll.debug.compact", &compactToken, DispatchQueue.main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.controllers.forEach { $0.viewModel.close() }
+            }
+        }
+        debugTokens = [expandToken, compactToken]
     }
 
     /// Empreinte de la configuration d'écrans. Un tableau (pas un dictionnaire) :

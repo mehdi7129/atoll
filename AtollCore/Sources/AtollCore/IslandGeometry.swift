@@ -18,6 +18,11 @@ public enum IslandGeometry {
     /// Taille du panneau étendu.
     public static let expandedSize = CGSize(width: 580, height: 240)
 
+    /// Marge horizontale du contenu étendu : les flancs de la NotchShape sont
+    /// insetés de topRadius (19 pt) — le contenu doit s'en écarter en plus de
+    /// sa propre respiration, sinon il déborde du corps visible du panneau.
+    public static let expandedContentInset: CGFloat = 38
+
     /// Rect de la fenêtre : top-centrée sur l'écran, collée au bord supérieur.
     public static func windowRect(screenFrame: CGRect) -> CGRect {
         CGRect(

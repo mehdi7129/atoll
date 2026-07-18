@@ -20,16 +20,19 @@ final class NotchViewModel {
     var state: IslandState = .compact
     var isPinned = false
 
-    // Données factices en Phase 1 — la Phase 2 branchera les vraies sessions.
-    var sessions: [AgentSession] = MockData.sessions
-    var usage: UsageSnapshot = MockData.usage
+    /// Source de vérité partagée entre tous les écrans.
+    private let store: SessionStore
 
     @ObservationIgnored private var hoverTask: Task<Void, Never>?
 
-    init(screen: NSScreen) {
+    init(screen: NSScreen, store: SessionStore = .shared) {
         notchSize = screen.notchSize
         menuBarHeight = screen.menuBarHeight
+        self.store = store
     }
+
+    var sessions: [AgentSession] { store.uiSessions }
+    var usage: UsageSnapshot { store.usage }
 
     var hasActivity: Bool { !sessions.isEmpty }
     var workingCount: Int { sessions.filter(\.isActive).count }

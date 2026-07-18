@@ -10,18 +10,22 @@ public struct AgentSession: Identifiable, Equatable, Sendable {
         case done
     }
 
-    public let id: UUID
+    /// Identifiant stable : le session_id Claude Code (ou un id synthétique).
+    public let id: String
     public var projectName: String
     public var gitBranch: String?
     public var status: Status
+    /// Contexte court affiché sous le nom (premier prompt, titre de session…).
+    public var subtitle: String?
     public var startedAt: Date
 
-    public init(id: UUID = UUID(), projectName: String, gitBranch: String? = nil,
-                status: Status, startedAt: Date = Date()) {
+    public init(id: String = UUID().uuidString, projectName: String, gitBranch: String? = nil,
+                status: Status, subtitle: String? = nil, startedAt: Date = Date()) {
         self.id = id
         self.projectName = projectName
         self.gitBranch = gitBranch
         self.status = status
+        self.subtitle = subtitle
         self.startedAt = startedAt
     }
 

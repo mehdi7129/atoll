@@ -26,9 +26,9 @@ struct ExpandedView: View {
             footer
         }
         .font(AtollFont.mono(11))
-        .padding(.horizontal, 18)
+        .padding(.horizontal, IslandGeometry.expandedContentInset)
         .padding(.top, topInset + 10)
-        .padding(.bottom, 14)
+        .padding(.bottom, 16)
         .frame(
             width: IslandGeometry.expandedSize.width,
             height: topInset + IslandGeometry.expandedSize.height,
@@ -54,18 +54,25 @@ struct ExpandedView: View {
 
     private var sessionList: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(AsciiArt.sectionHeader("SESSIONS", width: 46))
+            Text(AsciiArt.sectionHeader("SESSIONS", width: 72))
+                .lineLimit(1)
                 .foregroundStyle(colors.dim)
 
-            ForEach(viewModel.sessions) { session in
-                SessionRow(session: session, colors: colors)
+            if viewModel.sessions.isEmpty {
+                Text("· aucune session — lance `claude` dans un terminal")
+                    .foregroundStyle(colors.dim)
+            } else {
+                ForEach(viewModel.sessions) { session in
+                    SessionRow(session: session, colors: colors)
+                }
             }
         }
     }
 
     private var footer: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(AsciiArt.sectionHeader("QUOTA", width: 46))
+            Text(AsciiArt.sectionHeader("QUOTA", width: 72))
+                .lineLimit(1)
                 .foregroundStyle(colors.dim)
 
             HStack(spacing: 16) {
@@ -74,7 +81,7 @@ struct ExpandedView: View {
                 Spacer()
             }
 
-            Text("données de démonstration · phase 2 = sessions réelles")
+            Text("sessions réelles · quota de démonstration (phase 5)")
                 .font(AtollFont.mono(9))
                 .foregroundStyle(colors.dim)
         }
@@ -124,9 +131,9 @@ private struct SessionRow: View {
 
     private var detail: String? {
         switch session.status {
-        case .working(let tool): return tool
+        case .working(let tool): return tool ?? session.subtitle
         case .awaitingPermission(let tool): return tool
-        case .awaitingInput, .done: return nil
+        case .awaitingInput, .done: return session.subtitle
         }
     }
 

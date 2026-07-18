@@ -1,0 +1,177 @@
+import Foundation
+import Darwin
+import OSLog
+import AtollCore
+
+private let log = Logger(subsystem: "dev.mehdiguiard.atoll", category: "bridge-server")
+
+/// Serveur du socket Unix `/tmp/atoll-<uid>.sock` : reçoit les enveloppes JSON
+/// envoyées par `atoll-bridge` (une connexion = un événement, close = fin).
+///
+/// BSD sockets + DispatchSource — NWListener a des comportements erratiques avec
+/// les sockets Unix (connexions acceptées au niveau noyau mais jamais livrées au
+/// newConnectionHandler, constaté sur macOS 26).
+final class BridgeServer: @unchecked Sendable {
+    private let queue = DispatchQueue(label: "dev.mehdiguiard.atoll.bridge-server")
+    private var listenFD: Int32 = -1
+    private var acceptSource: DispatchSourceRead?
+    private var readers: [Int32: (source: DispatchSourceRead, buffer: Data)] = [:]
+
+    /// Appelé sur la main queue pour chaque événement décodé.
+    private let onEvent: (ParsedHookEvent) -> Void
+    private let onStateChange: (Bool) -> Void
+
+    init(
+        onEvent: @escaping (ParsedHookEvent) -> Void,
+        onStateChange: @escaping (Bool) -> Void
+    ) {
+        self.onEvent = onEvent
+        self.onStateChange = onStateChange
+    }
+
+    enum ServerError: Error {
+        case socketFailed(Int32)
+        case bindFailed(Int32)
+        case listenFailed(Int32)
+    }
+
+    func start() throws {
+        let path = BridgePaths.socketPath
+        unlink(path)
+
+        let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+        guard fd >= 0 else { throw ServerError.socketFailed(errno) }
+        // Non-bloquant : la boucle d'accept tourne sur une queue série — un
+        // accept() bloquant la gèlerait après la première connexion.
+        let flags = fcntl(fd, F_GETFL)
+        _ = fcntl(fd, F_SETFL, flags | O_NONBLOCK)
+
+        var address = sockaddr_un()
+        address.sun_family = sa_family_t(AF_UNIX)
+        let pathBytes = path.utf8CString
+        withUnsafeMutableBytes(of: &address.sun_path) { destination in
+            pathBytes.withUnsafeBytes { source in
+                destination.copyMemory(
+                    from: UnsafeRawBufferPointer(rebasing: source.prefix(destination.count))
+                )
+            }
+        }
+        let length = socklen_t(MemoryLayout<sockaddr_un>.size)
+        let bound = withUnsafePointer(to: &address) { pointer in
+            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                bind(fd, $0, length)
+            }
+        }
+        guard bound == 0 else {
+            close(fd)
+            throw ServerError.bindFailed(errno)
+        }
+        // Le socket ne doit être accessible qu'à l'utilisateur courant.
+        chmod(path, 0o600)
+        guard listen(fd, 16) == 0 else {
+            close(fd)
+            throw ServerError.listenFailed(errno)
+        }
+
+        listenFD = fd
+        let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: queue)
+        source.setEventHandler { [weak self] in
+            self?.acceptConnection()
+        }
+        source.setCancelHandler {
+            close(fd)
+        }
+        source.resume()
+        acceptSource = source
+
+        log.info("serveur à l'écoute sur \(path, privacy: .public)")
+        DispatchQueue.main.async { self.onStateChange(true) }
+    }
+
+    func stop() {
+        queue.sync {
+            for (_, entry) in readers {
+                entry.source.cancel()
+            }
+            readers.removeAll()
+            acceptSource?.cancel()
+            acceptSource = nil
+            listenFD = -1
+        }
+        unlink(BridgePaths.socketPath)
+        DispatchQueue.main.async { self.onStateChange(false) }
+    }
+
+    // MARK: - Connexions (tout sur `queue`)
+
+    private func acceptConnection() {
+        while true {
+            let clientFD = accept(listenFD, nil, nil)
+            if clientFD < 0 {
+                if errno == EINTR { continue }
+                // fd épuisés : la connexion reste dans le backlog et la source
+                // se redéclencherait en boucle CPU — pause d'une seconde.
+                if errno == EMFILE || errno == ENFILE, let source = acceptSource {
+                    log.warning("descripteurs épuisés — accept en pause 1 s")
+                    source.suspend()
+                    queue.asyncAfter(deadline: .now() + 1) {
+                        source.resume()
+                    }
+                }
+                return
+            }
+
+            let flags = fcntl(clientFD, F_GETFL)
+            _ = fcntl(clientFD, F_SETFL, flags | O_NONBLOCK)
+
+            log.debug("connexion entrante (fd \(clientFD))")
+            let source = DispatchSource.makeReadSource(fileDescriptor: clientFD, queue: queue)
+            source.setEventHandler { [weak self] in
+                self?.readAvailable(clientFD)
+            }
+            source.setCancelHandler {
+                close(clientFD)
+            }
+            readers[clientFD] = (source, Data())
+            source.resume()
+        }
+    }
+
+    private func readAvailable(_ fd: Int32) {
+        var chunk = [UInt8](repeating: 0, count: 65_536)
+        while true {
+            let byteCount = read(fd, &chunk, chunk.count)
+            if byteCount > 0 {
+                readers[fd]?.buffer.append(contentsOf: chunk[0..<byteCount])
+                // Garde-fou : un client fou ne doit pas remplir la mémoire.
+                if let size = readers[fd]?.buffer.count, size > 10_485_760 {
+                    log.warning("enveloppe > 10 Mo, abandonnée")
+                    finish(fd, parse: false)
+                    return
+                }
+            } else if byteCount == 0 {
+                // EOF propre : le client a tout envoyé.
+                finish(fd, parse: true)
+                return
+            } else {
+                if errno == EAGAIN || errno == EWOULDBLOCK { return }
+                if errno == EINTR { continue }
+                // Erreur : on tente quand même de parser ce qui a été reçu.
+                finish(fd, parse: true)
+                return
+            }
+        }
+    }
+
+    private func finish(_ fd: Int32, parse: Bool) {
+        guard let entry = readers.removeValue(forKey: fd) else { return }
+        entry.source.cancel()
+        guard parse, !entry.buffer.isEmpty else { return }
+        if let event = ParsedHookEvent(envelopeData: entry.buffer) {
+            log.info("événement reçu: \(event.kind.rawValue, privacy: .public) session \(event.sessionID, privacy: .public)")
+            DispatchQueue.main.async { self.onEvent(event) }
+        } else {
+            log.warning("enveloppe illisible (\(entry.buffer.count) octets)")
+        }
+    }
+}
