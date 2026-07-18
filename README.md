@@ -13,8 +13,17 @@ validation de plans, quota, chat — directement depuis le notch, sans quitter v
 y compris pour les sessions lancées depuis le terminal de Cursor.
 
 **Gratuit et open source (GPL-3.0-or-later).**
-**Statut : Phase 1 — coquille notch + thème ASCII (sessions factices).**
-Voir le [plan détaillé](PLAN.md) et la [recherche](docs/research/).
+
+| Phase | Statut |
+|---|---|
+| 1 · Coquille notch + thème ASCII | ✅ |
+| 2 · Monitoring des sessions réelles (hooks) | 🚧 en cours |
+| 3 · Interactions (permissions, plans, questions) | ⬜ |
+| 4 · Jump-back terminal | ⬜ |
+| 5 · Quota exact · 6 · Chat · 7 · Distribution | ⬜ |
+
+Voir le [plan détaillé](PLAN.md), la [recherche](docs/research/) et [CLAUDE.md](CLAUDE.md)
+pour contribuer.
 
 ## Principes
 

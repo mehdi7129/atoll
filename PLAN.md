@@ -285,7 +285,7 @@ COMPACT (autour du notch)                       ÉTENDU — permission
 Repo privé ✔, projet Xcode (app + package SPM `AtollCore`), `.gitignore`, cible macOS 14,
 LSUIElement, MenuBarExtra squelette, CI locale simple (`xcodebuild build test`).
 
-### Phase 1 — La coquille notch + thème *(premier « wow » visuel)*
+### Phase 1 — La coquille notch + thème *(premier « wow » visuel)* — ✅ livrée 2026-07-18
 NSPanel + géométrie + hover/expand/collapse animés, pilule simulée sans notch, multi-écrans,
 ThemeEngine (system/light/dark + presets), composants ASCII de base (cadre, spinner, barre,
 badge d'état) avec données factices. **Livrable : l'îlot vit sur l'écran et il est beau.**
