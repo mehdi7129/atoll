@@ -56,13 +56,21 @@ codesign --force --timestamp --options runtime \
 
 echo "── Vérification de signature"
 codesign --verify --strict --deep "$APP"
-codesign -dvv "$APP" 2>&1 | grep -m1 "Authority=Developer ID"
-if codesign -d --entitlements - --xml "$APP" 2>/dev/null | grep -q "get-task-allow"; then
+# PAS de `codesign | grep -m1/-q` ici : sous pipefail, grep qui ferme le pipe
+# envoie SIGPIPE à codesign → pipeline 141 → le script meurt (ou pire, un
+# `if … grep -q` devient FAUX au moment précis où il matche). Variables + [[.
+SIGN_INFO=$(codesign -dvv "$APP" 2>&1)
+[[ "$SIGN_INFO" == *"Authority=Developer ID"* ]] \
+  || { echo "✗ app pas signée Developer ID"; exit 1; }
+ENTITLEMENTS=$(codesign -d --entitlements - --xml "$APP" 2>/dev/null || true)
+if [[ "$ENTITLEMENTS" == *"get-task-allow"* ]]; then
   echo "✗ get-task-allow présent dans les entitlements — notarisation vouée à l'échec"
   exit 1
 fi
-codesign -dvv "$SPARKLE/Versions/B/Autoupdate" 2>&1 | grep -m1 "Authority=Developer ID" >/dev/null \
+AUTOUPDATE_INFO=$(codesign -dvv "$SPARKLE/Versions/B/Autoupdate" 2>&1)
+[[ "$AUTOUPDATE_INFO" == *"Authority=Developer ID"* ]] \
   || { echo "✗ Autoupdate (Sparkle) pas signé Developer ID"; exit 1; }
+echo "✓ signatures Developer ID, sans get-task-allow"
 
 echo "── Notarisation de l'app"
 ZIP="$DIST/Atoll-$VERSION.zip"
