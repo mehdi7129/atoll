@@ -117,9 +117,10 @@ Permissions Claude Code — faits VÉRIFIÉS empiriquement (CLI 2.1.215, tests p
 - En bypassPermissions, AskUserQuestion déclenche QUAND MÊME le hook PermissionRequest
   (et la décision du hook est honorée) → rockstar répond aux questions même en bypass.
 - En mode `-p` (headless, donc le chat intégré), l'outil AskUserQuestion N'EXISTE PAS.
-- Mehdi a `defaultMode: bypassPermissions` dans son settings.json : ses sessions ne
-  produisent presque jamais de PermissionRequest d'outils — ne pas s'étonner que
-  l'auto-accept semble « inactif » ; ce sont les deny rules qui bloquaient encore.
+- Avec `defaultMode: bypassPermissions` dans le settings.json utilisateur, les sessions
+  ne produisent presque jamais de PermissionRequest d'outils — l'auto-accept paraît
+  alors « inactif » ; ce sont les règles deny qui bloquent encore. (Config de la
+  machine de dev : voir la mémoire projet, pas ici — repo public.)
 - Un claude lancé DEPUIS une session Claude Code (env CLAUDECODE/CHILD_SESSION) peut
   démarrer en bypass : nettoyer l'env pour tester des comportements de permissions.
 

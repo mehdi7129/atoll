@@ -2,15 +2,16 @@
 
 > Document de continuité pour reprendre le dev après un compactage de conversation.
 > **À lire en premier** avec `CLAUDE.md` (règles) et `PLAN.md` (plan produit).
-> Dernière mise à jour : **2026-07-19**, commit `cb530a2`, app **v0.3.0**.
+> Dernière mise à jour : **2026-07-19**, app **v0.4.0** (Rockstar sans protection + Phase 7 distribution).
 
 ---
 
 ## 0. TL;DR — où on en est
 
 Atoll est une « Dynamic Island » ASCII pour Claude Code sur macOS (Swift/SwiftUI, GPL-3.0,
-repo privé `github.com/mehdi7129/atoll`). **Phases 1 à 6 livrées et vérifiées en vrai.**
-Il reste **la Phase 7 (distribution)**. L'app tourne, 116 tests AtollCore verts, tout est poussé.
+repo PUBLIC `github.com/mehdi7129/atoll`). **Phases 1 à 7 livrées et vérifiées en vrai**
+(distribution : signature Developer ID, notarisation, DMG, Sparkle opt-in, onboarding).
+L'app tourne, 131 tests AtollCore verts, tout est poussé.
 
 Ce qui marche aujourd'hui, de bout en bout :
 - Îlot notch ASCII (thème system/light/dark, 4 palettes, mono+orange par défaut).
@@ -25,23 +26,24 @@ Ce qui marche aujourd'hui, de bout en bout :
 
 ## 1. CE QU'IL RESTE À FAIRE
 
-### Phase 7 — Distribution (la prochaine grande étape)
-Objectif : app installable et partageable, avec mises à jour automatiques.
-1. **Onboarding** : premier lancement → guider l'installation des hooks (bouton dans
-   Réglages existe déjà via `HookInstaller`), expliquer le fail-open, demander les
-   permissions au besoin (Automatisation pour le jump-back AppleScript).
-2. **Signature + notarisation** (Mehdi **a** un compte Apple Developer) :
-   - Passer `CODE_SIGN_IDENTITY` de `"-"` (adhoc) à `Developer ID Application`,
-     `ENABLE_HARDENED_RUNTIME` = YES (voir `project.yml`).
-   - `xcrun notarytool store-credentials` (une fois), puis
-     `xcrun notarytool submit App.zip --keychain-profile … --wait`, puis `xcrun stapler staple`.
-   - ⚠️ L'entitlement `com.apple.security.automation.apple-events` est déjà là
-     (`App/Atoll.entitlements`) ; garder sandbox OFF, Hardened Runtime ON.
-3. **DMG** notarisé + stapled (drag-to-Applications). `create-dmg` ou `hdiutil`.
-4. **Sparkle 2.8** (SPM) pour l'auto-update : `generate_keys` une fois, `SUPublicEDKey`
-   dans Info.plist, `SUFeedURL` → appcast sur GitHub Pages, archives sur GitHub Releases.
-   Détails vérifiés dans `docs/research/research-macos-app.md`.
-5. **CI** (optionnel) : GitHub Actions `xcodebuild archive → notarytool → stapler → generate_appcast`.
+### Phase 7 — Distribution : LIVRÉE (2026-07-19)
+Tout est en place ; publier une release = **`Scripts/release.sh`** (build Release signé
+Developer ID + Hardened Runtime → re-signature des binaires imbriqués Sparkle →
+notarisation `--keychain-profile atoll-notary` → staple → DMG notarisé → appcast).
+Le script imprime les 2 commandes de publication (gh release create, push de
+docs/appcast.xml — servi par GitHub Pages : main//docs).
+- Debug reste **adhoc** (boucle dev inchangée) ; updater Sparkle **inactif en Debug**
+  (sinon le build de dev s'auto-remplacerait par la release notarisée).
+- Sparkle : opt-in (SUEnableAutomaticChecks **false** + Toggle Réglages, zéro réseau
+  par défaut) ; gentle reminders (app LSUIElement → ◆ dans le menu, jamais de fenêtre
+  cachée derrière) ; clé privée EdDSA dans le Keychain de connexion (À SAUVEGARDER).
+- Pièges vérifiés en revue : `xcodebuild build` (non-archive) injecte get-task-allow
+  → `CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO` en Release ; Autoupdate/Updater.app de
+  Sparkle livrés adhoc → re-signés par release.sh ; `codesign -dv` n'affiche PAS
+  `Authority=` (verbosité 2 requise : `-dvv`).
+- Onboarding premier lancement (`OnboardingView`, flag `onboardingDone`, menu
+  « Bienvenue… ») ; icône ASCII générée (`App/Assets.xcassets`).
+- **CI** (optionnel, non fait) : GitHub Actions archive → notarytool → stapler → generate_appcast.
 
 ### Reste de la roadmap (voir PLAN.md §5) — après la 7
 - Multi-agents (Codex/Gemini/…) : v2, hors périmètre v1 (Claude-only), NE PAS l'entamer
@@ -100,7 +102,7 @@ xcodebuild -project Atoll.xcodeproj -scheme Atoll -configuration Debug -derivedD
 ditto "$DD/Build/Products/Debug/Atoll.app" ~/Applications/Atoll.app   # lancer LA COPIE
 pkill -x Atoll; sleep 1; open ~/Applications/Atoll.app                # relancer
 
-cd AtollCore && swift test              # 116 tests
+cd AtollCore && swift test              # 131 tests
 
 # Debug runtime
 /usr/bin/log stream --predicate 'subsystem == "dev.mehdiguiard.atoll"' --level debug
@@ -198,7 +200,7 @@ printf '%s' '{"hook_event_name":"PermissionRequest","session_id":"t","tool_name"
   bloquants de l'utilisateur (GSD…) restent actifs — choix assumé, ce sont des
   éléments de workflow, pas des protections Atoll. Autres faits vérifiés : questions
   AskUserQuestion passent par le hook même en bypass (rockstar y répond) ; l'outil
-  n'existe pas en mode `-p` (chat) ; Mehdi a `defaultMode: bypassPermissions` global.
+  n'existe pas en mode `-p` (chat). La config exacte de la machine de dev vit dans la mémoire projet (pas ici : repo public).
 
 ---
 
@@ -256,7 +258,7 @@ claude CLI (n'importe quel terminal) ──hook──▶ ~/.atoll/bin/atoll-brid
 
 ## 6. DÉCISIONS & CONTRAINTES (validées par Mehdi)
 
-- Nom **Atoll** ✔ · **gratuit + open source GPL-3.0** ✔ · repo **privé** (à passer public
+- Nom **Atoll** ✔ · **gratuit + open source GPL-3.0** ✔ · repo **public depuis le 2026-07-19** (décision Mehdi
   sur décision de Mehdi) · palette **mono + accent orange** ✔ · **v1 = Claude Code only** ✔.
 - **Compte Apple Developer : Mehdi en a un** → notarisation possible (Phase 7).
 - Cible **macOS 14+**, Swift 5 language mode, **sandbox OFF / Hardened Runtime ON**.
@@ -271,7 +273,7 @@ claude CLI (n'importe quel terminal) ──hook──▶ ~/.atoll/bin/atoll-brid
   (`__CFBundleIdentifier=com.todesktop.230313mzl4w4u92`, `TERM_PROGRAM=vscode`) → le jump-back
   vise Cursor en priorité.
 - Il a des hooks GSD + sons `afplay` + statusline `bun` custom dans `~/.claude/settings.json`
-  → **préservés** (vérifié). `defaultMode: bypassPermissions`, model `claude-fable-5[1m]`.
+  → **préservés** (vérifié). Détails de config locale : voir la mémoire projet (repo public).
 - node est via nvm mais aussi `/usr/local/bin/node` (donc trouvable par le PATH augmenté).
 
 ---

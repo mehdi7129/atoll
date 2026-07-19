@@ -23,7 +23,7 @@ y compris pour les sessions lancées depuis le terminal de Cursor.
 | 4 · Jump-back terminal (Cursor/VS Code · Terminal · iTerm2) | ✅ |
 | 5 · Quota exact (statusline) | ✅ |
 | 6 · Chat intégré (lancer Claude depuis le notch) | ✅ |
-| 7 · Distribution (notarisation, DMG, Sparkle) | ⬜ |
+| 7 · Distribution (notarisation, DMG, Sparkle) | 🚧 première release en cours |
 
 Voir le [plan détaillé](PLAN.md), la [recherche](docs/research/) et [CLAUDE.md](CLAUDE.md)
 pour contribuer.
@@ -37,6 +37,18 @@ pour contribuer.
 - **ASCII** — grille de caractères disciplinée, box-drawing, spinners braille,
   mono + un accent.
 - **Fail-open** — si Atoll est fermé, Claude Code fonctionne exactement comme avant.
+
+## Installer
+
+Téléchargez le dernier `Atoll-x.y.z.dmg` depuis les
+[Releases](https://github.com/mehdi7129/atoll/releases), glissez Atoll dans
+Applications, lancez. L'app est signée Developer ID et notarisée ; les mises à
+jour arrivent ensuite automatiquement (Sparkle).
+
+Au premier lancement, la fenêtre de bienvenue guide l'installation des hooks
+Claude Code — fail-open garanti : Atoll fermé ou planté, le CLI `claude`
+fonctionne exactement comme avant, et la désinstallation restitue votre
+`settings.json` d'origine.
 
 ## Builder
 

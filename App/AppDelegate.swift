@@ -10,6 +10,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var lastScreenSignature = ""
     private var bridgeServer: BridgeServer?
     private var debugTokens: [Int32] = []
+    private var onboardingController: OnboardingWindowController?
+
+    /// Affiche (ou ramène) la fenêtre de bienvenue — aussi appelée par le menu.
+    func showOnboarding() {
+        if onboardingController == nil {
+            onboardingController = OnboardingWindowController()
+        }
+        onboardingController?.show()
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         ThemeManager.applyStored()
@@ -23,6 +32,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // TOUJOURS refléter le niveau d'autonomie courant (jamais de règles
         // parquées hors Rockstar, jamais de règles actives en Rockstar).
         HookInstaller.syncDenyParking(level: InteractionCenter.shared.autonomyLevel)
+
+        // Premier lancement : fenêtre de bienvenue (hooks, fail-open, autonomie).
+        if OnboardingWindowController.shouldShowAtLaunch {
+            showOnboarding()
+        }
 
         // Démarre la réception des événements de hooks puis le suivi des sessions.
         let store = SessionStore.shared

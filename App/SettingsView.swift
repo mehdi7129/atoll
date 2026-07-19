@@ -3,6 +3,8 @@ import ServiceManagement
 import AtollCore
 
 struct SettingsView: View {
+    let updaterModel: UpdaterModel
+
     @AppStorage(ThemeManager.themeKey) private var themePreference = ThemePreference.system.rawValue
     @AppStorage("paletteID") private var paletteID = Palette.monoOrange.id
     @AppStorage("hoverDelay") private var hoverDelay = 0.15
@@ -156,6 +158,18 @@ struct SettingsView: View {
                     }
             }
 
+            Section("Mises à jour") {
+                Toggle("Vérifier automatiquement", isOn: automaticUpdateChecks)
+                Text("""
+                Opt-in — désactivé, Atoll ne contacte jamais le réseau (zéro télémétrie). \
+                Activé, Sparkle interroge une fois par jour le flux du projet (GitHub Pages) \
+                et signale les mises à jour d'un ◆ discret dans le menu. Vérification \
+                manuelle à tout moment via le menu ≋.
+                """)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+
             Section("À propos") {
                 LabeledContent("Version", value: appVersion)
                 LabeledContent("Licence", value: "GPL-3.0-or-later")
@@ -191,6 +205,14 @@ struct SettingsView: View {
         // Le parking suit la disponibilité des hooks : désinstaller restaure les
         // règles (fait par le helper), réinstaller en Rockstar les reparque.
         denyParkingError = HookInstaller.syncDenyParking(level: currentLevel)
+    }
+
+    /// Persisté par Sparkle dans les user defaults (prime sur l'Info.plist).
+    private var automaticUpdateChecks: Binding<Bool> {
+        Binding(
+            get: { updaterModel.updater.automaticallyChecksForUpdates },
+            set: { updaterModel.updater.automaticallyChecksForUpdates = $0 }
+        )
     }
 
     private var appVersion: String {

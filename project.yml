@@ -8,6 +8,11 @@ options:
 packages:
   AtollCore:
     path: AtollCore
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    # Épinglé exactement : la version embarquée dans une release doit être
+    # reproductible (pas de lockfile versionné — le projet est généré).
+    exactVersion: 2.9.4
 
 targets:
   Atoll:
@@ -18,6 +23,7 @@ targets:
       - Shared
     dependencies:
       - package: AtollCore
+      - package: Sparkle
       - target: atoll-bridge
         embed: false
     settings:
@@ -26,12 +32,26 @@ targets:
         SWIFT_VERSION: "5.0"
         SWIFT_OBJC_BRIDGING_HEADER: Shared/BridgingHeader.h
         CODE_SIGN_ENTITLEMENTS: App/Atoll.entitlements
-        MARKETING_VERSION: "0.3.0"
-        CURRENT_PROJECT_VERSION: "3"
+        MARKETING_VERSION: "0.4.0"
+        CURRENT_PROJECT_VERSION: "4"
         CODE_SIGN_STYLE: Manual
-        CODE_SIGN_IDENTITY: "-"
-        ENABLE_HARDENED_RUNTIME: NO
         DEAD_CODE_STRIPPING: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+      configs:
+        # Debug : adhoc, boucle de dev inchangée (pas de prompt Keychain).
+        Debug:
+          CODE_SIGN_IDENTITY: "-"
+          ENABLE_HARDENED_RUNTIME: NO
+        # Release : Developer ID + Hardened Runtime + horodatage — requis pour
+        # la notarisation (voir docs/research/research-macos-app.md).
+        # CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO : l'action `build` (non-archive)
+        # injecterait get-task-allow → notarisation REFUSÉE (vu en revue).
+        Release:
+          CODE_SIGN_IDENTITY: "Developer ID Application"
+          DEVELOPMENT_TEAM: X524H8XA4L
+          ENABLE_HARDENED_RUNTIME: YES
+          OTHER_CODE_SIGN_FLAGS: "--timestamp"
+          CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
     info:
       path: App/Info.plist
       properties:
@@ -41,7 +61,17 @@ targets:
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         LSMinimumSystemVersion: "$(MACOSX_DEPLOYMENT_TARGET)"
         LSUIElement: true
+        LSApplicationCategoryType: public.app-category.developer-tools
         NSHumanReadableCopyright: "© 2026 Mehdi Guiard — GPL-3.0-or-later"
+        # Sparkle : flux appcast servi par GitHub Pages (repo public, main//docs).
+        SUFeedURL: "https://mehdi7129.github.io/atoll/appcast.xml"
+        # Clé publique EdDSA (la privée vit dans le Keychain de connexion de
+        # Mehdi — générée par generate_keys de Sparkle, à sauvegarder !).
+        SUPublicEDKey: "R/j22fcwZ8DvtHcYp5Qh5a0187GkxrYDRxg5EthZ5Mo="
+        # false (et pas absent) : la clé présente supprime le prompt Sparkle du
+        # 2e lancement ; l'activation est un OPT-IN explicite dans les Réglages
+        # (zéro télémétrie par défaut — règle du projet).
+        SUEnableAutomaticChecks: false
         NSAppleEventsUsageDescription: "Atoll utilise l'automatisation pour faire remonter au premier plan le terminal exact de la session Claude que vous ouvrez."
     postBuildScripts:
       - name: Embed atoll-bridge helper
@@ -68,7 +98,18 @@ targets:
         SWIFT_VERSION: "5.0"
         SWIFT_OBJC_BRIDGING_HEADER: Shared/BridgingHeader.h
         CODE_SIGN_STYLE: Manual
-        CODE_SIGN_IDENTITY: "-"
+      configs:
+        Debug:
+          CODE_SIGN_IDENTITY: "-"
+          ENABLE_HARDENED_RUNTIME: NO
+        # Le helper embarqué doit être signé Developer ID + hardened AVANT sa
+        # copie dans Contents/Helpers (la notarisation vérifie chaque binaire).
+        Release:
+          CODE_SIGN_IDENTITY: "Developer ID Application"
+          DEVELOPMENT_TEAM: X524H8XA4L
+          ENABLE_HARDENED_RUNTIME: YES
+          OTHER_CODE_SIGN_FLAGS: "--timestamp"
+          CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
 
 schemes:
   Atoll:
