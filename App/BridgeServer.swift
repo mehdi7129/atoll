@@ -220,8 +220,12 @@ final class BridgeServer: @unchecked Sendable {
     private func finish(_ fd: Int32, parse: Bool) {
         guard let entry = readers.removeValue(forKey: fd) else { return }
 
-        // Enveloppe statusline : {"v":1,"statusline": <payload>} — pas un hook.
-        if parse, !entry.buffer.isEmpty, isStatuslineEnvelope(entry.buffer) {
+        // JSON parsé UNE seule fois : enveloppe statusline vs événement de hook.
+        let envelope = (parse && !entry.buffer.isEmpty)
+            ? (try? JSONSerialization.jsonObject(with: entry.buffer)) as? [String: Any]
+            : nil
+
+        if let envelope, envelope["statusline"] != nil {
             entry.source.cancel()
             close(fd)
             let buffer = entry.buffer
@@ -231,9 +235,7 @@ final class BridgeServer: @unchecked Sendable {
 
         entry.source.cancel()
 
-        let event = parse && !entry.buffer.isEmpty
-            ? ParsedHookEvent(envelopeData: entry.buffer)
-            : nil
+        let event = envelope.flatMap { ParsedHookEvent(envelope: $0) }
 
         if let event, event.kind == .permissionRequest {
             // Le helper attend la décision : le fd reste OUVERT (non fermé ici).
@@ -265,9 +267,4 @@ final class BridgeServer: @unchecked Sendable {
         }
     }
 
-    private func isStatuslineEnvelope(_ data: Data) -> Bool {
-        guard let object = try? JSONSerialization.jsonObject(with: data),
-              let dict = object as? [String: Any] else { return false }
-        return dict["statusline"] != nil
-    }
 }

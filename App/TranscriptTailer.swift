@@ -93,6 +93,24 @@ final class TranscriptTailer {
         if Self.interruptMarkers.contains(where: { text.contains($0) }) {
             onInterrupt?(sessionID)
         }
+
+        // Rafraîchir branche/modèle si de nouvelles lignes en portent (changement
+        // de branche ou de modèle en cours de session). Scan gardé : uniquement
+        // si les clés apparaissent dans le nouveau texte.
+        if text.contains("gitBranch") || text.contains("\"model\"") {
+            var model: String?
+            var gitBranch: String?
+            for lineData in data.split(separator: UInt8(ascii: "\n")) {
+                guard let line = (try? JSONSerialization.jsonObject(with: Data(lineData))) as? [String: Any] else { continue }
+                if let branch = line["gitBranch"] as? String, !branch.isEmpty { gitBranch = branch }
+                if let message = line["message"] as? [String: Any], let modelID = message["model"] as? String {
+                    model = modelID
+                }
+            }
+            if model != nil || gitBranch != nil {
+                onMeta?(sessionID, model, gitBranch)
+            }
+        }
     }
 
     /// Cherche un titre dans la tête du fichier : ligne `ai-title` sinon premier

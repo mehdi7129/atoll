@@ -228,7 +228,11 @@ enum BridgeCLI {
         # statusline d'origine. Fail-open : ne bloque ni ne casse jamais le CLI.
         BIN='\(escaped)'
         INPUT=$(cat)
-        [ -x "$BIN" ] && printf '%s' "$INPUT" | "$BIN" statusline >/dev/null 2>&1 &
+        # Tee détaché : stdin/stdout/stderr redirigés pour ne PAS garder ouverts
+        # les pipes de la statusline du CLI (sinon il bloquerait sur le job de fond).
+        if [ -x "$BIN" ]; then
+          { printf '%s' "$INPUT" | "$BIN" statusline >/dev/null 2>&1 </dev/null & } >/dev/null 2>&1
+        fi
         ORIG='\(originalFile)'
         if [ -s "$ORIG" ]; then
           printf '%s' "$INPUT" | sh -c "$(cat "$ORIG")"
@@ -246,33 +250,57 @@ enum BridgeCLI {
         _ = try fileManager.replaceItemAt(BridgePaths.statuslineWrapperURL, withItemAt: temporary)
     }
 
+    /// Commande statusline d'origine mémorisée par Atoll, avec repli sur le
+    /// backup pré-Atoll si le fichier a disparu (ex. `rm -rf ~/.atoll`). Chaîne
+    /// vide = « l'utilisateur n'avait pas de statusline » (distinct de nil/absent).
+    static func storedOriginalStatusline() -> String? {
+        if let stored = try? String(contentsOf: BridgePaths.statuslineOriginalURL, encoding: .utf8) {
+            return stored // peut être "" (marqueur « aucune »)
+        }
+        // Fichier disparu : récupérer depuis le backup pré-Atoll.
+        if let backup = try? Data(contentsOf: BridgePaths.settingsBackupURL) {
+            return StatusLineEditor.currentCommand(in: backup) ?? ""
+        }
+        return nil
+    }
+
     /// Installe le chaînage statusline en mémorisant la commande d'origine.
     static func installStatusline(current: Data?) throws {
-        // Déjà chaîné → ne rien réécrire.
+        try ensureStatuslineWrapper()
+
+        // Déjà chaîné → ne pas réécrire les settings, mais AUTO-RÉPARER le
+        // fichier d'original s'il a disparu (sinon la désinstallation supprimerait
+        // la statusline de l'utilisateur au lieu de la restituer).
         if StatusLineEditor.isInstalled(in: current) {
-            try ensureStatuslineWrapper()
+            if (try? String(contentsOf: BridgePaths.statuslineOriginalURL, encoding: .utf8)) == nil,
+               let recovered = storedOriginalStatusline() {
+                try recovered.write(to: BridgePaths.statuslineOriginalURL, atomically: true, encoding: .utf8)
+            }
             return
         }
-        try ensureStatuslineWrapper()
+
         let result = try StatusLineEditor.install(into: current, wrapperCommand: BridgePaths.statuslineCommand)
-        // Mémoriser l'original AVANT d'écrire les settings.
-        if let original = result.originalCommand {
-            try original.write(to: BridgePaths.statuslineOriginalURL, atomically: true, encoding: .utf8)
-        } else if !FileManager.default.fileExists(atPath: BridgePaths.statuslineOriginalURL.path) {
-            try "".write(to: BridgePaths.statuslineOriginalURL, atomically: true, encoding: .utf8)
-        }
+        // Mémoriser l'original (ou le marqueur vide « aucune ») AVANT d'écrire
+        // les settings — toujours réécrit pour refléter l'état courant, jamais
+        // conditionné à l'absence du fichier (évite de ressusciter un ancien).
+        try (result.originalCommand ?? "").write(to: BridgePaths.statuslineOriginalURL, atomically: true, encoding: .utf8)
         try result.settings.write(to: settingsURL, options: .atomic)
     }
 
     static func uninstallStatusline(current: Data) throws {
         guard StatusLineEditor.isInstalled(in: current) else { return }
-        let original = try? String(contentsOf: BridgePaths.statuslineOriginalURL, encoding: .utf8)
+        // "" = l'utilisateur n'avait pas de statusline (on la retire) ;
+        // nil ne devrait pas arriver (storedOriginalStatusline replie sur "").
+        let original = storedOriginalStatusline()
         let restored = try StatusLineEditor.uninstall(
             from: current,
-            originalCommand: original?.isEmpty == true ? nil : original
+            originalCommand: (original?.isEmpty ?? true) ? nil : original
         )
         try restored.write(to: settingsURL, options: .atomic)
         try? FileManager.default.removeItem(at: BridgePaths.statuslineWrapperURL)
+        // Ne pas laisser traîner l'original : une réinstallation future ne doit
+        // pas ressusciter une statusline que l'utilisateur a depuis retirée.
+        try? FileManager.default.removeItem(at: BridgePaths.statuslineOriginalURL)
     }
 
     /// Backup : créé avant la première écriture ; rafraîchi quand le fichier
