@@ -35,7 +35,6 @@ final class ChatDriver {
 
     @ObservationIgnored private var process: Process?
     @ObservationIgnored private var stdinHandle: FileHandle?
-    @ObservationIgnored private var stdoutBuffer = Data()
 
     init(cwd: String) {
         self.cwd = cwd
@@ -73,12 +72,24 @@ final class ChatDriver {
 
         // Lecture par thread dédié bloquant : plus fiable que readabilityHandler
         // dans une app LSUIElement (dont la run loop peut ne pas pomper le handler).
+        // Le découpage NDJSON se fait ICI (un seul thread, séquentiel) et chaque
+        // événement PARSÉ est livré au main via DispatchQueue.main.async (FIFO
+        // garanti — Task { @MainActor } ne garantit PAS l'ordre → flux mélangé).
         let stdoutFD = stdoutPipe.fileHandleForReading
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            var buffer = Data()
             while true {
                 let chunk = stdoutFD.availableData
                 if chunk.isEmpty { break } // EOF
-                Task { @MainActor in self?.ingest(chunk) }
+                buffer.append(chunk)
+                while let newline = buffer.firstIndex(of: 0x0A) {
+                    let lineData = Data(buffer[buffer.startIndex..<newline])
+                    buffer.removeSubrange(buffer.startIndex...newline)
+                    guard let event = StreamEvent(line: lineData) else { continue }
+                    DispatchQueue.main.async {
+                        MainActor.assumeIsolated { self?.handle(event) }
+                    }
+                }
             }
         }
         let stderrFD = stderrPipe.fileHandleForReading
@@ -90,7 +101,10 @@ final class ChatDriver {
         }
 
         process.terminationHandler = { [weak self] proc in
-            Task { @MainActor in self?.processEnded(status: proc.terminationStatus) }
+            // main.async (FIFO) pour rester ordonné avec les événements stdout.
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { self?.processEnded(status: proc.terminationStatus) }
+            }
         }
 
         do {
@@ -133,19 +147,7 @@ final class ChatDriver {
         if case .failed = state {} else { state = .idle }
     }
 
-    // MARK: - Lecture du flux
-
-    private func ingest(_ chunk: Data) {
-        stdoutBuffer.append(chunk)
-        // Découper sur les sauts de ligne (NDJSON).
-        while let newline = stdoutBuffer.firstIndex(of: 0x0A) {
-            let lineData = stdoutBuffer[stdoutBuffer.startIndex..<newline]
-            stdoutBuffer.removeSubrange(stdoutBuffer.startIndex...newline)
-            if let event = StreamEvent(line: Data(lineData)) {
-                handle(event)
-            }
-        }
-    }
+    // MARK: - Application des événements (sur le main actor, dans l'ordre)
 
     private func handle(_ event: StreamEvent) {
         switch event {
