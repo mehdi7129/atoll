@@ -186,7 +186,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         }
-        debugTokens.append(contentsOf: [allowToken, denyToken, selectToken, jumpToken])
+        // Démarre un chat de test + envoie un message (test visuel Phase 6).
+        var chatToken: Int32 = 0
+        notify_register_dispatch("dev.mehdiguiard.atoll.debug.chat", &chatToken, DispatchQueue.main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.controllers.forEach { $0.viewModel.isPinned = true; $0.viewModel.open() }
+                ChatCenter.shared.startNew(cwd: "/tmp")
+                Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(2))
+                    ChatCenter.shared.active?.send("Dis bonjour en exactement 4 mots.")
+                }
+            }
+        }
+        debugTokens.append(contentsOf: [allowToken, denyToken, selectToken, jumpToken, chatToken])
         #endif
     }
 

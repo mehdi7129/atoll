@@ -25,10 +25,15 @@ struct ExpandedView: View {
             header
 
             if let request = InteractionCenter.shared.current {
-                // Une demande en attente prend toute la place.
+                // Une demande en attente prend toute la place (priorité maximale).
                 InteractionCardView(request: request, colors: colors)
                     .id(request.id)
                 Spacer(minLength: 0)
+            } else if let chat = ChatCenter.shared.active {
+                // Conversation en cours.
+                ChatView(driver: chat, colors: colors) {
+                    ChatCenter.shared.close()
+                }
             } else if let session = viewModel.selectedSession {
                 // Détail d'une session (clic sur une ligne).
                 SessionDetailView(session: session, colors: colors) {
@@ -90,10 +95,30 @@ struct ExpandedView: View {
                         viewModel.selectSession(session.id)
                     }
                 }
-                Text("· clique une session pour ses détails")
-                    .font(AtollFont.mono(9))
-                    .foregroundStyle(colors.dim)
+                HStack {
+                    Text("· clique une session pour ses détails")
+                        .font(AtollFont.mono(9))
+                        .foregroundStyle(colors.dim)
+                    Spacer()
+                    AsciiButton(label: "＋ NOUVEAU CHAT", color: colors.accent, shortcut: nil) {
+                        startNewChat()
+                    }
+                }
             }
+        }
+    }
+
+    /// Ouvre un sélecteur de dossier puis démarre une nouvelle conversation.
+    private func startNewChat() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Nouveau chat ici"
+        panel.message = "Choisis le dossier de la conversation Claude"
+        NSApp.activate(ignoringOtherApps: true)
+        if panel.runModal() == .OK, let url = panel.url {
+            ChatCenter.shared.startNew(cwd: url.path)
         }
     }
 
@@ -113,6 +138,10 @@ struct ExpandedView: View {
                 Text("quota indisponible — ouvre une session Claude pour l'alimenter")
                     .font(AtollFont.mono(9))
                     .foregroundStyle(colors.dim)
+            } else if let receivedAt = viewModel.quotaReceivedAt {
+                // Indicateur d'âge : la statusline ne pousse le quota qu'à chaque
+                // message assistant → on signale quand la donnée devient périmée.
+                QuotaAgeLabel(receivedAt: receivedAt, colors: colors)
             }
         }
     }
@@ -128,6 +157,28 @@ struct ExpandedView: View {
             if let resetsAt {
                 ResetCountdown(resetsAt: resetsAt)
                     .foregroundStyle(colors.dim)
+            }
+        }
+    }
+}
+
+/// Âge de la donnée de quota : discret si frais, visible dès qu'il vieillit.
+struct QuotaAgeLabel: View {
+    let receivedAt: Date
+    let colors: ThemeColors
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 15)) { context in
+            let age = Int(context.date.timeIntervalSince(receivedAt))
+            if age < 90 {
+                Text("quota exact · à jour")
+                    .font(AtollFont.mono(9))
+                    .foregroundStyle(colors.dim)
+            } else {
+                let text = age < 3600 ? "il y a \(age / 60) min" : "il y a \(age / 3600) h"
+                Text("quota · données \(text) (envoie un message pour rafraîchir)")
+                    .font(AtollFont.mono(9))
+                    .foregroundStyle(colors.warn)
             }
         }
     }

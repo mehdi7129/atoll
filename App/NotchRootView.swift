@@ -37,6 +37,11 @@ struct NotchRootView: View {
         InteractionCenter.shared.pending.count
     }
 
+    /// L'îlot doit-il rester ouvert + prendre le clavier ? (carte OU chat actif).
+    private var wantsFocus: Bool {
+        pendingCount > 0 || ChatCenter.shared.isActive
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             island
@@ -47,18 +52,17 @@ struct NotchRootView: View {
             height: IslandGeometry.windowSize.height,
             alignment: .top
         )
-        .onChange(of: pendingCount) { oldCount, newCount in
-            // Claude demande quelque chose → l'îlot s'ouvre tout seul (écran
-            // principal) et prend le clavier ; tout résolu → il se replie et
-            // rend le focus au terminal.
-            viewModel.syncInteractionState(pendingCount: newCount, previousCount: oldCount)
+        .onChange(of: wantsFocus) { oldValue, newValue in
+            // Carte en attente OU chat actif → l'îlot s'ouvre tout seul (écran
+            // principal) et prend le clavier ; plus rien → il se replie et rend
+            // le focus au terminal.
+            viewModel.syncInteractionState(pendingCount: newValue ? 1 : 0,
+                                           previousCount: oldValue ? 1 : 0)
         }
         .onAppear {
-            // Fenêtre reconstruite (changement d'écran) pendant qu'une carte est
-            // en attente : réappliquer l'état, sinon la carte serait invisible et
-            // les raccourcis morts.
-            if pendingCount > 0 {
-                viewModel.syncInteractionState(pendingCount: pendingCount, previousCount: 0)
+            // Fenêtre reconstruite pendant une carte/chat actif : réappliquer.
+            if wantsFocus {
+                viewModel.syncInteractionState(pendingCount: 1, previousCount: 0)
             }
         }
     }

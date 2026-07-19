@@ -76,6 +76,11 @@ struct SessionDetailView: View {
                         .foregroundStyle(colors.dim)
                 }
                 Spacer()
+                if let cwd = session.cwd {
+                    AsciiButton(label: "CHAT ICI", color: colors.ok, shortcut: nil) {
+                        ChatCenter.shared.startNew(cwd: cwd)
+                    }
+                }
             }
             if let needsPermissionApp {
                 Button {

@@ -78,7 +78,14 @@ Pièges de build appris à la dure :
 - ✅ Auto-accept sûr (allowlist), vrais quotas (statusline tee), infos par session
 - ✅ Phase 4 — jump-back terminal (Cursor/VS Code via `<cli> -r`, Terminal.app/iTerm2
   via AppleScript par TTY, fallback activation app ; ancre capturée aux hooks + KERN_PROCARGS2)
-- ⬜ Phases 6-7 — chat, distribution
+- ✅ Phase 5 — quota exact (tee-wrapper statusline, rate_limits serveur + indicateur d'âge)
+- ✅ Phase 6 — chat intégré (`claude -p` stream-json persistant, composer dans l'îlot)
+- ⬜ Phase 7 — distribution (notarisation, DMG, Sparkle)
+
+Chat (Phase 6) : ChatDriver spawne `claude -p --input/--output-format stream-json`.
+PIÈGE VÉCU : `readabilityHandler` sur le pipe stdout ne se déclenche PAS dans l'app
+LSUIElement (run loop) → lecture par thread dédié bloquant (availableData en boucle).
+Débug : `notifyutil -p dev.mehdiguiard.atoll.debug.chat`.
 
 Jump-back : les sessions de Mehdi tournent dans le terminal intégré de **Cursor**
 (`com.todesktop.230313mzl4w4u92`, TERM_PROGRAM=vscode) → `cursor -r <cwd>` remonte la

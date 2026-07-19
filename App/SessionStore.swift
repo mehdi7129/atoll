@@ -144,6 +144,8 @@ final class SessionStore {
     }
 
     var hasRealQuota: Bool { realQuota != nil }
+    /// Quand le dernier vrai quota a été reçu (pour l'indicateur d'âge).
+    var quotaReceivedAt: Date? { realQuota?.receivedAt }
 
     /// Ancre terminal d'une session (pour le jump-back).
     func terminalAnchor(for id: String) -> TerminalAnchor? {

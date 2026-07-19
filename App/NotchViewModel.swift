@@ -72,6 +72,7 @@ final class NotchViewModel {
     var usage: UsageSnapshot { store.displayQuota }
     var quotaResets: (five: Date?, seven: Date?) { store.quotaResets }
     var hasRealQuota: Bool { store.hasRealQuota }
+    var quotaReceivedAt: Date? { store.quotaReceivedAt }
 
     var selectedSession: AgentSession? {
         guard let id = selectedSessionID else { return nil }
