@@ -134,19 +134,14 @@ struct ExpandedView: View {
                 HStack(spacing: 16) {
                     quotaGauge(label: "5h", fraction: viewModel.usage.fiveHourFraction, resetsAt: viewModel.quotaResets.five)
                     quotaGauge(label: "7j", fraction: viewModel.usage.sevenDayFraction, resetsAt: viewModel.quotaResets.seven)
-                    Spacer()
-                }
-                // Jauges par modèle (« Fable ») — opt-in, endpoint non officiel.
-                let modelLimits = ModelQuotaPoller.shared.displayedLimits
-                if !modelLimits.isEmpty {
-                    HStack(spacing: 16) {
-                        ForEach(modelLimits, id: \.label) { limit in
-                            quotaGauge(label: limit.label.lowercased(),
-                                       fraction: limit.usedFraction,
-                                       resetsAt: limit.resetsAt)
-                        }
-                        Spacer()
+                    // Jauges par modèle (« fable ») — opt-in, même ligne. Leur
+                    // reset ≈ celui du 7j : omis pour tenir dans la largeur.
+                    ForEach(ModelQuotaPoller.shared.displayedLimits, id: \.label) { limit in
+                        quotaGauge(label: limit.label.lowercased(),
+                                   fraction: limit.usedFraction,
+                                   resetsAt: nil)
                     }
+                    Spacer()
                 }
                 if let receivedAt = viewModel.quotaReceivedAt {
                     // Indicateur d'âge : la statusline ne pousse le quota qu'à
