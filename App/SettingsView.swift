@@ -11,6 +11,8 @@ struct SettingsView: View {
     @State private var hooksInstalled = false
     @State private var hookError: String?
     @AppStorage(InteractionCenter.autoAcceptKey) private var autoAccept = false
+    @AppStorage(InteractionCenter.rockstarKey) private var rockstar = false
+    @State private var confirmingRockstar = false
 
     private var store: SessionStore { .shared }
     private var center: InteractionCenter { .shared }
@@ -57,6 +59,37 @@ struct SettingsView: View {
                 """)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+            }
+
+            Section {
+                Toggle(isOn: Binding(
+                    get: { rockstar },
+                    set: { newValue in
+                        if newValue { confirmingRockstar = true } // confirmer l'activation
+                        else { rockstar = false }
+                    }
+                )) {
+                    Label("Mode Rockstar", systemImage: "flame.fill")
+                }
+                .tint(.red)
+
+                Text("""
+                ☠️ Autonomie totale : Claude approuve TOUT sans vous demander — permissions \
+                (même destructrices), plans, questions. À vos risques et périls. Seule protection \
+                restante : vos règles deny et hooks bloquants (ex. Bash(rm -rf *)), appliqués par \
+                Claude Code avant Atoll. Activable uniquement ici. Un badge [ ROCKSTAR ] rouge \
+                reste affiché tant qu'il est actif.
+                """)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            } header: {
+                Text("Rockstar")
+            }
+            .alert("Activer le mode Rockstar ?", isPresented: $confirmingRockstar) {
+                Button("Annuler", role: .cancel) { rockstar = false }
+                Button("Activer", role: .destructive) { rockstar = true }
+            } message: {
+                Text("Claude approuvera automatiquement TOUTES les demandes, y compris les commandes destructrices non couvertes par vos règles deny. À utiliser en connaissance de cause.")
             }
 
             Section("Apparence") {

@@ -123,6 +123,42 @@ final class PermissionDecisionTests: XCTestCase {
         XCTAssertEqual(questions[0].options[0].description, "orange")
     }
 
+    func testDefaultAnswersPicksFirstOption() {
+        let questions = [
+            ParsedHookEvent.AskQuestion(
+                question: "Quelle approche ?", header: "App", multiSelect: false,
+                options: [.init(label: "SwiftUI", description: nil), .init(label: "AppKit", description: nil)]
+            ),
+            ParsedHookEvent.AskQuestion(
+                question: "Tests ?", header: "T", multiSelect: false,
+                options: [.init(label: "Oui", description: nil), .init(label: "Non", description: nil)]
+            ),
+        ]
+        let answers = PermissionDecision.defaultAnswers(for: questions)
+        XCTAssertEqual(answers["Quelle approche ?"], "SwiftUI")
+        XCTAssertEqual(answers["Tests ?"], "Oui")
+    }
+
+    func testDefaultAnswersSkipsOptionlessQuestions() {
+        let questions = [
+            ParsedHookEvent.AskQuestion(question: "Libre ?", header: nil, multiSelect: false, options: [])
+        ]
+        XCTAssertTrue(PermissionDecision.defaultAnswers(for: questions).isEmpty)
+    }
+
+    func testRockstarQuestionDecisionIsWellFormed() throws {
+        // Le chemin rockstar pour une question doit produire un allow valide.
+        let toolInput: [String: Any] = ["questions": [["question": "X", "options": [["label": "A"]]]]]
+        let data = try JSONSerialization.data(withJSONObject: toolInput)
+        let questions = [ParsedHookEvent.AskQuestion(question: "X", header: nil, multiSelect: false, options: [.init(label: "A", description: nil)])]
+        let decisionData = try XCTUnwrap(PermissionDecision.answerQuestions(
+            toolInputData: data, answers: PermissionDecision.defaultAnswers(for: questions)))
+        let d = try decision(from: decisionData)
+        XCTAssertEqual(d["behavior"] as? String, "allow")
+        let updated = try XCTUnwrap(d["updatedInput"] as? [String: Any])
+        XCTAssertEqual((updated["answers"] as? [String: String])?["X"], "A")
+    }
+
     func testReducerMapsPermissionRequestToWaitingPermission() throws {
         let payload: [String: Any] = [
             "hook_event_name": "PermissionRequest",

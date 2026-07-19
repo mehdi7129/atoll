@@ -47,9 +47,18 @@ final class InteractionCenter {
     var current: Pending? { pending.first }
 
     static let autoAcceptKey = "autoAcceptEnabled"
+    static let rockstarKey = "rockstarEnabled"
 
     var isAutoAcceptEnabled: Bool {
         UserDefaults.standard.bool(forKey: Self.autoAcceptKey)
+    }
+
+    /// Mode rockstar : approuve TOUT (permissions destructrices, plans, questions).
+    /// À activer UNIQUEMENT depuis les réglages. Ne peut toujours pas outrepasser
+    /// les règles deny / hooks bloquants de l'utilisateur (appliqués par Claude
+    /// Code AVANT que la demande n'atteigne Atoll).
+    var isRockstarEnabled: Bool {
+        UserDefaults.standard.bool(forKey: Self.rockstarKey)
     }
 
     // MARK: - Enregistrement
@@ -67,6 +76,18 @@ final class InteractionCenter {
             kind = .permission
         }
 
+        // Mode ROCKSTAR : approuve TOUT immédiatement — permissions (même
+        // destructrices), plans, questions. Full autonomie « à nos risques et
+        // périls ». (Les règles deny / hooks bloquants passent quand même avant.)
+        if isRockstarEnabled, let decision = rockstarDecision(for: kind) {
+            server?.reply(requestID, decision: decision)
+            autoAcceptedCount += 1
+            lastAutoAccepted = event.toolSummary ?? event.toolName ?? kindLabel(kind)
+            SessionStore.shared.markAutoApproved(event.sessionID)
+            log.info("rockstar: \(event.toolSummary ?? event.toolName ?? self.kindLabel(kind), privacy: .public)")
+            return
+        }
+
         // Mode auto-accept : approbation immédiate des permissions SÛRES.
         // Jamais les plans ni les questions (le classement ci-dessus les exclut
         // du cas .permission) ; jamais les commandes destructrices ; et les
@@ -78,6 +99,7 @@ final class InteractionCenter {
             server?.reply(requestID, decision: PermissionDecision.allow())
             autoAcceptedCount += 1
             lastAutoAccepted = event.toolSummary ?? event.toolName
+            SessionStore.shared.markAutoApproved(event.sessionID)
             log.info("auto-accepté: \(event.toolSummary ?? event.toolName ?? "?", privacy: .public)")
             return
         }
@@ -92,6 +114,31 @@ final class InteractionCenter {
             toolSummary: event.toolSummary,
             receivedAt: Date()
         ))
+    }
+
+    /// Décision d'approbation automatique pour le mode rockstar, selon le type.
+    /// nil = impossible de décider (ex. questions dont le tool_input est illisible) →
+    /// on rend alors la main au terminal plutôt que d'envoyer du JSON malformé.
+    private func rockstarDecision(for kind: Kind) -> Data? {
+        switch kind {
+        case .permission:
+            return PermissionDecision.allow()
+        case .plan:
+            return PermissionDecision.approvePlan(acceptEdits: false)
+        case .questions(let questions, let toolInputData):
+            return PermissionDecision.answerQuestions(
+                toolInputData: toolInputData,
+                answers: PermissionDecision.defaultAnswers(for: questions)
+            )
+        }
+    }
+
+    private func kindLabel(_ kind: Kind) -> String {
+        switch kind {
+        case .permission: return "permission"
+        case .plan: return "plan"
+        case .questions: return "question"
+        }
     }
 
     // MARK: - Décisions

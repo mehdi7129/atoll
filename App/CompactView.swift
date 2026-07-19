@@ -6,6 +6,8 @@ struct CompactView: View {
     let viewModel: NotchViewModel
     let colors: ThemeColors
 
+    @AppStorage(InteractionCenter.rockstarKey) private var rockstar = false
+
     var body: some View {
         if let notch = viewModel.notchSize {
             // Écran à encoche : contenu dans les ailes, le centre reste vide
@@ -92,16 +94,21 @@ struct CompactView: View {
         .padding(.trailing, 12)
     }
 
+    // Rouge = mode rockstar actif (indicateur persistant permanent).
+    private var rockstarRed: Color { Color(hex: 0xFF3B30) }
+
     @ViewBuilder
     private var statusGlyph: some View {
         if viewModel.workingCount > 0 {
-            AsciiSpinnerView(color: colors.accent)
+            // Le spinner tourne toujours (= travail) ; rouge s'il est en rockstar.
+            AsciiSpinnerView(color: rockstar ? rockstarRed : colors.accent)
         } else if viewModel.attentionCount > 0 {
             Text("?")
-                .foregroundStyle(colors.warn)
+                .foregroundStyle(rockstar ? rockstarRed : colors.warn)
         } else {
-            Text("·")
-                .foregroundStyle(colors.dim)
+            // Au repos : losange rouge en rockstar, sinon point discret.
+            Text(rockstar ? "◆" : "·")
+                .foregroundStyle(rockstar ? rockstarRed : colors.dim)
         }
     }
 }

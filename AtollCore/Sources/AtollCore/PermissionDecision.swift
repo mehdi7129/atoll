@@ -40,6 +40,19 @@ public enum PermissionDecision {
         deny(message: feedback)
     }
 
+    /// Réponses « par défaut » pour le mode rockstar : la PREMIÈRE option de
+    /// chaque question (les modèles listent en général l'option recommandée en
+    /// premier). Questions sans option → ignorées (rien à choisir).
+    public static func defaultAnswers(for questions: [ParsedHookEvent.AskQuestion]) -> [String: String] {
+        var answers: [String: String] = [:]
+        for question in questions {
+            if let first = question.options.first {
+                answers[question.question] = first.label
+            }
+        }
+        return answers
+    }
+
     /// Réponse à AskUserQuestion : allow + updatedInput = tool_input original
     /// (passthrough OBLIGATOIRE de `questions`) + `answers` {question: réponse}.
     /// Réponses multiples jointes par « , » ; texte libre transmis tel quel.

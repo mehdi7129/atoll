@@ -8,6 +8,7 @@ struct ExpandedView: View {
     let capColors: ThemeColors
 
     @AppStorage(InteractionCenter.autoAcceptKey) private var autoAccept = false
+    @AppStorage(InteractionCenter.rockstarKey) private var rockstar = false
 
     /// Hauteur de la zone « cap » en haut de l'îlot : le notch physique sur un
     /// écran à encoche, la hauteur de la pilule sinon.
@@ -57,7 +58,11 @@ struct ExpandedView: View {
             Text("ATOLL")
                 .fontWeight(.bold)
                 .foregroundStyle(colors.fg)
-            if autoAccept {
+            if rockstar {
+                // Mode le plus risqué : badge rouge, prioritaire sur AUTO.
+                Text("[ ROCKSTAR ]")
+                    .foregroundStyle(Color(hex: 0xFF3B30))
+            } else if autoAccept {
                 Text("[ AUTO ]")
                     .foregroundStyle(colors.accent)
             }

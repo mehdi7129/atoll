@@ -150,6 +150,17 @@ final class SessionStore {
         sessions.first { $0.id == id }?.terminalAnchor
     }
 
+    /// Une permission a été auto-approuvée (auto-accept / rockstar) : la session
+    /// n'attend plus, l'outil va s'exécuter → repasser en « busy » (sinon elle
+    /// resterait affichée « en attente d'approbation »).
+    func markAutoApproved(_ sessionID: String) {
+        guard let index = sessions.firstIndex(where: { $0.id == sessionID }) else { return }
+        if case .waitingPermission = sessions[index].phase {
+            sessions[index].phase = .busy
+            scheduleSnapshot()
+        }
+    }
+
     private func rank(_ session: Tracked) -> Int {
         switch session.phase {
         case .waitingPermission: return 0
@@ -502,6 +513,8 @@ final class SessionStore {
             "updatedAt": ISO8601DateFormatter().string(from: Date()),
             "eventCount": eventCount,
             "serverRunning": serverRunning,
+            "rockstar": InteractionCenter.shared.isRockstarEnabled,
+            "autoAccept": InteractionCenter.shared.isAutoAcceptEnabled,
             "sessions": list,
             "pendingInteractions": InteractionCenter.shared.pending.map { request -> [String: Any] in
                 var entry: [String: Any] = ["id": request.id, "session": request.sessionID]

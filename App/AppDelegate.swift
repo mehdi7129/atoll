@@ -22,10 +22,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let server = BridgeServer(
             onEvent: { event, requestID in
                 Task { @MainActor in
+                    // apply() AVANT register() : la machine à états pose d'abord
+                    // waitingPermission ; si register auto-approuve (rockstar/auto),
+                    // il ré-avance la phase — sinon la carte reste en attente.
+                    SessionStore.shared.apply(event)
                     if let requestID {
                         InteractionCenter.shared.register(event: event, requestID: requestID)
                     }
-                    SessionStore.shared.apply(event)
                 }
             },
             onStatusline: { data in
