@@ -22,7 +22,7 @@ y compris pour les sessions lancées depuis le terminal de Cursor.
 | Auto-accept sûr · infos par session · quota exact | ✅ |
 | 4 · Jump-back terminal (Cursor/VS Code · Terminal · iTerm2) | ✅ |
 | 5 · Quota exact (statusline · jauge par modèle · % contexte) | ✅ |
-| 6 · Distribution (notarisation, DMG, Sparkle) | ✅ |
+| 6 · Distribution (notarisation, DMG, Sparkle) | ✅ v0.4.1 |
 
 Voir le [plan détaillé](PLAN.md), la [recherche](docs/research/) et [CLAUDE.md](CLAUDE.md)
 pour contribuer.
