@@ -132,12 +132,69 @@ public enum AutoAcceptPolicy {
         }
         guard safeCommands.contains(name) else { return false }
 
+        let args = Array(tokens.dropFirst())
+
+        // Lanceurs npx/bunx/dlx/exec : la commande réelle est le PAQUET, pas le
+        // lanceur. `npx rimraf dist` est destructeur même si `npx` est sûr.
+        if let package = launchedPackage(command: name, args: args) {
+            return safePackage(package)
+        }
+
         // Garde-fou d'arguments pour les outils sûrs mais capables de détruire.
-        let args = tokens.dropFirst()
         if name == "find", args.contains(where: { $0 == "-delete" || $0 == "-exec" || $0 == "-execdir" || $0 == "-ok" }) {
             return false
         }
         return true
+    }
+
+    /// Paquets réputés destructeurs, exécutés via un lanceur → jamais auto-acceptés.
+    static let destructivePackages: Set<String> = [
+        "rimraf", "rimraf2", "del", "del-cli", "trash", "trash-cli", "empty-trash-cli",
+        "rm-cli", "shx", "rmrf", "fkill", "fkill-cli",
+    ]
+
+    /// Extrait le paquet exécuté par un lanceur (npx/bunx/pnpm dlx/yarn dlx/npm exec).
+    /// nil si `command` n'est pas un lanceur.
+    private static func launchedPackage(command: String, args: [String]) -> String? {
+        var rest = args[...]
+        switch command {
+        case "npx", "bunx":
+            break // le paquet est le 1er argument non-option
+        case "npm", "pnpm", "yarn", "bun":
+            // Sous-commande dlx / exec / x, puis le paquet.
+            guard let sub = rest.first, ["dlx", "exec", "x"].contains(sub) else { return nil }
+            rest = rest.dropFirst()
+        default:
+            return nil
+        }
+        // Sauter les options du lanceur (-y, --yes, -p pkg, --package pkg…).
+        while let first = rest.first, first.hasPrefix("-") {
+            let flag = first
+            rest = rest.dropFirst()
+            if flag == "-p" || flag == "--package" || flag == "-c" || flag == "--call" {
+                if !rest.isEmpty { rest = rest.dropFirst() }
+            }
+        }
+        guard let package = rest.first else { return nil }
+        return Self.normalizePackage(package)
+    }
+
+    /// `[@scope/]name[@version]` → `name`. Ex. `@org/rimraf@1.2` → `rimraf`.
+    static func normalizePackage(_ spec: String) -> String {
+        var pkg = spec
+        // Retirer une version en fin (@ qui n'est pas le @ de scope en tête).
+        if let at = pkg.dropFirst().firstIndex(of: "@") {
+            pkg = String(pkg[..<at])
+        }
+        // Retirer le scope (tout ce qui précède le dernier /).
+        if let slash = pkg.lastIndex(of: "/") {
+            pkg = String(pkg[pkg.index(after: slash)...])
+        }
+        return pkg
+    }
+
+    private static func safePackage(_ package: String) -> Bool {
+        !destructivePackages.contains(package)
     }
 
     /// git : saute les options globales (-C path, -c k=v, --git-dir=…) puis vérifie

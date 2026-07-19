@@ -6,7 +6,8 @@ struct CompactView: View {
     let viewModel: NotchViewModel
     let colors: ThemeColors
 
-    @AppStorage(InteractionCenter.rockstarKey) private var rockstar = false
+    @AppStorage(InteractionCenter.autonomyKey) private var autonomyRaw = AutonomyLevel.manual.rawValue
+    private var rockstar: Bool { AutonomyLevel(rawValue: autonomyRaw) == .rockstar }
 
     var body: some View {
         if let notch = viewModel.notchSize {

@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         ThemeManager.applyStored()
+        InteractionCenter.migrateAutonomyIfNeeded()
 
         // Répare le wrapper ~/.atoll/bin si l'app a été déplacée (idempotent).
         HookInstaller.repairIfInstalled()

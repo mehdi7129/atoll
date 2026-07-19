@@ -46,19 +46,31 @@ final class InteractionCenter {
 
     var current: Pending? { pending.first }
 
+    /// Clé unique du niveau d'autonomie (Manuel / Auto / Rockstar).
+    static let autonomyKey = "autonomyLevel"
+    // Anciennes clés — conservées uniquement pour la migration ponctuelle.
     static let autoAcceptKey = "autoAcceptEnabled"
     static let rockstarKey = "rockstarEnabled"
 
-    var isAutoAcceptEnabled: Bool {
-        UserDefaults.standard.bool(forKey: Self.autoAcceptKey)
+    /// Niveau d'autonomie courant. Rockstar ne peut toujours pas outrepasser les
+    /// règles deny / hooks bloquants de l'utilisateur (appliqués par Claude Code
+    /// AVANT que la demande n'atteigne Atoll).
+    var autonomyLevel: AutonomyLevel {
+        AutonomyLevel(rawValue: UserDefaults.standard.string(forKey: Self.autonomyKey) ?? "") ?? .manual
     }
 
-    /// Mode rockstar : approuve TOUT (permissions destructrices, plans, questions).
-    /// À activer UNIQUEMENT depuis les réglages. Ne peut toujours pas outrepasser
-    /// les règles deny / hooks bloquants de l'utilisateur (appliqués par Claude
-    /// Code AVANT que la demande n'atteigne Atoll).
-    var isRockstarEnabled: Bool {
-        UserDefaults.standard.bool(forKey: Self.rockstarKey)
+    /// Migration unique des deux anciens booléens vers le réglage à 3 niveaux.
+    /// Rockstar l'emporte s'il était activé, sinon auto, sinon manuel.
+    static func migrateAutonomyIfNeeded() {
+        let defaults = UserDefaults.standard
+        guard defaults.string(forKey: autonomyKey) == nil else { return }
+        let level: AutonomyLevel
+        if defaults.bool(forKey: rockstarKey) { level = .rockstar }
+        else if defaults.bool(forKey: autoAcceptKey) { level = .auto }
+        else { level = .manual }
+        defaults.set(level.rawValue, forKey: autonomyKey)
+        defaults.removeObject(forKey: rockstarKey)
+        defaults.removeObject(forKey: autoAcceptKey)
     }
 
     // MARK: - Enregistrement
@@ -76,32 +88,28 @@ final class InteractionCenter {
             kind = .permission
         }
 
-        // Mode ROCKSTAR : approuve TOUT immédiatement — permissions (même
-        // destructrices), plans, questions. Full autonomie « à nos risques et
-        // périls ». (Les règles deny / hooks bloquants passent quand même avant.)
-        if isRockstarEnabled, let decision = rockstarDecision(for: kind) {
-            server?.reply(requestID, decision: decision)
-            autoAcceptedCount += 1
-            lastAutoAccepted = event.toolSummary ?? event.toolName ?? kindLabel(kind)
-            SessionStore.shared.markAutoApproved(event.sessionID)
-            log.info("rockstar: \(event.toolSummary ?? event.toolName ?? self.kindLabel(kind), privacy: .public)")
-            return
-        }
-
-        // Mode auto-accept : approbation immédiate des permissions SÛRES.
-        // Jamais les plans ni les questions (le classement ci-dessus les exclut
-        // du cas .permission) ; jamais les commandes destructrices ; et les
-        // règles deny / hooks bloquants de l'utilisateur s'exécutent AVANT
-        // d'arriver ici — impossible de les outrepasser.
-        if case .permission = kind,
-           isAutoAcceptEnabled,
-           AutoAcceptPolicy.isSafeToAutoAccept(toolName: event.toolName, toolInputData: event.toolInputData) {
-            server?.reply(requestID, decision: PermissionDecision.allow())
-            autoAcceptedCount += 1
-            lastAutoAccepted = event.toolSummary ?? event.toolName
-            SessionStore.shared.markAutoApproved(event.sessionID)
-            log.info("auto-accepté: \(event.toolSummary ?? event.toolName ?? "?", privacy: .public)")
-            return
+        // Auto-approbation selon le niveau d'autonomie (un seul réglage, exclusif).
+        switch autonomyLevel {
+        case .rockstar:
+            // Approuve TOUT : permissions (même destructrices), plans, questions.
+            // (Les règles deny / hooks bloquants passent quand même avant.)
+            if let decision = rockstarDecision(for: kind) {
+                autoApprove(requestID, decision: decision, event: event,
+                            label: event.toolSummary ?? event.toolName ?? kindLabel(kind),
+                            tag: "rockstar")
+                return
+            }
+        case .auto:
+            // Permissions SÛRES uniquement (allowlist) — jamais destructif, plans
+            // ni questions (le classement plus haut les exclut du cas .permission).
+            if case .permission = kind,
+               AutoAcceptPolicy.isSafeToAutoAccept(toolName: event.toolName, toolInputData: event.toolInputData) {
+                autoApprove(requestID, decision: PermissionDecision.allow(), event: event,
+                            label: event.toolSummary ?? event.toolName ?? "outil", tag: "auto")
+                return
+            }
+        case .manual:
+            break
         }
 
         let project = event.cwd.map { ($0 as NSString).lastPathComponent } ?? "claude"
@@ -114,6 +122,16 @@ final class InteractionCenter {
             toolSummary: event.toolSummary,
             receivedAt: Date()
         ))
+    }
+
+    /// Approuve automatiquement : envoie la décision, compte, ré-avance la phase.
+    private func autoApprove(_ requestID: String, decision: Data, event: ParsedHookEvent,
+                             label: String, tag: String) {
+        server?.reply(requestID, decision: decision)
+        autoAcceptedCount += 1
+        lastAutoAccepted = label
+        SessionStore.shared.markAutoApproved(event.sessionID)
+        log.info("\(tag, privacy: .public): \(label, privacy: .public)")
     }
 
     /// Décision d'approbation automatique pour le mode rockstar, selon le type.

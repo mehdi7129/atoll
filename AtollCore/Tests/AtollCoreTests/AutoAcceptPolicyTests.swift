@@ -116,4 +116,42 @@ final class AutoAcceptPolicyTests: XCTestCase {
         XCTAssertFalse(AutoAcceptPolicy.isSafeBashCommand(""))
         XCTAssertFalse(AutoAcceptPolicy.isSafeBashCommand("   "))
     }
+
+    // MARK: - Lanceurs npx/dlx avec paquet destructeur
+
+    func testDestructiveNpxPackagesAreManual() {
+        for command in [
+            "npx rimraf dist",
+            "npx rimraf@5 node_modules",
+            "npx @org/rimraf build",
+            "bunx del-cli dist",
+            "pnpm dlx trash-cli x",
+            "yarn dlx rimraf x",
+            "npm exec rimraf -- dist",
+            "npx -y rimraf dist",
+            "npx shx rm -rf dist",
+        ] {
+            XCTAssertFalse(AutoAcceptPolicy.isSafeBashCommand(command), "npx destructeur : \(command)")
+        }
+    }
+
+    func testSafeNpxPackagesStayAuto() {
+        for command in [
+            "npx create-react-app mon-app",
+            "npx tsc --noEmit",
+            "npx prettier --write .",
+            "npx eslint src",
+            "bunx vite build",
+            "pnpm dlx degit user/repo",
+        ] {
+            XCTAssertTrue(AutoAcceptPolicy.isSafeBashCommand(command), "npx sûr : \(command)")
+        }
+    }
+
+    func testNormalizePackage() {
+        XCTAssertEqual(AutoAcceptPolicy.normalizePackage("rimraf"), "rimraf")
+        XCTAssertEqual(AutoAcceptPolicy.normalizePackage("rimraf@1.2"), "rimraf")
+        XCTAssertEqual(AutoAcceptPolicy.normalizePackage("@org/rimraf"), "rimraf")
+        XCTAssertEqual(AutoAcceptPolicy.normalizePackage("@org/rimraf@5.0.1"), "rimraf")
+    }
 }

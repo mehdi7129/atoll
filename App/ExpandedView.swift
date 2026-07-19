@@ -7,8 +7,8 @@ struct ExpandedView: View {
     let colors: ThemeColors
     let capColors: ThemeColors
 
-    @AppStorage(InteractionCenter.autoAcceptKey) private var autoAccept = false
-    @AppStorage(InteractionCenter.rockstarKey) private var rockstar = false
+    @AppStorage(InteractionCenter.autonomyKey) private var autonomyRaw = AutonomyLevel.manual.rawValue
+    private var level: AutonomyLevel { AutonomyLevel(rawValue: autonomyRaw) ?? .manual }
 
     /// Hauteur de la zone « cap » en haut de l'îlot : le notch physique sur un
     /// écran à encoche, la hauteur de la pilule sinon.
@@ -58,13 +58,15 @@ struct ExpandedView: View {
             Text("ATOLL")
                 .fontWeight(.bold)
                 .foregroundStyle(colors.fg)
-            if rockstar {
-                // Mode le plus risqué : badge rouge, prioritaire sur AUTO.
+            switch level {
+            case .rockstar:
                 Text("[ ROCKSTAR ]")
                     .foregroundStyle(Color(hex: 0xFF3B30))
-            } else if autoAccept {
+            case .auto:
                 Text("[ AUTO ]")
                     .foregroundStyle(colors.accent)
+            case .manual:
+                EmptyView()
             }
             Spacer()
             Text("\(viewModel.sessions.count) session\(viewModel.sessions.count > 1 ? "s" : "")")

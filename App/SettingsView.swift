@@ -10,12 +10,12 @@ struct SettingsView: View {
     @State private var launchAtLogin = false
     @State private var hooksInstalled = false
     @State private var hookError: String?
-    @AppStorage(InteractionCenter.autoAcceptKey) private var autoAccept = false
-    @AppStorage(InteractionCenter.rockstarKey) private var rockstar = false
+    @AppStorage(InteractionCenter.autonomyKey) private var autonomyRaw = AutonomyLevel.manual.rawValue
     @State private var confirmingRockstar = false
 
     private var store: SessionStore { .shared }
     private var center: InteractionCenter { .shared }
+    private var currentLevel: AutonomyLevel { AutonomyLevel(rawValue: autonomyRaw) ?? .manual }
 
     var body: some View {
         Form {
@@ -45,49 +45,44 @@ struct SettingsView: View {
                 .foregroundStyle(.secondary)
             }
 
-            Section("Auto-accept") {
-                Toggle("Auto-accepter les permissions", isOn: $autoAccept)
-                if autoAccept, center.autoAcceptedCount > 0 {
-                    LabeledContent("Auto-acceptées", value: "\(center.autoAcceptedCount)")
-                }
-                Text("""
-                Claude avance sans attendre : les permissions d'outils sûres sont approuvées \
-                automatiquement (badge [ AUTO ] sur l'îlot). Garde-fous — vos règles deny et vos \
-                hooks bloquants s'exécutent AVANT Atoll et ne peuvent pas être outrepassés ; les \
-                commandes destructrices (rm, sudo, force-push, pipe-to-shell…), la validation des \
-                plans et les questions restent toujours manuelles.
-                """)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-
-            Section {
-                Toggle(isOn: Binding(
-                    get: { rockstar },
-                    set: { newValue in
-                        if newValue { confirmingRockstar = true } // confirmer l'activation
-                        else { rockstar = false }
+            Section("Niveau d'autonomie") {
+                // Un seul réglage exclusif : Manuel / Auto / Rockstar. Aucun état
+                // contradictoire possible.
+                Picker("Niveau", selection: Binding(
+                    get: { AutonomyLevel(rawValue: autonomyRaw) ?? .manual },
+                    set: { newLevel in
+                        if newLevel == .rockstar {
+                            confirmingRockstar = true // confirmer avant d'activer
+                        } else {
+                            autonomyRaw = newLevel.rawValue
+                        }
                     }
                 )) {
-                    Label("Mode Rockstar", systemImage: "flame.fill")
+                    ForEach(AutonomyLevel.allCases, id: \.self) { level in
+                        Text(level.displayName).tag(level)
+                    }
                 }
-                .tint(.red)
+                .pickerStyle(.segmented)
+
+                Text(currentLevel.summary)
+                    .font(.caption)
+                    .foregroundStyle(currentLevel == .rockstar ? .red : .secondary)
+
+                if currentLevel != .manual, center.autoAcceptedCount > 0 {
+                    LabeledContent("Auto-approuvées", value: "\(center.autoAcceptedCount)")
+                }
 
                 Text("""
-                ☠️ Autonomie totale : Claude approuve TOUT sans vous demander — permissions \
-                (même destructrices), plans, questions. À vos risques et périls. Seule protection \
-                restante : vos règles deny et hooks bloquants (ex. Bash(rm -rf *)), appliqués par \
-                Claude Code avant Atoll. Activable uniquement ici. Un badge [ ROCKSTAR ] rouge \
-                reste affiché tant qu'il est actif.
+                Garde-fou commun à Auto et Rockstar : vos règles deny et vos hooks bloquants \
+                (ex. Bash(rm -rf *)) s'exécutent dans Claude Code AVANT Atoll et ne peuvent jamais \
+                être outrepassés. Rockstar n'est activable qu'ici, avec confirmation.
                 """)
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            } header: {
-                Text("Rockstar")
             }
             .alert("Activer le mode Rockstar ?", isPresented: $confirmingRockstar) {
-                Button("Annuler", role: .cancel) { rockstar = false }
-                Button("Activer", role: .destructive) { rockstar = true }
+                Button("Annuler", role: .cancel) { }
+                Button("Activer", role: .destructive) { autonomyRaw = AutonomyLevel.rockstar.rawValue }
             } message: {
                 Text("Claude approuvera automatiquement TOUTES les demandes, y compris les commandes destructrices non couvertes par vos règles deny. À utiliser en connaissance de cause.")
             }

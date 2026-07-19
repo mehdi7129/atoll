@@ -513,8 +513,7 @@ final class SessionStore {
             "updatedAt": ISO8601DateFormatter().string(from: Date()),
             "eventCount": eventCount,
             "serverRunning": serverRunning,
-            "rockstar": InteractionCenter.shared.isRockstarEnabled,
-            "autoAccept": InteractionCenter.shared.isAutoAcceptEnabled,
+            "autonomy": InteractionCenter.shared.autonomyLevel.rawValue,
             "sessions": list,
             "pendingInteractions": InteractionCenter.shared.pending.map { request -> [String: Any] in
                 var entry: [String: Any] = ["id": request.id, "session": request.sessionID]
