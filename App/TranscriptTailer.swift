@@ -13,6 +13,9 @@ import Foundation
 final class TranscriptTailer {
     var onInterrupt: ((String) -> Void)?
     var onTitle: ((String, String) -> Void)?
+    /// Le transcript vient d'être écrit → la session travaille (signal temps réel,
+    /// utilisé pour les sessions découvertes par scan qui n'ont pas de hooks).
+    var onActivity: ((String) -> Void)?
     /// (sessionID, modèle?, branche git?) extraits du transcript.
     var onMeta: ((String, String?, String?) -> Void)?
 
@@ -44,6 +47,8 @@ final class TranscriptTailer {
         )
         source.setEventHandler { [weak self] in
             MainActor.assumeIsolated {
+                // Toute écriture = activité (avant même de lire le contenu).
+                self?.onActivity?(sessionID)
                 self?.drain(sessionID: sessionID, path: path)
             }
         }

@@ -68,6 +68,14 @@ final class SessionStore {
     @ObservationIgnored private var reconcileTask: Task<Void, Never>?
     @ObservationIgnored private var snapshotTask: Task<Void, Never>?
     @ObservationIgnored private let tailer = TranscriptTailer()
+    /// Minuteurs d'inactivité par session synthétique : pas d'écriture pendant
+    /// ce délai → la session repasse « en attente » (pas de hook pour le dire).
+    @ObservationIgnored private var idleTimers: [String: Task<Void, Never>] = [:]
+    /// Au-delà, une session synthétique dont le transcript n'a pas bougé est
+    /// considérée inactive (« en attente ») plutôt que « en cours ». Assez long
+    /// pour ne pas clignoter pendant un outil silencieux, assez court pour ne
+    /// pas mentir (le bug : une session inactive depuis 16 min affichée « busy »).
+    private static let syntheticIdleSeconds: TimeInterval = 15
 
     // MARK: - Cycle de vie
 
@@ -80,6 +88,9 @@ final class SessionStore {
         }
         tailer.onMeta = { [weak self] sessionID, model, gitBranch in
             self?.setMeta(sessionID, model: model, gitBranch: gitBranch)
+        }
+        tailer.onActivity = { [weak self] sessionID in
+            self?.transcriptActivity(sessionID)
         }
         reconcileTask = Task { [weak self] in
             while !Task.isCancelled {
@@ -211,6 +222,8 @@ final class SessionStore {
             if let pid = event.claudePid {
                 for synthetic in sessions.filter({ $0.isSynthetic && $0.pid == pid }) {
                     tailer.stopWatching(synthetic.id)
+                    idleTimers[synthetic.id]?.cancel()
+                    idleTimers[synthetic.id] = nil
                 }
                 sessions.removeAll { $0.isSynthetic && $0.pid == pid }
             }
@@ -375,6 +388,8 @@ final class SessionStore {
             if let index = self.sessions.firstIndex(where: { $0.id == sessionID }),
                self.sessions[index].phase == .ended {
                 self.tailer.stopWatching(sessionID)
+                self.idleTimers[sessionID]?.cancel()
+                self.idleTimers[sessionID] = nil
                 self.sessions.remove(at: index)
             }
         }
@@ -391,6 +406,42 @@ final class SessionStore {
         switch sessions[index].phase {
         case .busy, .toolRunning, .starting, .waitingPermission:
             sessions[index].phase = .waitingInput
+        default:
+            break
+        }
+    }
+
+    /// Le transcript d'une session SYNTHÉTIQUE (découverte par scan, sans hooks)
+    /// vient d'être écrit → elle travaille. On la passe « en cours » et on arme
+    /// un minuteur d'inactivité : sans nouvelle écriture, elle repassera « en
+    /// attente » (aucun hook Stop ne le signalera pour ces sessions). Les
+    /// sessions à hooks gardent leur phase pilotée par la machine à états.
+    private func transcriptActivity(_ sessionID: String) {
+        guard let index = sessions.firstIndex(where: { $0.id == sessionID }),
+              sessions[index].isSynthetic else { return }
+        // Ne pas écraser une demande de permission en attente.
+        if case .waitingPermission = sessions[index].phase { return }
+        if sessions[index].phase != .busy {
+            sessions[index].phase = .busy
+            scheduleSnapshot()
+        }
+        idleTimers[sessionID]?.cancel()
+        idleTimers[sessionID] = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(Self.syntheticIdleSeconds))
+            guard !Task.isCancelled else { return }
+            self?.markSyntheticIdle(sessionID)
+        }
+    }
+
+    /// Session synthétique sans écriture depuis le délai d'inactivité → en attente.
+    private func markSyntheticIdle(_ sessionID: String) {
+        idleTimers[sessionID] = nil
+        guard let index = sessions.firstIndex(where: { $0.id == sessionID }),
+              sessions[index].isSynthetic else { return }
+        switch sessions[index].phase {
+        case .busy, .toolRunning, .starting:
+            sessions[index].phase = .waitingInput
+            scheduleSnapshot()
         default:
             break
         }
@@ -427,6 +478,31 @@ final class SessionStore {
                 if sessions[index].missedScans >= 2 {
                     pidExited(pid)
                 }
+            }
+        }
+
+        // 1bis. Filet pour les sessions SYNTHÉTIQUES bloquées « en cours » : sans
+        //       hooks, seul le transcript dit si elles travaillent. Si le fichier
+        //       n'a pas bougé depuis le délai d'inactivité, elles sont « en
+        //       attente » (corrige aussi une session découverte « busy » qui
+        //       n'a plus jamais écrit — le minuteur temps réel ne s'arme que sur
+        //       une écriture, ce filet couvre l'absence d'écriture).
+        let now = Date()
+        for index in sessions.indices
+        where sessions[index].isSynthetic && sessions[index].phase.isAlive {
+            switch sessions[index].phase {
+            case .busy, .toolRunning, .starting:
+                let mtime = sessions[index].transcriptPath
+                    .flatMap { try? FileManager.default.attributesOfItem(atPath: $0)[.modificationDate] as? Date }
+                    ?? nil
+                let stale = mtime.map { now.timeIntervalSince($0) > Self.syntheticIdleSeconds } ?? true
+                if stale {
+                    sessions[index].phase = .waitingInput
+                    idleTimers[sessions[index].id]?.cancel()
+                    idleTimers[sessions[index].id] = nil
+                }
+            default:
+                break
             }
         }
 
