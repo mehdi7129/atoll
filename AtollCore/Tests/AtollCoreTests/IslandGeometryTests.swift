@@ -57,5 +57,27 @@ final class IslandGeometryTests: XCTestCase {
         let pillExpanded = IslandGeometry.expandedIslandSize(notch: nil, menuBarHeight: 24)
         XCTAssertLessThanOrEqual(pillExpanded.width, IslandGeometry.windowSize.width)
         XCTAssertLessThanOrEqual(pillExpanded.height, IslandGeometry.windowSize.height)
+
+        // Le mode chat (le plus haut) doit AUSSI tenir dans la fenêtre fixe —
+        // sinon rognage silencieux (piège documenté).
+        let chatExpanded = IslandGeometry.expandedIslandSize(
+            notch: notch, menuBarHeight: 37, chat: true, screenHeight: 982)
+        XCTAssertLessThanOrEqual(chatExpanded.height, IslandGeometry.windowSize.height)
+        XCTAssertGreaterThan(chatExpanded.height,
+                             IslandGeometry.expandedIslandSize(notch: notch, menuBarHeight: 37).height,
+                             "le chat doit être réellement plus haut que le standard")
+    }
+
+    func testChatHeightClampedOnSmallScreens() {
+        // Petit écran externe : le panneau chat se borne, sans passer sous le standard.
+        XCTAssertEqual(IslandGeometry.expandedContentHeight(chat: true, screenHeight: 620), 460)
+        XCTAssertEqual(IslandGeometry.expandedContentHeight(chat: true, screenHeight: 400),
+                       IslandGeometry.expandedSize.height)
+        // Grand écran : hauteur idéale pleine.
+        XCTAssertEqual(IslandGeometry.expandedContentHeight(chat: true, screenHeight: 1169),
+                       IslandGeometry.chatExpandedHeight)
+        // Hors chat : hauteur standard inchangée.
+        XCTAssertEqual(IslandGeometry.expandedContentHeight(chat: false, screenHeight: 1169),
+                       IslandGeometry.expandedSize.height)
     }
 }

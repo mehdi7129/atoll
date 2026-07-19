@@ -6,7 +6,9 @@ import CoreGraphics
 public enum IslandGeometry {
 
     /// Taille fixe de la fenêtre transparente (jamais animée) : l'îlot s'anime dedans en SwiftUI.
-    public static let windowSize = CGSize(width: 760, height: 460)
+    /// La hauteur doit contenir le PLUS HAUT des modes (chat avec historique) —
+    /// un îlot plus haut que la fenêtre serait rogné SILENCIEUSEMENT.
+    public static let windowSize = CGSize(width: 760, height: 680)
 
     /// Largeur d'une aile de contenu de part et d'autre du notch en mode compact.
     public static let wingWidth: CGFloat = 88
@@ -17,6 +19,19 @@ public enum IslandGeometry {
 
     /// Taille du panneau étendu (assez haut pour les cartes interactives).
     public static let expandedSize = CGSize(width: 600, height: 340)
+
+    /// Hauteur idéale du panneau en mode CHAT : l'historique de conversation a
+    /// besoin de place pour donner le contexte.
+    public static let chatExpandedHeight: CGFloat = 560
+
+    /// Hauteur du contenu étendu selon le mode. Le chat obtient un panneau plus
+    /// haut, borné par l'écran (marge pour le notch + un peu d'air en bas) et
+    /// jamais plus bas que le panneau standard.
+    public static func expandedContentHeight(chat: Bool, screenHeight: CGFloat? = nil) -> CGFloat {
+        guard chat else { return expandedSize.height }
+        guard let screenHeight, screenHeight > 0 else { return chatExpandedHeight }
+        return min(chatExpandedHeight, max(expandedSize.height, screenHeight - 160))
+    }
 
     /// Marge horizontale du contenu étendu : les flancs de la NotchShape sont
     /// insetés de topRadius (19 pt) — le contenu doit s'en écarter en plus de
@@ -46,11 +61,13 @@ public enum IslandGeometry {
     }
 
     /// Taille de l'îlot étendu : jamais plus étroit que le compact, panneau sous le notch.
-    public static func expandedIslandSize(notch: CGSize?, menuBarHeight: CGFloat) -> CGSize {
+    /// `chat` : panneau haut pour l'historique de conversation (borné par l'écran).
+    public static func expandedIslandSize(notch: CGSize?, menuBarHeight: CGFloat,
+                                          chat: Bool = false, screenHeight: CGFloat? = nil) -> CGSize {
         let compact = compactSize(notch: notch, menuBarHeight: menuBarHeight, hasActivity: true)
         return CGSize(
             width: max(expandedSize.width, compact.width),
-            height: compact.height + expandedSize.height
+            height: compact.height + expandedContentHeight(chat: chat, screenHeight: screenHeight)
         )
     }
 }

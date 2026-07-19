@@ -57,20 +57,38 @@ struct ChatView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 8) {
                     if driver.turns.isEmpty {
-                        Text("· pose ta question à Claude dans ce dossier")
+                        Text(driver.resumedSessionID == nil
+                             ? "· pose ta question à Claude dans ce dossier"
+                             : "· reprise de la conversation — historique en chargement…")
                             .font(AtollFont.mono(10))
                             .foregroundStyle(colors.dim)
                     }
-                    ForEach(driver.turns) { turn in
+                    // Historique de la session reprise (atténué), puis le vif.
+                    let history = driver.turns.filter(\.isHistory)
+                    let live = driver.turns.filter { !$0.isHistory }
+                    ForEach(history) { turn in
+                        turnView(turn).id(turn.id)
+                    }
+                    if !history.isEmpty {
+                        Text("──── reprise ────")
+                            .font(AtollFont.mono(9))
+                            .foregroundStyle(colors.dim)
+                            .frame(maxWidth: .infinity)
+                    }
+                    ForEach(live) { turn in
                         turnView(turn).id(turn.id)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxHeight: 200)
+            // Prend toute la hauteur offerte par le panneau chat (plus haut).
+            .frame(maxHeight: .infinity)
             // Défilement à la frontière de tour (pas à chaque token — moins coûteux).
             .onChange(of: driver.turns.count) { _, _ in
                 if let last = driver.turns.last { withAnimation { proxy.scrollTo(last.id, anchor: .bottom) } }
+            }
+            .onAppear {
+                if let last = driver.turns.last { proxy.scrollTo(last.id, anchor: .bottom) }
             }
         }
     }
@@ -79,10 +97,12 @@ struct ChatView: View {
         VStack(alignment: .leading, spacing: 1) {
             Text(turn.role == .user ? "› toi" : "‹ claude")
                 .font(AtollFont.mono(9, weight: .bold))
-                .foregroundStyle(turn.role == .user ? colors.accent : colors.ok)
+                .foregroundStyle(
+                    turn.isHistory ? colors.dim
+                        : (turn.role == .user ? colors.accent : colors.ok))
             Text(turn.text.isEmpty && turn.streaming ? "…" : turn.text)
                 .font(AtollFont.mono(11))
-                .foregroundStyle(colors.fg)
+                .foregroundStyle(turn.isHistory ? colors.dim : colors.fg)
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }

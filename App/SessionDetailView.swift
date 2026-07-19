@@ -77,8 +77,18 @@ struct SessionDetailView: View {
                 }
                 Spacer()
                 if let cwd = session.cwd {
-                    AsciiButton(label: "CHAT ICI", color: colors.ok, shortcut: nil) {
-                        ChatCenter.shared.startNew(cwd: cwd)
+                    // Reprise si l'id est un vrai session_id Claude (les sessions
+                    // synthétiques « pid-… » découvertes par scan n'en ont pas)
+                    // ET qu'un transcript existe pour fournir l'historique.
+                    if !session.id.hasPrefix("pid-"),
+                       SessionStore.shared.transcriptPath(for: session.id) != nil {
+                        AsciiButton(label: "REPRENDRE LE CHAT", color: colors.ok, shortcut: nil) {
+                            ChatCenter.shared.resume(sessionID: session.id, cwd: cwd)
+                        }
+                    } else {
+                        AsciiButton(label: "CHAT ICI", color: colors.ok, shortcut: nil) {
+                            ChatCenter.shared.startNew(cwd: cwd)
+                        }
                     }
                 }
             }

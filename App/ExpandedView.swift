@@ -52,7 +52,9 @@ struct ExpandedView: View {
         .padding(.bottom, 16)
         .frame(
             width: IslandGeometry.expandedSize.width,
-            height: topInset + IslandGeometry.expandedSize.height,
+            // Hauteur dynamique : le chat obtient un panneau plus haut — la
+            // même valeur que islandSize (sinon contenu et îlot se désalignent).
+            height: topInset + viewModel.expandedContentHeight,
             alignment: .top
         )
     }

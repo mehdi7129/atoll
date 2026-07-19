@@ -222,7 +222,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         }
-        debugTokens.append(contentsOf: [allowToken, denyToken, selectToken, jumpToken, chatToken])
+        // Reprend la 1re session réelle (id non synthétique + transcript) avec
+        // historique, puis envoie un message d'épreuve (valide le fork --resume).
+        var resumeToken: Int32 = 0
+        notify_register_dispatch("dev.mehdiguiard.atoll.debug.resume", &resumeToken, DispatchQueue.main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let vm = self?.controllers.first(where: { $0.viewModel.isPrimary })?.viewModel,
+                      let session = vm.sessions.first(where: {
+                          !$0.id.hasPrefix("pid-") && SessionStore.shared.transcriptPath(for: $0.id) != nil
+                      }) else { return }
+                self?.controllers.forEach { $0.viewModel.isPinned = true; $0.viewModel.open() }
+                ChatCenter.shared.resume(sessionID: session.id, cwd: session.cwd)
+                Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(6))
+                    ChatCenter.shared.active?.send("Réponds uniquement : « reprise ok ».")
+                }
+            }
+        }
+        debugTokens.append(contentsOf: [allowToken, denyToken, selectToken, jumpToken, chatToken, resumeToken])
         #endif
     }
 

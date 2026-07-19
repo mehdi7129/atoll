@@ -18,6 +18,8 @@ final class ChatDriver {
         let role: Role
         var text: String
         var streaming: Bool
+        /// Tour chargé du transcript de la session reprise (rendu atténué).
+        var isHistory: Bool = false
     }
 
     enum State: Equatable {
@@ -31,6 +33,8 @@ final class ChatDriver {
     private(set) var turns: [Turn] = []
     private(set) var state: State = .idle
     private(set) var claudeSessionID: String?
+    /// Session dont ce chat est la reprise (fork `--resume`), nil pour un chat neuf.
+    private(set) var resumedSessionID: String?
     /// Brouillon du composer — porté par le driver (survit à la reconstruction de
     /// la vue, à une carte qui interrompt, au repli de l'îlot).
     var draft: String = ""
@@ -54,10 +58,23 @@ final class ChatDriver {
     func start(resume: String? = nil) {
         guard state == .idle else { return }
         state = .starting
+        resumedSessionID = resume
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let path = ClaudeLocator.resolve()
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.spawn(path: path, resume: resume) } }
         }
+    }
+
+    /// Précharge l'historique de la session reprise EN TÊTE du transcript
+    /// (l'utilisateur a pu envoyer un message avant la fin du chargement).
+    func preloadHistory(_ history: [TranscriptHistory.HistoryTurn]) {
+        guard !history.isEmpty else { return }
+        let loaded = history.map { turn in
+            Turn(role: turn.role == .user ? .user : .assistant,
+                 text: turn.text, streaming: false, isHistory: true)
+        }
+        turns.insert(contentsOf: loaded, at: 0)
+        trimTurns()
     }
 
     private func spawn(path: String?, resume: String?) {

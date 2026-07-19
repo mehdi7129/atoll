@@ -26,6 +26,8 @@ final class NotchViewModel {
     /// clavier des cartes interactives, pour que les panneaux ne se disputent
     /// pas le focus en multi-écrans.
     let isPrimary: Bool
+    /// Hauteur de l'écran de ce contrôleur : borne le panneau chat (par écran).
+    let screenHeight: CGFloat
 
     /// Posé par le contrôleur : demande/rend le focus clavier du panneau
     /// (nécessaire pour ⌘Y/⌘N et les champs texte des cartes interactives).
@@ -43,6 +45,7 @@ final class NotchViewModel {
     init(screen: NSScreen, isPrimary: Bool, store: SessionStore = .shared) {
         notchSize = screen.notchSize
         menuBarHeight = screen.menuBarHeight
+        screenHeight = screen.frame.height
         self.isPrimary = isPrimary
         self.store = store
     }
@@ -100,11 +103,25 @@ final class NotchViewModel {
                 hasActivity: hasActivity
             )
         case .expanded:
+            // Le chat obtient un panneau plus haut (historique de conversation).
+            // Lire ChatCenter ici inscrit la dépendance d'observation : la vue
+            // qui évalue islandSize se ré-évalue à l'ouverture/fermeture du chat.
             return IslandGeometry.expandedIslandSize(
                 notch: notchSize,
-                menuBarHeight: menuBarHeight
+                menuBarHeight: menuBarHeight,
+                chat: ChatCenter.shared.isActive,
+                screenHeight: screenHeight
             )
         }
+    }
+
+    /// Hauteur du contenu du panneau étendu (partagée avec ExpandedView pour
+    /// que la frame du contenu et celle de l'îlot restent alignées).
+    var expandedContentHeight: CGFloat {
+        IslandGeometry.expandedContentHeight(
+            chat: ChatCenter.shared.isActive,
+            screenHeight: screenHeight
+        )
     }
 
     // MARK: - Interactions
