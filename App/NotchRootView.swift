@@ -9,6 +9,9 @@ struct NotchRootView: View {
     @AppStorage("paletteID") private var paletteID = Palette.monoOrange.id
     @AppStorage("hoverDelay") private var hoverDelay = 0.15
     @Environment(\.colorScheme) private var colorScheme
+    #if DEBUG
+    @Environment(\.openSettings) private var openSettings
+    #endif
 
     private var colors: ThemeColors {
         ThemeColors(paletteID: paletteID, scheme: colorScheme)
@@ -52,6 +55,17 @@ struct NotchRootView: View {
             height: IslandGeometry.windowSize.height,
             alignment: .top
         )
+        #if DEBUG
+        // Ouverture scriptée des Réglages (captures) : openSettings est
+        // l'action SwiftUI fiable, contrairement à showSettingsWindow: routé
+        // depuis un handler de fond. AppDelegate relaie la notif Darwin.
+        .onReceive(NotificationCenter.default.publisher(for: .atollDebugOpenSettings)) { _ in
+            if viewModel.isPrimary {
+                NSApp.activate(ignoringOtherApps: true)
+                openSettings()
+            }
+        }
+        #endif
         .onChange(of: wantsFocus) { oldValue, newValue in
             // Carte en attente OU chat actif → l'îlot s'ouvre tout seul (écran
             // principal) et prend le clavier ; plus rien → il se replie et rend

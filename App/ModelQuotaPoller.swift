@@ -51,7 +51,7 @@ final class ModelQuotaPoller {
     }
 
     private func fetchOnce() async {
-        guard let token = Self.readAccessToken() else {
+        guard let token = await Self.readAccessToken() else {
             log.info("jeton Claude Code introuvable dans le Keychain")
             return
         }
@@ -80,20 +80,35 @@ final class ModelQuotaPoller {
         }
     }
 
-    /// Jeton OAuth du CLI : item générique « Claude Code-credentials » du
-    /// Keychain de connexion (macOS peut demander l'autorisation UNE fois).
-    private static func readAccessToken() -> String? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: "Claude Code-credentials",
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-        ]
-        var item: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
-              let data = item as? Data,
-              let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
-              let oauth = root["claudeAiOauth"] as? [String: Any] else { return nil }
-        return oauth["accessToken"] as? String
+    /// Jeton OAuth du CLI : item « Claude Code-credentials » du Keychain, lu via
+    /// `/usr/bin/security` (identité STABLE — un accès SecItemCopyMatching
+    /// depuis l'app redemanderait l'autorisation à CHAQUE build Debug redéployé,
+    /// le trousseau voyant chaque binaire adhoc comme une app différente).
+    private static func readAccessToken() async -> String? {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .utility).async {
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/security")
+                process.arguments = ["find-generic-password", "-s", "Claude Code-credentials", "-w"]
+                let output = Pipe()
+                process.standardOutput = output
+                process.standardError = Pipe()
+                do {
+                    try process.run()
+                } catch {
+                    continuation.resume(returning: nil)
+                    return
+                }
+                let data = output.fileHandleForReading.readDataToEndOfFile()
+                process.waitUntilExit()
+                guard process.terminationStatus == 0,
+                      let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+                      let oauth = root["claudeAiOauth"] as? [String: Any] else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+                continuation.resume(returning: oauth["accessToken"] as? String)
+            }
+        }
     }
 }

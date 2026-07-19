@@ -239,7 +239,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         }
-        debugTokens.append(contentsOf: [allowToken, denyToken, selectToken, jumpToken, chatToken, resumeToken])
+        // Ouvre la fenêtre Réglages (captures d'écran scriptées).
+        var settingsToken: Int32 = 0
+        notify_register_dispatch("dev.mehdiguiard.atoll.debug.settings", &settingsToken, DispatchQueue.main) { _ in
+            MainActor.assumeIsolated {
+                NotificationCenter.default.post(name: .atollDebugOpenSettings, object: nil)
+            }
+        }
+        debugTokens.append(contentsOf: [allowToken, denyToken, selectToken, jumpToken, chatToken, resumeToken, settingsToken])
         #endif
     }
 
@@ -254,3 +261,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .joined(separator: ";")
     }
 }
+
+#if DEBUG
+extension Notification.Name {
+    /// Relaie le trigger Darwin debug.settings vers la vue SwiftUI qui détient
+    /// l'action openSettings (fiable, contrairement à showSettingsWindow:).
+    static let atollDebugOpenSettings = Notification.Name("dev.mehdiguiard.atoll.debug.openSettings")
+}
+#endif
