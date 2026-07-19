@@ -10,8 +10,10 @@ struct SettingsView: View {
     @State private var launchAtLogin = false
     @State private var hooksInstalled = false
     @State private var hookError: String?
+    @AppStorage(InteractionCenter.autoAcceptKey) private var autoAccept = false
 
     private var store: SessionStore { .shared }
+    private var center: InteractionCenter { .shared }
 
     var body: some View {
         Form {
@@ -36,6 +38,22 @@ struct SettingsView: View {
                 Vos hooks existants sont préservés ; backup unique dans \
                 ~/.claude/settings.json.atoll-backup. Les sessions déjà ouvertes prennent \
                 les hooks à leur prochain démarrage.
+                """)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+
+            Section("Auto-accept") {
+                Toggle("Auto-accepter les permissions", isOn: $autoAccept)
+                if autoAccept, center.autoAcceptedCount > 0 {
+                    LabeledContent("Auto-acceptées", value: "\(center.autoAcceptedCount)")
+                }
+                Text("""
+                Claude avance sans attendre : les permissions d'outils sûres sont approuvées \
+                automatiquement (badge [ AUTO ] sur l'îlot). Garde-fous — vos règles deny et vos \
+                hooks bloquants s'exécutent AVANT Atoll et ne peuvent pas être outrepassés ; les \
+                commandes destructrices (rm, sudo, force-push, pipe-to-shell…), la validation des \
+                plans et les questions restent toujours manuelles.
                 """)
                 .font(.caption)
                 .foregroundStyle(.secondary)

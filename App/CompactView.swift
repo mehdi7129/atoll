@@ -45,20 +45,37 @@ struct CompactView: View {
         ).height
     }
 
+    /// Session la plus pertinente à afficher en persistance : attention d'abord,
+    /// puis en cours, sinon la première.
+    private var focusSession: AgentSession? {
+        viewModel.sessions.first { $0.needsAttention }
+            ?? viewModel.sessions.first { $0.isActive }
+            ?? viewModel.sessions.first
+    }
+
     private var leftWing: some View {
         HStack(spacing: 5) {
             statusGlyph
-            if viewModel.attentionCount > 0 {
-                Text("!\(viewModel.attentionCount)")
-                    .foregroundStyle(colors.warn)
-            } else {
-                Text("\(viewModel.sessions.count)")
+            if let session = focusSession {
+                // Info persistante : nom court de la session active/en attente.
+                Text(shortName(session.projectName))
+                    .foregroundStyle(session.needsAttention ? colors.warn : colors.dim)
+                    .lineLimit(1)
+            }
+            if viewModel.sessions.count > 1 {
+                Text("+\(viewModel.sessions.count - 1)")
                     .foregroundStyle(colors.dim)
             }
             Spacer(minLength: 0)
         }
-        .font(AtollFont.mono(11))
+        .font(AtollFont.mono(10))
         .padding(.leading, 12)
+    }
+
+    /// Dernier segment du nom, tronqué pour tenir dans l'aile.
+    private func shortName(_ name: String) -> String {
+        let last = name.contains("/") ? String(name.split(separator: "/").last ?? "") : name
+        return last.count > 10 ? String(last.prefix(9)) + "…" : last
     }
 
     private var rightWing: some View {

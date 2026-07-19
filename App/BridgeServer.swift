@@ -23,13 +23,16 @@ final class BridgeServer: @unchecked Sendable {
     /// Appelés sur la main queue. requestID non-nil = PermissionRequest en
     /// attente de décision via reply()/cancelPending().
     private let onEvent: (ParsedHookEvent, _ requestID: String?) -> Void
+    private let onStatusline: (Data) -> Void
     private let onStateChange: (Bool) -> Void
 
     init(
         onEvent: @escaping (ParsedHookEvent, String?) -> Void,
+        onStatusline: @escaping (Data) -> Void,
         onStateChange: @escaping (Bool) -> Void
     ) {
         self.onEvent = onEvent
+        self.onStatusline = onStatusline
         self.onStateChange = onStateChange
     }
 
@@ -216,6 +219,16 @@ final class BridgeServer: @unchecked Sendable {
 
     private func finish(_ fd: Int32, parse: Bool) {
         guard let entry = readers.removeValue(forKey: fd) else { return }
+
+        // Enveloppe statusline : {"v":1,"statusline": <payload>} — pas un hook.
+        if parse, !entry.buffer.isEmpty, isStatuslineEnvelope(entry.buffer) {
+            entry.source.cancel()
+            close(fd)
+            let buffer = entry.buffer
+            DispatchQueue.main.async { self.onStatusline(buffer) }
+            return
+        }
+
         entry.source.cancel()
 
         let event = parse && !entry.buffer.isEmpty
@@ -250,5 +263,11 @@ final class BridgeServer: @unchecked Sendable {
         if let fd = pendingReplies.removeValue(forKey: requestID) {
             close(fd)
         }
+    }
+
+    private func isStatuslineEnvelope(_ data: Data) -> Bool {
+        guard let object = try? JSONSerialization.jsonObject(with: data),
+              let dict = object as? [String: Any] else { return false }
+        return dict["statusline"] != nil
     }
 }

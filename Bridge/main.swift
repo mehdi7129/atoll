@@ -133,24 +133,39 @@ func forwardHookEvent() {
 
     let isPermissionRequest = (payload["hook_event_name"] as? String) == "PermissionRequest"
     let reply = sendToSocket(data, path: BridgePaths.socketPath, awaitReply: isPermissionRequest)
-    // Décision de l'îlot → stdout (le CLI la parse). Connexion fermée sans
-    // données = on rend la main au prompt du terminal, en silence.
-    // write(2) brut : FileHandle.write lève une NSException non rattrapable si
-    // le CLI a déjà fermé le pipe — ce qui violerait le « exit 0 quoi qu'il arrive ».
-    if let reply, !reply.isEmpty {
-        reply.withUnsafeBytes { raw in
-            var offset = 0
-            while offset < raw.count {
-                let written = write(1, raw.baseAddress!.advanced(by: offset), raw.count - offset)
-                if written < 0 {
-                    if errno == EINTR { continue }
-                    break
-                }
-                if written == 0 { break }
-                offset += written
+    _ = replyToStdout(reply)
+}
+
+@discardableResult
+func replyToStdout(_ reply: Data?) -> Bool {
+    guard let reply, !reply.isEmpty else { return false }
+    reply.withUnsafeBytes { raw in
+        var offset = 0
+        while offset < raw.count {
+            let written = write(1, raw.baseAddress!.advanced(by: offset), raw.count - offset)
+            if written < 0 {
+                if errno == EINTR { continue }
+                break
             }
+            if written == 0 { break }
+            offset += written
         }
     }
+    return true
+}
+
+/// Mode statusline : lit le payload statusline sur stdin, l'envoie à l'app (tee
+/// non bloquant, fail-open) et ne produit RIEN sur stdout — le wrapper enchaîne
+/// ensuite la statusline d'origine de l'utilisateur.
+func forwardStatusline() {
+    guard isatty(0) == 0 else { return }
+    let input = FileHandle.standardInput.readDataToEndOfFile()
+    guard !input.isEmpty, input.count <= 1_048_576 else { return }
+    guard (try? JSONSerialization.jsonObject(with: input)) is [String: Any] else { return }
+    var envelope = Data(#"{"v":1,"statusline":"#.utf8)
+    envelope.append(input)
+    envelope.append(Data("}".utf8))
+    _ = sendToSocket(envelope, path: BridgePaths.socketPath)
 }
 
 // MARK: - Installation (partagée CLI / app)
@@ -197,6 +212,69 @@ enum BridgeCLI {
         _ = try fileManager.replaceItemAt(BridgePaths.wrapperURL, withItemAt: temporary)
     }
 
+    /// Génère le wrapper statusline : tee non bloquant des rate_limits vers l'app,
+    /// puis exécution de la statusline d'origine (lue à l'exécution depuis un
+    /// fichier — survit à un déplacement de l'app). Fail-open intégral.
+    static func ensureStatuslineWrapper() throws {
+        let fileManager = FileManager.default
+        try fileManager.createDirectory(at: BridgePaths.binDirectory, withIntermediateDirectories: true)
+        let helperPath = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath().path
+        let escaped = helperPath.replacingOccurrences(of: "'", with: "'\\''")
+        let originalFile = BridgePaths.statuslineOriginalURL.path
+            .replacingOccurrences(of: "'", with: "'\\''")
+        let content = """
+        #!/bin/sh
+        # Généré par Atoll — met en cache les rate_limits puis enchaîne la
+        # statusline d'origine. Fail-open : ne bloque ni ne casse jamais le CLI.
+        BIN='\(escaped)'
+        INPUT=$(cat)
+        [ -x "$BIN" ] && printf '%s' "$INPUT" | "$BIN" statusline >/dev/null 2>&1 &
+        ORIG='\(originalFile)'
+        if [ -s "$ORIG" ]; then
+          printf '%s' "$INPUT" | sh -c "$(cat "$ORIG")"
+        fi
+        exit 0
+        """
+        if let existing = try? String(contentsOf: BridgePaths.statuslineWrapperURL, encoding: .utf8),
+           existing == content,
+           fileManager.isExecutableFile(atPath: BridgePaths.statuslineWrapperURL.path) {
+            return
+        }
+        let temporary = BridgePaths.binDirectory.appendingPathComponent(".atoll-statusline.tmp")
+        try content.write(to: temporary, atomically: true, encoding: .utf8)
+        try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: temporary.path)
+        _ = try fileManager.replaceItemAt(BridgePaths.statuslineWrapperURL, withItemAt: temporary)
+    }
+
+    /// Installe le chaînage statusline en mémorisant la commande d'origine.
+    static func installStatusline(current: Data?) throws {
+        // Déjà chaîné → ne rien réécrire.
+        if StatusLineEditor.isInstalled(in: current) {
+            try ensureStatuslineWrapper()
+            return
+        }
+        try ensureStatuslineWrapper()
+        let result = try StatusLineEditor.install(into: current, wrapperCommand: BridgePaths.statuslineCommand)
+        // Mémoriser l'original AVANT d'écrire les settings.
+        if let original = result.originalCommand {
+            try original.write(to: BridgePaths.statuslineOriginalURL, atomically: true, encoding: .utf8)
+        } else if !FileManager.default.fileExists(atPath: BridgePaths.statuslineOriginalURL.path) {
+            try "".write(to: BridgePaths.statuslineOriginalURL, atomically: true, encoding: .utf8)
+        }
+        try result.settings.write(to: settingsURL, options: .atomic)
+    }
+
+    static func uninstallStatusline(current: Data) throws {
+        guard StatusLineEditor.isInstalled(in: current) else { return }
+        let original = try? String(contentsOf: BridgePaths.statuslineOriginalURL, encoding: .utf8)
+        let restored = try StatusLineEditor.uninstall(
+            from: current,
+            originalCommand: original?.isEmpty == true ? nil : original
+        )
+        try restored.write(to: settingsURL, options: .atomic)
+        try? FileManager.default.removeItem(at: BridgePaths.statuslineWrapperURL)
+    }
+
     /// Backup : créé avant la première écriture ; rafraîchi quand le fichier
     /// courant ne contient aucun hook Atoll (réinstallation propre) pour ne pas
     /// laisser traîner un backup vieux de plusieurs mois.
@@ -214,17 +292,21 @@ enum BridgeCLI {
     static func install() -> Int32 {
         do {
             try ensureWrapper()
-            let current = try readSettings()
-            // Déjà installé → rien à écrire : pas de réécriture à chaque
-            // lancement de l'app, fenêtre de course minimale avec le CLI.
-            if HookSettingsEditor.isInstalled(in: current) {
-                print("hooks déjà installés — wrapper vérifié")
-                return 0
+            var current = try readSettings()
+
+            // Hooks : écriture seulement si pas déjà installés (évite de réécrire
+            // à chaque lancement de l'app, fenêtre de course minimale avec le CLI).
+            if !HookSettingsEditor.isInstalled(in: current) {
+                try refreshBackup(currentData: current)
+                let updated = try HookSettingsEditor.install(into: current, command: BridgePaths.hookCommand)
+                try updated.write(to: settingsURL, options: .atomic)
+                current = try readSettings()
             }
-            try refreshBackup(currentData: current)
-            let updated = try HookSettingsEditor.install(into: current, command: BridgePaths.hookCommand)
-            try updated.write(to: settingsURL, options: .atomic)
-            print("hooks installés (backup : \(BridgePaths.settingsBackupURL.path))")
+
+            // Statusline (vrais quotas) : idempotent, s'installe même si les hooks
+            // l'étaient déjà — relu depuis le fichier à jour.
+            try installStatusline(current: current)
+            print("hooks + statusline OK (backup : \(BridgePaths.settingsBackupURL.path))")
             return 0
         } catch {
             FileHandle.standardError.write(Data("échec de l'installation : \(error)\n".utf8))
@@ -239,15 +321,19 @@ enum BridgeCLI {
                 return 0
             }
             guard HookSettingsEditor.isInstalled(in: current) ||
-                  String(decoding: current, as: UTF8.self).contains(".atoll/bin/atoll-bridge") else {
+                  StatusLineEditor.isInstalled(in: current) ||
+                  String(decoding: current, as: UTF8.self).contains("/.atoll/bin/") else {
                 print("hooks non installés — rien à faire")
                 return 0
             }
-            let updated = try HookSettingsEditor.uninstall(from: current)
+            // Restaurer la statusline d'origine AVANT de retirer les hooks.
+            try uninstallStatusline(current: current)
+            let afterStatusline = try readSettings() ?? current
+            let updated = try HookSettingsEditor.uninstall(from: afterStatusline)
             try updated.write(to: settingsURL, options: .atomic)
-            // Le wrapper reste en place : les sessions Claude déjà ouvertes le
-            // référencent encore, et il est fail-open (exit 0 sans binaire).
-            print("hooks désinstallés")
+            // Les wrappers restent en place : les sessions Claude déjà ouvertes les
+            // référencent encore, et ils sont fail-open (exit 0 sans binaire).
+            print("hooks + statusline désinstallés")
             return 0
         } catch {
             FileHandle.standardError.write(Data("échec de la désinstallation : \(error)\n".utf8))
@@ -280,6 +366,10 @@ case "uninstall":
     exit(BridgeCLI.uninstall())
 case "status":
     exit(BridgeCLI.status())
+case "statusline":
+    // Tee des rate_limits vers l'app (fail-open, ne produit rien sur stdout).
+    forwardStatusline()
+    exit(0)
 default:
     // Mode hook : tout échec est silencieux, exit 0 inconditionnel.
     forwardHookEvent()

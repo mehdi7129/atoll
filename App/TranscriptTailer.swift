@@ -13,6 +13,8 @@ import Foundation
 final class TranscriptTailer {
     var onInterrupt: ((String) -> Void)?
     var onTitle: ((String, String) -> Void)?
+    /// (sessionID, modèle?, branche git?) extraits du transcript.
+    var onMeta: ((String, String?, String?) -> Void)?
 
     private struct Watch {
         let descriptor: Int32
@@ -101,14 +103,23 @@ final class TranscriptTailer {
         guard let data = try? handle.read(upToCount: 131_072), !data.isEmpty else { return }
 
         var firstUserText: String?
+        var aiTitle: String?
+        var model: String?
+        var gitBranch: String?
         for lineData in data.split(separator: UInt8(ascii: "\n")) {
             guard let object = try? JSONSerialization.jsonObject(with: Data(lineData)),
                   let line = object as? [String: Any] else { continue }
             let type = line["type"] as? String
 
-            if type == "ai-title", let title = line["title"] as? String, !title.isEmpty {
-                onTitle?(sessionID, title)
-                return
+            if gitBranch == nil, let branch = line["gitBranch"] as? String, !branch.isEmpty {
+                gitBranch = branch
+            }
+            if type == "assistant", let message = line["message"] as? [String: Any],
+               let modelID = message["model"] as? String {
+                model = modelID // le dernier vu = le plus récent
+            }
+            if aiTitle == nil, type == "ai-title", let title = line["title"] as? String, !title.isEmpty {
+                aiTitle = title
             }
             if firstUserText == nil, type == "user", (line["isMeta"] as? Bool) != true,
                let message = line["message"] as? [String: Any] {
@@ -122,7 +133,12 @@ final class TranscriptTailer {
                 }
             }
         }
-        if let firstUserText, !firstUserText.isEmpty {
+        if model != nil || gitBranch != nil {
+            onMeta?(sessionID, model, gitBranch)
+        }
+        if let aiTitle {
+            onTitle?(sessionID, aiTitle)
+        } else if let firstUserText, !firstUserText.isEmpty {
             onTitle?(sessionID, firstUserText)
         }
     }

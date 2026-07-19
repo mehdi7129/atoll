@@ -30,12 +30,21 @@ final class SessionStore {
         var firstSeenAt: Date
         var lastEventAt: Date
         var missedScans = 0
+        // Enrichissements.
+        var model: String?
+        var gitBranch: String?
+        var subagentCount = 0
+        var mcpServers: Set<String> = []
+        var contextUsedFraction: Double?
+        var costUSD: Double?
     }
 
     private(set) var sessions: [Tracked] = []
     private(set) var eventCount = 0
     var serverRunning = false
-    /// Quota factice jusqu'à la Phase 5 (statusline).
+    /// Vrai quota serveur (statusline). nil tant qu'aucun payload reçu.
+    private(set) var realQuota: QuotaSnapshot?
+    /// Repli factice affiché tant que le vrai quota n'est pas encore arrivé.
     var usage = MockData.usage
 
     @ObservationIgnored private var exitWatchers: [pid_t: DispatchSourceProcess] = [:]
@@ -52,6 +61,9 @@ final class SessionStore {
         tailer.onTitle = { [weak self] sessionID, title in
             self?.setTitle(sessionID, title: title)
         }
+        tailer.onMeta = { [weak self] sessionID, model, gitBranch in
+            self?.setMeta(sessionID, model: model, gitBranch: gitBranch)
+        }
         reconcileTask = Task { [weak self] in
             while !Task.isCancelled {
                 self?.reconcile()
@@ -63,23 +75,56 @@ final class SessionStore {
     // MARK: - Projection UI
 
     var uiSessions: [AgentSession] {
-        sessions
-            .sorted { lhs, rhs in
-                let lr = rank(lhs), rr = rank(rhs)
-                if lr != rr { return lr < rr }
-                return lhs.firstSeenAt < rhs.firstSeenAt
+        let sorted = sessions.sorted { lhs, rhs in
+            let lr = rank(lhs), rr = rank(rhs)
+            if lr != rr { return lr < rr }
+            return lhs.firstSeenAt < rhs.firstSeenAt
+        }
+        // Désambiguïsation des noms : un dossier nommé « claude » (vécu : le
+        // projet drones de l'utilisateur) ou deux projets homonymes affichent
+        // leurs deux derniers composants (« Blender/claude »).
+        let baseNames = sorted.map { ($0.cwd as NSString?)?.lastPathComponent ?? "claude" }
+        return zip(sorted, baseNames).map { tracked, base in
+            let isAmbiguous = base == "claude"
+                || baseNames.filter { $0 == base }.count > 1
+            var name = base
+            if isAmbiguous, let cwd = tracked.cwd {
+                let components = (cwd as NSString).pathComponents.suffix(2)
+                if components.count == 2 {
+                    name = components.joined(separator: "/")
+                }
             }
-            .map { tracked in
-                AgentSession(
-                    id: tracked.id,
-                    projectName: tracked.cwd.map { ($0 as NSString).lastPathComponent } ?? "claude",
-                    gitBranch: nil,
-                    status: tracked.phase.uiStatus,
-                    subtitle: tracked.title,
-                    startedAt: tracked.firstSeenAt
-                )
-            }
+            return AgentSession(
+                id: tracked.id,
+                projectName: name,
+                gitBranch: tracked.gitBranch,
+                status: tracked.phase.uiStatus,
+                subtitle: tracked.title,
+                startedAt: tracked.firstSeenAt,
+                model: tracked.model,
+                subagentCount: tracked.subagentCount,
+                mcpServers: tracked.mcpServers.sorted(),
+                contextUsedFraction: tracked.contextUsedFraction,
+                costUSD: tracked.costUSD,
+                cwd: tracked.cwd
+            )
+        }
     }
+
+    /// Quota affiché : vrai serveur si disponible, sinon repli factice.
+    var displayQuota: UsageSnapshot {
+        guard let realQuota else { return usage }
+        return UsageSnapshot(
+            fiveHourFraction: realQuota.fiveHour.usedFraction,
+            sevenDayFraction: realQuota.sevenDay.usedFraction
+        )
+    }
+
+    var quotaResets: (five: Date?, seven: Date?) {
+        (realQuota?.fiveHour.resetsAt, realQuota?.sevenDay.resetsAt)
+    }
+
+    var hasRealQuota: Bool { realQuota != nil }
 
     private func rank(_ session: Tracked) -> Int {
         switch session.phase {
@@ -173,6 +218,24 @@ final class SessionStore {
             session.pidStartTime = event.claudeStartTime
             armExitWatch(pid: pid)
         }
+
+        // Sous-agents actifs (compteur) et serveurs MCP utilisés.
+        switch event.kind {
+        case .subagentStart:
+            session.subagentCount += 1
+        case .subagentStop:
+            session.subagentCount = max(0, session.subagentCount - 1)
+        case .preToolUse:
+            if let tool = event.toolName, tool.hasPrefix("mcp__") {
+                let parts = tool.split(separator: "_").filter { !$0.isEmpty }
+                if parts.count >= 2 { session.mcpServers.insert(String(parts[1])) }
+            }
+        case .stop, .sessionEnd:
+            session.subagentCount = 0 // fin de tour : plus de sous-agents en vol
+        default:
+            break
+        }
+
         if session.phase == .ended {
             tailer.stopWatching(session.id)
         }
@@ -185,6 +248,36 @@ final class SessionStore {
         return flattened.count > maxLength
             ? String(flattened.prefix(maxLength)) + "…"
             : flattened
+    }
+
+    private func setMeta(_ sessionID: String, model: String?, gitBranch: String?) {
+        guard let index = sessions.firstIndex(where: { $0.id == sessionID }) else { return }
+        // La statusline fournit un nom de modèle plus lisible (« Opus 4.8 ») ;
+        // ne pas écraser un modèle déjà connu par l'id brut du transcript.
+        if let model, sessions[index].model == nil { sessions[index].model = model }
+        if let gitBranch, gitBranch != "HEAD" { sessions[index].gitBranch = gitBranch }
+        scheduleSnapshot()
+    }
+
+    /// Payload statusline : vrai quota serveur + modèle/contexte/coût par session.
+    func applyStatusline(_ envelope: Data) {
+        guard let object = try? JSONSerialization.jsonObject(with: envelope),
+              let dict = object as? [String: Any],
+              let inner = dict["statusline"],
+              let innerData = try? JSONSerialization.data(withJSONObject: inner),
+              let payload = StatusLinePayload(data: innerData, now: Date()) else { return }
+
+        if let quota = payload.quota { realQuota = quota }
+
+        if let sessionID = payload.sessionID,
+           let index = sessions.firstIndex(where: { $0.id == sessionID }) {
+            // La statusline est la source autoritaire du modèle courant.
+            if let model = payload.usage.modelDisplayName { sessions[index].model = model }
+            if let context = payload.usage.contextUsedFraction { sessions[index].contextUsedFraction = context }
+            if let cost = payload.usage.costUSD { sessions[index].costUSD = cost }
+            sessions[index].lastEventAt = Date()
+        }
+        scheduleSnapshot()
     }
 
     private func setTitle(_ sessionID: String, title: String) {
@@ -269,8 +362,15 @@ final class SessionStore {
         //    ne doit pas rester immortelle.
         for index in sessions.indices where sessions[index].phase.isAlive {
             guard let pid = sessions[index].pid else {
-                if !sessions[index].isSynthetic,
-                   Date().timeIntervalSince(sessions[index].lastEventAt) > 1800 {
+                // Session hook SANS pid : rien ne l'ancre à un processus vivant
+                // (enveloppe forgée, ancêtre claude introuvable — ex. hook lancé
+                // depuis un npm/node non reconnu). 5 min sans événement suffisent
+                // pour la déclarer morte — vécu : les sessions de test traînaient.
+                // MAIS une carte en attente prouve que la session est vivante
+                // (le helper y est bloqué) : ne jamais la GC dans ce cas.
+                let hasPendingCard = InteractionCenter.shared.pending.contains { $0.sessionID == sessions[index].id }
+                if !sessions[index].isSynthetic, !hasPendingCard,
+                   Date().timeIntervalSince(sessions[index].lastEventAt) > 300 {
                     sessions[index].phase = .ended
                     tailer.stopWatching(sessions[index].id)
                     scheduleRemoval(sessions[index].id)
@@ -293,6 +393,12 @@ final class SessionStore {
         let claudePids = ProcessInspector.allClaudePids()
         log.debug("réconciliation: \(claudePids.count) processus claude, \(knownPids.count) connus")
         for pid in claudePids where !knownPids.contains(pid) {
+            // Un claude enfant d'un autre claude (subagent, claude -p spawné par
+            // une session, agents de workflow) n'est pas une session utilisateur.
+            if let parent = ProcessInspector.parent(of: pid), parent > 1,
+               ProcessInspector.findClaudeAncestor(from: parent) != nil {
+                continue
+            }
             guard let cwd = ProcessInspector.currentWorkingDirectory(of: pid) else {
                 log.debug("pid \(pid): cwd illisible, ignoré")
                 continue

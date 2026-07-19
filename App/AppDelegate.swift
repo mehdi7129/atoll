@@ -27,6 +27,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     SessionStore.shared.apply(event)
                 }
             },
+            onStatusline: { data in
+                Task { @MainActor in
+                    SessionStore.shared.applyStatusline(data)
+                }
+            },
             onStateChange: { running in
                 Task { @MainActor in
                     SessionStore.shared.serverRunning = running
@@ -144,7 +149,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 center.deny(request.id, message: "Refus de test automatisé Atoll.")
             }
         }
-        debugTokens.append(contentsOf: [allowToken, denyToken])
+        // Sélectionne la 1re session (test visuel de la vue détail).
+        var selectToken: Int32 = 0
+        notify_register_dispatch("dev.mehdiguiard.atoll.debug.select", &selectToken, DispatchQueue.main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let vm = self?.controllers.first(where: { $0.viewModel.isPrimary })?.viewModel,
+                      let first = vm.sessions.first else { return }
+                vm.isPinned = true
+                vm.open()
+                vm.selectSession(first.id)
+            }
+        }
+        debugTokens.append(contentsOf: [allowToken, denyToken, selectToken])
         #endif
     }
 

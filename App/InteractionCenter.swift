@@ -39,9 +39,18 @@ final class InteractionCenter {
     }
 
     private(set) var pending: [Pending] = []
+    /// Compteur des permissions approuvées automatiquement (mode auto-accept).
+    private(set) var autoAcceptedCount = 0
+    private(set) var lastAutoAccepted: String?
     @ObservationIgnored weak var server: BridgeServer?
 
     var current: Pending? { pending.first }
+
+    static let autoAcceptKey = "autoAcceptEnabled"
+
+    var isAutoAcceptEnabled: Bool {
+        UserDefaults.standard.bool(forKey: Self.autoAcceptKey)
+    }
 
     // MARK: - Enregistrement
 
@@ -57,6 +66,22 @@ final class InteractionCenter {
         } else {
             kind = .permission
         }
+
+        // Mode auto-accept : approbation immédiate des permissions SÛRES.
+        // Jamais les plans ni les questions (le classement ci-dessus les exclut
+        // du cas .permission) ; jamais les commandes destructrices ; et les
+        // règles deny / hooks bloquants de l'utilisateur s'exécutent AVANT
+        // d'arriver ici — impossible de les outrepasser.
+        if case .permission = kind,
+           isAutoAcceptEnabled,
+           AutoAcceptPolicy.isSafeToAutoAccept(toolName: event.toolName, toolInputData: event.toolInputData) {
+            server?.reply(requestID, decision: PermissionDecision.allow())
+            autoAcceptedCount += 1
+            lastAutoAccepted = event.toolSummary ?? event.toolName
+            log.info("auto-accepté: \(event.toolSummary ?? event.toolName ?? "?", privacy: .public)")
+            return
+        }
+
         let project = event.cwd.map { ($0 as NSString).lastPathComponent } ?? "claude"
         pending.append(Pending(
             id: requestID,

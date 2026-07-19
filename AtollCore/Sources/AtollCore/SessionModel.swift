@@ -19,14 +19,30 @@ public struct AgentSession: Identifiable, Equatable, Sendable {
     public var subtitle: String?
     public var startedAt: Date
 
+    // Infos enrichies (transcript + statusline), toutes optionnelles.
+    public var model: String?
+    public var subagentCount: Int
+    public var mcpServers: [String]
+    public var contextUsedFraction: Double?
+    public var costUSD: Double?
+    public var cwd: String?
+
     public init(id: String = UUID().uuidString, projectName: String, gitBranch: String? = nil,
-                status: Status, subtitle: String? = nil, startedAt: Date = Date()) {
+                status: Status, subtitle: String? = nil, startedAt: Date = Date(),
+                model: String? = nil, subagentCount: Int = 0, mcpServers: [String] = [],
+                contextUsedFraction: Double? = nil, costUSD: Double? = nil, cwd: String? = nil) {
         self.id = id
         self.projectName = projectName
         self.gitBranch = gitBranch
         self.status = status
         self.subtitle = subtitle
         self.startedAt = startedAt
+        self.model = model
+        self.subagentCount = subagentCount
+        self.mcpServers = mcpServers
+        self.contextUsedFraction = contextUsedFraction
+        self.costUSD = costUSD
+        self.cwd = cwd
     }
 
     /// La session réclame l'attention de l'utilisateur.
@@ -60,7 +76,9 @@ public enum MockData {
     public static let sessions: [AgentSession] = [
         AgentSession(projectName: "atoll", gitBranch: "main",
                      status: .working(tool: "Bash(xcodebuild build)"),
-                     startedAt: Date().addingTimeInterval(-260)),
+                     startedAt: Date().addingTimeInterval(-260),
+                     model: "Fable 5", subagentCount: 2, mcpServers: ["github"],
+                     contextUsedFraction: 0.45),
         AgentSession(projectName: "dynamic-island", gitBranch: "feat/notch",
                      status: .awaitingPermission(tool: "Edit(NotchPanel.swift)"),
                      startedAt: Date().addingTimeInterval(-1240)),

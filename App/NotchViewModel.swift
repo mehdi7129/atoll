@@ -19,6 +19,8 @@ final class NotchViewModel {
 
     var state: IslandState = .compact
     var isPinned = false
+    /// Session ouverte en vue détaillée (clic sur une ligne). nil = liste.
+    var selectedSessionID: String?
 
     /// Un seul écran (l'écran principal) pilote l'ouverture auto et le focus
     /// clavier des cartes interactives, pour que les panneaux ne se disputent
@@ -67,7 +69,22 @@ final class NotchViewModel {
     }
 
     var sessions: [AgentSession] { store.uiSessions }
-    var usage: UsageSnapshot { store.usage }
+    var usage: UsageSnapshot { store.displayQuota }
+    var quotaResets: (five: Date?, seven: Date?) { store.quotaResets }
+    var hasRealQuota: Bool { store.hasRealQuota }
+
+    var selectedSession: AgentSession? {
+        guard let id = selectedSessionID else { return nil }
+        return sessions.first { $0.id == id }
+    }
+
+    func selectSession(_ id: String) {
+        selectedSessionID = (selectedSessionID == id) ? nil : id
+    }
+
+    func clearSelection() {
+        selectedSessionID = nil
+    }
 
     var hasActivity: Bool { !sessions.isEmpty }
     var workingCount: Int { sessions.filter(\.isActive).count }
@@ -130,6 +147,7 @@ final class NotchViewModel {
     func close() {
         isPinned = false
         hoverTask?.cancel()
+        selectedSessionID = nil
         withAnimation(.spring(response: 0.45, dampingFraction: 1.0)) {
             state = .compact
         }
