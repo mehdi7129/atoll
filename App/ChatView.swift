@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import AtollCore
 
@@ -11,6 +12,8 @@ struct ChatView: View {
 
     /// Dictée vocale (locale) : une instance par vue de chat.
     @State private var voice = VoiceDictation()
+    /// Moniteur clavier local du push-to-talk (espace maintenu).
+    @State private var pttMonitor: Any?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -22,7 +25,72 @@ struct ChatView: View {
         }
         // Chat fermé/remplacé pendant une dictée : couper le micro (sinon le tap
         // audio et la reconnaissance resteraient actifs — micro allumé fantôme).
-        .onDisappear { voice.stop() }
+        .onDisappear {
+            voice.stop()
+            removePushToTalk()
+        }
+        .onAppear {
+            if interactive { installPushToTalk() }
+        }
+        #if DEBUG
+        // Test scripté du micro (crash installTap) : notifyutil …debug.voice
+        // démarre la dictée 3 s puis l'arrête.
+        .onReceive(NotificationCenter.default.publisher(for: .atollDebugVoice)) { _ in
+            guard interactive, !voice.isListening else { return }
+            voice.start { text in driver.draft = text }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { voice.stop() }
+        }
+        #endif
+    }
+
+    // MARK: - Push-to-talk (espace maintenu)
+
+    /// Installe le moniteur clavier LOCAL (aucune permission d'accessibilité :
+    /// il ne voit que les touches destinées à Atoll quand le chat a le focus).
+    /// Règle anti-conflit avec la frappe : l'espace ne déclenche la voix QUE si
+    /// le composer est VIDE — dès qu'un texte est saisi, l'espace se tape
+    /// normalement. Maintenir l'espace = parler ; relâcher = transcrire.
+    private func installPushToTalk() {
+        guard pttMonitor == nil else { return }
+        pttMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) { event in
+            MainActor.assumeIsolated {
+                handlePushToTalk(event)
+            }
+        }
+    }
+
+    private func removePushToTalk() {
+        if let monitor = pttMonitor { NSEvent.removeMonitor(monitor) }
+        pttMonitor = nil
+        voice.pttHeld = false
+    }
+
+    /// Retourne nil pour AVALER l'événement (espace consommé par la voix), ou
+    /// l'événement pour le laisser suivre son cours (frappe normale).
+    private func handlePushToTalk(_ event: NSEvent) -> NSEvent? {
+        let spaceKeyCode: UInt16 = 49
+        guard event.keyCode == spaceKeyCode else { return event }
+
+        if event.type == .keyDown {
+            if voice.isListening { return voice.pttHeld ? nil : event } // auto-repeat
+            let composerEmpty = driver.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            let canDictate = composerEmpty && driver.state == .ready
+            guard canDictate else { return event } // texte présent → espace normal
+            voice.pttHeld = true
+            let base = driver.draft
+            voice.start { text in
+                driver.draft = base.isEmpty ? text : base + " " + text
+            }
+            return nil
+        }
+
+        // keyUp
+        if voice.pttHeld {
+            voice.pttHeld = false
+            voice.stop()
+            return nil
+        }
+        return event
     }
 
     private var header: some View {
@@ -192,10 +260,13 @@ struct ChatView: View {
     /// Indication sous le composer selon l'état de la dictée.
     private var voiceHint: String? {
         switch voice.state {
-        case .idle: return nil
+        case .idle:
+            // Astuce push-to-talk visible quand le composer est vide et prêt.
+            let empty = driver.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            return (empty && driver.state == .ready) ? "espace maintenu ou 🎤 pour dicter" : nil
         case .listening:
             let partial = voice.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-            return partial.isEmpty ? "◉ à l'écoute — parle, puis appuie pour arrêter" : "◉ " + partial
+            return partial.isEmpty ? "◉ à l'écoute — parle, relâche pour terminer" : "◉ " + partial
         case .denied:
             return "micro/reconnaissance refusés — Réglages › Confidentialité"
         case .unavailable:

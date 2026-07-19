@@ -246,7 +246,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 NotificationCenter.default.post(name: .atollDebugOpenSettings, object: nil)
             }
         }
-        debugTokens.append(contentsOf: [allowToken, denyToken, selectToken, jumpToken, chatToken, resumeToken, settingsToken])
+        // Démarre la dictée dans le chat actif (test du crash installTap micro).
+        var voiceToken: Int32 = 0
+        notify_register_dispatch("dev.mehdiguiard.atoll.debug.voice", &voiceToken, DispatchQueue.main) { _ in
+            MainActor.assumeIsolated {
+                NotificationCenter.default.post(name: .atollDebugVoice, object: nil)
+            }
+        }
+        debugTokens.append(contentsOf: [allowToken, denyToken, selectToken, jumpToken, chatToken, resumeToken, settingsToken, voiceToken])
         #endif
     }
 
@@ -267,5 +274,7 @@ extension Notification.Name {
     /// Relaie le trigger Darwin debug.settings vers la vue SwiftUI qui détient
     /// l'action openSettings (fiable, contrairement à showSettingsWindow:).
     static let atollDebugOpenSettings = Notification.Name("dev.mehdiguiard.atoll.debug.openSettings")
+    /// Relaie debug.voice vers la ChatView active (test du micro).
+    static let atollDebugVoice = Notification.Name("dev.mehdiguiard.atoll.debug.voice.local")
 }
 #endif
