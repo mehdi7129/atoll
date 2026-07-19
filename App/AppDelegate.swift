@@ -177,8 +177,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     logger.info("debug.jump → aucune ancre")
                     return
                 }
-                let result = TerminalJumpService.jump(to: anchor)
-                logger.info("debug.jump → \(String(describing: result), privacy: .public)")
+                TerminalJumpService.jump(to: anchor) { result in
+                    logger.info("debug.jump → \(String(describing: result), privacy: .public)")
+                }
             }
         }
         debugTokens.append(contentsOf: [allowToken, denyToken, selectToken, jumpToken])

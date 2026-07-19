@@ -100,19 +100,22 @@ struct SessionDetailView: View {
     }
 
     private func performJump() {
-        jumpMessage = nil
+        jumpMessage = "…"
         needsPermissionApp = nil
         guard let anchor = store.terminalAnchor(for: session.id) else {
             jumpMessage = "ancrage terminal indisponible"
             return
         }
-        switch TerminalJumpService.jump(to: anchor) {
-        case .focused(_, let granularity):
-            jumpMessage = "focus (\(granularity))"
-        case .needsAutomationPermission(let appName):
-            needsPermissionApp = appName
-        case .failed(let reason):
-            jumpMessage = reason
+        TerminalJumpService.jump(to: anchor) { result in
+            switch result {
+            case .focused(_, let granularity):
+                jumpMessage = "focus (\(granularity))"
+            case .needsAutomationPermission(let appName):
+                jumpMessage = nil
+                needsPermissionApp = appName
+            case .failed(let reason):
+                jumpMessage = reason
+            }
         }
     }
 

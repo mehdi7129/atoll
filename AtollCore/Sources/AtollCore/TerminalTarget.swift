@@ -79,7 +79,8 @@ public enum TerminalResolver {
         "com.microsoft.VSCodeInsiders": "code-insiders",
         "com.todesktop.230313mzl4w4u92": "cursor",
         "com.exafunction.windsurf": "windsurf",
-        "dev.zed.Zed": "zed",
+        // Zed n'utilise ni le flag `-r` ni le chemin de CLI VS Code → repli
+        // sur activation app plutôt qu'un `zed -r` erroné.
     ]
 
     static let byBundleID: [String: TerminalKind] = [
@@ -109,6 +110,23 @@ public enum TerminalResolver {
         default:
             return .unknown(bundleID: anchor.bundleID)
         }
+    }
+}
+
+/// Résolution de la racine de workspace pour un éditeur VS Code-family.
+public enum WorkspaceRoot {
+    /// Racine probable du workspace : le plus proche ancêtre de `cwd` contenant
+    /// un `.git` (le cas quasi universel), sinon `cwd` lui-même. Passer la RACINE
+    /// à `cursor -r` focalise la bonne fenêtre ; passer un sous-dossier
+    /// détournerait une fenêtre existante (constat de revue).
+    public static func resolve(cwd: String, gitExists: (String) -> Bool) -> String {
+        var components = (cwd as NSString).pathComponents
+        while components.count > 1 {
+            let path = NSString.path(withComponents: components)
+            if gitExists(path + "/.git") { return path }
+            components.removeLast()
+        }
+        return cwd
     }
 }
 

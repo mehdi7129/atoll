@@ -17,43 +17,49 @@ public enum TerminalScripts {
     }
 
     /// Terminal.app : sélectionne l'onglet dont le tty correspond, au premier plan.
-    public static func terminalApp(tty: String) -> String {
+    /// `with timeout` borne l'Apple Event : un terminal figé dégrade au lieu de
+    /// bloquer l'appelant indéfiniment.
+    public static func terminalApp(tty: String, timeoutSeconds: Int = 5) -> String {
         let target = escapeAppleScript(devTTY(tty))
         return """
-        tell application "Terminal"
-          activate
-          repeat with w in windows
-            repeat with t in tabs of w
-              if (tty of t as text) is "\(target)" then
-                set selected of t to true
-                set frontmost of w to true
-                return
-              end if
-            end repeat
-          end repeat
-        end tell
-        """
-    }
-
-    /// iTerm2 : sélectionne la session (split pane) par tty, au premier plan.
-    public static func iterm2(tty: String) -> String {
-        let target = escapeAppleScript(devTTY(tty))
-        return """
-        tell application "iTerm"
-          activate
-          repeat with aWindow in windows
-            repeat with aTab in tabs of aWindow
-              repeat with aSession in sessions of aTab
-                if (tty of aSession) is "\(target)" then
-                  select aWindow
-                  select aTab
-                  select aSession
+        with timeout of \(timeoutSeconds) seconds
+          tell application "Terminal"
+            activate
+            repeat with w in windows
+              repeat with t in tabs of w
+                if (tty of t as text) is "\(target)" then
+                  set selected of t to true
+                  set frontmost of w to true
                   return
                 end if
               end repeat
             end repeat
-          end repeat
-        end tell
+          end tell
+        end timeout
+        """
+    }
+
+    /// iTerm2 : sélectionne la session (split pane) par tty, au premier plan.
+    public static func iterm2(tty: String, timeoutSeconds: Int = 5) -> String {
+        let target = escapeAppleScript(devTTY(tty))
+        return """
+        with timeout of \(timeoutSeconds) seconds
+          tell application "iTerm"
+            activate
+            repeat with aWindow in windows
+              repeat with aTab in tabs of aWindow
+                repeat with aSession in sessions of aTab
+                  if (tty of aSession) is "\(target)" then
+                    select aWindow
+                    select aTab
+                    select aSession
+                    return
+                  end if
+                end repeat
+              end repeat
+            end repeat
+          end tell
+        end timeout
         """
     }
 

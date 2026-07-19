@@ -78,4 +78,30 @@ final class TerminalTargetTests: XCTestCase {
         XCTAssertEqual(paths.first, "/Applications/Cursor.app/Contents/Resources/app/bin/cursor")
         XCTAssertTrue(paths.contains("/opt/homebrew/bin/cursor"))
     }
+
+    func testZedNotVSCodeFamily() {
+        // Zed ne doit PAS hériter du flag -r ni du chemin CLI VS Code.
+        let kind = TerminalResolver.resolve(anchor(bundleID: "dev.zed.Zed"))
+        if case .vscodeFamily = kind { XCTFail("Zed ne doit pas être vscodeFamily") }
+    }
+
+    // MARK: - Racine de workspace (jump-back Cursor)
+
+    func testWorkspaceRootWalksUpToGit() {
+        // /repo est un dépôt git, la session tourne dans /repo/src/components.
+        let root = WorkspaceRoot.resolve(cwd: "/repo/src/components") { path in
+            path == "/repo/.git"
+        }
+        XCTAssertEqual(root, "/repo", "doit viser la racine du workspace, pas le sous-dossier")
+    }
+
+    func testWorkspaceRootFallsBackToCwd() {
+        let root = WorkspaceRoot.resolve(cwd: "/tmp/nogit/deep") { _ in false }
+        XCTAssertEqual(root, "/tmp/nogit/deep")
+    }
+
+    func testWorkspaceRootAtRepoRoot() {
+        let root = WorkspaceRoot.resolve(cwd: "/repo") { path in path == "/repo/.git" }
+        XCTAssertEqual(root, "/repo")
+    }
 }
