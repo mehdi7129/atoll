@@ -9,6 +9,9 @@ struct ChatView: View {
     let interactive: Bool
     let onClose: () -> Void
 
+    /// Dictée vocale (locale) : une instance par vue de chat.
+    @State private var voice = VoiceDictation()
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             header
@@ -17,6 +20,9 @@ struct ChatView: View {
                 composer
             }
         }
+        // Chat fermé/remplacé pendant une dictée : couper le micro (sinon le tap
+        // audio et la reconnaissance resteraient actifs — micro allumé fantôme).
+        .onDisappear { voice.stop() }
     }
 
     private var header: some View {
@@ -128,31 +134,75 @@ struct ChatView: View {
     }
 
     private var composer: some View {
-        HStack(spacing: 8) {
-            Text("›")
-                .foregroundStyle(colors.accent)
-            TextField("message à Claude…", text: Binding(
-                get: { driver.draft },
-                set: { driver.draft = $0 }
-            ), axis: .vertical)
-                .textFieldStyle(.plain)
-                .font(AtollFont.mono(11))
-                .foregroundStyle(colors.fg)
-                .lineLimit(1...4)
-                .disabled(driver.state == .responding || driver.state == .starting)
-                .onSubmit(sendMessage)
-            if driver.state == .responding {
-                Text("réponse en cours…")
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 8) {
+                Text("›")
+                    .foregroundStyle(colors.accent)
+                TextField("message à Claude…", text: Binding(
+                    get: { driver.draft },
+                    set: { driver.draft = $0 }
+                ), axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .font(AtollFont.mono(11))
+                    .foregroundStyle(colors.fg)
+                    .lineLimit(1...4)
+                    .disabled(driver.state == .responding || driver.state == .starting)
+                    .onSubmit(sendMessage)
+                if driver.state == .responding {
+                    Text("réponse en cours…")
+                        .font(AtollFont.mono(9))
+                        .foregroundStyle(colors.dim)
+                }
+                micButton
+                AsciiButton(label: "⏎", color: canSend ? colors.ok : colors.dim, shortcut: nil) {
+                    sendMessage()
+                }
+                .disabled(!canSend)
+            }
+            if let voiceHint {
+                Text(voiceHint)
                     .font(AtollFont.mono(9))
-                    .foregroundStyle(colors.dim)
+                    .foregroundStyle(voice.isListening ? colors.accent : colors.warn)
+                    .lineLimit(1)
             }
-            AsciiButton(label: "⏎", color: canSend ? colors.ok : colors.dim, shortcut: nil) {
-                sendMessage()
-            }
-            .disabled(!canSend)
         }
         .padding(8)
         .background(colors.surface)
+    }
+
+    /// Micro : appuie pour dicter, appuie encore pour arrêter. Le texte transcrit
+    /// (en local) remplit le composer — l'utilisateur relit avant d'envoyer.
+    private var micButton: some View {
+        AsciiButton(label: voice.isListening ? "◉" : "🎤",
+                    color: voice.isListening ? colors.accent : colors.dim,
+                    shortcut: nil) {
+            if voice.isListening {
+                voice.stop()
+            } else {
+                let base = driver.draft
+                voice.start { text in
+                    // Ajoute au brouillon existant (ne l'écrase pas).
+                    driver.draft = base.isEmpty ? text : base + " " + text
+                }
+            }
+        }
+        .disabled(driver.state == .responding || driver.state == .starting)
+    }
+
+    /// Indication sous le composer selon l'état de la dictée.
+    private var voiceHint: String? {
+        switch voice.state {
+        case .idle: return nil
+        case .listening:
+            let partial = voice.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+            return partial.isEmpty ? "◉ à l'écoute — parle, puis appuie pour arrêter" : "◉ " + partial
+        case .denied:
+            return "micro/reconnaissance refusés — Réglages › Confidentialité"
+        case .unavailable:
+            return "dictée locale indisponible pour le français sur ce Mac"
+        case .failed(let message):
+            return message
+        }
     }
 
     private var canSend: Bool {

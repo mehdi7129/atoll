@@ -4,5 +4,9 @@
 <dict>
     <key>com.apple.security.automation.apple-events</key>
     <true/>
+    <!-- Saisie vocale du chat : micro + reconnaissance (sandbox OFF, mais le
+         Hardened Runtime exige l'entitlement audio-input pour le micro). -->
+    <key>com.apple.security.device.audio-input</key>
+    <true/>
 </dict>
 </plist>
