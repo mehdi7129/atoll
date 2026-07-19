@@ -19,8 +19,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Démarre la réception des événements de hooks puis le suivi des sessions.
         let store = SessionStore.shared
         let server = BridgeServer(
-            onEvent: { event in
+            onEvent: { event, requestID in
                 Task { @MainActor in
+                    if let requestID {
+                        InteractionCenter.shared.register(event: event, requestID: requestID)
+                    }
                     SessionStore.shared.apply(event)
                 }
             },
@@ -31,6 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         )
         bridgeServer = server
+        InteractionCenter.shared.server = server
         try? server.start()
         store.start()
 
@@ -99,7 +103,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.controllers.forEach { $0.viewModel.close() }
             }
         }
-        debugTokens = [expandToken, compactToken]
+        // Résolution automatisée de la première demande en attente — pour les
+        // tests de bout en bout scriptés (mêmes chemins de code que les boutons).
+        var allowToken: Int32 = 0
+        notify_register_dispatch("dev.mehdiguiard.atoll.debug.allow", &allowToken, DispatchQueue.main) { _ in
+            MainActor.assumeIsolated {
+                let center = InteractionCenter.shared
+                guard let request = center.current else { return }
+                switch request.kind {
+                case .permission:
+                    center.allow(request.id)
+                case .plan:
+                    center.approvePlan(request.id, acceptEdits: false)
+                case .questions(let questions, _):
+                    var answers: [String: String] = [:]
+                    for question in questions {
+                        answers[question.question] = question.options.first?.label ?? "ok"
+                    }
+                    center.answerQuestions(request.id, answers: answers)
+                }
+            }
+        }
+        var denyToken: Int32 = 0
+        notify_register_dispatch("dev.mehdiguiard.atoll.debug.deny", &denyToken, DispatchQueue.main) { _ in
+            MainActor.assumeIsolated {
+                let center = InteractionCenter.shared
+                guard let request = center.current else { return }
+                center.deny(request.id, message: "Refus de test automatisé Atoll.")
+            }
+        }
+        debugTokens = [expandToken, compactToken, allowToken, denyToken]
     }
 
     /// Empreinte de la configuration d'écrans. Un tableau (pas un dictionnaire) :

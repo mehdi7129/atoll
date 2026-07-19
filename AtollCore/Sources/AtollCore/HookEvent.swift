@@ -21,6 +21,7 @@ public struct ParsedHookEvent: Equatable, Sendable {
         case preToolUse = "PreToolUse"
         case postToolUse = "PostToolUse"
         case postToolUseFailure = "PostToolUseFailure"
+        case permissionRequest = "PermissionRequest"
         case permissionDenied = "PermissionDenied"
         case notification = "Notification"
         case stop = "Stop"
@@ -32,6 +33,19 @@ public struct ParsedHookEvent: Equatable, Sendable {
         case sessionEnd = "SessionEnd"
     }
 
+    /// Une question du tool AskUserQuestion.
+    public struct AskQuestion: Equatable, Sendable {
+        public struct Option: Equatable, Sendable {
+            public let label: String
+            public let description: String?
+        }
+
+        public let question: String
+        public let header: String?
+        public let multiSelect: Bool
+        public let options: [Option]
+    }
+
     public let kind: Kind
     public let sessionID: String
     public let transcriptPath: String?
@@ -41,6 +55,14 @@ public struct ParsedHookEvent: Equatable, Sendable {
     public let notificationType: String?
     public let promptText: String?
     public let sessionEndReason: String?
+    // Spécifique PermissionRequest — conservé en Data (re-sérialisé) pour rester
+    // Equatable/Sendable tout en permettant le passthrough exact vers la décision.
+    public let toolInputData: Data?
+    public let suggestionsData: Data?
+    /// Markdown du plan si l'outil est ExitPlanMode.
+    public let planText: String?
+    /// Questions décodées si l'outil est AskUserQuestion.
+    public let questions: [AskQuestion]?
     // Enrichissements du helper.
     public let claudePid: Int32?
     public let claudeStartTime: Double?
@@ -76,12 +98,44 @@ public struct ParsedHookEvent: Equatable, Sendable {
         promptText = payload["prompt"] as? String
         sessionEndReason = payload["reason"] as? String
 
+        let toolInput = payload["tool_input"] as? [String: Any]
+        if kind == .permissionRequest {
+            toolInputData = toolInput.flatMap { try? JSONSerialization.data(withJSONObject: $0) }
+            suggestionsData = (payload["permission_suggestions"] as? [Any])
+                .flatMap { try? JSONSerialization.data(withJSONObject: $0) }
+            planText = toolInput?["plan"] as? String
+            questions = Self.parseQuestions(toolInput)
+        } else {
+            toolInputData = nil
+            suggestionsData = nil
+            planText = nil
+            questions = nil
+        }
+
         let enrich = envelope["enrich"] as? [String: Any] ?? [:]
         claudePid = (enrich["pid"] as? NSNumber)?.int32Value
         claudeStartTime = (enrich["startTime"] as? NSNumber)?.doubleValue
         tty = enrich["tty"] as? String
         terminalHint = enrich["terminalHint"] as? String
         entrypoint = enrich["entrypoint"] as? String
+    }
+
+    private static func parseQuestions(_ toolInput: [String: Any]?) -> [AskQuestion]? {
+        guard let raw = toolInput?["questions"] as? [[String: Any]], !raw.isEmpty else { return nil }
+        let parsed = raw.compactMap { entry -> AskQuestion? in
+            guard let question = entry["question"] as? String else { return nil }
+            let options = (entry["options"] as? [[String: Any]] ?? []).compactMap { option -> AskQuestion.Option? in
+                guard let label = option["label"] as? String else { return nil }
+                return AskQuestion.Option(label: label, description: option["description"] as? String)
+            }
+            return AskQuestion(
+                question: question,
+                header: entry["header"] as? String,
+                multiSelect: entry["multiSelect"] as? Bool ?? false,
+                options: options
+            )
+        }
+        return parsed.isEmpty ? nil : parsed
     }
 
     /// Résumé lisible d'un appel d'outil pour l'affichage : `Bash(git push)`, `Edit(Foo.swift)`…

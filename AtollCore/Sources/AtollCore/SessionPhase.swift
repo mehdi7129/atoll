@@ -46,6 +46,8 @@ public enum SessionReducer {
             return .busy
         case .preToolUse:
             return .toolRunning(tool: event.toolSummary ?? event.toolName)
+        case .permissionRequest:
+            return .waitingPermission(tool: event.toolSummary ?? event.toolName)
         case .postToolUse, .postToolUseFailure, .permissionDenied, .subagentStart, .subagentStop:
             // Un événement de complétion tardif (outil asynchrone terminé après
             // Stop) ne doit pas ré-afficher un spinner sans porte de sortie.

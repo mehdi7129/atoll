@@ -33,6 +33,10 @@ struct NotchRootView: View {
         viewModel.state == .expanded ? 24 : 14
     }
 
+    private var pendingCount: Int {
+        InteractionCenter.shared.pending.count
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             island
@@ -43,6 +47,17 @@ struct NotchRootView: View {
             height: IslandGeometry.windowSize.height,
             alignment: .top
         )
+        .onChange(of: pendingCount) { oldCount, newCount in
+            // Claude demande quelque chose → l'îlot s'ouvre tout seul et prend
+            // le clavier ; tout résolu → il se replie et rend le focus.
+            if newCount > oldCount {
+                viewModel.isPinned = true
+                viewModel.open()
+            } else if newCount == 0, oldCount > 0 {
+                viewModel.close()
+            }
+            viewModel.onKeyFocusRequest?(newCount > 0)
+        }
     }
 
     @ViewBuilder

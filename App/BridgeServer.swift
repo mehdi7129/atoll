@@ -16,17 +16,50 @@ final class BridgeServer: @unchecked Sendable {
     private var listenFD: Int32 = -1
     private var acceptSource: DispatchSourceRead?
     private var readers: [Int32: (source: DispatchSourceRead, buffer: Data)] = [:]
+    /// Connexions PermissionRequest gardées ouvertes en attendant la décision
+    /// de l'îlot (requestID → fd du helper bloqué).
+    private var pendingReplies: [String: Int32] = [:]
 
-    /// Appelé sur la main queue pour chaque événement décodé.
-    private let onEvent: (ParsedHookEvent) -> Void
+    /// Appelés sur la main queue. requestID non-nil = PermissionRequest en
+    /// attente de décision via reply()/cancelPending().
+    private let onEvent: (ParsedHookEvent, _ requestID: String?) -> Void
     private let onStateChange: (Bool) -> Void
 
     init(
-        onEvent: @escaping (ParsedHookEvent) -> Void,
+        onEvent: @escaping (ParsedHookEvent, String?) -> Void,
         onStateChange: @escaping (Bool) -> Void
     ) {
         self.onEvent = onEvent
         self.onStateChange = onStateChange
+    }
+
+    // MARK: - Réponses aux PermissionRequest
+
+    /// Envoie la décision au helper bloqué puis ferme la connexion.
+    func reply(_ requestID: String, decision: Data) {
+        queue.async { [weak self] in
+            guard let self, let fd = self.pendingReplies.removeValue(forKey: requestID) else { return }
+            decision.withUnsafeBytes { raw in
+                var offset = 0
+                while offset < raw.count {
+                    let written = write(fd, raw.baseAddress!.advanced(by: offset), raw.count - offset)
+                    if written <= 0 { break }
+                    offset += written
+                }
+            }
+            close(fd)
+            log.info("décision envoyée pour \(requestID, privacy: .public)")
+        }
+    }
+
+    /// Ferme la connexion SANS décision : le helper sort en silence et le
+    /// prompt du terminal garde la main (course perdue, îlot fermé, etc.).
+    func cancelPending(_ requestID: String) {
+        queue.async { [weak self] in
+            guard let self, let fd = self.pendingReplies.removeValue(forKey: requestID) else { return }
+            close(fd)
+            log.info("requête \(requestID, privacy: .public) rendue au terminal")
+        }
     }
 
     enum ServerError: Error {
@@ -90,10 +123,16 @@ final class BridgeServer: @unchecked Sendable {
 
     func stop() {
         queue.sync {
-            for (_, entry) in readers {
+            for (fd, entry) in readers {
                 entry.source.cancel()
+                close(fd)
             }
             readers.removeAll()
+            // Les helpers bloqués repartent en silence → prompts terminal intacts.
+            for (_, fd) in pendingReplies {
+                close(fd)
+            }
+            pendingReplies.removeAll()
             acceptSource?.cancel()
             acceptSource = nil
             listenFD = -1
@@ -129,9 +168,9 @@ final class BridgeServer: @unchecked Sendable {
             source.setEventHandler { [weak self] in
                 self?.readAvailable(clientFD)
             }
-            source.setCancelHandler {
-                close(clientFD)
-            }
+            // Pas de fermeture dans le cancel handler : le fd d'une PermissionRequest
+            // survit à l'annulation de sa source (on lui répondra plus tard).
+            // La fermeture est toujours explicite (finish / reply / stop).
             readers[clientFD] = (source, Data())
             source.resume()
         }
@@ -166,12 +205,38 @@ final class BridgeServer: @unchecked Sendable {
     private func finish(_ fd: Int32, parse: Bool) {
         guard let entry = readers.removeValue(forKey: fd) else { return }
         entry.source.cancel()
+
+        let event = parse && !entry.buffer.isEmpty
+            ? ParsedHookEvent(envelopeData: entry.buffer)
+            : nil
+
+        if let event, event.kind == .permissionRequest {
+            // Le helper attend la décision : le fd reste OUVERT (non fermé ici).
+            let requestID = UUID().uuidString
+            pendingReplies[requestID] = fd
+            // Filet de sécurité : jamais de fd orphelin au-delà du timeout du hook.
+            queue.asyncAfter(deadline: .now() + 86_400) { [weak self] in
+                self?.pendingRepliesTimeout(requestID)
+            }
+            log.info("permission en attente \(requestID, privacy: .public) — \(event.toolSummary ?? event.toolName ?? "?", privacy: .public)")
+            DispatchQueue.main.async { self.onEvent(event, requestID) }
+            return
+        }
+
+        // Tous les autres cas : fermeture explicite du fd.
+        close(fd)
         guard parse, !entry.buffer.isEmpty else { return }
-        if let event = ParsedHookEvent(envelopeData: entry.buffer) {
+        if let event {
             log.info("événement reçu: \(event.kind.rawValue, privacy: .public) session \(event.sessionID, privacy: .public)")
-            DispatchQueue.main.async { self.onEvent(event) }
+            DispatchQueue.main.async { self.onEvent(event, nil) }
         } else {
             log.warning("enveloppe illisible (\(entry.buffer.count) octets)")
+        }
+    }
+
+    private func pendingRepliesTimeout(_ requestID: String) {
+        if let fd = pendingReplies.removeValue(forKey: requestID) {
+            close(fd)
         }
     }
 }

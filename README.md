@@ -18,7 +18,7 @@ y compris pour les sessions lancées depuis le terminal de Cursor.
 |---|---|
 | 1 · Coquille notch + thème ASCII | ✅ |
 | 2 · Monitoring des sessions réelles (hooks) | ✅ |
-| 3 · Interactions (permissions, plans, questions) | ⬜ |
+| 3 · Interactions (permissions, plans, questions) | ✅ |
 | 4 · Jump-back terminal | ⬜ |
 | 5 · Quota exact · 6 · Chat · 7 · Distribution | ⬜ |
 

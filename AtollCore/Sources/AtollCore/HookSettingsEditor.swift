@@ -10,14 +10,37 @@ import Foundation
 public enum HookSettingsEditor {
     public static let managedMarker = "atoll-bridge"
 
-    /// Événements installés en Phase 2 — tous en fire-and-forget (`async`).
-    /// `PermissionRequest` (bloquant) arrivera en Phase 3 avec l'UI de réponse.
-    public static let managedEvents = [
-        "SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse",
-        "PostToolUseFailure", "PermissionDenied", "Notification", "Stop",
-        "StopFailure", "SubagentStart", "SubagentStop", "PreCompact",
-        "PostCompact", "SessionEnd",
+    public struct ManagedEvent: Sendable {
+        public let name: String
+        /// Fire-and-forget (n'ajoute aucune latence au CLI).
+        public let async: Bool
+        public let timeout: Int
+        public let matcher: String?
+
+        init(_ name: String, async: Bool = true, timeout: Int = 10, matcher: String? = nil) {
+            self.name = name
+            self.async = async
+            self.timeout = timeout
+            self.matcher = matcher
+        }
+    }
+
+    /// Les événements d'état sont async (jamais de latence CLI) ; PermissionRequest
+    /// est BLOQUANT (timeout 86400 = l'îlot peut répondre pendant 24 h — même
+    /// valeur que Vibe Island/open-vibe-island) et fail-open : si l'app ne répond
+    /// pas, le helper sort en silence et le prompt terminal reprend la main.
+    public static let managedEvents: [ManagedEvent] = [
+        ManagedEvent("SessionStart"), ManagedEvent("UserPromptSubmit"),
+        ManagedEvent("PreToolUse"), ManagedEvent("PostToolUse"),
+        ManagedEvent("PostToolUseFailure"), ManagedEvent("PermissionDenied"),
+        ManagedEvent("Notification"), ManagedEvent("Stop"),
+        ManagedEvent("StopFailure"), ManagedEvent("SubagentStart"),
+        ManagedEvent("SubagentStop"), ManagedEvent("PreCompact"),
+        ManagedEvent("PostCompact"), ManagedEvent("SessionEnd"),
+        ManagedEvent("PermissionRequest", async: false, timeout: 86_400, matcher: "*"),
     ]
+
+    public static var managedEventNames: [String] { managedEvents.map(\.name) }
 
     public enum EditorError: Error, Equatable {
         /// Le fichier existe mais n'est pas un objet JSON valide (JSONC ? corrompu ?).
@@ -35,19 +58,18 @@ public enum HookSettingsEditor {
         var hooks = settings["hooks"] as? [String: Any] ?? [:]
 
         for event in managedEvents {
-            var entries = try strictEntries(hooks[event])
+            var entries = try strictEntries(hooks[event.name])
             entries.removeAll { isManagedEntry($0) }
-            entries.append([
-                "hooks": [
-                    [
-                        "type": "command",
-                        "command": command,
-                        "async": true,
-                        "timeout": 10,
-                    ] as [String: Any]
-                ]
-            ])
-            hooks[event] = entries
+            var hook: [String: Any] = [
+                "type": "command",
+                "command": command,
+                "timeout": event.timeout,
+            ]
+            if event.async { hook["async"] = true }
+            var entry: [String: Any] = ["hooks": [hook]]
+            if let matcher = event.matcher { entry["matcher"] = matcher }
+            entries.append(entry)
+            hooks[event.name] = entries
         }
 
         settings["hooks"] = hooks
@@ -95,7 +117,7 @@ public enum HookSettingsEditor {
         guard let settings = try? parse(data),
               let hooks = settings["hooks"] as? [String: Any] else { return false }
         return managedEvents.allSatisfy { event in
-            (hooks[event] as? [[String: Any]] ?? []).contains { isManagedEntry($0) }
+            (hooks[event.name] as? [[String: Any]] ?? []).contains { isManagedEntry($0) }
         }
     }
 

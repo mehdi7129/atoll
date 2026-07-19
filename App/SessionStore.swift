@@ -96,6 +96,16 @@ final class SessionStore {
         eventCount += 1
         let now = Date()
 
+        // Course terminal ↔ îlot : un événement de résolution signifie que la
+        // demande a été tranchée ailleurs → annuler nos cartes en attente pour
+        // cette session (fermeture silencieuse, le terminal garde la main).
+        switch event.kind {
+        case .postToolUse, .postToolUseFailure, .permissionDenied, .stop, .sessionEnd:
+            InteractionCenter.shared.cancelForSession(event.sessionID)
+        default:
+            break
+        }
+
         if let index = sessions.firstIndex(where: { $0.id == event.sessionID }) {
             var session = sessions[index]
             // Résurrection : `claude --resume` reprend le MÊME session_id après un
@@ -214,6 +224,7 @@ final class SessionStore {
         for index in sessions.indices where sessions[index].pid == pid && sessions[index].phase.isAlive {
             sessions[index].phase = .ended
             tailer.stopWatching(sessions[index].id)
+            InteractionCenter.shared.cancelForSession(sessions[index].id)
             scheduleRemoval(sessions[index].id)
         }
         scheduleSnapshot()
@@ -342,6 +353,16 @@ final class SessionStore {
             "eventCount": eventCount,
             "serverRunning": serverRunning,
             "sessions": list,
+            "pendingInteractions": InteractionCenter.shared.pending.map { request -> [String: Any] in
+                var entry: [String: Any] = ["id": request.id, "session": request.sessionID]
+                switch request.kind {
+                case .permission: entry["kind"] = "permission"
+                case .plan: entry["kind"] = "plan"
+                case .questions: entry["kind"] = "questions"
+                }
+                if let tool = request.toolSummary ?? request.toolName { entry["tool"] = tool }
+                return entry
+            },
         ]
         if let data = try? JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: directory.appendingPathComponent("state.json"), options: .atomic)

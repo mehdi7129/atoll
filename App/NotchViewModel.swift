@@ -20,6 +20,10 @@ final class NotchViewModel {
     var state: IslandState = .compact
     var isPinned = false
 
+    /// Posé par le contrôleur : demande/rend le focus clavier du panneau
+    /// (nécessaire pour ⌘Y/⌘N et les champs texte des cartes interactives).
+    @ObservationIgnored var onKeyFocusRequest: ((Bool) -> Void)?
+
     /// Source de vérité partagée entre tous les écrans.
     private let store: SessionStore
 

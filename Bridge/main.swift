@@ -15,14 +15,20 @@ import AtollCore
 
 // MARK: - Client socket (BSD, timeouts courts)
 
-func sendToSocket(_ data: Data, path: String) -> Bool {
+/// Envoie l'enveloppe. Pour PermissionRequest (`awaitReply`), attend ensuite la
+/// décision de l'app sur la même connexion (half-close côté écriture) — le CLI
+/// borne l'attente via le timeout du hook, et l'app ferme la connexion sans
+/// données pour « rendre la main au terminal ».
+func sendToSocket(_ data: Data, path: String, awaitReply: Bool = false) -> Data? {
     let fd = socket(AF_UNIX, SOCK_STREAM, 0)
-    guard fd >= 0 else { return false }
+    guard fd >= 0 else { return nil }
     defer { close(fd) }
 
     var timeout = timeval(tv_sec: 0, tv_usec: 700_000)
     setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
-    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
+    if !awaitReply {
+        setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
+    }
     // L'app peut fermer pendant l'écriture : sans ceci, SIGPIPE tuerait le
     // helper (statut 141) — violation du fail-open.
     var noSigpipe: Int32 = 1
@@ -31,7 +37,7 @@ func sendToSocket(_ data: Data, path: String) -> Bool {
     var address = sockaddr_un()
     address.sun_family = sa_family_t(AF_UNIX)
     let pathBytes = path.utf8CString
-    guard pathBytes.count <= MemoryLayout.size(ofValue: address.sun_path) else { return false }
+    guard pathBytes.count <= MemoryLayout.size(ofValue: address.sun_path) else { return nil }
     withUnsafeMutableBytes(of: &address.sun_path) { destination in
         pathBytes.withUnsafeBytes { source in
             destination.copyMemory(from: UnsafeRawBufferPointer(rebasing: source.prefix(destination.count)))
@@ -44,7 +50,7 @@ func sendToSocket(_ data: Data, path: String) -> Bool {
             connect(fd, $0, length)
         }
     }
-    guard connected == 0 else { return false }
+    guard connected == 0 else { return nil }
 
     var offset = 0
     let total = data.count
@@ -52,10 +58,29 @@ func sendToSocket(_ data: Data, path: String) -> Bool {
         let written: Int = data.withUnsafeBytes { raw in
             write(fd, raw.baseAddress!.advanced(by: offset), min(total - offset, 65_536))
         }
-        guard written > 0 else { return false }
+        guard written > 0 else { return nil }
         offset += written
     }
-    return true
+    // Half-close : signale « enveloppe complète » au serveur tout en gardant
+    // la voie de retour ouverte pour la décision.
+    shutdown(fd, SHUT_WR)
+
+    guard awaitReply else { return nil }
+
+    var reply = Data()
+    var chunk = [UInt8](repeating: 0, count: 65_536)
+    while true {
+        let count = read(fd, &chunk, chunk.count)
+        if count > 0 {
+            reply.append(contentsOf: chunk[0..<count])
+            if reply.count > 1_048_576 { return nil }
+        } else if count == 0 {
+            return reply.isEmpty ? nil : reply
+        } else {
+            if errno == EINTR { continue }
+            return nil
+        }
+    }
 }
 
 // MARK: - Enrichissement + envoi
@@ -105,7 +130,14 @@ func forwardHookEvent() {
 
     let envelope: [String: Any] = ["v": 1, "enrich": enrich, "payload": payload]
     guard let data = try? JSONSerialization.data(withJSONObject: envelope) else { return }
-    _ = sendToSocket(data, path: BridgePaths.socketPath)
+
+    let isPermissionRequest = (payload["hook_event_name"] as? String) == "PermissionRequest"
+    let reply = sendToSocket(data, path: BridgePaths.socketPath, awaitReply: isPermissionRequest)
+    // Décision de l'îlot → stdout (le CLI la parse). Connexion fermée sans
+    // données = on rend la main au prompt du terminal, en silence.
+    if let reply, !reply.isEmpty {
+        FileHandle.standardOutput.write(reply)
+    }
 }
 
 // MARK: - Installation (partagée CLI / app)

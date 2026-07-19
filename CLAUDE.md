@@ -73,5 +73,12 @@ Pièges de build appris à la dure :
 ## État des phases (voir PLAN.md §5)
 
 - ✅ Phase 1 — coquille notch + thème ASCII (sessions factices)
-- 🚧 Phase 2 — monitoring des sessions réelles (hooks → socket → machine à états)
-- ⬜ Phases 3-7 — interactions, jump-back, quota, chat, distribution
+- ✅ Phase 2 — monitoring des sessions réelles (hooks → socket → machine à états)
+- ✅ Phase 3 — interactions (PermissionRequest bloquant : permissions, plans, questions)
+- ⬜ Phases 4-7 — jump-back, quota, chat, distribution
+
+Debug des interactions (Phase 3) : `notifyutil -p dev.mehdiguiard.atoll.debug.allow`
+(ou `.deny`) résout la première carte en attente via les mêmes chemins que les boutons ;
+`state.json` liste `pendingInteractions`. Tester le vrai helper :
+`echo '{"hook_event_name":"PermissionRequest","session_id":"t","tool_name":"Bash","tool_input":{"command":"ls"}}' | ~/.atoll/bin/atoll-bridge` bloque jusqu'à la décision (stdout = JSON de décision, vide = rendu au terminal).
+Le hook PermissionRequest est BLOQUANT (async:false, timeout 86400) — tout le reste est async.

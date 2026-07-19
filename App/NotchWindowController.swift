@@ -23,6 +23,17 @@ final class NotchWindowController {
         panel.setFrame(rect, display: true)
         panel.orderFrontRegardless()
 
+        // Focus clavier accordé seulement pendant une carte interactive
+        // (⌘Y/⌘N, champs texte) — sans jamais activer l'app.
+        viewModel.onKeyFocusRequest = { [weak panel] wantsFocus in
+            panel?.allowsKeyFocus = wantsFocus
+            if wantsFocus {
+                panel?.makeKeyAndOrderFront(nil)
+            } else {
+                panel?.orderFrontRegardless()
+            }
+        }
+
         // Un clic en dehors de l'îlot le referme. Le moniteur global couvre les
         // clics dans les autres apps ; le moniteur local couvre nos propres
         // fenêtres (Réglages, îlot d'un autre écran…) que le global ne voit pas.

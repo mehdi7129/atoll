@@ -6,7 +6,7 @@ import CoreGraphics
 public enum IslandGeometry {
 
     /// Taille fixe de la fenêtre transparente (jamais animée) : l'îlot s'anime dedans en SwiftUI.
-    public static let windowSize = CGSize(width: 720, height: 320)
+    public static let windowSize = CGSize(width: 760, height: 460)
 
     /// Largeur d'une aile de contenu de part et d'autre du notch en mode compact.
     public static let wingWidth: CGFloat = 88
@@ -15,8 +15,8 @@ public enum IslandGeometry {
     public static let pillWidth: CGFloat = 200
     public static let minimumPillHeight: CGFloat = 26
 
-    /// Taille du panneau étendu.
-    public static let expandedSize = CGSize(width: 580, height: 240)
+    /// Taille du panneau étendu (assez haut pour les cartes interactives).
+    public static let expandedSize = CGSize(width: 600, height: 340)
 
     /// Marge horizontale du contenu étendu : les flancs de la NotchShape sont
     /// insetés de topRadius (19 pt) — le contenu doit s'en écarter en plus de

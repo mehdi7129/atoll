@@ -43,14 +43,21 @@ final class HookSettingsEditorTests: XCTestCase {
 
         let settings = try parse(result)
         let hooks = try XCTUnwrap(settings["hooks"] as? [String: Any])
-        XCTAssertEqual(Set(hooks.keys), Set(HookSettingsEditor.managedEvents))
+        XCTAssertEqual(Set(hooks.keys), Set(HookSettingsEditor.managedEventNames))
 
-        // Chaque entrée gérée est async avec timeout court (fail-open).
+        // Les événements d'état sont async avec timeout court (fail-open).
         let stops = try XCTUnwrap(hooks["Stop"] as? [[String: Any]])
         let inner = try XCTUnwrap(stops.first?["hooks"] as? [[String: Any]]).first!
         XCTAssertEqual(inner["command"] as? String, command)
         XCTAssertEqual(inner["async"] as? Bool, true)
         XCTAssertEqual(inner["timeout"] as? Int, 10)
+
+        // PermissionRequest est BLOQUANT : matcher *, timeout 24 h, pas d'async.
+        let permissions = try XCTUnwrap(hooks["PermissionRequest"] as? [[String: Any]])
+        XCTAssertEqual(permissions.first?["matcher"] as? String, "*")
+        let permissionHook = try XCTUnwrap(permissions.first?["hooks"] as? [[String: Any]]).first!
+        XCTAssertEqual(permissionHook["timeout"] as? Int, 86_400)
+        XCTAssertNil(permissionHook["async"])
     }
 
     func testInstallPreservesUserHooksAndSettings() throws {
@@ -111,7 +118,7 @@ final class HookSettingsEditorTests: XCTestCase {
           "hooks": {
             "Stop": { "type": "command", "command": "afplay x.mp3" },
             "PreToolUse": [ { "hooks": [ { "type": "command", "command": "user-cmd" } ] }, "note" ],
-            "PermissionRequest": [ { "hooks": [ { "type": "command", "command": "user-perm" } ] } ],
+            "Elicitation": [ { "hooks": [ { "type": "command", "command": "user-elicit" } ] } ],
             "SessionStart": [
               { "hooks": [ { "type": "command", "command": "\\"$HOME/.atoll/bin/atoll-bridge\\"" } ] }
             ]
@@ -122,7 +129,7 @@ final class HookSettingsEditorTests: XCTestCase {
         let hooks = try XCTUnwrap(try parse(result)["hooks"] as? [String: Any])
         XCTAssertNotNil(hooks["Stop"] as? [String: Any], "valeur dict préservée telle quelle")
         XCTAssertEqual((hooks["PreToolUse"] as? [Any])?.count, 2, "tableau mixte préservé")
-        XCTAssertNotNil(hooks["PermissionRequest"], "événement non géré préservé")
+        XCTAssertNotNil(hooks["Elicitation"], "événement non géré préservé")
         XCTAssertNil(hooks["SessionStart"], "notre entrée retirée, clé vide supprimée")
     }
 

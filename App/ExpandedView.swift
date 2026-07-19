@@ -21,9 +21,17 @@ struct ExpandedView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             header
-            sessionList
-            Spacer(minLength: 0)
-            footer
+            // Une demande en attente prend toute la place : c'est LE moment
+            // où l'îlot sert à quelque chose.
+            if let request = InteractionCenter.shared.current {
+                InteractionCardView(request: request, colors: colors)
+                    .id(request.id)
+                Spacer(minLength: 0)
+            } else {
+                sessionList
+                Spacer(minLength: 0)
+                footer
+            }
         }
         .font(AtollFont.mono(11))
         .padding(.horizontal, IslandGeometry.expandedContentInset)
