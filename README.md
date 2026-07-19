@@ -23,7 +23,7 @@ y compris pour les sessions lancées depuis le terminal de Cursor.
 | 4 · Jump-back terminal (Cursor/VS Code · Terminal · iTerm2) | ✅ |
 | 5 · Quota exact (statusline) | ✅ |
 | 6 · Chat intégré (lancer Claude depuis le notch) | ✅ |
-| 7 · Distribution (notarisation, DMG, Sparkle) | 🚧 première release en cours |
+| 7 · Distribution (notarisation, DMG, Sparkle) | ✅ |
 
 Voir le [plan détaillé](PLAN.md), la [recherche](docs/research/) et [CLAUDE.md](CLAUDE.md)
 pour contribuer.
