@@ -88,6 +88,55 @@ enum ProcessInspector {
         return pids.prefix(count).filter { $0 > 0 && isClaudeProcess($0) }
     }
 
+    /// Environnement d'un processus du même utilisateur via KERN_PROCARGS2.
+    /// Format : [argc int32][exec_path\0][pad\0…][argv…\0][env…\0].
+    static func environment(of pid: pid_t) -> [String: String] {
+        var mib: [Int32] = [CTL_KERN, KERN_PROCARGS2, pid]
+        var size = 0
+        guard sysctl(&mib, 3, nil, &size, nil, 0) == 0, size > 4 else { return [:] }
+        var buffer = [CChar](repeating: 0, count: size)
+        guard sysctl(&mib, 3, &buffer, &size, nil, 0) == 0 else { return [:] }
+
+        let bytes = buffer.prefix(size)
+        var argc: Int32 = 0
+        withUnsafeMutableBytes(of: &argc) { dst in
+            for i in 0..<min(4, bytes.count) { dst[i] = UInt8(bitPattern: buffer[i]) }
+        }
+
+        // Segmenter sur les octets nuls, en sautant argc (4 octets) puis exec_path,
+        // le padding, et les `argc` arguments.
+        var tokens: [String] = []
+        var current: [UInt8] = []
+        for index in 4..<Int(size) {
+            let byte = UInt8(bitPattern: buffer[index])
+            if byte == 0 {
+                if !current.isEmpty || !tokens.isEmpty {
+                    tokens.append(String(decoding: current, as: UTF8.self))
+                }
+                current.removeAll(keepingCapacity: true)
+            } else {
+                current.append(byte)
+            }
+        }
+        // tokens = [exec_path, "", "", …, argv0…argvN-1, env0, env1, …]
+        // Sauter exec_path + les vides de padding, puis argc arguments.
+        var idx = 0
+        while idx < tokens.count, tokens[idx].isEmpty { idx += 1 } // exec_path est en tokens[0] non vide en fait
+        // exec_path
+        if idx < tokens.count { idx += 1 }
+        while idx < tokens.count, tokens[idx].isEmpty { idx += 1 } // padding nul
+        idx += Int(argc) // sauter les arguments
+        var result: [String: String] = [:]
+        while idx < tokens.count {
+            let token = tokens[idx]
+            if let eq = token.firstIndex(of: "=") {
+                result[String(token[..<eq])] = String(token[token.index(after: eq)...])
+            }
+            idx += 1
+        }
+        return result
+    }
+
     static func currentWorkingDirectory(of pid: pid_t) -> String? {
         var info = proc_vnodepathinfo()
         let size = Int32(MemoryLayout<proc_vnodepathinfo>.size)

@@ -37,6 +37,17 @@ final class SessionStore {
         var mcpServers: Set<String> = []
         var contextUsedFraction: Double?
         var costUSD: Double?
+        // Ancrage terminal (jump-back).
+        var tty: String?
+        var bundleID: String?
+        var termProgram: String?
+        var entrypoint: String?
+        var env: [String: String] = [:]
+
+        var terminalAnchor: TerminalAnchor {
+            TerminalAnchor(cwd: cwd, tty: tty, bundleID: bundleID, termProgram: termProgram,
+                           entrypoint: entrypoint, env: env)
+        }
     }
 
     private(set) var sessions: [Tracked] = []
@@ -46,6 +57,14 @@ final class SessionStore {
     private(set) var realQuota: QuotaSnapshot?
     /// Repli factice affiché tant que le vrai quota n'est pas encore arrivé.
     var usage = MockData.usage
+
+    /// Clés d'environnement conservées pour l'ancrage terminal (jump-back).
+    static let anchorEnvKeys: Set<String> = [
+        "__CFBundleIdentifier", "TERM_PROGRAM", "TERM_PROGRAM_VERSION",
+        "ITERM_SESSION_ID", "TMUX", "TMUX_PANE", "KITTY_WINDOW_ID", "KITTY_LISTEN_ON",
+        "WEZTERM_PANE", "GHOSTTY_RESOURCES_DIR", "ALACRITTY_WINDOW_ID",
+        "VSCODE_INJECTION", "CURSOR_TRACE_ID", "WARP_SESSION_ID", "CLAUDE_CODE_ENTRYPOINT",
+    ]
 
     @ObservationIgnored private var exitWatchers: [pid_t: DispatchSourceProcess] = [:]
     @ObservationIgnored private var reconcileTask: Task<Void, Never>?
@@ -126,6 +145,11 @@ final class SessionStore {
 
     var hasRealQuota: Bool { realQuota != nil }
 
+    /// Ancre terminal d'une session (pour le jump-back).
+    func terminalAnchor(for id: String) -> TerminalAnchor? {
+        sessions.first { $0.id == id }?.terminalAnchor
+    }
+
     private func rank(_ session: Tracked) -> Int {
         switch session.phase {
         case .waitingPermission: return 0
@@ -204,6 +228,12 @@ final class SessionStore {
         session.lastEventAt = now
         if let cwd = event.cwd { session.cwd = cwd }
         if let hint = event.terminalHint { session.terminalHint = hint }
+        // Ancrage terminal capté aux premiers événements (SessionStart, etc.).
+        if session.tty == nil, let tty = event.tty { session.tty = tty }
+        if session.bundleID == nil { session.bundleID = event.env["__CFBundleIdentifier"] ?? event.terminalHint }
+        if session.termProgram == nil { session.termProgram = event.env["TERM_PROGRAM"] }
+        if session.entrypoint == nil { session.entrypoint = event.entrypoint }
+        if session.env.isEmpty, !event.env.isEmpty { session.env = event.env }
         if let transcript = event.transcriptPath { session.transcriptPath = transcript }
         // Tentée à chaque événement (le tailer ignore les doublons) : couvre les
         // échecs d'open transitoires ET la reprise après résurrection --resume.
@@ -405,6 +435,10 @@ final class SessionStore {
             // Les worktrees de subagents ne sont pas des sessions utilisateur.
             if cwd.contains("/.claude/worktrees/") { continue }
             let transcript = Self.newestTranscript(forCwd: cwd)
+            // Ancre terminal lue directement dans l'environnement du processus
+            // (KERN_PROCARGS2) : ces sessions n'ont pas d'enrichissement de hook.
+            let procEnv = ProcessInspector.environment(of: pid)
+            let anchorEnv = procEnv.filter { Self.anchorEnvKeys.contains($0.key) }
             var session = Tracked(
                 id: "pid-\(pid)-\(Int(ProcessInspector.startTime(of: pid) ?? 0))",
                 pid: pid,
@@ -413,11 +447,16 @@ final class SessionStore {
                 transcriptPath: transcript?.path,
                 phase: .waitingInput,
                 title: nil,
-                terminalHint: nil,
+                terminalHint: procEnv["__CFBundleIdentifier"],
                 isSynthetic: true,
                 firstSeenAt: Date(),
                 lastEventAt: Date()
             )
+            session.tty = ProcessInspector.tty(of: pid)
+            session.bundleID = procEnv["__CFBundleIdentifier"]
+            session.termProgram = procEnv["TERM_PROGRAM"]
+            session.entrypoint = procEnv["CLAUDE_CODE_ENTRYPOINT"]
+            session.env = anchorEnv
             if let transcript, let mtime = try? transcript.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate,
                Date().timeIntervalSince(mtime) < 8 {
                 session.phase = .busy

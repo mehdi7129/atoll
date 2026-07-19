@@ -1,4 +1,5 @@
 import AppKit
+import OSLog
 import AtollCore
 
 @MainActor
@@ -160,7 +161,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 vm.selectSession(first.id)
             }
         }
-        debugTokens.append(contentsOf: [allowToken, denyToken, selectToken])
+        // Jump-back de la 1re session (test visuel Phase 4).
+        var jumpToken: Int32 = 0
+        notify_register_dispatch("dev.mehdiguiard.atoll.debug.jump", &jumpToken, DispatchQueue.main) { _ in
+            MainActor.assumeIsolated {
+                let logger = Logger(subsystem: "dev.mehdiguiard.atoll", category: "jump")
+                // Choisir la 1re session dont l'ancre est résolvable (pas .unknown).
+                let anchors = SessionStore.shared.uiSessions.compactMap {
+                    SessionStore.shared.terminalAnchor(for: $0.id)
+                }
+                guard let anchor = anchors.first(where: {
+                    if case .unknown = TerminalResolver.resolve($0) { return false }
+                    return true
+                }) ?? anchors.first else {
+                    logger.info("debug.jump → aucune ancre")
+                    return
+                }
+                let result = TerminalJumpService.jump(to: anchor)
+                logger.info("debug.jump → \(String(describing: result), privacy: .public)")
+            }
+        }
+        debugTokens.append(contentsOf: [allowToken, denyToken, selectToken, jumpToken])
         #endif
     }
 

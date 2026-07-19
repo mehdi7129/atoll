@@ -8,6 +8,11 @@ struct SessionDetailView: View {
     let colors: ThemeColors
     let onBack: () -> Void
 
+    @State private var jumpMessage: String?
+    @State private var needsPermissionApp: String?
+
+    private var store: SessionStore { .shared }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             // En-tête cliquable pour revenir à la liste.
@@ -31,6 +36,8 @@ struct SessionDetailView: View {
                 .foregroundStyle(colors.dim)
                 .lineLimit(1)
 
+            jumpBar
+
             grid
 
             if let subtitle = session.subtitle, !subtitle.isEmpty {
@@ -53,6 +60,59 @@ struct SessionDetailView: View {
             }
 
             Spacer(minLength: 0)
+        }
+    }
+
+    /// Bouton d'aller-au-terminal + retours (permission, échec).
+    private var jumpBar: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 12) {
+                AsciiButton(label: "ALLER AU TERMINAL ↵", color: colors.accent, shortcut: nil) {
+                    performJump()
+                }
+                if let terminal = terminalName {
+                    Text(terminal)
+                        .font(AtollFont.mono(9))
+                        .foregroundStyle(colors.dim)
+                }
+                Spacer()
+            }
+            if let needsPermissionApp {
+                Button {
+                    AutomationPermission.openSettings()
+                } label: {
+                    Text("⚠ autorise Atoll à contrôler \(needsPermissionApp) → Réglages")
+                        .font(AtollFont.mono(9))
+                        .foregroundStyle(colors.warn)
+                }
+                .buttonStyle(.plain)
+            } else if let jumpMessage {
+                Text(jumpMessage)
+                    .font(AtollFont.mono(9))
+                    .foregroundStyle(colors.dim)
+            }
+        }
+    }
+
+    private var terminalName: String? {
+        guard let anchor = store.terminalAnchor(for: session.id) else { return nil }
+        return "→ " + TerminalResolver.resolve(anchor).displayName
+    }
+
+    private func performJump() {
+        jumpMessage = nil
+        needsPermissionApp = nil
+        guard let anchor = store.terminalAnchor(for: session.id) else {
+            jumpMessage = "ancrage terminal indisponible"
+            return
+        }
+        switch TerminalJumpService.jump(to: anchor) {
+        case .focused(_, let granularity):
+            jumpMessage = "focus (\(granularity))"
+        case .needsAutomationPermission(let appName):
+            needsPermissionApp = appName
+        case .failed(let reason):
+            jumpMessage = reason
         }
     }
 

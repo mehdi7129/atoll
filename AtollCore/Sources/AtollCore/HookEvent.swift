@@ -69,6 +69,8 @@ public struct ParsedHookEvent: Equatable, Sendable {
     public let tty: String?
     public let terminalHint: String?
     public let entrypoint: String?
+    /// Sous-ensemble d'environnement pour le jump-back (Phase 4).
+    public let env: [String: String]
 
     public init?(envelopeData: Data) {
         guard let object = try? JSONSerialization.jsonObject(with: envelopeData),
@@ -118,6 +120,7 @@ public struct ParsedHookEvent: Equatable, Sendable {
         tty = enrich["tty"] as? String
         terminalHint = enrich["terminalHint"] as? String
         entrypoint = enrich["entrypoint"] as? String
+        env = (enrich["env"] as? [String: String]) ?? [:]
     }
 
     private static func parseQuestions(_ toolInput: [String: Any]?) -> [AskQuestion]? {

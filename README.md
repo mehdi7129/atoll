@@ -20,7 +20,7 @@ y compris pour les sessions lancées depuis le terminal de Cursor.
 | 2 · Monitoring des sessions réelles (hooks) | ✅ |
 | 3 · Interactions (permissions, plans, questions) | ✅ |
 | Auto-accept sûr · infos par session · quota exact | ✅ |
-| 4 · Jump-back terminal | ⬜ |
+| 4 · Jump-back terminal (Cursor/VS Code · Terminal · iTerm2) | ✅ |
 | 6 · Chat · 7 · Distribution | ⬜ |
 
 Voir le [plan détaillé](PLAN.md), la [recherche](docs/research/) et [CLAUDE.md](CLAUDE.md)

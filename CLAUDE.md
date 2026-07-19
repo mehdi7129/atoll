@@ -75,7 +75,15 @@ Pièges de build appris à la dure :
 - ✅ Phase 1 — coquille notch + thème ASCII (sessions factices)
 - ✅ Phase 2 — monitoring des sessions réelles (hooks → socket → machine à états)
 - ✅ Phase 3 — interactions (PermissionRequest bloquant : permissions, plans, questions)
-- ⬜ Phases 4-7 — jump-back, quota, chat, distribution
+- ✅ Auto-accept sûr (allowlist), vrais quotas (statusline tee), infos par session
+- ✅ Phase 4 — jump-back terminal (Cursor/VS Code via `<cli> -r`, Terminal.app/iTerm2
+  via AppleScript par TTY, fallback activation app ; ancre capturée aux hooks + KERN_PROCARGS2)
+- ⬜ Phases 6-7 — chat, distribution
+
+Jump-back : les sessions de Mehdi tournent dans le terminal intégré de **Cursor**
+(`com.todesktop.230313mzl4w4u92`, TERM_PROGRAM=vscode) → `cursor -r <cwd>` remonte la
+fenêtre, AUCUNE permission TCC. AppleScript (Terminal/iTerm2) exécuté par l'app seulement
+(attribution TCC). Debug : `notifyutil -p dev.mehdiguiard.atoll.debug.jump`.
 
 Debug des interactions (Phase 3) : `notifyutil -p dev.mehdiguiard.atoll.debug.allow`
 (ou `.deny`) résout la première carte en attente via les mêmes chemins que les boutons ;
