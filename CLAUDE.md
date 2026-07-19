@@ -83,8 +83,16 @@ Pièges de build appris à la dure :
 - ⬜ Phase 7 — distribution (notarisation, DMG, Sparkle)
 
 Chat (Phase 6) : ChatDriver spawne `claude -p --input/--output-format stream-json`.
-PIÈGE VÉCU : `readabilityHandler` sur le pipe stdout ne se déclenche PAS dans l'app
-LSUIElement (run loop) → lecture par thread dédié bloquant (availableData en boucle).
+PIÈGES VÉCUS (chacun a coûté cher) :
+- `readabilityHandler` sur le pipe stdout ne se déclenche PAS dans l'app LSUIElement
+  (run loop) → lecture par read(2) sur un thread dédié.
+- Les Pipe/FileHandle de Foundation croisaient les fds sous concurrence (le reader
+  lisait le pipe stdin — vérifié à l'lsof) → pipes POSIX explicites + FD_CLOEXEC.
+- **Spawner claude DIRECTEMENT depuis l'app GUI le laisse MUET** (n'émet même pas
+  l'init, main thread bloqué, aucune I/O — pas l'env ni les fds, testé exhaustivement).
+  FIX : spawner via `/bin/zsh -l -c "exec claude …"` — claude hérite des pipes mais
+  tourne dans un contexte de shell de login (comme le terminal, où il marche).
+- Livraison des événements au main via DispatchQueue.main.async (FIFO), PAS Task {} (ordre non garanti → flux mélangé).
 Débug : `notifyutil -p dev.mehdiguiard.atoll.debug.chat`.
 
 Jump-back : les sessions de Mehdi tournent dans le terminal intégré de **Cursor**

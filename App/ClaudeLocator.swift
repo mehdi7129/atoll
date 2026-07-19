@@ -15,26 +15,38 @@ enum ClaudeLocator {
         "\(NSHomeDirectory())/.claude/local/claude",
     ]
 
+    private static let lock = NSLock()
     private static var cached: String?
+    private static var resolved = false
 
-    /// Chemin résolu (mis en cache). nil si introuvable.
+    /// Précharge le cache hors du thread appelant (à lancer au démarrage) pour
+    /// que le premier chat ne subisse pas la résolution par shell de login.
+    static func warmUp() {
+        DispatchQueue.global(qos: .utility).async { _ = resolve() }
+    }
+
+    /// Chemin résolu (mis en cache). nil si introuvable. Peut lancer un shell de
+    /// login → NE JAMAIS appeler sur le thread principal (le driver résout en fond).
     static func resolve() -> String? {
-        if let cached { return cached }
+        lock.lock()
+        if resolved { defer { lock.unlock() }; return cached }
+        lock.unlock()
 
+        var found: String?
         // 1. Sondes directes (rapide, pas de shell).
         for path in probes where FileManager.default.isExecutableFile(atPath: path) {
-            cached = path
-            return path
+            found = path
+            break
         }
+        // 2. Shell de login : `zsh -l -c 'command -v claude'`.
+        if found == nil { found = resolveViaLoginShell() }
+        if found == nil { log.error("binaire claude introuvable") }
 
-        // 2. Shell de login : `zsh -l -c 'command -v claude'` (source /etc/zprofile).
-        if let viaShell = resolveViaLoginShell() {
-            cached = viaShell
-            return viaShell
-        }
-
-        log.error("binaire claude introuvable")
-        return nil
+        lock.lock()
+        cached = found
+        resolved = true
+        lock.unlock()
+        return found
     }
 
     private static func resolveViaLoginShell() -> String? {

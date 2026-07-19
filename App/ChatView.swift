@@ -5,15 +5,17 @@ import AtollCore
 struct ChatView: View {
     let driver: ChatDriver
     let colors: ThemeColors
+    /// Composer actif seulement là où le focus clavier est accordé (écran primaire).
+    let interactive: Bool
     let onClose: () -> Void
-
-    @State private var input = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             header
             transcript
-            composer
+            if interactive {
+                composer
+            }
         }
     }
 
@@ -66,7 +68,8 @@ struct ChatView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .frame(maxHeight: 200)
-            .onChange(of: driver.turns.last?.text) { _, _ in
+            // Défilement à la frontière de tour (pas à chaque token — moins coûteux).
+            .onChange(of: driver.turns.count) { _, _ in
                 if let last = driver.turns.last { withAnimation { proxy.scrollTo(last.id, anchor: .bottom) } }
             }
         }
@@ -89,12 +92,21 @@ struct ChatView: View {
         HStack(spacing: 8) {
             Text("›")
                 .foregroundStyle(colors.accent)
-            TextField("message à Claude…", text: $input, axis: .vertical)
+            TextField("message à Claude…", text: Binding(
+                get: { driver.draft },
+                set: { driver.draft = $0 }
+            ), axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(AtollFont.mono(11))
                 .foregroundStyle(colors.fg)
                 .lineLimit(1...4)
+                .disabled(driver.state == .responding || driver.state == .starting)
                 .onSubmit(sendMessage)
+            if driver.state == .responding {
+                Text("réponse en cours…")
+                    .font(AtollFont.mono(9))
+                    .foregroundStyle(colors.dim)
+            }
             AsciiButton(label: "⏎", color: canSend ? colors.ok : colors.dim, shortcut: nil) {
                 sendMessage()
             }
@@ -105,13 +117,13 @@ struct ChatView: View {
     }
 
     private var canSend: Bool {
-        !input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && driver.state != .starting
+        !driver.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && driver.state == .ready
     }
 
     private func sendMessage() {
         guard canSend else { return }
-        driver.send(input)
-        input = ""
+        driver.send(driver.draft)
+        driver.draft = ""
     }
 }

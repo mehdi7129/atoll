@@ -30,8 +30,9 @@ struct ExpandedView: View {
                     .id(request.id)
                 Spacer(minLength: 0)
             } else if let chat = ChatCenter.shared.active {
-                // Conversation en cours.
-                ChatView(driver: chat, colors: colors) {
+                // Conversation en cours. Composer actif seulement sur l'écran
+                // primaire (celui qui reçoit le focus clavier).
+                ChatView(driver: chat, colors: colors, interactive: viewModel.isPrimary) {
                     ChatCenter.shared.close()
                 }
             } else if let session = viewModel.selectedSession {

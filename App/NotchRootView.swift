@@ -59,6 +59,12 @@ struct NotchRootView: View {
             viewModel.syncInteractionState(pendingCount: newValue ? 1 : 0,
                                            previousCount: oldValue ? 1 : 0)
         }
+        .onChange(of: viewModel.state) { _, newState in
+            // Le focus clavier suit l'état visible : replié → rendu au terminal,
+            // déployé avec carte/chat → repris. Corrige le focus resté capté quand
+            // on replie l'îlot alors qu'un chat tourne toujours.
+            viewModel.onKeyFocusRequest?(viewModel.isPrimary && newState == .expanded && wantsFocus)
+        }
         .onAppear {
             // Fenêtre reconstruite pendant une carte/chat actif : réappliquer.
             if wantsFocus {

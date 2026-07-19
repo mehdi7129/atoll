@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         ThemeManager.applyStored()
         InteractionCenter.migrateAutonomyIfNeeded()
+        ClaudeLocator.warmUp() // résout le binaire en fond → 1er chat instantané
 
         // Répare le wrapper ~/.atoll/bin si l'app a été déplacée (idempotent).
         HookInstaller.repairIfInstalled()
