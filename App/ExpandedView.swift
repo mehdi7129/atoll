@@ -187,9 +187,17 @@ struct QuotaAgeLabel: View {
     }
 }
 
-/// « ↻ 2h14 » : temps restant avant réinitialisation du quota.
+/// « ↻2h14 » (< 24 h) ou « ↻dim 03:59 » (au-delà — illisible en heures,
+/// même présentation que la page Utilisation de claude.ai).
 struct ResetCountdown: View {
     let resetsAt: Date
+
+    private static let dayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "fr_FR")
+        formatter.dateFormat = "EEE HH:mm"
+        return formatter
+    }()
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
@@ -205,6 +213,9 @@ struct ResetCountdown: View {
         let total = Int(seconds)
         let hours = total / 3600
         let minutes = (total % 3600) / 60
+        if hours >= 24 {
+            return Self.dayFormatter.string(from: resetsAt).replacingOccurrences(of: ".", with: "")
+        }
         if hours > 0 { return "\(hours)h\(String(format: "%02d", minutes))" }
         return "\(minutes)m"
     }

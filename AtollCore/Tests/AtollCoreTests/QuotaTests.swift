@@ -113,6 +113,57 @@ final class StatusLineEditorTests: XCTestCase {
         XCTAssertNil(twice.originalCommand, "ne pas mémoriser notre wrapper comme 'original'")
     }
 
+    func testInstallAddsRefreshIntervalWhenAbsent() throws {
+        let result = try StatusLineEditor.install(into: userSettings, wrapperCommand: wrapper)
+        let statusLine = try XCTUnwrap(try parse(result.settings)["statusLine"] as? [String: Any])
+        XCTAssertEqual(statusLine["refreshInterval"] as? Int, StatusLineEditor.managedRefreshInterval,
+                       "sans lui, le quota gèle pendant l'inactivité")
+    }
+
+    func testInstallRespectsUserRefreshInterval() throws {
+        let custom = Data("""
+        { "statusLine": { "type": "command", "command": "bun /Users/x/s.ts", "refreshInterval": 5 } }
+        """.utf8)
+        let result = try StatusLineEditor.install(into: custom, wrapperCommand: wrapper)
+        let statusLine = try XCTUnwrap(try parse(result.settings)["statusLine"] as? [String: Any])
+        XCTAssertEqual(statusLine["refreshInterval"] as? Int, 5, "valeur utilisateur conservée")
+    }
+
+    func testUninstallRemovesOnlyOurRefreshInterval() throws {
+        // Le nôtre (sentinelle) est retiré à la restitution…
+        let installed = try StatusLineEditor.install(into: userSettings, wrapperCommand: wrapper)
+        let restored = try StatusLineEditor.uninstall(from: installed.settings, originalCommand: installed.originalCommand)
+        let statusLine = try XCTUnwrap(try parse(restored)["statusLine"] as? [String: Any])
+        XCTAssertNil(statusLine["refreshInterval"])
+
+        // …mais une valeur modifiée par l'utilisateur entre-temps est conservée.
+        var settings = try parse(installed.settings)
+        var block = settings["statusLine"] as? [String: Any] ?? [:]
+        block["refreshInterval"] = 120
+        settings["statusLine"] = block
+        let data = try JSONSerialization.data(withJSONObject: settings)
+        let restored2 = try StatusLineEditor.uninstall(from: data, originalCommand: "bun /Users/x/s.ts")
+        let statusLine2 = try XCTUnwrap(try parse(restored2)["statusLine"] as? [String: Any])
+        XCTAssertEqual(statusLine2["refreshInterval"] as? Int, 120)
+    }
+
+    func testAddRefreshIntervalMigratesOnlyOurChainedInstall() throws {
+        // Chaînée sans refreshInterval → ajouté.
+        let installed = Data("""
+        { "statusLine": { "type": "command", "command": "\\"$HOME/.atoll/bin/atoll-statusline\\"" } }
+        """.utf8)
+        let migrated = try XCTUnwrap(StatusLineEditor.addRefreshIntervalIfMissing(into: installed))
+        let statusLine = try XCTUnwrap(try parse(migrated)["statusLine"] as? [String: Any])
+        XCTAssertEqual(statusLine["refreshInterval"] as? Int, StatusLineEditor.managedRefreshInterval)
+
+        // Déjà présent → nil (aucune écriture) ; statusline étrangère → nil.
+        XCTAssertNil(try StatusLineEditor.addRefreshIntervalIfMissing(into: migrated))
+        let foreign = Data("""
+        { "statusLine": { "type": "command", "command": "bun /autre/s.ts" } }
+        """.utf8)
+        XCTAssertNil(try StatusLineEditor.addRefreshIntervalIfMissing(into: foreign))
+    }
+
     func testUninstallLeavesForeignStatusLineUntouched() throws {
         let foreign = Data("""
         { "statusLine": { "type": "command", "command": "bun /autre/statusline.ts" } }

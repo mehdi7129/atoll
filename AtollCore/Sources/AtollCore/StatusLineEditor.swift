@@ -18,6 +18,11 @@ public enum StatusLineEditor {
         public let originalCommand: String?
     }
 
+    /// Intervalle (s) posé par Atoll quand l'utilisateur n'en a pas : le quota
+    /// continue d'arriver pendant l'inactivité. Sert aussi de sentinelle à la
+    /// désinstallation (retiré seulement si la valeur est restée la nôtre).
+    public static let managedRefreshInterval = 60
+
     /// Remplace la commande statusline par `wrapperCommand`.
     public static func install(into data: Data?, wrapperCommand: String) throws -> InstallResult {
         var settings = try parse(data)
@@ -31,8 +36,27 @@ public enum StatusLineEditor {
 
         statusLine["type"] = "command"
         statusLine["command"] = wrapperCommand
+        // Sans refreshInterval, la statusline (donc rate_limits) ne se met à
+        // jour qu'aux messages assistant : le quota gèle pendant l'inactivité.
+        // 60 s comble les trous (recommandation du rapport quota) ; une valeur
+        // posée par l'utilisateur est respectée.
+        if statusLine["refreshInterval"] == nil {
+            statusLine["refreshInterval"] = Self.managedRefreshInterval
+        }
         settings["statusLine"] = statusLine
         return InstallResult(settings: try serialize(settings), originalCommand: original)
+    }
+
+    /// Migration douce d'une statusline DÉJÀ chaînée : ajoute refreshInterval
+    /// s'il manque. nil = rien à changer (aucune écriture).
+    public static func addRefreshIntervalIfMissing(into data: Data?) throws -> Data? {
+        var settings = try parse(data)
+        guard var statusLine = settings["statusLine"] as? [String: Any],
+              (statusLine["command"] as? String)?.contains(marker) == true,
+              statusLine["refreshInterval"] == nil else { return nil }
+        statusLine["refreshInterval"] = managedRefreshInterval
+        settings["statusLine"] = statusLine
+        return try serialize(settings)
     }
 
     /// Restaure la commande d'origine (ou retire la statusline si aucune).
@@ -44,6 +68,11 @@ public enum StatusLineEditor {
         // Ne touche à rien si la statusline actuelle n'est pas la nôtre.
         guard (statusLine["command"] as? String)?.contains(marker) == true else {
             return try serialize(settings)
+        }
+        // Retirer NOTRE refreshInterval (valeur sentinelle exacte : une valeur
+        // différente a été posée/modifiée par l'utilisateur → conservée).
+        if (statusLine["refreshInterval"] as? Int) == Self.managedRefreshInterval {
+            statusLine["refreshInterval"] = nil
         }
         if let originalCommand, !originalCommand.isEmpty {
             statusLine["command"] = originalCommand

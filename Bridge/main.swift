@@ -279,6 +279,11 @@ enum BridgeCLI {
                let recovered = storedOriginalStatusline() {
                 try recovered.write(to: BridgePaths.statuslineOriginalURL, atomically: true, encoding: .utf8)
             }
+            // Migration douce des installations existantes : refreshInterval
+            // s'il manque (quota pendant l'inactivité) — seule clé touchée.
+            if let migrated = try StatusLineEditor.addRefreshIntervalIfMissing(into: current) {
+                try migrated.write(to: settingsURL, options: .atomic)
+            }
             return
         }
 
