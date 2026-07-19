@@ -55,8 +55,6 @@ final class SessionStore {
     var serverRunning = false
     /// Vrai quota serveur (statusline). nil tant qu'aucun payload reçu.
     private(set) var realQuota: QuotaSnapshot?
-    /// Repli factice affiché tant que le vrai quota n'est pas encore arrivé.
-    var usage = MockData.usage
 
     /// Clés d'environnement conservées pour l'ancrage terminal (jump-back).
     static let anchorEnvKeys: Set<String> = [
@@ -130,9 +128,12 @@ final class SessionStore {
         }
     }
 
-    /// Quota affiché : vrai serveur si disponible, sinon repli factice.
+    /// Quota affiché : vrai serveur uniquement — jamais de données factices
+    /// (les vues masquent les jauges tant que hasRealQuota est faux).
     var displayQuota: UsageSnapshot {
-        guard let realQuota else { return usage }
+        guard let realQuota else {
+            return UsageSnapshot(fiveHourFraction: 0, sevenDayFraction: 0)
+        }
         return UsageSnapshot(
             fiveHourFraction: realQuota.fiveHour.usedFraction,
             sevenDayFraction: realQuota.sevenDay.usedFraction

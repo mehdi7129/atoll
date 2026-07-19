@@ -228,10 +228,13 @@ enum BridgeCLI {
         # statusline d'origine. Fail-open : ne bloque ni ne casse jamais le CLI.
         BIN='\(escaped)'
         INPUT=$(cat)
-        # Tee détaché : stdin/stdout/stderr redirigés pour ne PAS garder ouverts
-        # les pipes de la statusline du CLI (sinon il bloquerait sur le job de fond).
+        # Tee détaché : stdout/stderr redirigés pour ne PAS garder ouverts les
+        # pipes de la statusline du CLI. ATTENTION : jamais de `</dev/null` sur
+        # "$BIN" — il écraserait le pipe de printf et le bridge lirait une
+        # entrée VIDE (bug réel : quota jamais alimenté). Le stdin du job est le
+        # pipe, refermé dès la fin de printf — rien ne bloque le CLI.
         if [ -x "$BIN" ]; then
-          { printf '%s' "$INPUT" | "$BIN" statusline >/dev/null 2>&1 </dev/null & } >/dev/null 2>&1
+          { printf '%s' "$INPUT" | "$BIN" statusline >/dev/null 2>&1 & } >/dev/null 2>&1
         fi
         ORIG='\(originalFile)'
         if [ -s "$ORIG" ]; then

@@ -31,8 +31,10 @@ struct CompactView: View {
                 Text("atoll")
                     .foregroundStyle(colors.dim)
                 Spacer(minLength: 4)
-                Text("5h \(Int(viewModel.usage.fiveHourFraction * 100))%")
-                    .foregroundStyle(colors.dim)
+                if viewModel.hasRealQuota {
+                    Text("5h \(Int(viewModel.usage.fiveHourFraction * 100))%")
+                        .foregroundStyle(colors.dim)
+                }
             }
             .font(AtollFont.mono(10))
             .padding(.horizontal, 10)
@@ -84,12 +86,18 @@ struct CompactView: View {
     private var rightWing: some View {
         HStack(spacing: 4) {
             Spacer(minLength: 0)
-            Text("5h")
-                .foregroundStyle(colors.dim)
-            Text(AsciiArt.progressBar(fraction: viewModel.usage.fiveHourFraction, cells: 4))
-                .foregroundStyle(colors.accent)
-            Text("\(Int(viewModel.usage.fiveHourFraction * 100))%")
-                .foregroundStyle(colors.dim)
+            // Jamais de jauge factice : rien tant que le vrai quota n'est pas là.
+            if viewModel.hasRealQuota {
+                Text("5h")
+                    .foregroundStyle(colors.dim)
+                Text(AsciiArt.progressBar(fraction: viewModel.usage.fiveHourFraction, cells: 4))
+                    .foregroundStyle(colors.accent)
+                Text("\(Int(viewModel.usage.fiveHourFraction * 100))%")
+                    .foregroundStyle(colors.dim)
+            } else {
+                Text("·")
+                    .foregroundStyle(colors.dim)
+            }
         }
         .font(AtollFont.mono(10))
         .padding(.trailing, 12)

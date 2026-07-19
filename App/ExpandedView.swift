@@ -129,20 +129,22 @@ struct ExpandedView: View {
                 .lineLimit(1)
                 .foregroundStyle(colors.dim)
 
-            HStack(spacing: 16) {
-                quotaGauge(label: "5h", fraction: viewModel.usage.fiveHourFraction, resetsAt: viewModel.quotaResets.five)
-                quotaGauge(label: "7j", fraction: viewModel.usage.sevenDayFraction, resetsAt: viewModel.quotaResets.seven)
-                Spacer()
-            }
-
-            if !viewModel.hasRealQuota {
+            // Jauges seulement avec de VRAIES données (jamais le mock de dev).
+            if viewModel.hasRealQuota {
+                HStack(spacing: 16) {
+                    quotaGauge(label: "5h", fraction: viewModel.usage.fiveHourFraction, resetsAt: viewModel.quotaResets.five)
+                    quotaGauge(label: "7j", fraction: viewModel.usage.sevenDayFraction, resetsAt: viewModel.quotaResets.seven)
+                    Spacer()
+                }
+                if let receivedAt = viewModel.quotaReceivedAt {
+                    // Indicateur d'âge : la statusline ne pousse le quota qu'à
+                    // chaque message assistant → signaler la donnée périmée.
+                    QuotaAgeLabel(receivedAt: receivedAt, colors: colors)
+                }
+            } else {
                 Text("quota indisponible — ouvre une session Claude pour l'alimenter")
                     .font(AtollFont.mono(9))
                     .foregroundStyle(colors.dim)
-            } else if let receivedAt = viewModel.quotaReceivedAt {
-                // Indicateur d'âge : la statusline ne pousse le quota qu'à chaque
-                // message assistant → on signale quand la donnée devient périmée.
-                QuotaAgeLabel(receivedAt: receivedAt, colors: colors)
             }
         }
     }
