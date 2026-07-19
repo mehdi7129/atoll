@@ -1,7 +1,7 @@
 # CLAUDE.md — instructions projet Atoll
 
-> 📌 **REPRISE DE DEV : lire `docs/HANDOFF.md` en premier** — état exact, ce qu'il reste
-> à faire (Phase 7), méthode de travail, et TOUS les pièges appris à la dure.
+> 📌 **REPRISE DE DEV : lire `docs/HANDOFF.md` en premier** — état exact, méthode de
+> travail, et TOUS les pièges appris à la dure. (v0.4.0 publiée ; chat/voix retirés.)
 
 Atoll est une app macOS native (Swift/SwiftUI) : une « Dynamic Island » autour du notch,
 esthétique ASCII, pour suivre et piloter les sessions Claude Code. Gratuit, open source,
@@ -86,22 +86,17 @@ Pièges de build appris à la dure :
 - ✅ Auto-accept sûr (allowlist), vrais quotas (statusline tee), infos par session
 - ✅ Phase 4 — jump-back terminal (Cursor/VS Code via `<cli> -r`, Terminal.app/iTerm2
   via AppleScript par TTY, fallback activation app ; ancre capturée aux hooks + KERN_PROCARGS2)
-- ✅ Phase 5 — quota exact (tee-wrapper statusline, rate_limits serveur + indicateur d'âge)
-- ✅ Phase 6 — chat intégré (`claude -p` stream-json persistant, composer dans l'îlot)
-- ⬜ Phase 7 — distribution (notarisation, DMG, Sparkle)
+- ✅ Phase 5 — quota exact (tee-wrapper statusline, rate_limits serveur + indicateur
+  d'âge ; jauge par modèle opt-in ; % de contexte par session)
+- ✅ Phase 6 — distribution (Developer ID + notarisation, DMG, Sparkle, onboarding)
 
-Chat (Phase 6) : ChatDriver spawne `claude -p --input/--output-format stream-json`.
-PIÈGES VÉCUS (chacun a coûté cher) :
-- `readabilityHandler` sur le pipe stdout ne se déclenche PAS dans l'app LSUIElement
-  (run loop) → lecture par read(2) sur un thread dédié.
-- Les Pipe/FileHandle de Foundation croisaient les fds sous concurrence (le reader
-  lisait le pipe stdin — vérifié à l'lsof) → pipes POSIX explicites + FD_CLOEXEC.
-- **Spawner claude DIRECTEMENT depuis l'app GUI le laisse MUET** (n'émet même pas
-  l'init, main thread bloqué, aucune I/O — pas l'env ni les fds, testé exhaustivement).
-  FIX : spawner via `/bin/zsh -l -c "exec claude …"` — claude hérite des pipes mais
-  tourne dans un contexte de shell de login (comme le terminal, où il marche).
-- Livraison des événements au main via DispatchQueue.main.async (FIFO), PAS Task {} (ordre non garanti → flux mélangé).
-Débug : `notifyutil -p dev.mehdiguiard.atoll.debug.chat`.
+**Chat intégré + dictée vocale : RETIRÉS le 2026-07-19** (décision de Mehdi — il
+préfère parler et chatter dans Cursor). Supprimés : ChatCenter/ChatDriver/ChatView/
+VoiceDictation/ClaudeLocator (App), ChatProtocol/StreamEvent/TranscriptHistory
+(AtollCore) + tests. Le détail de session ouvre le terminal de la session
+(« OUVRIR DANS CURSOR ») via le jump-back. NE PAS ré-ajouter sans le redemander.
+Les pièges du chat restent en mémoire projet si jamais on y revient (spawn via
+`zsh -l -c "exec claude"`, pipes POSIX + CLOEXEC, `--fork-session` obligatoire).
 
 Jump-back : les sessions de Mehdi tournent dans le terminal intégré de **Cursor**
 (`com.todesktop.230313mzl4w4u92`, TERM_PROGRAM=vscode) → `cursor -r <cwd>` remonte la
@@ -116,7 +111,7 @@ Permissions Claude Code — faits VÉRIFIÉS empiriquement (CLI 2.1.215, tests p
   les hooks (l'îlot ne voit jamais la demande refusée) → seul le parking les lève.
 - En bypassPermissions, AskUserQuestion déclenche QUAND MÊME le hook PermissionRequest
   (et la décision du hook est honorée) → rockstar répond aux questions même en bypass.
-- En mode `-p` (headless, donc le chat intégré), l'outil AskUserQuestion N'EXISTE PAS.
+- En mode `-p` (headless), l'outil AskUserQuestion N'EXISTE PAS.
 - Avec `defaultMode: bypassPermissions` dans le settings.json utilisateur, les sessions
   ne produisent presque jamais de PermissionRequest d'outils — l'auto-accept paraît
   alors « inactif » ; ce sont les règles deny qui bloquent encore. (Config de la

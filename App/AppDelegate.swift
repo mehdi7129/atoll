@@ -23,7 +23,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         ThemeManager.applyStored()
         InteractionCenter.migrateAutonomyIfNeeded()
-        ClaudeLocator.warmUp() // résout le binaire en fond → 1er chat instantané
 
         // Répare le wrapper ~/.atoll/bin si l'app a été déplacée (idempotent).
         HookInstaller.repairIfInstalled()
@@ -90,7 +89,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         bridgeServer?.stop()
-        ChatCenter.shared.close() // ne pas laisser un claude -p orphelin
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -210,35 +208,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         }
-        // Démarre un chat de test + envoie un message (test visuel Phase 6).
-        var chatToken: Int32 = 0
-        notify_register_dispatch("dev.mehdiguiard.atoll.debug.chat", &chatToken, DispatchQueue.main) { [weak self] _ in
-            MainActor.assumeIsolated {
-                self?.controllers.forEach { $0.viewModel.isPinned = true; $0.viewModel.open() }
-                ChatCenter.shared.startNew(cwd: "/tmp")
-                Task { @MainActor in
-                    try? await Task.sleep(for: .seconds(2))
-                    ChatCenter.shared.active?.send("Dis bonjour en exactement 4 mots.")
-                }
-            }
-        }
-        // Reprend la 1re session réelle (id non synthétique + transcript) avec
-        // historique, puis envoie un message d'épreuve (valide le fork --resume).
-        var resumeToken: Int32 = 0
-        notify_register_dispatch("dev.mehdiguiard.atoll.debug.resume", &resumeToken, DispatchQueue.main) { [weak self] _ in
-            MainActor.assumeIsolated {
-                guard let vm = self?.controllers.first(where: { $0.viewModel.isPrimary })?.viewModel,
-                      let session = vm.sessions.first(where: {
-                          !$0.id.hasPrefix("pid-") && SessionStore.shared.transcriptPath(for: $0.id) != nil
-                      }) else { return }
-                self?.controllers.forEach { $0.viewModel.isPinned = true; $0.viewModel.open() }
-                ChatCenter.shared.resume(sessionID: session.id, cwd: session.cwd)
-                Task { @MainActor in
-                    try? await Task.sleep(for: .seconds(6))
-                    ChatCenter.shared.active?.send("Réponds uniquement : « reprise ok ».")
-                }
-            }
-        }
         // Ouvre la fenêtre Réglages (captures d'écran scriptées).
         var settingsToken: Int32 = 0
         notify_register_dispatch("dev.mehdiguiard.atoll.debug.settings", &settingsToken, DispatchQueue.main) { _ in
@@ -246,14 +215,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 NotificationCenter.default.post(name: .atollDebugOpenSettings, object: nil)
             }
         }
-        // Démarre la dictée dans le chat actif (test du crash installTap micro).
-        var voiceToken: Int32 = 0
-        notify_register_dispatch("dev.mehdiguiard.atoll.debug.voice", &voiceToken, DispatchQueue.main) { _ in
-            MainActor.assumeIsolated {
-                NotificationCenter.default.post(name: .atollDebugVoice, object: nil)
-            }
-        }
-        debugTokens.append(contentsOf: [allowToken, denyToken, selectToken, jumpToken, chatToken, resumeToken, settingsToken, voiceToken])
+        debugTokens.append(contentsOf: [allowToken, denyToken, selectToken, jumpToken, settingsToken])
         #endif
     }
 
@@ -274,7 +236,5 @@ extension Notification.Name {
     /// Relaie le trigger Darwin debug.settings vers la vue SwiftUI qui détient
     /// l'action openSettings (fiable, contrairement à showSettingsWindow:).
     static let atollDebugOpenSettings = Notification.Name("dev.mehdiguiard.atoll.debug.openSettings")
-    /// Relaie debug.voice vers la ChatView active (test du micro).
-    static let atollDebugVoice = Notification.Name("dev.mehdiguiard.atoll.debug.voice.local")
 }
 #endif

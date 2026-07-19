@@ -20,7 +20,11 @@ Ce qui marche aujourd'hui, de bout en bout :
 - **Niveau d'autonomie** : 1 sélecteur exclusif **Manuel / Auto / Rockstar** (Réglages).
 - Jump-back terminal (Cursor/VS Code via `cli -r`, Terminal.app/iTerm2 via AppleScript).
 - Vrais quotas serveur (tee-wrapper statusline) + infos par session (modèle, MCP, coût…).
-- Chat intégré : lancer/piloter `claude -p` stream-json depuis l'îlot.
+- Ouvrir la session dans son terminal (« OUVRIR DANS CURSOR ») via le jump-back.
+
+> **Chat intégré + dictée vocale RETIRÉS le 2026-07-19** (décision de Mehdi : il
+> chatte et dicte dans Cursor). Le bouton du détail de session ouvre désormais le
+> terminal Cursor. Ne pas ré-ajouter sans demande explicite.
 
 ---
 

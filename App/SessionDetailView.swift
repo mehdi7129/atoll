@@ -63,11 +63,12 @@ struct SessionDetailView: View {
         }
     }
 
-    /// Bouton d'aller-au-terminal + retours (permission, échec).
+    /// Bouton d'ouverture du terminal de la session (ramène la fenêtre Cursor /
+    /// Terminal) + retours (permission, échec).
     private var jumpBar: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 12) {
-                AsciiButton(label: "ALLER AU TERMINAL ↵", color: colors.accent, shortcut: nil) {
+                AsciiButton(label: openLabel, color: colors.accent, shortcut: nil) {
                     performJump()
                 }
                 if let terminal = terminalName {
@@ -76,21 +77,6 @@ struct SessionDetailView: View {
                         .foregroundStyle(colors.dim)
                 }
                 Spacer()
-                if let cwd = session.cwd {
-                    // Reprise si l'id est un vrai session_id Claude (les sessions
-                    // synthétiques « pid-… » découvertes par scan n'en ont pas)
-                    // ET qu'un transcript existe pour fournir l'historique.
-                    if !session.id.hasPrefix("pid-"),
-                       SessionStore.shared.transcriptPath(for: session.id) != nil {
-                        AsciiButton(label: "REPRENDRE LE CHAT", color: colors.ok, shortcut: nil) {
-                            ChatCenter.shared.resume(sessionID: session.id, cwd: cwd)
-                        }
-                    } else {
-                        AsciiButton(label: "CHAT ICI", color: colors.ok, shortcut: nil) {
-                            ChatCenter.shared.startNew(cwd: cwd)
-                        }
-                    }
-                }
             }
             if let needsPermissionApp {
                 Button {
@@ -109,9 +95,19 @@ struct SessionDetailView: View {
         }
     }
 
+    /// Libellé du bouton : nomme l'app cible quand on la connaît (« OUVRIR DANS
+    /// CURSOR »), sinon générique. C'est l'action principale du détail — ouvrir
+    /// la fenêtre où la session vit pour y travailler (chat, dictée…).
+    private var openLabel: String {
+        guard let anchor = store.terminalAnchor(for: session.id) else {
+            return "ALLER AU TERMINAL ↵"
+        }
+        return "OUVRIR DANS \(TerminalResolver.resolve(anchor).displayName.uppercased()) ↵"
+    }
+
     private var terminalName: String? {
-        guard let anchor = store.terminalAnchor(for: session.id) else { return nil }
-        return "→ " + TerminalResolver.resolve(anchor).displayName
+        // Le nom figure déjà dans le libellé du bouton — pas de doublon.
+        nil
     }
 
     private func performJump() {

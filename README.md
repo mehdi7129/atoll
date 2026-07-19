@@ -9,7 +9,7 @@
 
 Une **Dynamic Island pour Claude Code** sur macOS, avec une esthétique ASCII/terminal
 (dark / light / auto). Suivez et pilotez vos sessions Claude — permissions, questions,
-validation de plans, quota, chat — directement depuis le notch, sans quitter votre flow,
+validation de plans, quota — directement depuis le notch, sans quitter votre flow,
 y compris pour les sessions lancées depuis le terminal de Cursor.
 
 **Gratuit et open source (GPL-3.0-or-later).**
@@ -21,9 +21,8 @@ y compris pour les sessions lancées depuis le terminal de Cursor.
 | 3 · Interactions (permissions, plans, questions) | ✅ |
 | Auto-accept sûr · infos par session · quota exact | ✅ |
 | 4 · Jump-back terminal (Cursor/VS Code · Terminal · iTerm2) | ✅ |
-| 5 · Quota exact (statusline) | ✅ |
-| 6 · Chat intégré (lancer Claude depuis le notch) | ✅ |
-| 7 · Distribution (notarisation, DMG, Sparkle) | ✅ |
+| 5 · Quota exact (statusline · jauge par modèle · % contexte) | ✅ |
+| 6 · Distribution (notarisation, DMG, Sparkle) | ✅ |
 
 Voir le [plan détaillé](PLAN.md), la [recherche](docs/research/) et [CLAUDE.md](CLAUDE.md)
 pour contribuer.

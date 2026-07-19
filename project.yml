@@ -73,8 +73,6 @@ targets:
         # (zéro télémétrie par défaut — règle du projet).
         SUEnableAutomaticChecks: false
         NSAppleEventsUsageDescription: "Atoll utilise l'automatisation pour faire remonter au premier plan le terminal exact de la session Claude que vous ouvrez."
-        NSMicrophoneUsageDescription: "Atoll utilise le micro pour dicter vos messages dans le chat. L'audio est transcrit en local sur votre Mac, rien n'est envoyé sur Internet."
-        NSSpeechRecognitionUsageDescription: "Atoll transcrit votre voix en texte, en local sur votre Mac, pour composer vos messages de chat sans les taper."
     postBuildScripts:
       - name: Embed atoll-bridge helper
         script: |

@@ -40,9 +40,9 @@ struct NotchRootView: View {
         InteractionCenter.shared.pending.count
     }
 
-    /// L'îlot doit-il rester ouvert + prendre le clavier ? (carte OU chat actif).
+    /// L'îlot doit-il rester ouvert + prendre le clavier ? (carte en attente).
     private var wantsFocus: Bool {
-        pendingCount > 0 || ChatCenter.shared.isActive
+        pendingCount > 0
     }
 
     var body: some View {
@@ -67,20 +67,19 @@ struct NotchRootView: View {
         }
         #endif
         .onChange(of: wantsFocus) { oldValue, newValue in
-            // Carte en attente OU chat actif → l'îlot s'ouvre tout seul (écran
-            // principal) et prend le clavier ; plus rien → il se replie et rend
-            // le focus au terminal.
+            // Carte en attente → l'îlot s'ouvre tout seul (écran principal) et
+            // prend le clavier ; plus rien → il se replie et rend le focus au
+            // terminal.
             viewModel.syncInteractionState(pendingCount: newValue ? 1 : 0,
                                            previousCount: oldValue ? 1 : 0)
         }
         .onChange(of: viewModel.state) { _, newState in
             // Le focus clavier suit l'état visible : replié → rendu au terminal,
-            // déployé avec carte/chat → repris. Corrige le focus resté capté quand
-            // on replie l'îlot alors qu'un chat tourne toujours.
+            // déployé avec carte → repris.
             viewModel.onKeyFocusRequest?(viewModel.isPrimary && newState == .expanded && wantsFocus)
         }
         .onAppear {
-            // Fenêtre reconstruite pendant une carte/chat actif : réappliquer.
+            // Fenêtre reconstruite pendant une carte active : réappliquer.
             if wantsFocus {
                 viewModel.syncInteractionState(pendingCount: 1, previousCount: 0)
             }

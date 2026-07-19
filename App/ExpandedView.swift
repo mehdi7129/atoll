@@ -29,12 +29,6 @@ struct ExpandedView: View {
                 InteractionCardView(request: request, colors: colors)
                     .id(request.id)
                 Spacer(minLength: 0)
-            } else if let chat = ChatCenter.shared.active {
-                // Conversation en cours. Composer actif seulement sur l'écran
-                // primaire (celui qui reçoit le focus clavier).
-                ChatView(driver: chat, colors: colors, interactive: viewModel.isPrimary) {
-                    ChatCenter.shared.close()
-                }
             } else if let session = viewModel.selectedSession {
                 // Détail d'une session (clic sur une ligne).
                 SessionDetailView(session: session, colors: colors) {
@@ -52,9 +46,7 @@ struct ExpandedView: View {
         .padding(.bottom, 16)
         .frame(
             width: IslandGeometry.expandedSize.width,
-            // Hauteur dynamique : le chat obtient un panneau plus haut — la
-            // même valeur que islandSize (sinon contenu et îlot se désalignent).
-            height: topInset + viewModel.expandedContentHeight,
+            height: topInset + IslandGeometry.expandedSize.height,
             alignment: .top
         )
     }
@@ -98,30 +90,10 @@ struct ExpandedView: View {
                         viewModel.selectSession(session.id)
                     }
                 }
-                HStack {
-                    Text("· clique une session pour ses détails")
-                        .font(AtollFont.mono(9))
-                        .foregroundStyle(colors.dim)
-                    Spacer()
-                    AsciiButton(label: "＋ NOUVEAU CHAT", color: colors.accent, shortcut: nil) {
-                        startNewChat()
-                    }
-                }
+                Text("· clique une session pour ses détails")
+                    .font(AtollFont.mono(9))
+                    .foregroundStyle(colors.dim)
             }
-        }
-    }
-
-    /// Ouvre un sélecteur de dossier puis démarre une nouvelle conversation.
-    private func startNewChat() {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
-        panel.prompt = "Nouveau chat ici"
-        panel.message = "Choisis le dossier de la conversation Claude"
-        NSApp.activate(ignoringOtherApps: true)
-        if panel.runModal() == .OK, let url = panel.url {
-            ChatCenter.shared.startNew(cwd: url.path)
         }
     }
 

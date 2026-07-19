@@ -153,11 +153,6 @@ final class SessionStore {
         sessions.first { $0.id == id }?.terminalAnchor
     }
 
-    /// Chemin du transcript d'une session (historique du chat repris).
-    func transcriptPath(for id: String) -> String? {
-        sessions.first { $0.id == id }?.transcriptPath
-    }
-
     /// Une permission a été auto-approuvée (auto-accept / rockstar) : la session
     /// n'attend plus, l'outil va s'exécuter → repasser en « busy » (sinon elle
     /// resterait affichée « en attente d'approbation »).
