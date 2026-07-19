@@ -14,6 +14,8 @@ struct ChatView: View {
     @State private var voice = VoiceDictation()
     /// Moniteur clavier local du push-to-talk (espace maintenu).
     @State private var pttMonitor: Any?
+    /// Brouillon présent AVANT le début de la dictée (le texte dicté s'y ajoute).
+    @State private var dictationBase = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -22,6 +24,12 @@ struct ChatView: View {
             if interactive {
                 composer
             }
+        }
+        // Texte dicté injecté EN DIRECT dans le composer (comme Cursor) : on voit
+        // la phrase se construire, elle est prête à relire/envoyer au relâchement.
+        .onChange(of: voice.transcript) { _, live in
+            guard voice.isListening else { return }
+            driver.draft = joinDraft(dictationBase, live)
         }
         // Chat fermé/remplacé pendant une dictée : couper le micro (sinon le tap
         // audio et la reconnaissance resteraient actifs — micro allumé fantôme).
@@ -37,10 +45,24 @@ struct ChatView: View {
         // démarre la dictée 3 s puis l'arrête.
         .onReceive(NotificationCenter.default.publisher(for: .atollDebugVoice)) { _ in
             guard interactive, !voice.isListening else { return }
-            voice.start { text in driver.draft = text }
+            startDictation()
             DispatchQueue.main.asyncAfter(deadline: .now() + 3) { voice.stop() }
         }
         #endif
+    }
+
+    /// Démarre la dictée en mémorisant le brouillon courant comme base.
+    private func startDictation() {
+        dictationBase = driver.draft
+        voice.start { final in driver.draft = joinDraft(dictationBase, final) }
+    }
+
+    private func joinDraft(_ base: String, _ addition: String) -> String {
+        let b = base.trimmingCharacters(in: .whitespacesAndNewlines)
+        let a = addition.trimmingCharacters(in: .whitespacesAndNewlines)
+        if b.isEmpty { return a }
+        if a.isEmpty { return b }
+        return b + " " + a
     }
 
     // MARK: - Push-to-talk (espace maintenu)
@@ -77,10 +99,7 @@ struct ChatView: View {
             let canDictate = composerEmpty && driver.state == .ready
             guard canDictate else { return event } // texte présent → espace normal
             voice.pttHeld = true
-            let base = driver.draft
-            voice.start { text in
-                driver.draft = base.isEmpty ? text : base + " " + text
-            }
+            startDictation()
             return nil
         }
 
@@ -239,7 +258,7 @@ struct ChatView: View {
     }
 
     /// Micro : appuie pour dicter, appuie encore pour arrêter. Le texte transcrit
-    /// (en local) remplit le composer — l'utilisateur relit avant d'envoyer.
+    /// (en local) s'écrit dans le composer en direct — relire avant d'envoyer.
     private var micButton: some View {
         AsciiButton(label: voice.isListening ? "◉" : "🎤",
                     color: voice.isListening ? colors.accent : colors.dim,
@@ -247,26 +266,22 @@ struct ChatView: View {
             if voice.isListening {
                 voice.stop()
             } else {
-                let base = driver.draft
-                voice.start { text in
-                    // Ajoute au brouillon existant (ne l'écrase pas).
-                    driver.draft = base.isEmpty ? text : base + " " + text
-                }
+                startDictation()
             }
         }
         .disabled(driver.state == .responding || driver.state == .starting)
     }
 
-    /// Indication sous le composer selon l'état de la dictée.
+    /// Indication sous le composer : STATUT seulement (le texte transcrit
+    /// s'affiche désormais dans le champ lui-même, plus besoin de le répéter).
     private var voiceHint: String? {
         switch voice.state {
         case .idle:
-            // Astuce push-to-talk visible quand le composer est vide et prêt.
+            // Astuce visible quand le composer est vide et prêt.
             let empty = driver.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             return (empty && driver.state == .ready) ? "espace maintenu ou 🎤 pour dicter" : nil
         case .listening:
-            let partial = voice.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-            return partial.isEmpty ? "◉ à l'écoute — parle, relâche pour terminer" : "◉ " + partial
+            return "◉ à l'écoute — parle, relâche pour terminer"
         case .denied:
             return "micro/reconnaissance refusés — Réglages › Confidentialité"
         case .unavailable:
