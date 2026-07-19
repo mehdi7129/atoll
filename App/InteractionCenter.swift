@@ -46,12 +46,14 @@ final class InteractionCenter {
     // MARK: - Enregistrement
 
     func register(event: ParsedHookEvent, requestID: String) {
+        // Classement par CONTENU, pas par nom d'outil strict : une question mal
+        // classée en permission enverrait un allow sans réponses (le CLI
+        // avancerait sans réponse). Priorité aux questions puis au plan.
         let kind: Kind
-        if let plan = event.planText, event.toolName == "ExitPlanMode" {
-            kind = .plan(plan)
-        } else if let questions = event.questions, let inputData = event.toolInputData,
-                  event.toolName == "AskUserQuestion" {
+        if let questions = event.questions, let inputData = event.toolInputData {
             kind = .questions(questions, toolInputData: inputData)
+        } else if let plan = event.planText {
+            kind = .plan(plan)
         } else {
             kind = .permission
         }

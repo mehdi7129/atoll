@@ -63,6 +63,12 @@ struct InteractionCardView: View {
             Text(request.projectName)
                 .foregroundStyle(colors.dim)
                 .lineLimit(1)
+            // Autres demandes en file : chacune bloque son propre helper jusqu'à
+            // résolution ; on signale qu'il y en a d'autres derrière.
+            if center.pending.count > 1 {
+                Text("(1/\(center.pending.count))")
+                    .foregroundStyle(colors.accent)
+            }
             Spacer(minLength: 4)
             ElapsedText(since: request.receivedAt)
                 .foregroundStyle(colors.dim)
@@ -173,14 +179,27 @@ struct InteractionCardView: View {
             }
             .frame(maxHeight: 210)
 
-            HStack {
+            HStack(spacing: 10) {
                 AsciiButton(label: "TERMINAL", color: colors.dim, shortcut: nil) {
                     center.handBackToTerminal(request.id)
                 }
                 Spacer()
-                AsciiButton(label: "ENVOYER ⏎", color: colors.ok, shortcut: .return, modifiers: []) {
+                if !allAnswered(questions) {
+                    Text("répondez à tout")
+                        .font(AtollFont.mono(9))
+                        .foregroundStyle(colors.dim)
+                }
+                // Le CLI attend une réponse à CHAQUE question : ENVOYER reste
+                // désactivé tant que tout n'est pas répondu.
+                AsciiButton(
+                    label: "ENVOYER ⏎",
+                    color: allAnswered(questions) ? colors.ok : colors.dim,
+                    shortcut: allAnswered(questions) ? .return : nil,
+                    modifiers: []
+                ) {
                     sendAnswers(questions)
                 }
+                .disabled(!allAnswered(questions))
             }
         }
     }
@@ -236,13 +255,27 @@ struct InteractionCardView: View {
             selection = selection.contains(label) ? [] : [label]
         }
         selectedOptions[question.question] = selection
+        // Options et texte libre s'excluent : ce qui est affiché est ce qui sera
+        // envoyé (le texte libre ne doit pas écraser silencieusement une sélection).
+        if !selection.isEmpty { freeTexts[question.question] = "" }
     }
 
     private func freeTextBinding(_ question: String) -> Binding<String> {
         Binding(
             get: { freeTexts[question] ?? "" },
-            set: { freeTexts[question] = $0 }
+            set: { newValue in
+                freeTexts[question] = newValue
+                if !newValue.isEmpty { selectedOptions[question] = [] }
+            }
         )
+    }
+
+    /// Chaque question a-t-elle une réponse (sélection ou texte libre) ?
+    private func allAnswered(_ questions: [ParsedHookEvent.AskQuestion]) -> Bool {
+        questions.allSatisfy { question in
+            !(freeTexts[question.question] ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                || !selectedOptions[question.question, default: []].isEmpty
+        }
     }
 
     private func sendAnswers(_ questions: [ParsedHookEvent.AskQuestion]) {

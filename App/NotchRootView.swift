@@ -48,15 +48,18 @@ struct NotchRootView: View {
             alignment: .top
         )
         .onChange(of: pendingCount) { oldCount, newCount in
-            // Claude demande quelque chose → l'îlot s'ouvre tout seul et prend
-            // le clavier ; tout résolu → il se replie et rend le focus.
-            if newCount > oldCount {
-                viewModel.isPinned = true
-                viewModel.open()
-            } else if newCount == 0, oldCount > 0 {
-                viewModel.close()
+            // Claude demande quelque chose → l'îlot s'ouvre tout seul (écran
+            // principal) et prend le clavier ; tout résolu → il se replie et
+            // rend le focus au terminal.
+            viewModel.syncInteractionState(pendingCount: newCount, previousCount: oldCount)
+        }
+        .onAppear {
+            // Fenêtre reconstruite (changement d'écran) pendant qu'une carte est
+            // en attente : réappliquer l'état, sinon la carte serait invisible et
+            // les raccourcis morts.
+            if pendingCount > 0 {
+                viewModel.syncInteractionState(pendingCount: pendingCount, previousCount: 0)
             }
-            viewModel.onKeyFocusRequest?(newCount > 0)
         }
     }
 

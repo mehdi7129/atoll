@@ -1,8 +1,15 @@
 import SwiftUI
+import Darwin
 
 @main
 struct AtollApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+
+    init() {
+        // Ceinture et bretelles : écrire dans un socket dont le pair est mort ne
+        // doit jamais tuer l'app (SO_NOSIGPIPE couvre déjà chaque fd client).
+        signal(SIGPIPE, SIG_IGN)
+    }
 
     var body: some Scene {
         MenuBarExtra {

@@ -135,8 +135,21 @@ func forwardHookEvent() {
     let reply = sendToSocket(data, path: BridgePaths.socketPath, awaitReply: isPermissionRequest)
     // Décision de l'îlot → stdout (le CLI la parse). Connexion fermée sans
     // données = on rend la main au prompt du terminal, en silence.
+    // write(2) brut : FileHandle.write lève une NSException non rattrapable si
+    // le CLI a déjà fermé le pipe — ce qui violerait le « exit 0 quoi qu'il arrive ».
     if let reply, !reply.isEmpty {
-        FileHandle.standardOutput.write(reply)
+        reply.withUnsafeBytes { raw in
+            var offset = 0
+            while offset < raw.count {
+                let written = write(1, raw.baseAddress!.advanced(by: offset), raw.count - offset)
+                if written < 0 {
+                    if errno == EINTR { continue }
+                    break
+                }
+                if written == 0 { break }
+                offset += written
+            }
+        }
     }
 }
 

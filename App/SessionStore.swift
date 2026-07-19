@@ -100,7 +100,9 @@ final class SessionStore {
         // demande a été tranchée ailleurs → annuler nos cartes en attente pour
         // cette session (fermeture silencieuse, le terminal garde la main).
         switch event.kind {
-        case .postToolUse, .postToolUseFailure, .permissionDenied, .stop, .sessionEnd:
+        case .postToolUse, .postToolUseFailure, .permissionDenied, .stop, .sessionEnd, .userPromptSubmit:
+            // userPromptSubmit inclus : un nouveau prompt prouve qu'aucun dialogue
+            // de permission n'est plus en attente pour cette session.
             InteractionCenter.shared.cancelForSession(event.sessionID)
         default:
             break
@@ -245,9 +247,13 @@ final class SessionStore {
     // MARK: - Transcript
 
     private func transcriptInterrupted(_ sessionID: String) {
+        // Échap au prompt du terminal ne déclenche AUCUN hook : c'est le seul
+        // signal qu'un dialogue interactif en cours a été abandonné → on annule
+        // notre carte (sinon elle traînerait jusqu'au timeout de 24 h).
+        InteractionCenter.shared.cancelForSession(sessionID)
         guard let index = sessions.firstIndex(where: { $0.id == sessionID }) else { return }
         switch sessions[index].phase {
-        case .busy, .toolRunning, .starting:
+        case .busy, .toolRunning, .starting, .waitingPermission:
             sessions[index].phase = .waitingInput
         default:
             break

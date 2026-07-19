@@ -39,11 +39,19 @@ final class BridgeServer: @unchecked Sendable {
     func reply(_ requestID: String, decision: Data) {
         queue.async { [weak self] in
             guard let self, let fd = self.pendingReplies.removeValue(forKey: requestID) else { return }
+            // Le helper est garanti bloqué en lecture : on repasse le fd en
+            // bloquant pour ne jamais tronquer la décision sur EAGAIN.
+            let flags = fcntl(fd, F_GETFL)
+            _ = fcntl(fd, F_SETFL, flags & ~O_NONBLOCK)
             decision.withUnsafeBytes { raw in
                 var offset = 0
                 while offset < raw.count {
                     let written = write(fd, raw.baseAddress!.advanced(by: offset), raw.count - offset)
-                    if written <= 0 { break }
+                    if written < 0 {
+                        if errno == EINTR { continue }
+                        break // EPIPE (helper mort) etc. — SO_NOSIGPIPE évite le crash.
+                    }
+                    if written == 0 { break }
                     offset += written
                 }
             }
@@ -162,6 +170,10 @@ final class BridgeServer: @unchecked Sendable {
 
             let flags = fcntl(clientFD, F_GETFL)
             _ = fcntl(clientFD, F_SETFL, flags | O_NONBLOCK)
+            // Écrire dans un fd dont le pair (helper) est mort ne doit JAMAIS
+            // tuer l'app par SIGPIPE — write échoue alors avec EPIPE.
+            var noSigpipe: Int32 = 1
+            setsockopt(clientFD, SOL_SOCKET, SO_NOSIGPIPE, &noSigpipe, socklen_t(MemoryLayout<Int32>.size))
 
             log.debug("connexion entrante (fd \(clientFD))")
             let source = DispatchSource.makeReadSource(fileDescriptor: clientFD, queue: queue)

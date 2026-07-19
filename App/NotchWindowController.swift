@@ -11,8 +11,12 @@ final class NotchWindowController {
     private var globalClickMonitor: Any?
     private var localClickMonitor: Any?
 
-    init(screen: NSScreen) {
-        viewModel = NotchViewModel(screen: screen)
+    /// App qui avait le focus avant qu'une carte prenne le clavier — restituée
+    /// quand la carte se résout, pour ne pas laisser l'utilisateur sans focus.
+    private var previousApp: NSRunningApplication?
+
+    init(screen: NSScreen, isPrimary: Bool) {
+        viewModel = NotchViewModel(screen: screen, isPrimary: isPrimary)
 
         let rect = IslandGeometry.windowRect(screenFrame: screen.frame)
         panel = NotchPanel(contentRect: rect)
@@ -25,12 +29,21 @@ final class NotchWindowController {
 
         // Focus clavier accordé seulement pendant une carte interactive
         // (⌘Y/⌘N, champs texte) — sans jamais activer l'app.
-        viewModel.onKeyFocusRequest = { [weak panel] wantsFocus in
-            panel?.allowsKeyFocus = wantsFocus
+        viewModel.onKeyFocusRequest = { [weak panel, weak self] wantsFocus in
+            guard let panel else { return }
+            panel.allowsKeyFocus = wantsFocus
             if wantsFocus {
-                panel?.makeKeyAndOrderFront(nil)
+                // Mémoriser l'app active pour lui rendre le focus ensuite.
+                self?.previousApp = NSWorkspace.shared.frontmostApplication
+                panel.makeKeyAndOrderFront(nil)
             } else {
-                panel?.orderFrontRegardless()
+                panel.orderFrontRegardless()
+                // Rendre le focus à l'app précédente (le terminal, typiquement).
+                if panel.isKeyWindow {
+                    panel.resignKey()
+                    self?.previousApp?.activate()
+                }
+                self?.previousApp = nil
             }
         }
 

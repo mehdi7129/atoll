@@ -79,7 +79,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func rebuildWindows() {
         controllers.forEach { $0.tearDown() }
-        controllers = NSScreen.screens.map { NotchWindowController(screen: $0) }
+        let screens = NSScreen.screens
+        // Un seul écran « primaire » pilote l'ouverture auto et le focus des
+        // cartes (évite que les panneaux se disputent le clavier). L'écran
+        // principal, ou à défaut le premier.
+        let primaryScreen = NSScreen.main ?? screens.first
+        controllers = screens.map { screen in
+            NotchWindowController(screen: screen, isPrimary: screen == primaryScreen)
+        }
         lastScreenSignature = screenSignature()
     }
 
@@ -103,8 +110,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.controllers.forEach { $0.viewModel.close() }
             }
         }
-        // Résolution automatisée de la première demande en attente — pour les
-        // tests de bout en bout scriptés (mêmes chemins de code que les boutons).
+        debugTokens = [expandToken, compactToken]
+
+        // Les triggers qui PRENNENT une décision (approuver/refuser une permission)
+        // ne doivent JAMAIS exister en release : sans cela, n'importe quel processus
+        // local pourrait approuver silencieusement des permissions via une simple
+        // notification Darwin. Réservés aux builds Debug pour les tests scriptés.
+        #if DEBUG
         var allowToken: Int32 = 0
         notify_register_dispatch("dev.mehdiguiard.atoll.debug.allow", &allowToken, DispatchQueue.main) { _ in
             MainActor.assumeIsolated {
@@ -132,7 +144,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 center.deny(request.id, message: "Refus de test automatisé Atoll.")
             }
         }
-        debugTokens = [expandToken, compactToken, allowToken, denyToken]
+        debugTokens.append(contentsOf: [allowToken, denyToken])
+        #endif
     }
 
     /// Empreinte de la configuration d'écrans. Un tableau (pas un dictionnaire) :

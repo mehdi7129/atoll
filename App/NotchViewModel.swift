@@ -20,19 +20,50 @@ final class NotchViewModel {
     var state: IslandState = .compact
     var isPinned = false
 
+    /// Un seul écran (l'écran principal) pilote l'ouverture auto et le focus
+    /// clavier des cartes interactives, pour que les panneaux ne se disputent
+    /// pas le focus en multi-écrans.
+    let isPrimary: Bool
+
     /// Posé par le contrôleur : demande/rend le focus clavier du panneau
     /// (nécessaire pour ⌘Y/⌘N et les champs texte des cartes interactives).
     @ObservationIgnored var onKeyFocusRequest: ((Bool) -> Void)?
+
+    /// L'îlot était-il épinglé par l'utilisateur AVANT qu'une carte l'ouvre ?
+    /// Si oui, on ne le referme pas quand la carte se résout.
+    @ObservationIgnored private var wasUserPinnedBeforeCard = false
 
     /// Source de vérité partagée entre tous les écrans.
     private let store: SessionStore
 
     @ObservationIgnored private var hoverTask: Task<Void, Never>?
 
-    init(screen: NSScreen, store: SessionStore = .shared) {
+    init(screen: NSScreen, isPrimary: Bool, store: SessionStore = .shared) {
         notchSize = screen.notchSize
         menuBarHeight = screen.menuBarHeight
+        self.isPrimary = isPrimary
         self.store = store
+    }
+
+    // MARK: - Cartes interactives
+
+    /// Applique l'état d'ouverture/focus en fonction du nombre de demandes en
+    /// attente. Appelé sur changement ET à l'apparition (reconstruction de fenêtre).
+    func syncInteractionState(pendingCount: Int, previousCount: Int) {
+        guard isPrimary else { return }
+        if pendingCount > 0, previousCount == 0 {
+            wasUserPinnedBeforeCard = isPinned
+            isPinned = true
+            open()
+            onKeyFocusRequest?(true)
+        } else if pendingCount == 0, previousCount > 0 {
+            onKeyFocusRequest?(false)
+            // Ne pas refermer un îlot que l'utilisateur avait épinglé lui-même.
+            if !wasUserPinnedBeforeCard {
+                close()
+            }
+            wasUserPinnedBeforeCard = false
+        }
     }
 
     var sessions: [AgentSession] { store.uiSessions }
