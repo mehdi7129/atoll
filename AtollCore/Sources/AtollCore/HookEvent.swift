@@ -138,6 +138,16 @@ public struct ParsedHookEvent: Equatable, Sendable {
         return parsed.isEmpty ? nil : parsed
     }
 
+    /// Nom du serveur MCP à partir d'un nom d'outil `mcp__<serveur>__<outil>`.
+    /// Le nom de serveur peut contenir des underscores simples → on découpe sur
+    /// le double underscore, pas le simple. nil si ce n'est pas un outil MCP.
+    public static func mcpServerName(_ toolName: String) -> String? {
+        guard toolName.hasPrefix("mcp__") else { return nil }
+        let parts = toolName.components(separatedBy: "__")
+        guard parts.count >= 2, !parts[1].isEmpty else { return nil }
+        return parts[1]
+    }
+
     /// Résumé lisible d'un appel d'outil pour l'affichage : `Bash(git push)`, `Edit(Foo.swift)`…
     public static func summarize(toolName: String?, input: [String: Any]?, maxLength: Int = 90) -> String? {
         guard let toolName else { return nil }

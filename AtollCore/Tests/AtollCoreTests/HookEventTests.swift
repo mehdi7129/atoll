@@ -46,6 +46,14 @@ final class HookEventTests: XCTestCase {
         XCTAssertNil(ParsedHookEvent(envelopeData: Data("[1,2,3]".utf8)))
     }
 
+    func testMcpServerName() {
+        XCTAssertEqual(ParsedHookEvent.mcpServerName("mcp__github__create_pr"), "github")
+        XCTAssertEqual(ParsedHookEvent.mcpServerName("mcp__foo_bar__baz"), "foo_bar")
+        XCTAssertEqual(ParsedHookEvent.mcpServerName("mcp__blender__execute_blender_code"), "blender")
+        XCTAssertNil(ParsedHookEvent.mcpServerName("Bash"))
+        XCTAssertNil(ParsedHookEvent.mcpServerName("mcp__"))
+    }
+
     func testNotificationTypeFallbackToTypeField() throws {
         let payload: [String: Any] = [
             "hook_event_name": "Notification",

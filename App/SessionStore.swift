@@ -226,9 +226,8 @@ final class SessionStore {
         case .subagentStop:
             session.subagentCount = max(0, session.subagentCount - 1)
         case .preToolUse:
-            if let tool = event.toolName, tool.hasPrefix("mcp__") {
-                let parts = tool.split(separator: "_").filter { !$0.isEmpty }
-                if parts.count >= 2 { session.mcpServers.insert(String(parts[1])) }
+            if let tool = event.toolName, let server = ParsedHookEvent.mcpServerName(tool) {
+                session.mcpServers.insert(server)
             }
         case .stop, .sessionEnd:
             session.subagentCount = 0 // fin de tour : plus de sous-agents en vol
