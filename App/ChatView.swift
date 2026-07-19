@@ -20,20 +20,30 @@ struct ChatView: View {
     }
 
     private var header: some View {
-        HStack(spacing: 6) {
-            Button(action: onClose) {
-                Text("‹ fermer")
-                    .foregroundStyle(colors.accent)
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                Button(action: onClose) {
+                    Text("‹ fermer")
+                        .foregroundStyle(colors.accent)
+                }
+                .buttonStyle(.plain)
+                Text(AsciiArt.sectionHeader("CHAT", width: 20))
+                    .foregroundStyle(colors.dim)
+                    .lineLimit(1)
+                Text((driver.cwd as NSString).lastPathComponent)
+                    .foregroundStyle(colors.dim)
+                    .lineLimit(1)
+                Spacer()
+                stateBadge
             }
-            .buttonStyle(.plain)
-            Text(AsciiArt.sectionHeader("CHAT", width: 20))
-                .foregroundStyle(colors.dim)
-                .lineLimit(1)
-            Text((driver.cwd as NSString).lastPathComponent)
-                .foregroundStyle(colors.dim)
-                .lineLimit(1)
-            Spacer()
-            stateBadge
+            // Reprise = FORK : on parle à une COPIE, la session du terminal
+            // continue séparément. Le dire clairement évite la confusion.
+            if driver.resumedSessionID != nil {
+                Text("⑂ copie de la session — le terminal continue à part")
+                    .font(AtollFont.mono(9))
+                    .foregroundStyle(colors.warn)
+                    .lineLimit(1)
+            }
         }
         .font(AtollFont.mono(10))
     }
@@ -57,9 +67,7 @@ struct ChatView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 8) {
                     if driver.turns.isEmpty {
-                        Text(driver.resumedSessionID == nil
-                             ? "· pose ta question à Claude dans ce dossier"
-                             : "· reprise de la conversation — historique en chargement…")
+                        Text(emptyStateMessage)
                             .font(AtollFont.mono(10))
                             .foregroundStyle(colors.dim)
                     }
@@ -91,6 +99,17 @@ struct ChatView: View {
                 if let last = driver.turns.last { proxy.scrollTo(last.id, anchor: .bottom) }
             }
         }
+    }
+
+    /// Message d'état vide, honnête selon reprise / chargement / historique absent.
+    private var emptyStateMessage: String {
+        guard driver.resumedSessionID != nil else {
+            return "· pose ta question à Claude dans ce dossier"
+        }
+        if !driver.historyLoadAttempted {
+            return "· reprise de la conversation — historique en chargement…"
+        }
+        return "· reprise — pas d'historique lisible, continue la conversation"
     }
 
     private func turnView(_ turn: ChatDriver.Turn) -> some View {

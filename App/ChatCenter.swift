@@ -15,12 +15,14 @@ final class ChatCenter {
 
     var isActive: Bool { active != nil }
 
-    /// Le panneau chat est plus haut que le panneau standard : toute mutation
-    /// de `active` s'anime avec les mêmes springs que l'expansion de l'îlot.
+    /// Le panneau chat est plus haut que le panneau standard : ouvrir un chat
+    /// utilise le spring d'ouverture ; le fermer (retour 560→340) utilise le
+    /// spring de fermeture (amorti, sans rebond) — cohérent avec l'îlot.
     private func setActive(_ driver: ChatDriver?) {
-        withAnimation(.spring(response: 0.42, dampingFraction: 0.8)) {
-            active = driver
-        }
+        let spring: Animation = driver == nil
+            ? .spring(response: 0.45, dampingFraction: 1.0)
+            : .spring(response: 0.42, dampingFraction: 0.8)
+        withAnimation(spring) { active = driver }
     }
 
     /// Démarre une nouvelle conversation dans `cwd`.
@@ -41,12 +43,19 @@ final class ChatCenter {
         setActive(driver)
         driver.start(resume: sessionID)
 
-        guard let path = SessionStore.shared.transcriptPath(for: sessionID) else { return }
+        guard let path = SessionStore.shared.transcriptPath(for: sessionID) else {
+            driver.preloadHistory([]) // pas de transcript : lever « en chargement… »
+            return
+        }
         // Fichiers jusqu'à 88 Mo : lecture fenêtrée HORS du main thread.
-        Task.detached(priority: .userInitiated) {
+        Task.detached(priority: .userInitiated) { [weak self] in
             let history = TranscriptHistory.load(path: path)
-            guard !history.isEmpty else { return }
-            await MainActor.run { driver.preloadHistory(history) }
+            await MainActor.run {
+                // Le chat a pu être fermé/remplacé entre-temps : ne préremplir
+                // QUE s'il est toujours le chat actif (sinon fuite/incohérence).
+                guard self?.active === driver else { return }
+                driver.preloadHistory(history)
+            }
         }
     }
 

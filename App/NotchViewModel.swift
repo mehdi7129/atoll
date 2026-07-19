@@ -104,24 +104,29 @@ final class NotchViewModel {
             )
         case .expanded:
             // Le chat obtient un panneau plus haut (historique de conversation).
-            // Lire ChatCenter ici inscrit la dépendance d'observation : la vue
-            // qui évalue islandSize se ré-évalue à l'ouverture/fermeture du chat.
+            // Lire isChatTall inscrit la dépendance d'observation : la vue qui
+            // évalue islandSize se ré-évalue à l'ouverture/fermeture du chat.
             return IslandGeometry.expandedIslandSize(
                 notch: notchSize,
                 menuBarHeight: menuBarHeight,
-                chat: ChatCenter.shared.isActive,
+                chat: isChatTall,
                 screenHeight: screenHeight
             )
         }
     }
 
+    /// Le panneau doit-il être HAUT (mode chat) ? Seulement quand le chat est la
+    /// vue réellement affichée : une carte d'interaction est PRIORITAIRE dans le
+    /// routage (ExpandedView) et se contenterait d'un panneau standard — sinon
+    /// elle flotterait dans un panneau aux deux tiers vide.
+    var isChatTall: Bool {
+        ChatCenter.shared.isActive && InteractionCenter.shared.current == nil
+    }
+
     /// Hauteur du contenu du panneau étendu (partagée avec ExpandedView pour
     /// que la frame du contenu et celle de l'îlot restent alignées).
     var expandedContentHeight: CGFloat {
-        IslandGeometry.expandedContentHeight(
-            chat: ChatCenter.shared.isActive,
-            screenHeight: screenHeight
-        )
+        IslandGeometry.expandedContentHeight(chat: isChatTall, screenHeight: screenHeight)
     }
 
     // MARK: - Interactions

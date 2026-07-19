@@ -35,6 +35,14 @@ final class ChatDriver {
     private(set) var claudeSessionID: String?
     /// Session dont ce chat est la reprise (fork `--resume`), nil pour un chat neuf.
     private(set) var resumedSessionID: String?
+    /// Le chargement de l'historique de reprise a-t-il été TENTÉ (succès OU vide) ?
+    /// Distingue « en cours de chargement » de « pas d'historique lisible ».
+    private(set) var historyLoadAttempted = false
+    /// A-t-on reçu au moins un événement du processus (init/texte) ? Un EOF
+    /// AVANT toute I/O = échec de démarrage (session --resume introuvable…).
+    @ObservationIgnored private var receivedAnyEvent = false
+    /// Arrêt volontaire (stop()) : l'EOF qui suit n'est PAS un échec.
+    @ObservationIgnored private var stopping = false
     /// Brouillon du composer — porté par le driver (survit à la reconstruction de
     /// la vue, à une carte qui interrompt, au repli de l'îlot).
     var draft: String = ""
@@ -45,6 +53,8 @@ final class ChatDriver {
 
     @ObservationIgnored private var process: Process?
     @ObservationIgnored private var stdinFD: Int32 = -1
+    /// Dernière ligne de stderr (diagnostic d'un échec de démarrage).
+    @ObservationIgnored private var stderrLine: String?
 
     init(cwd: String) {
         self.cwd = cwd
@@ -67,7 +77,9 @@ final class ChatDriver {
 
     /// Précharge l'historique de la session reprise EN TÊTE du transcript
     /// (l'utilisateur a pu envoyer un message avant la fin du chargement).
+    /// Toujours marquer la tentative — même vide — pour lever le « en chargement… ».
     func preloadHistory(_ history: [TranscriptHistory.HistoryTurn]) {
+        historyLoadAttempted = true
         guard !history.isEmpty else { return }
         let loaded = history.map { turn in
             Turn(role: turn.role == .user ? .user : .assistant,
@@ -123,7 +135,11 @@ final class ChatDriver {
 
         process.standardInput = FileHandle(fileDescriptor: inRead, closeOnDealloc: false)
         process.standardOutput = FileHandle(fileDescriptor: outWrite, closeOnDealloc: false)
-        process.standardError = FileHandle.nullDevice
+        // stderr capté : un --resume qui échoue (session introuvable) y écrit son
+        // erreur puis sort en silence côté stdout — sans ça, l'échec serait mué
+        // en un état « idle » indistinguable d'une session vide.
+        let errorPipe = Pipe()
+        process.standardError = errorPipe
 
         do {
             try process.run()
@@ -142,6 +158,18 @@ final class ChatDriver {
         self.stdinFD = inWrite
         state = .ready
         log.info("chat démarré dans \(self.cwd, privacy: .public)")
+
+        // Draine stderr sur un thread dédié (dernière ligne conservée pour
+        // diagnostiquer un démarrage --resume qui échoue).
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let data = errorPipe.fileHandleForReading.readDataToEndOfFile()
+            guard !data.isEmpty,
+                  let text = String(data: data, encoding: .utf8)?
+                      .trimmingCharacters(in: .whitespacesAndNewlines),
+                  let last = text.split(separator: "\n").last.map(String.init)
+            else { return }
+            DispatchQueue.main.async { MainActor.assumeIsolated { self?.stderrLine = last } }
+        }
 
         // Lecture stdout par read(2) direct sur outRead (fd sous notre contrôle).
         // Découpage NDJSON ici (séquentiel) ; événements livrés au main en FIFO.
@@ -193,6 +221,7 @@ final class ChatDriver {
     }
 
     func stop() {
+        stopping = true // l'EOF qui suit est volontaire, pas un échec
         if stdinFD >= 0 { close(stdinFD); stdinFD = -1 } // EOF → claude sort
         process?.terminate()
         process = nil
@@ -202,6 +231,7 @@ final class ChatDriver {
     // MARK: - Application des événements (sur le main actor, dans l'ordre)
 
     private func handle(_ event: StreamEvent) {
+        receivedAnyEvent = true
         switch event {
         case .initialized(let sessionID, _):
             if !sessionID.isEmpty { claudeSessionID = sessionID }
@@ -246,7 +276,24 @@ final class ChatDriver {
         }
         process = nil
         if stdinFD >= 0 { close(stdinFD); stdinFD = -1 }
-        if case .failed = state {} else { state = .idle }
+        if case .failed = state {
+            // déjà en échec
+        } else if !receivedAnyEvent && !stopping {
+            // EOF avant le moindre événement (et arrêt NON volontaire) = le
+            // processus n'a jamais démarré (session --resume introuvable,
+            // binaire cassé…). Rendre visible.
+            state = .failed(startupErrorMessage())
+        } else {
+            state = .idle
+        }
+    }
+
+    /// Message d'échec de démarrage : la ligne stderr si on l'a, sinon générique.
+    private func startupErrorMessage() -> String {
+        if let stderrLine, !stderrLine.isEmpty {
+            return String(stderrLine.prefix(80))
+        }
+        return resumedSessionID == nil ? "démarrage impossible" : "reprise impossible (session introuvable ?)"
     }
 
     private func trimTurns() {

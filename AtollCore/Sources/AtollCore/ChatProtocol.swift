@@ -27,7 +27,13 @@ public enum ChatProtocol {
             "--include-partial-messages",
         ]
         if let resume {
-            args += ["--resume", resume]
+            // `--fork-session` OBLIGATOIRE : sans lui, `--resume` RÉUTILISE le
+            // même session_id et écrit dans LE MÊME transcript que la session du
+            // terminal (si elle est encore ouverte) → les deux flux s'entrelacent
+            // et la corrompent, et nos hooks porteraient son id (le SessionStore
+            // fusionnerait/tuerait la vraie session). Le fork repart d'une copie
+            // avec un id NEUF (récupéré via l'événement init du flux).
+            args += ["--resume", resume, "--fork-session"]
         } else if let sessionID {
             args += ["--session-id", sessionID]
         }
