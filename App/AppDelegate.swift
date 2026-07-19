@@ -38,6 +38,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             showOnboarding()
         }
 
+        // Jauges par modèle (opt-in) : démarre le poller si le réglage est actif.
+        ModelQuotaPoller.shared.syncWithSettings()
+
         // Démarre la réception des événements de hooks puis le suivi des sessions.
         let store = SessionStore.shared
         let server = BridgeServer(

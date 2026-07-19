@@ -136,6 +136,18 @@ struct ExpandedView: View {
                     quotaGauge(label: "7j", fraction: viewModel.usage.sevenDayFraction, resetsAt: viewModel.quotaResets.seven)
                     Spacer()
                 }
+                // Jauges par modèle (« Fable ») — opt-in, endpoint non officiel.
+                let modelLimits = ModelQuotaPoller.shared.displayedLimits
+                if !modelLimits.isEmpty {
+                    HStack(spacing: 16) {
+                        ForEach(modelLimits, id: \.label) { limit in
+                            quotaGauge(label: limit.label.lowercased(),
+                                       fraction: limit.usedFraction,
+                                       resetsAt: limit.resetsAt)
+                        }
+                        Spacer()
+                    }
+                }
                 if let receivedAt = viewModel.quotaReceivedAt {
                     // Indicateur d'âge : la statusline ne pousse le quota qu'à
                     // chaque message assistant → signaler la donnée périmée.
@@ -235,6 +247,12 @@ private struct SessionRow: View {
                         .foregroundStyle(colors.fg)
                         .lineLimit(1)
                     Spacer(minLength: 8)
+                    // Remplissage du contexte de la conversation (statusline) —
+                    // l'info clé pour anticiper un /compact.
+                    if let context = session.contextUsedFraction {
+                        Text("ctx \(Int(context * 100))%")
+                            .foregroundStyle(context >= 0.8 ? colors.warn : colors.dim)
+                    }
                     Text(AsciiArt.statusBadge(session.status))
                         .foregroundStyle(badgeColor)
                 }

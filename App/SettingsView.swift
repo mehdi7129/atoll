@@ -158,6 +158,18 @@ struct SettingsView: View {
                     }
             }
 
+            Section("Quota") {
+                Toggle("Jauges par modèle (Fable…)", isOn: perModelQuota)
+                Text("""
+                Complète le 5h/7j officiel avec le détail par modèle de la page \
+                Utilisation de claude.ai (endpoint non documenté, lecture seule avec \
+                votre jeton local, jamais de renouvellement). Peut cesser de fonctionner \
+                à tout moment ; macOS demandera une fois l'accès au trousseau.
+                """)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+
             Section("Mises à jour") {
                 Toggle("Vérifier automatiquement", isOn: automaticUpdateChecks)
                 Text("""
@@ -205,6 +217,16 @@ struct SettingsView: View {
         // Le parking suit la disponibilité des hooks : désinstaller restaure les
         // règles (fait par le helper), réinstaller en Rockstar les reparque.
         denyParkingError = HookInstaller.syncDenyParking(level: currentLevel)
+    }
+
+    private var perModelQuota: Binding<Bool> {
+        Binding(
+            get: { UserDefaults.standard.bool(forKey: ModelQuotaPoller.enabledKey) },
+            set: {
+                UserDefaults.standard.set($0, forKey: ModelQuotaPoller.enabledKey)
+                ModelQuotaPoller.shared.syncWithSettings()
+            }
+        )
     }
 
     /// Persisté par Sparkle dans les user defaults (prime sur l'Info.plist).
