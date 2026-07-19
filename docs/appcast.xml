@@ -3,12 +3,23 @@
     <channel>
         <title>Atoll</title>
         <item>
+            <title>0.4.1</title>
+            <pubDate>Sun, 19 Jul 2026 22:21:54 +0200</pubDate>
+            <sparkle:version>5</sparkle:version>
+            <sparkle:shortVersionString>0.4.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/mehdi7129/atoll/releases/download/v0.4.1/Atoll-0.4.1.zip" length="3210295" type="application/octet-stream" sparkle:edSignature="aFbz8rEShj4zQE1mKL8yuCV+VbK6DUtA1E42VXyTidRt6uzXhzoPerOFq/EHwO1+J3Al7a4FmM1cTx/1vby9Bg=="/>
+            <sparkle:deltas>
+                <enclosure url="https://github.com/mehdi7129/atoll/releases/download/v0.4.1/Atoll5-4.delta" sparkle:deltaFrom="4" length="364614" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="zxNmdqF9IMXa89u2bcEInCkZqEDBnELBwt2iElsnQl1QrzWcmILcXmyEmikK9OkpC+vQF32eccEioPxqDhP1Ag=="/>
+            </sparkle:deltas>
+        </item>
+        <item>
             <title>0.4.0</title>
             <pubDate>Sun, 19 Jul 2026 19:08:09 +0200</pubDate>
             <sparkle:version>4</sparkle:version>
             <sparkle:shortVersionString>0.4.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/mehdi7129/atoll/releases/download/v0.4.0/Atoll-0.4.0.zip" length="3296136" type="application/octet-stream" sparkle:edSignature="JYYnS0Ed+NP5w7vgwtmN7eWR2BZ8zvS179oxoQrjCJB9euTZoJBLvD2OHM1Lm6oTcE7GVem+MpqNweVRlgu1Bw=="/>
+            <enclosure url="https://github.com/mehdi7129/atoll/releases/download/v0.4.1/Atoll-0.4.0.zip" length="3296136" type="application/octet-stream" sparkle:edSignature="JYYnS0Ed+NP5w7vgwtmN7eWR2BZ8zvS179oxoQrjCJB9euTZoJBLvD2OHM1Lm6oTcE7GVem+MpqNweVRlgu1Bw=="/>
         </item>
     </channel>
 </rss>
