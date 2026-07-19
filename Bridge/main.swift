@@ -343,18 +343,28 @@ enum BridgeCLI {
     }
 
     static func uninstall() -> Int32 {
+        // Restaurer les règles deny parquées (rockstar) AVANT TOUT — y compris
+        // les sorties anticipées ci-dessous : la désinstallation ne doit JAMAIS
+        // laisser les règles de l'utilisateur suspendues, même si settings.json
+        // a disparu ou ne contient plus de marqueur Atoll. Un échec est signalé
+        // (exit 1) mais n'empêche pas de retirer les hooks.
+        var denyRestoreFailed = false
+        if FileManager.default.fileExists(atPath: BridgePaths.rockstarParkedDenyURL.path) {
+            denyRestoreFailed = rockstarRestore() != 0
+        }
         do {
             guard let current = try readSettings() else {
                 print("aucun settings.json — rien à désinstaller")
-                return 0
+                return denyRestoreFailed ? 1 : 0
             }
             guard HookSettingsEditor.isInstalled(in: current) ||
                   StatusLineEditor.isInstalled(in: current) ||
                   String(decoding: current, as: UTF8.self).contains("/.atoll/bin/") else {
                 print("hooks non installés — rien à faire")
-                return 0
+                return denyRestoreFailed ? 1 : 0
             }
-            // Restaurer la statusline d'origine AVANT de retirer les hooks.
+            // Restaurer la statusline d'origine AVANT de retirer les hooks : la
+            // désinstallation doit rendre le settings.json tel qu'il était.
             try uninstallStatusline(current: current)
             let afterStatusline = try readSettings() ?? current
             let updated = try HookSettingsEditor.uninstall(from: afterStatusline)
@@ -362,9 +372,74 @@ enum BridgeCLI {
             // Les wrappers restent en place : les sessions Claude déjà ouvertes les
             // référencent encore, et ils sont fail-open (exit 0 sans binaire).
             print("hooks + statusline désinstallés")
-            return 0
+            return denyRestoreFailed ? 1 : 0
         } catch {
             FileHandle.standardError.write(Data("échec de la désinstallation : \(error)\n".utf8))
+            return 1
+        }
+    }
+
+    /// Rockstar : suspend les règles `permissions.deny` (conservées dans
+    /// ~/.atoll/rockstar-parked-deny.json). Crash-safe : le fichier de parking
+    /// est écrit AVANT de toucher settings.json — à aucun moment les règles
+    /// n'existent nulle part. Idempotent : un parking précédent est fusionné.
+    static func rockstarPark() -> Int32 {
+        do {
+            let current = try readSettings()
+            guard let result = try RockstarPermissionsEditor.park(in: current) else {
+                print("aucune règle deny — rien à suspendre")
+                return 0
+            }
+            var allParked = result.parked
+            if FileManager.default.fileExists(atPath: BridgePaths.rockstarParkedDenyURL.path) {
+                let existing = try Data(contentsOf: BridgePaths.rockstarParkedDenyURL)
+                guard let previous = RockstarPermissionsEditor.decodeParked(existing) else {
+                    // Illisible : ÉCHOUER plutôt qu'écraser — l'écraser détruirait
+                    // définitivement des règles parquées précédemment.
+                    FileHandle.standardError.write(Data("fichier de parking illisible, suspension refusée : \(BridgePaths.rockstarParkedDenyURL.path)\n".utf8))
+                    return 1
+                }
+                allParked = RockstarPermissionsEditor.mergeParked(previous: previous.deny, new: allParked)
+            }
+            try refreshBackup(currentData: current)
+            try FileManager.default.createDirectory(
+                at: BridgePaths.rockstarParkedDenyURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true)
+            let parkedData = try RockstarPermissionsEditor.encodeParked(
+                .init(deny: allParked, parkedAt: Date()))
+            try parkedData.write(to: BridgePaths.rockstarParkedDenyURL, options: .atomic)
+            try result.updated.write(to: settingsURL, options: .atomic)
+            print("règles deny suspendues (\(result.parked.count))")
+            return 0
+        } catch {
+            FileHandle.standardError.write(Data("échec de la suspension des règles deny : \(error)\n".utf8))
+            return 1
+        }
+    }
+
+    /// Rockstar terminé : réinsère les règles parquées (union avec celles
+    /// ajoutées entre-temps). Le fichier de parking ne disparaît QU'APRÈS
+    /// l'écriture réussie de settings.json.
+    static func rockstarRestore() -> Int32 {
+        do {
+            guard FileManager.default.fileExists(atPath: BridgePaths.rockstarParkedDenyURL.path) else {
+                print("aucune règle parquée — rien à restaurer")
+                return 0
+            }
+            let parkedData = try Data(contentsOf: BridgePaths.rockstarParkedDenyURL)
+            guard let parked = RockstarPermissionsEditor.decodeParked(parkedData) else {
+                // Corrompu : on le laisse en place pour diagnostic, on signale.
+                FileHandle.standardError.write(Data("fichier de parking illisible : \(BridgePaths.rockstarParkedDenyURL.path)\n".utf8))
+                return 1
+            }
+            let current = try readSettings()
+            let updated = try RockstarPermissionsEditor.restore(into: current, parked: parked.deny)
+            try updated.write(to: settingsURL, options: .atomic)
+            try FileManager.default.removeItem(at: BridgePaths.rockstarParkedDenyURL)
+            print("règles deny restaurées (\(parked.deny.count))")
+            return 0
+        } catch {
+            FileHandle.standardError.write(Data("échec de la restauration des règles deny : \(error)\n".utf8))
             return 1
         }
     }
@@ -375,6 +450,7 @@ enum BridgeCLI {
             "hooksInstalled": HookSettingsEditor.isInstalled(in: settings),
             "wrapperPresent": FileManager.default.isExecutableFile(atPath: BridgePaths.wrapperURL.path),
             "socketPresent": FileManager.default.fileExists(atPath: BridgePaths.socketPath),
+            "denyParked": FileManager.default.fileExists(atPath: BridgePaths.rockstarParkedDenyURL.path),
         ]
         if let data = try? JSONSerialization.data(withJSONObject: state, options: [.sortedKeys]) {
             print(String(decoding: data, as: UTF8.self))
@@ -394,6 +470,10 @@ case "uninstall":
     exit(BridgeCLI.uninstall())
 case "status":
     exit(BridgeCLI.status())
+case "rockstar-park":
+    exit(BridgeCLI.rockstarPark())
+case "rockstar-restore":
+    exit(BridgeCLI.rockstarRestore())
 case "statusline":
     // Tee des rate_limits vers l'app (fail-open, ne produit rien sur stdout).
     forwardStatusline()

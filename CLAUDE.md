@@ -60,6 +60,11 @@ Pièges de build appris à la dure :
    identifiables par `atoll-bridge`), backup avant première écriture, désinstallation
    restituant l'existant, refus propre si le fichier n'est pas du JSON valide.
    L'utilisateur a des hooks GSD + sons + statusline custom : les préserver.
+   EXCEPTION ENCADRÉE (Rockstar) : les règles `permissions.deny` de l'utilisateur
+   sont suspendues pendant Rockstar — parquées dans `~/.atoll/rockstar-parked-deny.json`
+   (écrit AVANT de toucher settings.json, crash-safe), restaurées à la sortie, au
+   lancement de l'app (réconciliation) et à la désinstallation. C'est le SEUL cas où
+   Atoll touche à des entrées non-Atoll, à la demande explicite de l'utilisateur.
 3. **Transcripts JSONL** (`~/.claude/projects/`) : format officiellement interne et
    instable → parsing défensif uniquement, jamais une dépendance dure.
 4. Pas de dépendances lourdes, pas d'Electron, **zéro télémétrie**.
@@ -102,6 +107,21 @@ Jump-back : les sessions de Mehdi tournent dans le terminal intégré de **Curso
 (`com.todesktop.230313mzl4w4u92`, TERM_PROGRAM=vscode) → `cursor -r <cwd>` remonte la
 fenêtre, AUCUNE permission TCC. AppleScript (Terminal/iTerm2) exécuté par l'app seulement
 (attribution TCC). Debug : `notifyutil -p dev.mehdiguiard.atoll.debug.jump`.
+
+Permissions Claude Code — faits VÉRIFIÉS empiriquement (CLI 2.1.215, tests pty/expect) :
+- `updatedPermissions setMode bypassPermissions` renvoyé par un hook PermissionRequest
+  est IGNORÉ par le CLI (contrairement à `acceptEdits`, honoré — utilisé pour les
+  plans en rockstar). Impossible de faire passer une session en bypass depuis un hook.
+- Les règles `permissions.deny` s'appliquent MÊME en bypassPermissions, et AVANT
+  les hooks (l'îlot ne voit jamais la demande refusée) → seul le parking les lève.
+- En bypassPermissions, AskUserQuestion déclenche QUAND MÊME le hook PermissionRequest
+  (et la décision du hook est honorée) → rockstar répond aux questions même en bypass.
+- En mode `-p` (headless, donc le chat intégré), l'outil AskUserQuestion N'EXISTE PAS.
+- Mehdi a `defaultMode: bypassPermissions` dans son settings.json : ses sessions ne
+  produisent presque jamais de PermissionRequest d'outils — ne pas s'étonner que
+  l'auto-accept semble « inactif » ; ce sont les deny rules qui bloquaient encore.
+- Un claude lancé DEPUIS une session Claude Code (env CLAUDECODE/CHILD_SESSION) peut
+  démarrer en bypass : nettoyer l'env pour tester des comportements de permissions.
 
 Debug des interactions (Phase 3) : `notifyutil -p dev.mehdiguiard.atoll.debug.allow`
 (ou `.deny`) résout la première carte en attente via les mêmes chemins que les boutons ;

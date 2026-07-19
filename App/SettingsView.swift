@@ -12,6 +12,7 @@ struct SettingsView: View {
     @State private var hookError: String?
     @AppStorage(InteractionCenter.autonomyKey) private var autonomyRaw = AutonomyLevel.manual.rawValue
     @State private var confirmingRockstar = false
+    @State private var denyParkingError: String?
 
     private var store: SessionStore { .shared }
     private var center: InteractionCenter { .shared }
@@ -55,6 +56,8 @@ struct SettingsView: View {
                             confirmingRockstar = true // confirmer avant d'activer
                         } else {
                             autonomyRaw = newLevel.rawValue
+                            // Quitter Rockstar restaure les règles deny parquées.
+                            denyParkingError = HookInstaller.syncDenyParking(level: newLevel)
                         }
                     }
                 )) {
@@ -72,19 +75,52 @@ struct SettingsView: View {
                     LabeledContent("Auto-approuvées", value: "\(center.autoAcceptedCount)")
                 }
 
+                if currentLevel == .rockstar, HookInstaller.denyRulesParked {
+                    LabeledContent("Règles deny", value: "suspendues")
+                }
+
+                if currentLevel != .rockstar, HookInstaller.denyRulesParked {
+                    // État le plus dangereux : parqué HORS Rockstar (restauration
+                    // échouée ?). Toujours visible, jamais silencieux.
+                    Text("⚠ Vos règles deny sont encore suspendues — restauration à retenter (relancez Atoll ou rechangez de niveau).")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+
+                if let denyParkingError {
+                    Text(denyParkingError)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+
                 Text("""
-                Garde-fou commun à Auto et Rockstar : vos règles deny et vos hooks bloquants \
-                (ex. Bash(rm -rf *)) s'exécutent dans Claude Code AVANT Atoll et ne peuvent jamais \
-                être outrepassés. Rockstar n'est activable qu'ici, avec confirmation.
+                Auto garde des garde-fous (allowlist ; destructif, plans et questions restent \
+                manuels). Rockstar n'en a AUCUN : tout est approuvé et vos règles deny \
+                (ex. Bash(rm -rf *)) sont suspendues — parquées tant que le niveau reste \
+                Rockstar, même app fermée, puis restaurées dès que vous le quittez. Les \
+                sessions déjà ouvertes gardent les règles qu'elles ont lues : redémarrez-les \
+                pour appliquer. Vos propres hooks bloquants restent toujours actifs.
                 """)
                 .font(.caption)
                 .foregroundStyle(.secondary)
             }
             .alert("Activer le mode Rockstar ?", isPresented: $confirmingRockstar) {
                 Button("Annuler", role: .cancel) { }
-                Button("Activer", role: .destructive) { autonomyRaw = AutonomyLevel.rockstar.rawValue }
+                Button("Activer", role: .destructive) {
+                    autonomyRaw = AutonomyLevel.rockstar.rawValue
+                    // Entrer en Rockstar suspend (parque) les règles deny et
+                    // résout les cartes déjà en attente.
+                    denyParkingError = HookInstaller.syncDenyParking(level: .rockstar)
+                    InteractionCenter.shared.resolvePendingAsRockstar()
+                }
             } message: {
-                Text("Claude approuvera automatiquement TOUTES les demandes, y compris les commandes destructrices non couvertes par vos règles deny. À utiliser en connaissance de cause.")
+                Text("""
+                Plus AUCUNE protection : Claude approuvera TOUTES les demandes (y compris \
+                destructrices) et répondra seul aux questions et plans — effet immédiat, \
+                sessions en cours comprises. Vos règles deny (rm -rf, sudo, .env…) sont \
+                suspendues jusqu'à la sortie de ce mode ; les sessions déjà ouvertes les \
+                ayant déjà lues, redémarrez-les pour en profiter.
+                """)
             }
 
             Section("Apparence") {
@@ -134,6 +170,9 @@ struct SettingsView: View {
         .onAppear {
             launchAtLogin = SMAppService.mainApp.status == .enabled
             hooksInstalled = HookInstaller.isInstalled
+            // Auto-réparation : si un état incohérent subsiste (règles parquées
+            // hors Rockstar après un échec), on retente en ouvrant les Réglages.
+            denyParkingError = HookInstaller.syncDenyParking(level: currentLevel)
         }
     }
 
@@ -149,6 +188,9 @@ struct SettingsView: View {
             hookError = error.localizedDescription
         }
         hooksInstalled = HookInstaller.isInstalled
+        // Le parking suit la disponibilité des hooks : désinstaller restaure les
+        // règles (fait par le helper), réinstaller en Rockstar les reparque.
+        denyParkingError = HookInstaller.syncDenyParking(level: currentLevel)
     }
 
     private var appVersion: String {

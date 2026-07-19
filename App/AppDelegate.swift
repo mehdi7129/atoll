@@ -19,6 +19,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Répare le wrapper ~/.atoll/bin si l'app a été déplacée (idempotent).
         HookInstaller.repairIfInstalled()
 
+        // Récupération après crash / relance : le parking des règles deny doit
+        // TOUJOURS refléter le niveau d'autonomie courant (jamais de règles
+        // parquées hors Rockstar, jamais de règles actives en Rockstar).
+        HookInstaller.syncDenyParking(level: InteractionCenter.shared.autonomyLevel)
+
         // Démarre la réception des événements de hooks puis le suivi des sessions.
         let store = SessionStore.shared
         let server = BridgeServer(

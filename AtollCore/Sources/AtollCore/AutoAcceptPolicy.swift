@@ -15,6 +15,10 @@ import Foundation
 ///    forme opaque (interpréteur `-c`, `$(...)`, `${IFS}`, `eval`, `base64|sh`,
 ///    substitution de process…) retombe en manuel — une blocklist de `rm` est
 ///    trivialement contournable (`/bin/rm`, `bash -c "rm -rf"`, `\rm`…).
+///
+/// Ces garanties décrivent le niveau AUTO uniquement. Le niveau Rockstar ne
+/// passe pas par cette politique : il approuve tout ce qui atteint l'îlot et
+/// suspend en plus les règles deny de l'utilisateur (RockstarPermissionsEditor).
 public enum AutoAcceptPolicy {
 
     /// La demande peut-elle être approuvée automatiquement ?

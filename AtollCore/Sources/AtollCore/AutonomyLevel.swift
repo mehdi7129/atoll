@@ -9,8 +9,10 @@ public enum AutonomyLevel: String, CaseIterable, Sendable {
     /// Les permissions d'outils SÛRES sont auto-approuvées (allowlist) ; les
     /// commandes destructrices, plans et questions restent manuels.
     case auto
-    /// Tout est auto-approuvé (permissions même destructrices, plans, questions).
-    /// « À vos risques et périls. »
+    /// Aucune protection : tout est auto-approuvé (permissions même
+    /// destructrices, plans — avec auto-acceptation des éditions —, questions)
+    /// et les règles `permissions.deny` de l'utilisateur sont suspendues
+    /// (parquées) tant que ce niveau est actif. « À vos risques et périls. »
     case rockstar
 
     public var displayName: String {
@@ -28,7 +30,7 @@ public enum AutonomyLevel: String, CaseIterable, Sendable {
         case .auto:
             return "Permissions sûres auto-approuvées ; destructif, plans et questions restent manuels."
         case .rockstar:
-            return "Tout est auto-approuvé, même les commandes destructrices. À vos risques et périls."
+            return "Aucune protection : tout est approuvé et vos règles deny sont suspendues. À vos risques et périls."
         }
     }
 

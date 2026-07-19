@@ -41,6 +41,12 @@ public enum BridgePaths {
         homeDirectory.appendingPathComponent(".claude/settings.json")
     }
 
+    /// Règles `permissions.deny` suspendues pendant le mode Rockstar (et
+    /// restaurées à la sortie). Présence du fichier = règles actuellement parquées.
+    public static var rockstarParkedDenyURL: URL {
+        homeDirectory.appendingPathComponent(".atoll/rockstar-parked-deny.json")
+    }
+
     /// Backup unique, créé avant la toute première écriture, jamais écrasé.
     public static var settingsBackupURL: URL {
         homeDirectory.appendingPathComponent(".claude/settings.json.atoll-backup")

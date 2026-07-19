@@ -39,6 +39,48 @@ enum HookInstaller {
         try runHelper("uninstall")
     }
 
+    // MARK: - Rockstar : suspension des règles deny
+
+    /// Les règles `permissions.deny` sont-elles actuellement parquées ?
+    static var denyRulesParked: Bool {
+        FileManager.default.fileExists(atPath: BridgePaths.rockstarParkedDenyURL.path)
+    }
+
+    /// Entrée en Rockstar : suspend les règles deny de l'utilisateur (elles
+    /// s'exécutent dans Claude Code AVANT nos hooks — même en bypassPermissions,
+    /// vérifié CLI 2.1.215 — les parquer est le seul moyen de tout autoriser).
+    static func parkDenyRules() throws {
+        try runHelper("rockstar-park")
+    }
+
+    /// Sortie de Rockstar : restaure les règles parquées.
+    static func restoreDenyRules() throws {
+        try runHelper("rockstar-restore")
+    }
+
+    /// Aligne le parking des règles deny sur le niveau d'autonomie. Appelé au
+    /// changement de niveau, au lancement (récupération après crash : ne
+    /// jamais laisser des règles parquées hors Rockstar, ni des règles actives
+    /// en Rockstar) et après (dés)installation des hooks. Le parking exige
+    /// Rockstar ET les hooks installés : sans hooks, Atoll ne pilote rien et
+    /// n'a aucune légitimité à retirer les règles de l'utilisateur (sinon la
+    /// réconciliation au lancement défait la restitution de la désinstallation).
+    /// Renvoie un message d'erreur à afficher, nil si OK.
+    @discardableResult
+    static func syncDenyParking(level: AutonomyLevel) -> String? {
+        do {
+            if level == .rockstar && isInstalled {
+                // Idempotent : reparque aussi des règles (ré)apparues entre-temps.
+                try parkDenyRules()
+            } else if denyRulesParked {
+                try restoreDenyRules()
+            }
+            return nil
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
     /// À chaque lancement : si les hooks sont installés, réexécute `install`
     /// (idempotent) pour réparer le wrapper si l'app a été déplacée.
     static func repairIfInstalled() {

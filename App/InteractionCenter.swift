@@ -52,9 +52,13 @@ final class InteractionCenter {
     static let autoAcceptKey = "autoAcceptEnabled"
     static let rockstarKey = "rockstarEnabled"
 
-    /// Niveau d'autonomie courant. Rockstar ne peut toujours pas outrepasser les
-    /// règles deny / hooks bloquants de l'utilisateur (appliqués par Claude Code
-    /// AVANT que la demande n'atteigne Atoll).
+    /// Niveau d'autonomie courant. Les règles deny et les hooks bloquants de
+    /// l'utilisateur s'exécutent dans Claude Code AVANT que la demande n'atteigne
+    /// Atoll — un hook ne peut pas les outrepasser (vérifié : même
+    /// `setMode bypassPermissions` via updatedPermissions est ignoré par le CLI).
+    /// C'est pourquoi Rockstar suspend les règles deny À LA SOURCE (parking via
+    /// HookInstaller.syncDenyParking) ; les hooks bloquants de l'utilisateur,
+    /// eux, restent toujours actifs (ce sont des éléments de son workflow).
     var autonomyLevel: AutonomyLevel {
         AutonomyLevel(rawValue: UserDefaults.standard.string(forKey: Self.autonomyKey) ?? "") ?? .manual
     }
@@ -92,7 +96,8 @@ final class InteractionCenter {
         switch autonomyLevel {
         case .rockstar:
             // Approuve TOUT : permissions (même destructrices), plans, questions.
-            // (Les règles deny / hooks bloquants passent quand même avant.)
+            // Les règles deny de l'utilisateur sont déjà suspendues par le
+            // parking ; ses hooks bloquants restent actifs (workflow).
             if let decision = rockstarDecision(for: kind) {
                 autoApprove(requestID, decision: decision, event: event,
                             label: event.toolSummary ?? event.toolName ?? kindLabel(kind),
@@ -124,6 +129,27 @@ final class InteractionCenter {
         ))
     }
 
+    /// À l'activation de Rockstar : résout immédiatement les cartes DÉJÀ en
+    /// attente (l'utilisateur vient précisément de dire « décidez sans moi »).
+    /// Sans cela, une carte antérieure au changement resterait bloquée.
+    func resolvePendingAsRockstar() {
+        guard autonomyLevel == .rockstar, !pending.isEmpty else { return }
+        let waiting = pending
+        pending.removeAll()
+        for request in waiting {
+            if let decision = rockstarDecision(for: request.kind) {
+                server?.reply(request.id, decision: decision)
+                autoAcceptedCount += 1
+                lastAutoAccepted = request.toolSummary ?? request.toolName ?? kindLabel(request.kind)
+                SessionStore.shared.markAutoApproved(request.sessionID)
+                log.info("rockstar (carte en attente): \(self.lastAutoAccepted ?? "?", privacy: .public)")
+            } else {
+                // Décision impossible (tool_input illisible) : rendre la main.
+                server?.cancelPending(request.id)
+            }
+        }
+    }
+
     /// Approuve automatiquement : envoie la décision, compte, ré-avance la phase.
     private func autoApprove(_ requestID: String, decision: Data, event: ParsedHookEvent,
                              label: String, tag: String) {
@@ -142,7 +168,10 @@ final class InteractionCenter {
         case .permission:
             return PermissionDecision.allow()
         case .plan:
-            return PermissionDecision.approvePlan(acceptEdits: false)
+            // acceptEdits : après le plan, les éditions ne redemandent plus rien
+            // (seul setMode qu'un hook puisse réellement poser — bypassPermissions
+            // est ignoré par le CLI, vérifié 2.1.215).
+            return PermissionDecision.approvePlan(acceptEdits: true)
         case .questions(let questions, let toolInputData):
             return PermissionDecision.answerQuestions(
                 toolInputData: toolInputData,

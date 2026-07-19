@@ -186,9 +186,19 @@ printf '%s' '{"hook_event_name":"PermissionRequest","session_id":"t","tool_name"
   structurel de tout ce qui est opaque (interpréteur `-c`, `$()`, `eval`, `xargs`…). Les
   lanceurs `npx/bunx/dlx` vérifient le **paquet réel** (`npx rimraf` bloqué). Voir
   `AutoAcceptPolicy` + ses 22 tests de bypass.
-- **Garantie clé** : les règles `deny` et hooks bloquants de l'utilisateur passent dans
-  Claude Code AVANT Atoll → même Rockstar ne peut pas les outrepasser (limite
-  architecturale, pas un choix). Le redire à Mehdi si le sujet revient.
+- **Règles `deny` et hooks bloquants de l'utilisateur** : ils passent dans Claude Code
+  AVANT Atoll → aucun hook ne peut les outrepasser (vérifié : même
+  `updatedPermissions setMode bypassPermissions` est ignoré par le CLI 2.1.215, et les
+  deny s'appliquent MÊME en bypassPermissions). D'où le design Rockstar (2026-07-19,
+  demande explicite de Mehdi « aucune protection ») : les règles deny sont PARQUÉES
+  dans `~/.atoll/rockstar-parked-deny.json` pendant Rockstar (verbes atoll-bridge
+  `rockstar-park`/`rockstar-restore`, logique dans `RockstarPermissionsEditor`),
+  restaurées à la sortie / au lancement / à la désinstallation. Crash-safe : le
+  fichier de parking est écrit avant toute modification de settings.json. Les hooks
+  bloquants de l'utilisateur (GSD…) restent actifs — choix assumé, ce sont des
+  éléments de workflow, pas des protections Atoll. Autres faits vérifiés : questions
+  AskUserQuestion passent par le hook même en bypass (rockstar y répond) ; l'outil
+  n'existe pas en mode `-p` (chat) ; Mehdi a `defaultMode: bypassPermissions` global.
 
 ---
 
