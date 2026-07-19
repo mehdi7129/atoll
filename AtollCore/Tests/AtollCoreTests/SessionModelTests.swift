@@ -6,7 +6,8 @@ final class SessionModelTests: XCTestCase {
     func testNeedsAttention() {
         XCTAssertFalse(AgentSession(projectName: "p", status: .working(tool: "Bash")).needsAttention)
         XCTAssertTrue(AgentSession(projectName: "p", status: .awaitingPermission(tool: "Edit")).needsAttention)
-        XCTAssertTrue(AgentSession(projectName: "p", status: .awaitingInput).needsAttention)
+        // Session au repos (attente du prochain message) = PAS une alerte.
+        XCTAssertFalse(AgentSession(projectName: "p", status: .awaitingInput).needsAttention)
         XCTAssertFalse(AgentSession(projectName: "p", status: .done).needsAttention)
     }
 

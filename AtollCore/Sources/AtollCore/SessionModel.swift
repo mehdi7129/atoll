@@ -45,11 +45,14 @@ public struct AgentSession: Identifiable, Equatable, Sendable {
         self.cwd = cwd
     }
 
-    /// La session réclame l'attention de l'utilisateur.
+    /// La session réclame une DÉCISION de l'utilisateur MAINTENANT (permission
+    /// bloquante). Une session simplement inactive (`awaitingInput`, au repos
+    /// entre deux messages) ne « réclame » rien — sinon chaque session dormante
+    /// s'afficherait en alerte sur le notch.
     public var needsAttention: Bool {
         switch status {
-        case .awaitingPermission, .awaitingInput: return true
-        case .working, .done: return false
+        case .awaitingPermission: return true
+        case .awaitingInput, .working, .done: return false
         }
     }
 

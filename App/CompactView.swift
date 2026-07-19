@@ -50,26 +50,27 @@ struct CompactView: View {
         ).height
     }
 
-    /// Session la plus pertinente à afficher en persistance : attention d'abord,
-    /// puis en cours, sinon la première.
+    /// Session à mettre en avant sur le notch : une demande de permission
+    /// d'abord (urgent), sinon une session qui travaille. Les sessions DORMANTES
+    /// ne sont PAS mises en avant (sinon le notch afficherait le nom d'une
+    /// session inactive comme si quelque chose se passait).
     private var focusSession: AgentSession? {
         viewModel.sessions.first { $0.needsAttention }
             ?? viewModel.sessions.first { $0.isActive }
-            ?? viewModel.sessions.first
     }
 
     private var leftWing: some View {
         HStack(spacing: 5) {
             statusGlyph
             if let session = focusSession {
-                // Info persistante : nom court de la session active/en attente.
+                // Nom court de la session en cours / qui attend une décision.
                 Text(shortName(session.projectName))
                     .foregroundStyle(session.needsAttention ? colors.warn : colors.dim)
                     .lineLimit(1)
-            }
-            if viewModel.sessions.count > 1 {
-                Text("+\(viewModel.sessions.count - 1)")
-                    .foregroundStyle(colors.dim)
+                if viewModel.sessions.count > 1 {
+                    Text("+\(viewModel.sessions.count - 1)")
+                        .foregroundStyle(colors.dim)
+                }
             }
             Spacer(minLength: 0)
         }
