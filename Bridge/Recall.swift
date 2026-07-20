@@ -142,7 +142,12 @@ enum RecallCLI {
             }
             print(header)
             print("   (\(hit.role)) \(flattened(hit.snippet))")
-            print("   session \(hit.sessionID) · reprendre : claude --resume \(hit.sessionID)")
+            // Les notes d'apprentissage sont des pseudo-sessions : rien à reprendre.
+            if hit.sessionID.hasPrefix("atoll-note-") {
+                print("   note Atoll · ~/.atoll/learning/notes/")
+            } else {
+                print("   session \(hit.sessionID) · reprendre : claude --resume \(hit.sessionID)")
+            }
         }
     }
 
@@ -185,7 +190,8 @@ enum RecallCLI {
                 "date": jsonValue(hit.timestamp.map { iso.string(from: $0) }),
                 "role": hit.role,
                 "snippet": hit.snippet,
-                "resume": "claude --resume \(hit.sessionID)",
+                "resume": jsonValue(hit.sessionID.hasPrefix("atoll-note-")
+                    ? nil : "claude --resume \(hit.sessionID)"),
             ]
         }
         if let data = try? JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys]) {

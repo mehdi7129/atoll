@@ -2,22 +2,24 @@
 
 > Document de continuité pour reprendre le dev après un compactage de conversation.
 > **À lire en premier** avec `CLAUDE.md` (règles) et `PLAN.md` (plan produit).
-> Dernière mise à jour : **2026-07-20**, app **v0.5.0** (Phase 7a « Mémoire » livrée :
-> index FTS5 de tous les transcripts + skill atoll-recall).
+> Dernière mise à jour : **2026-07-20**, app **v0.6.0** (Phases 7a « Mémoire » et
+> 7b « Rétrospective » livrées — Atoll se souvient et apprend).
 
 ---
 
 ## 0. TL;DR — où on en est
 
 Atoll est une « Dynamic Island » ASCII pour Claude Code sur macOS (Swift/SwiftUI, GPL-3.0,
-repo PUBLIC `github.com/mehdi7129/atoll`). **Phases 1 à 6 + 7a livrées et publiées**
-(v0.5.0 sur GitHub Releases, DMG notarisé + appcast Sparkle). L'app tourne, 173 tests
+repo PUBLIC `github.com/mehdi7129/atoll`). **Phases 1 à 6 + 7a + 7b livrées et publiées**
+(v0.6.0 sur GitHub Releases, DMG notarisé + appcast Sparkle). L'app tourne, 223 tests
 AtollCore verts, tout est poussé. Publier une nouvelle version = `Scripts/release.sh`
 (voir §1). **En cours : Phase 7 « Atoll apprend »** — plan complet validé par Mehdi
-dans `~/.claude/plans/indexed-snacking-dahl.md` (7a mémoire ✅ · 7b rétrospective
-headless read-only → quarantaine · 7c curation/revue). Prochaine étape : 7b, en
-commençant par la V0 empirique (valider les flags CLI `--safe-mode --setting-sources ""
---json-schema` sur un appel haiku réel AVANT d'écrire le runner).
+dans `~/.claude/plans/indexed-snacking-dahl.md` (7a mémoire ✅ · 7b rétrospective ✅ ·
+7c curation/revue 🚧). Prochaine étape : **7c** — SkillReviewCenter + fenêtre de revue
+ASCII (pattern OnboardingWindowController, ⌘⏎/⌘⌫), LearnedSkillStore en AtollCore
+(manifeste installed.json + SHA256, fail-closed), glyphe `+` compact, item menu
+« ◆ Skill proposé (N)… », table skill_usage, curation des notes, onglet Apprentissage
+qui REGROUPE les sections 7a/7b. Détail complet dans le plan validé.
 
 Ce qui marche aujourd'hui, de bout en bout :
 - Îlot notch ASCII (thème system/light/dark, 4 palettes, mono+orange par défaut).

@@ -24,10 +24,10 @@ y compris pour les sessions lancées depuis le terminal de Cursor.
 | 5 · Quota exact (statusline · jauge par modèle · % contexte) | ✅ |
 | 6 · Distribution (Developer ID, notarisation, DMG, Sparkle) | ✅ |
 | 7a · Mémoire (index FTS5 de tous les transcripts + skill `atoll-recall`) | ✅ |
-| 7b · Rétrospective (leçons + skills proposés en fin de session) | 🚧 |
-| 7c · Curation (revue des skills, stats d'usage, hygiène) | ⏳ |
+| 7b · Rétrospective (leçons + skills proposés en fin de session) | ✅ |
+| 7c · Curation (revue des skills, stats d'usage, hygiène) | 🚧 |
 
-**Version courante : v0.5.0** (voir les [Releases](https://github.com/mehdi7129/atoll/releases)).
+**Version courante : v0.6.0** (voir les [Releases](https://github.com/mehdi7129/atoll/releases)).
 
 Voir le [plan détaillé](PLAN.md), la [recherche](docs/research/) et [CLAUDE.md](CLAUDE.md)
 pour contribuer.
@@ -45,6 +45,12 @@ pour contribuer.
   (SQLite FTS5, ~/.atoll/memory.db — rien ne quitte la machine). Vos sessions
   Claude interrogent ce passé via le skill `atoll-recall` : « retrouve quand on a
   parlé de… » cite dates, projets et sessions à reprendre (`claude --resume`).
+- **Rétrospective (opt-in, expérimental)** : après chaque session substantielle —
+  et seulement si votre fenêtre de quota 5 h a de la marge — une analyse en
+  LECTURE SEULE extrait les leçons durables : notes mémoire (indexées, citées par
+  recall) et éventuels skills proposés, placés en QUARANTAINE, jamais actifs sans
+  votre approbation. Atoll apprend de vos sessions, sur votre souscription, avec
+  des garde-fous durs (plafond de runs, budget, kill-switch immédiat).
 - **Retour au terminal** : un clic ouvre la fenêtre de la session (Cursor/VS Code direct,
   Terminal.app / iTerm2 via automatisation).
 - **Personnalisable** : thème clair/sombre/auto, 4 palettes, et **taille de la barre

@@ -76,4 +76,34 @@ public enum BridgePaths {
     public static var recallSkillURL: URL {
         recallSkillDirectory.appendingPathComponent("SKILL.md")
     }
+
+    // MARK: - Apprentissage (Phase 7b)
+
+    /// Racine des artefacts d'apprentissage. Créée à l'ACTIVATION du réglage
+    /// (opt-in, OFF par défaut) — jamais au simple lancement.
+    public static var learningDirectory: URL {
+        homeDirectory.appendingPathComponent(".atoll/learning", isDirectory: true)
+    }
+
+    /// Notes mémoire durables écrites par Atoll après les rétrospectives
+    /// (JAMAIS par le modèle : la session headless n'a aucun outil d'écriture).
+    public static var learningNotesDirectory: URL {
+        learningDirectory.appendingPathComponent("notes", isDirectory: true)
+    }
+
+    /// QUARANTAINE : skills proposés, jamais actifs sans revue humaine (7c).
+    public static var learningProposedDirectory: URL {
+        learningDirectory.appendingPathComponent("proposed", isDirectory: true)
+    }
+
+    /// Archives (rien n'est jamais supprimé sans copie ici).
+    public static var learningArchiveDirectory: URL {
+        learningDirectory.appendingPathComponent("archive", isDirectory: true)
+    }
+
+    /// État du runner : sessions déjà traitées (dédup) + horodatages de
+    /// tentatives (plafond par fenêtre de 5 h).
+    public static var learningStateURL: URL {
+        learningDirectory.appendingPathComponent("retrospectives.json")
+    }
 }

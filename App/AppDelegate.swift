@@ -83,6 +83,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // entièrement hors bande — jamais dans le chemin des hooks.
         MemoryIndexer.shared.syncWithSettings()
 
+        // Apprentissage (opt-in, OFF par défaut) : rétrospectives de fin de
+        // session. Le store notifie le runner, le runner indexe ses notes.
+        LearningSettings.shared.syncWithSettings()
+        SessionStore.shared.onSessionEnded = { snapshot, reason in
+            RetrospectiveRunner.shared.sessionEnded(snapshot, reason: reason)
+        }
+        SessionStore.shared.onSessionResumed = { sessionID in
+            RetrospectiveRunner.shared.sessionResumed(sessionID)
+        }
+        RetrospectiveRunner.shared.noteSink = { url, note in
+            MemoryIndexer.shared.indexNote(url: url, slug: note.slug)
+        }
+
         rebuildWindows()
         registerDebugTriggers()
 
@@ -101,6 +114,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        RetrospectiveRunner.shared.terminateActive()
         bridgeServer?.stop()
     }
 
@@ -162,6 +176,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // local pourrait approuver silencieusement des permissions via une simple
         // notification Darwin. Réservés aux builds Debug pour les tests scriptés.
         #if DEBUG
+        // Rétrospective sur la dernière session terminée (bypass le gate —
+        // consomme du quota : jamais en release).
+        var retroToken: Int32 = 0
+        notify_register_dispatch("dev.mehdiguiard.atoll.debug.retro", &retroToken, DispatchQueue.main) { _ in
+            MainActor.assumeIsolated {
+                RetrospectiveRunner.shared.debugRunOnLastEnded()
+            }
+        }
+        debugTokens.append(retroToken)
+
         var allowToken: Int32 = 0
         notify_register_dispatch("dev.mehdiguiard.atoll.debug.allow", &allowToken, DispatchQueue.main) { _ in
             MainActor.assumeIsolated {

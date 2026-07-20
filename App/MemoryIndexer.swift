@@ -92,6 +92,16 @@ final class MemoryIndexer {
         Task { [weak self] in await self?.refreshStatsNow() }
     }
 
+    /// Note d'apprentissage (7b) écrite par Atoll → indexée comme DONNÉE
+    /// (rôle `note`) : recall la retrouve, elle n'est jamais une instruction.
+    func indexNote(url: URL, slug: String) {
+        guard isEnabled else { return }
+        Task(priority: .utility) { [weak self] in
+            await self?.worker.indexNoteFile(url: url, slug: slug)
+            await self?.refreshStatsNow()
+        }
+    }
+
     private func startScanLoop() {
         guard scanTask == nil else { return }
         scanTask = Task(priority: .utility) { [weak self] in
@@ -171,6 +181,22 @@ private actor MemoryIndexWorker {
                 await indexFile(at: file, projectDir: dir.lastPathComponent, index: index)
             }
         }
+        // Notes d'apprentissage (7b) : re-scannées ici pour survivre à une
+        // reconstruction de la base (revue : indexées seulement à l'écriture,
+        // un rebuild les orphelinait de recall pour toujours).
+        if let notes = try? fm.contentsOfDirectory(
+            at: BridgePaths.learningNotesDirectory, includingPropertiesForKeys: nil) {
+            for note in notes where note.pathExtension == "md" {
+                if Task.isCancelled { return }
+                seenPaths.insert(note.path)
+                // "2026-07-20-slug.md" → "slug" (préfixe date retiré si présent).
+                let stem = note.deletingPathExtension().lastPathComponent
+                let slug = stem.count > 11 && stem.prefix(11).allSatisfy({ $0.isNumber || $0 == "-" })
+                    ? String(stem.dropFirst(11)) : stem
+                indexNoteFile(url: note, slug: slug)
+            }
+        }
+
         // Disparus depuis le dernier scan : marqués missing, lignes CONSERVÉES
         // (le purge 30 j de Claude Code ne doit pas amnésier Atoll).
         for path in lastSeen.keys where !seenPaths.contains(path) {
@@ -187,6 +213,26 @@ private actor MemoryIndexWorker {
             await indexFile(at: url, projectDir: url.deletingLastPathComponent().lastPathComponent,
                             index: index)
         }
+    }
+
+    /// Indexe une note d'apprentissage (fichier .md complet, pas du JSONL) :
+    /// une pseudo-session « atoll-note-<slug> » avec un unique fragment `note`.
+    func indexNoteFile(url: URL, slug: String) {
+        guard let index = openIndexIfNeeded(),
+              let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let text = try? String(contentsOf: url, encoding: .utf8) else { return }
+        let inode = (attrs[.systemFileNumber] as? UInt64) ?? 0
+        let size = (attrs[.size] as? Int64) ?? 0
+        guard let state = try? index.openFile(path: url.path, inode: inode, size: size),
+              state.offset < size else { return }
+        let line = TranscriptLine(
+            uuid: "note", sessionID: nil, timestamp: Date(), cwd: nil, gitBranch: nil,
+            fragments: [.init(role: .title, text: "Note Atoll : \(slug)"),
+                        .init(role: .note, text: text)]
+        )
+        try? index.ingest(lines: [(line, "note-0")], fileState: state,
+                          sessionID: "atoll-note-\(slug)", projectDir: "atoll-notes",
+                          newOffset: size)
     }
 
     // MARK: - Lecture incrémentale d'un fichier

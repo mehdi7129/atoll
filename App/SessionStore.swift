@@ -43,6 +43,9 @@ final class SessionStore {
         var termProgram: String?
         var entrypoint: String?
         var env: [String: String] = [:]
+        /// Nombre de prompts utilisateur (hooks UserPromptSubmit) — critère de
+        /// « session substantielle » pour la rétrospective. 0 pour les synthétiques.
+        var userPromptCount = 0
 
         var terminalAnchor: TerminalAnchor {
             TerminalAnchor(cwd: cwd, tty: tty, bundleID: bundleID, termProgram: termProgram,
@@ -63,6 +66,24 @@ final class SessionStore {
         "WEZTERM_PANE", "GHOSTTY_RESOURCES_DIR", "ALACRITTY_WINDOW_ID",
         "VSCODE_INJECTION", "CURSOR_TRACE_ID", "WARP_SESSION_ID", "CLAUDE_CODE_ENTRYPOINT",
     ]
+
+    /// Raison du passage terminal — pour les logs et la rétrospective.
+    enum SessionEndReason: String { case hookEnded, pidExited, reconcileGC }
+
+    /// Tiré EXACTEMENT UNE FOIS par transition vivante → ended, avec le
+    /// snapshot complet de la session AVANT sa purge (fenêtre de 8 s).
+    /// Branché par l'AppDelegate vers le RetrospectiveRunner.
+    @ObservationIgnored var onSessionEnded: ((Tracked, SessionEndReason) -> Void)?
+    /// Une session .ended ressuscite via `claude --resume` (même session_id).
+    @ObservationIgnored var onSessionResumed: ((String) -> Void)?
+
+    /// Pids des claude lancés PAR ATOLL (rétrospectives) : jamais des sessions
+    /// utilisateur — reconcile() les ignore. Le marqueur d'env
+    /// ATOLL_RETROSPECTIVE=1 couvre le cas d'un redémarrage d'Atoll en plein vol.
+    @ObservationIgnored private var internalPids: Set<pid_t> = []
+
+    func registerInternalPid(_ pid: pid_t) { internalPids.insert(pid) }
+    func unregisterInternalPid(_ pid: pid_t) { internalPids.remove(pid) }
 
     @ObservationIgnored private var exitWatchers: [pid_t: DispatchSourceProcess] = [:]
     @ObservationIgnored private var reconcileTask: Task<Void, Never>?
@@ -204,20 +225,37 @@ final class SessionStore {
 
         if let index = sessions.firstIndex(where: { $0.id == event.sessionID }) {
             var session = sessions[index]
+            let previousPhase = session.phase
+            var resurrected = false
             // Résurrection : `claude --resume` reprend le MÊME session_id après un
             // SessionEnd(reason=resume) — .ended étant terminal dans le reducer,
             // un SessionStart relance explicitement le cycle de vie.
             if session.phase == .ended, event.kind == .sessionStart {
                 session.phase = SessionReducer.reduce(.starting, event)
                 session.missedScans = 0
+                resurrected = true
             } else {
                 session.phase = SessionReducer.reduce(session.phase, event)
             }
             update(&session, from: event, at: now)
             sessions[index] = session
+            if resurrected { onSessionResumed?(session.id) }
+            // Transition vivante → ended : passage terminal unifié (le seul
+            // endroit qui tire onSessionEnded pour les fins signalées par hook).
+            if previousPhase.isAlive, sessions[index].phase == .ended {
+                markEnded(at: index, reason: .hookEnded)
+            }
         } else {
             // Un SessionEnd pour une session inconnue n'a rien à créer.
             guard event.kind != .sessionEnd else { return }
+            // Reprise APRÈS la purge de 8 s (le cas courant : --resume minutes
+            // plus tard) : la Tracked n'existe plus, mais le session_id repris
+            // est identique → prévenir le runner AVANT de recréer la session,
+            // sinon une rétrospective en vol analyserait un transcript en cours
+            // d'écriture (revue). No-op si le runner ne suit pas cet id.
+            if event.kind == .sessionStart {
+                onSessionResumed?(event.sessionID)
+            }
             // Une session hook remplace la session synthétique du même pid.
             if let pid = event.claudePid {
                 for synthetic in sessions.filter({ $0.isSynthetic && $0.pid == pid }) {
@@ -244,10 +282,22 @@ final class SessionStore {
             sessions.append(session)
         }
 
-        if let session = sessions.first(where: { $0.id == event.sessionID }),
-           session.phase == .ended {
-            scheduleRemoval(event.sessionID)
-        }
+        scheduleSnapshot()
+    }
+
+    /// Passage terminal UNIFIÉ — les 3 chemins (hook SessionEnd, kqueue
+    /// NOTE_EXIT, GC de reconcile) convergent ici. L'APPELANT garantit la
+    /// transition (phase vivante avant l'appel) : le callback n'est jamais
+    /// ré-émis pour une session déjà terminée.
+    private func markEnded(at index: Int, reason: SessionEndReason) {
+        sessions[index].phase = .ended
+        let snapshot = sessions[index]
+        tailer.stopWatching(snapshot.id)
+        InteractionCenter.shared.cancelForSession(snapshot.id)
+        idleTimers[snapshot.id]?.cancel()
+        idleTimers[snapshot.id] = nil
+        scheduleRemoval(snapshot.id)
+        onSessionEnded?(snapshot, reason)
         scheduleSnapshot()
     }
 
@@ -278,6 +328,8 @@ final class SessionStore {
 
         // Sous-agents actifs (compteur) et serveurs MCP utilisés.
         switch event.kind {
+        case .userPromptSubmit:
+            session.userPromptCount += 1
         case .subagentStart:
             session.subagentCount += 1
         case .subagentStop:
@@ -328,7 +380,18 @@ final class SessionStore {
               let innerData = try? JSONSerialization.data(withJSONObject: inner),
               let payload = StatusLinePayload(data: innerData, now: Date()) else { return }
 
-        if let quota = payload.quota { realQuota = quota }
+        if let quota = payload.quota {
+            // Anti-replay : une session INACTIVE renvoie périodiquement un
+            // rate_limits mis en cache. Dans une MÊME fenêtre 5 h (même
+            // resets_at), l'utilisation ne peut que croître — une fraction plus
+            // basse est un vieux cache qui rafraîchirait receivedAt à tort (le
+            // gate de rétrospective croirait à de la marge fraîche — revue).
+            let isStaleReplay = realQuota.map { current in
+                current.fiveHour.resetsAt == quota.fiveHour.resetsAt
+                    && quota.fiveHour.usedFraction < current.fiveHour.usedFraction
+            } ?? false
+            if !isStaleReplay { realQuota = quota }
+        }
 
         if let sessionID = payload.sessionID,
            let index = sessions.firstIndex(where: { $0.id == sessionID }) {
@@ -378,10 +441,7 @@ final class SessionStore {
         exitWatchers[pid]?.cancel()
         exitWatchers[pid] = nil
         for index in sessions.indices where sessions[index].pid == pid && sessions[index].phase.isAlive {
-            sessions[index].phase = .ended
-            tailer.stopWatching(sessions[index].id)
-            InteractionCenter.shared.cancelForSession(sessions[index].id)
-            scheduleRemoval(sessions[index].id)
+            markEnded(at: index, reason: .pidExited)
         }
         scheduleSnapshot()
     }
@@ -470,9 +530,7 @@ final class SessionStore {
                 let hasPendingCard = InteractionCenter.shared.pending.contains { $0.sessionID == sessions[index].id }
                 if !sessions[index].isSynthetic, !hasPendingCard,
                    Date().timeIntervalSince(sessions[index].lastEventAt) > 300 {
-                    sessions[index].phase = .ended
-                    tailer.stopWatching(sessions[index].id)
-                    scheduleRemoval(sessions[index].id)
+                    markEnded(at: index, reason: .reconcileGC)
                 }
                 continue
             }
@@ -517,6 +575,10 @@ final class SessionStore {
         let claudePids = ProcessInspector.allClaudePids()
         log.debug("réconciliation: \(claudePids.count) processus claude, \(knownPids.count) connus")
         for pid in claudePids where !knownPids.contains(pid) {
+            // Les rétrospectives lancées PAR Atoll ne sont jamais des sessions
+            // utilisateur (double ceinture : set en mémoire + marqueur d'env
+            // plus bas, qui survit à un redémarrage d'Atoll).
+            if internalPids.contains(pid) { continue }
             // Un claude enfant d'un autre claude (subagent, claude -p spawné par
             // une session, agents de workflow) n'est pas une session utilisateur.
             if let parent = ProcessInspector.parent(of: pid), parent > 1,
@@ -533,6 +595,9 @@ final class SessionStore {
             // Ancre terminal lue directement dans l'environnement du processus
             // (KERN_PROCARGS2) : ces sessions n'ont pas d'enrichissement de hook.
             let procEnv = ProcessInspector.environment(of: pid)
+            // Rétrospective orpheline (Atoll a redémarré pendant le run) :
+            // reconnue à son marqueur d'env, jamais affichée comme session.
+            if procEnv["ATOLL_RETROSPECTIVE"] == "1" { continue }
             let anchorEnv = procEnv.filter { Self.anchorEnvKeys.contains($0.key) }
             var session = Tracked(
                 id: "pid-\(pid)-\(Int(ProcessInspector.startTime(of: pid) ?? 0))",

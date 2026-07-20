@@ -91,9 +91,37 @@ Pièges de build appris à la dure :
 - ✅ Phase 6 — distribution (Developer ID + notarisation, DMG, Sparkle, onboarding)
 - ✅ Phase 7a — mémoire (v0.5.0) : index FTS5 de TOUS les transcripts →
   ~/.atoll/memory.db + verbe `atoll-bridge recall` + skill `atoll-recall`
-- 🚧 Phase 7b — rétrospective (claude -p read-only en fin de session → notes +
-  skills en QUARANTAINE) ; Phase 7c — curation (revue, stats d'usage). Plan
-  détaillé validé par Mehdi : ~/.claude/plans/indexed-snacking-dahl.md
+- ✅ Phase 7b — rétrospective (v0.6.0) : en fin de session substantielle,
+  claude -p READ-ONLY → notes mémoire + skills en QUARANTAINE
+- 🚧 Phase 7c — curation (revue des skills proposés, stats d'usage, hygiène).
+  Plan détaillé validé par Mehdi : ~/.claude/plans/indexed-snacking-dahl.md
+
+**Phase 7b — Rétrospective (v0.6.0, 2026-07-20)** — « Atoll apprend » :
+- Chaîne : SessionStore.markEnded (3 chemins unifiés : hook SessionEnd, kqueue,
+  GC reconcile — callback UNE fois par transition) → RetrospectiveRunner (file
+  FIFO, délai 15 s PAR JOB, gate LearningGate pur testé) → spawn `zsh -l -c
+  "unset ANTHROPIC_API_KEY…; exec claude -p"` avec `--safe-mode
+  --setting-sources "" --no-session-persistence --tools Read,Grep,Glob
+  --permission-mode plan --json-schema … --max-budget-usd 1.5` → parse
+  structured_output (RetrospectiveReport, revalidation Swift complète +
+  détection de contenu suspect) → ATOLL écrit (LearningArtifacts) : notes →
+  ~/.atoll/learning/notes/ (indexées rôle `note`), skills →
+  learning/proposed/<slug>/ (quarantaine). État : learning/retrospectives.json.
+- Faits VÉRIFIÉS (V0 + run réel) : `--safe-mode` garde l'auth souscription et
+  ne déclenche AUCUN hook (PAS --bare : API key only) ; la sortie structurée
+  vit dans `structured_output` ; `--setting-sources ""` accepté ; rétrospective
+  INVISIBLE dans l'îlot (internalPids + env ATOLL_RETROSPECTIVE=1 filtrés par
+  reconcile ; --no-session-persistence = aucun transcript → boucle impossible).
+- Pièges (revue adversariale, 52 agents) : le kill-switch doit porter SA PROPRE
+  escalade SIGTERM→SIGKILL ; une reprise --resume APRÈS la purge de 8 s recrée
+  la Tracked → onSessionResumed émis aussi à la création sur sessionStart ;
+  anti-replay quota (même resets_at + fraction plus BASSE = vieux cache
+  ignoré) ; sessions synthétiques exclues (transcript deviné = lossy) ; regex
+  de suspicion larges (| zsh, bash <(curl), settings.local.json).
+- Debug : `notifyutil -p dev.mehdiguiard.atoll.debug.retro` (bypass gate,
+  DEBUG only) ; logs catégorie `retro` (log STREAM, pas show). Réglages ›
+  Claude Code › Rétrospective (opt-in OFF, seuil 50-80 %, modèle
+  haiku/sonnet/fable — défaut sonnet).
 
 **Phase 7a — Mémoire (v0.5.0, 2026-07-20)** — « Atoll se rappelle de tout » :
 - AtollCore : `TranscriptLineParser` (parse défensif → fragments rôlés, thinking

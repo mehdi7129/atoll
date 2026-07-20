@@ -211,6 +211,32 @@ private struct ClaudeCodePane: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             }
+
+            Section("Rétrospective (expérimental)") {
+                Toggle("Apprendre des sessions terminées", isOn: learningEnabled)
+                if learningEnabled.wrappedValue {
+                    Picker("Seuil de quota 5 h", selection: learningThreshold) {
+                        Text("50 %").tag(0.5)
+                        Text("60 %").tag(0.6)
+                        Text("70 %").tag(0.7)
+                        Text("80 %").tag(0.8)
+                    }
+                    Picker("Modèle", selection: learningModel) {
+                        Text("Haiku (économe)").tag("haiku")
+                        Text("Sonnet (recommandé)").tag("sonnet")
+                        Text("Fable (gourmand)").tag("fable")
+                    }
+                }
+                Text("""
+                Après chaque session substantielle (et si votre fenêtre 5 h a de la \
+                marge), une analyse en lecture seule extrait les leçons durables : notes \
+                mémoire dans ~/.atoll/learning/, et éventuels skills proposés — en \
+                QUARANTAINE, jamais actifs sans votre approbation. Consomme du quota. \
+                Désactiver arrête tout immédiatement.
+                """)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
         .fixedSize(horizontal: false, vertical: true)
@@ -233,6 +259,30 @@ private struct ClaudeCodePane: View {
                 UserDefaults.standard.set($0, forKey: MemoryIndexer.enabledKey)
                 MemoryIndexer.shared.syncWithSettings()
             }
+        )
+    }
+
+    private var learningEnabled: Binding<Bool> {
+        Binding(
+            get: { UserDefaults.standard.bool(forKey: LearningSettings.enabledKey) },
+            set: {
+                UserDefaults.standard.set($0, forKey: LearningSettings.enabledKey)
+                LearningSettings.shared.syncWithSettings()
+            }
+        )
+    }
+
+    private var learningThreshold: Binding<Double> {
+        Binding(
+            get: { UserDefaults.standard.object(forKey: LearningSettings.thresholdKey) as? Double ?? 0.7 },
+            set: { UserDefaults.standard.set($0, forKey: LearningSettings.thresholdKey) }
+        )
+    }
+
+    private var learningModel: Binding<String> {
+        Binding(
+            get: { UserDefaults.standard.string(forKey: LearningSettings.modelKey) ?? "sonnet" },
+            set: { UserDefaults.standard.set($0, forKey: LearningSettings.modelKey) }
         )
     }
 
