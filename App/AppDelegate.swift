@@ -12,11 +12,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var debugTokens: [Int32] = []
     private var onboardingController: OnboardingWindowController?
 
-    /// Affiche (ou ramène) la fenêtre de bienvenue — aussi appelée par le menu.
+    /// Affiche la fenêtre de bienvenue — appelée par le menu et au 1er lancement.
+    /// Recréée à NEUF à chaque fois : évite tout état résiduel après fermeture
+    /// (une fenêtre réutilisée pouvait rester invisible → « rien ne se passe »).
     func showOnboarding() {
-        if onboardingController == nil {
-            onboardingController = OnboardingWindowController()
-        }
+        onboardingController?.close()
+        onboardingController = OnboardingWindowController()
         onboardingController?.show()
     }
 
@@ -215,7 +216,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 NotificationCenter.default.post(name: .atollDebugOpenSettings, object: nil)
             }
         }
-        debugTokens.append(contentsOf: [allowToken, denyToken, selectToken, jumpToken, settingsToken])
+        // Ouvre la fenêtre Bienvenue (diagnostic).
+        var onboardingToken: Int32 = 0
+        notify_register_dispatch("dev.mehdiguiard.atoll.debug.onboarding", &onboardingToken, DispatchQueue.main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.showOnboarding() }
+        }
+        debugTokens.append(contentsOf: [allowToken, denyToken, selectToken, jumpToken, settingsToken, onboardingToken])
         #endif
     }
 
