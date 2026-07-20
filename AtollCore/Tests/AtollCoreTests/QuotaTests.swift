@@ -30,6 +30,35 @@ final class QuotaTests: XCTestCase {
         XCTAssertEqual(quota.fiveHour.resetsAt, Date(timeIntervalSince1970: 1784423400))
     }
 
+    func testRejectsExpiredFiveHourWindow() throws {
+        // Fenêtre 5h déjà réinitialisée (resets_at PASSÉ) : une session inactive
+        // renvoie son cache d'avant reset — used% périmé à ignorer (sinon il
+        // écrase la vraie valeur, bug « 5h 97% » figé).
+        let past = now.timeIntervalSince1970 - 60
+        let json = """
+        { "session_id": "x", "rate_limits": {
+            "five_hour": { "used_percentage": 97, "resets_at": \(Int(past)) },
+            "seven_day": { "used_percentage": 27, "resets_at": \(Int(now.timeIntervalSince1970 + 400000)) }
+        } }
+        """
+        let payload = try XCTUnwrap(StatusLinePayload(data: Data(json.utf8), now: now))
+        XCTAssertNil(payload.quota, "un quota dont la fenêtre 5h est expirée est périmé")
+    }
+
+    func testAcceptsFreshWindowAfterReset() throws {
+        // Après reset : nouvelle fenêtre, resets_at dans le FUTUR, used% bas.
+        let future = Int(now.timeIntervalSince1970 + 17000)
+        let json = """
+        { "rate_limits": {
+            "five_hour": { "used_percentage": 2, "resets_at": \(future) },
+            "seven_day": { "used_percentage": 27, "resets_at": \(future) }
+        } }
+        """
+        let payload = try XCTUnwrap(StatusLinePayload(data: Data(json.utf8), now: now))
+        let quota = try XCTUnwrap(payload.quota)
+        XCTAssertEqual(quota.fiveHour.usedFraction, 0.02, accuracy: 0.001)
+    }
+
     func testMissingRateLimitsYieldsNilQuotaButKeepsUsage() throws {
         let json = """
         { "session_id": "x", "model": { "display_name": "Fable 5" }, "context_window": { "used_percentage": 12 } }

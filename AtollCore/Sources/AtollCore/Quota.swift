@@ -78,7 +78,17 @@ public struct StatusLinePayload: Equatable, Sendable {
         if let rateLimits = root["rate_limits"] as? [String: Any],
            let five = Self.parseWindow(rateLimits["five_hour"]),
            let seven = Self.parseWindow(rateLimits["seven_day"]) {
-            quota = QuotaSnapshot(fiveHour: five, sevenDay: seven, receivedAt: now)
+            // PÉRIMÉ : la fenêtre 5h est déjà réinitialisée (resets_at passé).
+            // Une session INACTIVE ré-exécute sa statusline (refreshInterval) avec
+            // les rate_limits que le CLI a mis en cache lors de sa DERNIÈRE requête
+            // API — d'avant la réinitialisation. Ce used% obsolète écraserait la
+            // vraie valeur (bug vécu : « 5h 97% » figé alors que le serveur est à
+            // 2%). On ignore : realQuota garde sa dernière valeur fraîche.
+            if let reset = five.resetsAt, reset < now {
+                quota = nil
+            } else {
+                quota = QuotaSnapshot(fiveHour: five, sevenDay: seven, receivedAt: now)
+            }
         } else {
             quota = nil
         }
