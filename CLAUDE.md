@@ -1,7 +1,7 @@
 # CLAUDE.md — instructions projet Atoll
 
 > 📌 **REPRISE DE DEV : lire `docs/HANDOFF.md` en premier** — état exact, méthode de
-> travail, et TOUS les pièges appris à la dure. (v0.4.0 publiée ; chat/voix retirés.)
+> travail, et TOUS les pièges appris à la dure. (v0.4.4 publiée ; chat/voix retirés.)
 
 Atoll est une app macOS native (Swift/SwiftUI) : une « Dynamic Island » autour du notch,
 esthétique ASCII, pour suivre et piloter les sessions Claude Code. Gratuit, open source,
@@ -98,6 +98,24 @@ VoiceDictation/ClaudeLocator (App), ChatProtocol/StreamEvent/TranscriptHistory
 Les pièges du chat restent en mémoire projet si jamais on y revient (spawn via
 `zsh -l -c "exec claude"`, pipes POSIX + CLOEXEC, `--fork-session` obligatoire).
 
+**Polish post-distribution (v0.4.1 → v0.4.4, 2026-07-20)** — corrections et ajouts
+faits sur retours de Mehdi (chacun vérifié en vrai) :
+- **Taille de l'îlot compacte réglable PAR ÉCRAN** (petit/moyen/large) : `IslandWidth`
+  (AtollCore, largeur des ailes / de la pilule), `IslandSettings` (App, @Observable,
+  clé = displayUUID), réglage dans Réglages › Général. N'affecte que le compact.
+- **Quota figé** : une session INACTIVE renvoie via refreshInterval un `rate_limits`
+  mis en cache AVANT la réinitialisation → `StatusLinePayload` rejette tout quota dont
+  la fenêtre 5h est déjà expirée (resets_at passé), sinon il écrasait la vraie valeur.
+- **Phase des sessions synthétiques** (découvertes par scan, sans hooks) : elles
+  restaient « en cours » ; désormais l'activité se lit sur l'écriture du transcript
+  (TranscriptTailer.onActivity + minuteur d'inactivité 15 s + filet dans reconcile).
+- **Notch** : `needsAttention` = permission SEULEMENT (pas `awaitingInput`) — une
+  session dormante ne s'affiche plus en alerte. La pilule (écran sans encoche) nomme
+  aussi la session en cours.
+- **Menu « Bienvenue… »** : `NSApp.delegate as? AppDelegate` renvoie NIL avec
+  @NSApplicationDelegateAdaptor → le menu passe par la notif `.atollShowOnboarding`
+  observée par l'AppDelegate (l'action se déclenchait mais showOnboarding jamais).
+
 Jump-back : les sessions de Mehdi tournent dans le terminal intégré de **Cursor**
 (`com.todesktop.230313mzl4w4u92`, TERM_PROGRAM=vscode) → `cursor -r <cwd>` remonte la
 fenêtre, AUCUNE permission TCC. AppleScript (Terminal/iTerm2) exécuté par l'app seulement
@@ -118,6 +136,10 @@ Permissions Claude Code — faits VÉRIFIÉS empiriquement (CLI 2.1.215, tests p
   machine de dev : voir la mémoire projet, pas ici — repo public.)
 - Un claude lancé DEPUIS une session Claude Code (env CLAUDECODE/CHILD_SESSION) peut
   démarrer en bypass : nettoyer l'env pour tester des comportements de permissions.
+
+Triggers debug (`#if DEBUG`, `notifyutil -p dev.mehdiguiard.atoll.debug.<x>`) :
+`expand`/`compact` (îlot), `allow`/`deny` (1re carte), `select` (1re session),
+`jump` (jump-back), `settings` (fenêtre Réglages), `onboarding` (fenêtre Bienvenue).
 
 Debug des interactions (Phase 3) : `notifyutil -p dev.mehdiguiard.atoll.debug.allow`
 (ou `.deny`) résout la première carte en attente via les mêmes chemins que les boutons ;

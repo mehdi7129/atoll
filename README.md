@@ -22,10 +22,27 @@ y compris pour les sessions lancées depuis le terminal de Cursor.
 | Auto-accept sûr · infos par session · quota exact | ✅ |
 | 4 · Jump-back terminal (Cursor/VS Code · Terminal · iTerm2) | ✅ |
 | 5 · Quota exact (statusline · jauge par modèle · % contexte) | ✅ |
-| 6 · Distribution (notarisation, DMG, Sparkle) | ✅ v0.4.1 |
+| 6 · Distribution (Developer ID, notarisation, DMG, Sparkle) | ✅ |
+
+**Version courante : v0.4.4** (voir les [Releases](https://github.com/mehdi7129/atoll/releases)).
 
 Voir le [plan détaillé](PLAN.md), la [recherche](docs/research/) et [CLAUDE.md](CLAUDE.md)
 pour contribuer.
+
+## Fonctionnalités
+
+- **Suivi temps réel** de toutes vos sessions Claude Code (hooks → socket → machine à
+  états), avec l'état de chacune (en cours, en attente, permission…) et le % de contexte.
+- **Répondre depuis le notch** : permissions (⌘Y/⌘N), validation de plans, questions —
+  sans quitter votre terminal.
+- **Niveau d'autonomie** (Réglages) : Manuel, Auto (allowlist sûre) ou Rockstar (aucune
+  protection — vos règles `deny` sont suspendues puis restaurées, à vos risques et périls).
+- **Quota exact** 5 h / 7 j du serveur, jauge par modèle en option, reset lisible.
+- **Retour au terminal** : un clic ouvre la fenêtre de la session (Cursor/VS Code direct,
+  Terminal.app / iTerm2 via automatisation).
+- **Personnalisable** : thème clair/sombre/auto, 4 palettes, et **taille de la barre
+  compacte réglable par écran** (petit / moyen / large — ex. large sur un moniteur externe,
+  moyen sur le MacBook).
 
 ## Principes
 
@@ -68,7 +85,8 @@ iCloud/Dropbox, les xattrs du file provider cassent CodeSign.)
 
 Atoll apparaît dans la barre de menus (icône vagues) et autour du notch.
 Survoler l'îlot l'étend ; cliquer l'épingle ; cliquer ailleurs le referme.
-Réglages (thème, palette, délai de survol) via l'icône de la barre de menus.
+Réglages (thème, palette, taille de l'îlot par écran, autonomie, mises à jour)
+via l'icône de la barre de menus.
 
 Tests du cœur :
 

@@ -1,5 +1,11 @@
 # ATOLL — Plan détaillé
 
+> ⚠️ **Document HISTORIQUE (plan initial du 2026-07-18).** L'app est livrée et publiée
+> (**v0.4.4**, 2026-07-20). Deux écarts avec ce plan, décidés en cours de route :
+> le **chat intégré (ex-Phase 6) et la dictée vocale ont été RETIRÉS** (Mehdi préfère
+> Cursor) ; la **distribution est la Phase 6 finale**. Pour l'état À JOUR, voir
+> `docs/HANDOFF.md`, `CLAUDE.md` et le README. Ce fichier reste la trace du plan produit.
+
 > Une « Dynamic Island » pour Claude Code sur macOS, avec une esthétique ASCII/terminal soignée
 > (dark / light / auto), pour suivre et piloter tes sessions Claude sans jamais quitter ton flow —
 > y compris les sessions lancées depuis le terminal intégré de Cursor.

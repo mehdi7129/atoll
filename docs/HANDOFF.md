@@ -2,35 +2,54 @@
 
 > Document de continuité pour reprendre le dev après un compactage de conversation.
 > **À lire en premier** avec `CLAUDE.md` (règles) et `PLAN.md` (plan produit).
-> Dernière mise à jour : **2026-07-19**, app **v0.4.0** (Rockstar sans protection + Phase 7 distribution).
+> Dernière mise à jour : **2026-07-20**, app **v0.4.4** (chat/voix retirés, taille par
+> écran, correctifs quota/notch/Bienvenue).
 
 ---
 
 ## 0. TL;DR — où on en est
 
 Atoll est une « Dynamic Island » ASCII pour Claude Code sur macOS (Swift/SwiftUI, GPL-3.0,
-repo PUBLIC `github.com/mehdi7129/atoll`). **Phases 1 à 7 livrées et vérifiées en vrai**
-(distribution : signature Developer ID, notarisation, DMG, Sparkle opt-in, onboarding).
-L'app tourne, 131 tests AtollCore verts, tout est poussé.
+repo PUBLIC `github.com/mehdi7129/atoll`). **Phases 1 à 6 livrées et publiées** (v0.4.4
+sur GitHub Releases, DMG notarisé + appcast Sparkle). L'app tourne, 135 tests AtollCore
+verts, tout est poussé. Publier une nouvelle version = `Scripts/release.sh` (voir §1).
 
 Ce qui marche aujourd'hui, de bout en bout :
 - Îlot notch ASCII (thème system/light/dark, 4 palettes, mono+orange par défaut).
-- Monitoring temps réel des vraies sessions Claude (hooks → socket → machine à états).
+- **Taille de la barre compacte réglable PAR ÉCRAN** (petit/moyen/large, Réglages › Général).
+- Monitoring temps réel des vraies sessions Claude (hooks → socket → machine à états),
+  avec l'activité des sessions hookless lue sur le transcript (plus de « en cours » figé).
 - Réponses depuis le notch : permissions (⌘Y/⌘N), plans (approve/revise), questions.
 - **Niveau d'autonomie** : 1 sélecteur exclusif **Manuel / Auto / Rockstar** (Réglages).
 - Jump-back terminal (Cursor/VS Code via `cli -r`, Terminal.app/iTerm2 via AppleScript).
-- Vrais quotas serveur (tee-wrapper statusline) + infos par session (modèle, MCP, coût…).
+- Vrais quotas serveur (tee-wrapper statusline, quota périmé rejeté), jauge par modèle
+  opt-in, % de contexte par session.
 - Ouvrir la session dans son terminal (« OUVRIR DANS CURSOR ») via le jump-back.
 
 > **Chat intégré + dictée vocale RETIRÉS le 2026-07-19** (décision de Mehdi : il
 > chatte et dicte dans Cursor). Le bouton du détail de session ouvre désormais le
 > terminal Cursor. Ne pas ré-ajouter sans demande explicite.
+>
+> **Numérotation des phases** : la « distribution » était la Phase 7 dans le PLAN
+> historique ; après le retrait du chat (ex-Phase 6), elle est devenue la Phase 6.
+> Le README et CLAUDE.md sont la référence à jour.
 
 ---
 
 ## 1. CE QU'IL RESTE À FAIRE
 
-### Phase 7 — Distribution : LIVRÉE (2026-07-19)
+Le gros est livré et publié. Reste surtout du polish à la demande, la CI optionnelle,
+et la roadmap v2 (multi-agents) à NE PAS entamer sans le demander à Mehdi.
+
+### Publier une version (routine, ~5 min)
+1. Monter `MARKETING_VERSION` + `CURRENT_PROJECT_VERSION` dans `project.yml`, committer.
+2. `./Scripts/release.sh` → build signé, notarisation, DMG, appcast (imprime les commandes).
+3. `gh release create vX.Y.Z <dmg> <zip>` + joindre les `dist/updates/*.delta`.
+4. `git add docs/appcast.xml && git commit && git push` (servi par GitHub Pages).
+Profil notarytool : `atoll-notary` (déjà enregistré). Clé privée Sparkle EdDSA dans
+le Keychain de Mehdi — À SAUVEGARDER, elle signe toutes les mises à jour.
+
+### Distribution — LIVRÉE (Phase 6, 2026-07-19)
 Tout est en place ; publier une release = **`Scripts/release.sh`** (build Release signé
 Developer ID + Hardened Runtime → re-signature des binaires imbriqués Sparkle →
 notarisation `--keychain-profile atoll-notary` → staple → DMG notarisé → appcast).
