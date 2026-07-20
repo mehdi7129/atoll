@@ -98,7 +98,12 @@ struct MenuBarMenu: View {
         .keyboardShortcut(",")
 
         Button("Bienvenue…") {
-            (NSApp.delegate as? AppDelegate)?.showOnboarding()
+            // Passe par une notification (l'AppDelegate l'observe) : le cast
+            // `NSApp.delegate as? AppDelegate` renvoie nil avec
+            // @NSApplicationDelegateAdaptor — c'était la cause de « rien ne se
+            // passe » (l'action se déclenchait, mais showOnboarding jamais).
+            NSApp.activate(ignoringOtherApps: true)
+            NotificationCenter.default.post(name: .atollShowOnboarding, object: nil)
         }
 
         Divider()

@@ -33,6 +33,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // parquées hors Rockstar, jamais de règles actives en Rockstar).
         HookInstaller.syncDenyParking(level: InteractionCenter.shared.autonomyLevel)
 
+        // Le menu « Bienvenue… » demande l'onboarding via cette notif (le cast
+        // NSApp.delegate as? AppDelegate échoue avec @NSApplicationDelegateAdaptor).
+        NotificationCenter.default.addObserver(
+            forName: .atollShowOnboarding, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.showOnboarding() }
+        }
+
         // Premier lancement : fenêtre de bienvenue (hooks, fail-open, autonomie).
         if OnboardingWindowController.shouldShowAtLaunch {
             showOnboarding()
@@ -216,10 +224,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 NotificationCenter.default.post(name: .atollDebugOpenSettings, object: nil)
             }
         }
-        // Ouvre la fenêtre Bienvenue (diagnostic).
+        // Ouvre la fenêtre Bienvenue via la MÊME notif que le menu (test du
+        // chemin complet notif → observateur → showOnboarding).
         var onboardingToken: Int32 = 0
-        notify_register_dispatch("dev.mehdiguiard.atoll.debug.onboarding", &onboardingToken, DispatchQueue.main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.showOnboarding() }
+        notify_register_dispatch("dev.mehdiguiard.atoll.debug.onboarding", &onboardingToken, DispatchQueue.main) { _ in
+            MainActor.assumeIsolated {
+                NotificationCenter.default.post(name: .atollShowOnboarding, object: nil)
+            }
         }
         debugTokens.append(contentsOf: [allowToken, denyToken, selectToken, jumpToken, settingsToken, onboardingToken])
         #endif
@@ -237,10 +248,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-#if DEBUG
 extension Notification.Name {
+    /// Le menu « Bienvenue… » demande l'ouverture de l'onboarding (l'AppDelegate
+    /// l'observe — le cast NSApp.delegate as? AppDelegate échoue).
+    static let atollShowOnboarding = Notification.Name("dev.mehdiguiard.atoll.showOnboarding")
+    #if DEBUG
     /// Relaie le trigger Darwin debug.settings vers la vue SwiftUI qui détient
     /// l'action openSettings (fiable, contrairement à showSettingsWindow:).
     static let atollDebugOpenSettings = Notification.Name("dev.mehdiguiard.atoll.debug.openSettings")
+    #endif
 }
-#endif
