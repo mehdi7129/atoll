@@ -15,7 +15,7 @@ public enum IslandWidth: String, CaseIterable, Sendable, Identifiable {
         switch self {
         case .small: return 76
         case .medium: return 96
-        case .large: return 132
+        case .large: return 158   // +20 % (demande de Mehdi)
         }
     }
 
@@ -24,7 +24,7 @@ public enum IslandWidth: String, CaseIterable, Sendable, Identifiable {
         switch self {
         case .small: return 170
         case .medium: return 210
-        case .large: return 300
+        case .large: return 360   // +20 %
         }
     }
 
