@@ -35,9 +35,29 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
         window?.contentView = NSHostingView(rootView: OnboardingView { [weak self] in
             self?.close()
         })
+        // Centrer sur l'écran où est l'utilisateur (celui du curseur — il vient
+        // de cliquer le menu), pas sur l'écran par défaut : sinon la fenêtre
+        // apparaît sur un écran secondaire et « rien ne se passe » côté écran
+        // principal (bug vécu).
+        centerOnActiveScreen()
         // App LSUIElement : sans activation explicite la fenêtre resterait derrière.
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)
+    }
+
+    private func centerOnActiveScreen() {
+        guard let window else { return }
+        let mouse = NSEvent.mouseLocation
+        let screen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) }
+            ?? NSScreen.main
+            ?? NSScreen.screens.first
+        guard let frame = screen?.visibleFrame else { window.center(); return }
+        let size = window.frame.size
+        let origin = NSPoint(
+            x: frame.midX - size.width / 2,
+            y: frame.midY - size.height / 2
+        )
+        window.setFrameOrigin(origin)
     }
 
     /// Fermer = vu. On ne réaffiche plus au lancement (réouvrable via le menu).

@@ -25,11 +25,23 @@ struct CompactView: View {
                 .frame(height: notch.height)
             }
         } else {
-            // Pilule simulée : tout le contenu est visible, centré verticalement.
+            // Pilule simulée (écran sans encoche) : tout le contenu est visible.
+            // Comme l'aile gauche du notch, elle nomme la session en cours / qui
+            // attend une décision — sinon le 2e écran n'indiquait rien.
             HStack(spacing: 6) {
                 statusGlyph
-                Text("atoll")
-                    .foregroundStyle(colors.dim)
+                if let session = focusSession {
+                    Text(shortName(session.projectName))
+                        .foregroundStyle(session.needsAttention ? colors.warn : colors.dim)
+                        .lineLimit(1)
+                    if viewModel.sessions.count > 1 {
+                        Text("+\(viewModel.sessions.count - 1)")
+                            .foregroundStyle(colors.dim)
+                    }
+                } else {
+                    Text("atoll")
+                        .foregroundStyle(colors.dim)
+                }
                 Spacer(minLength: 4)
                 if viewModel.hasRealQuota {
                     Text("5h \(Int(viewModel.usage.fiveHourFraction * 100))%")
