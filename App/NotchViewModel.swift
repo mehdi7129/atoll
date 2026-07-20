@@ -40,9 +40,17 @@ final class NotchViewModel {
 
     @ObservationIgnored private var hoverTask: Task<Void, Never>?
 
+    /// Identifiant de l'écran de ce contrôleur : clé de la taille réglable.
+    let displayID: String
+
+    /// Largeur compacte choisie pour CET écran (observe IslandSettings → l'îlot
+    /// se redimensionne en direct quand on change le réglage).
+    var compactWidth: IslandWidth { IslandSettings.shared.width(for: displayID) }
+
     init(screen: NSScreen, isPrimary: Bool, store: SessionStore = .shared) {
         notchSize = screen.notchSize
         menuBarHeight = screen.menuBarHeight
+        displayID = screen.displayUUIDString
         self.isPrimary = isPrimary
         self.store = store
     }
@@ -97,12 +105,15 @@ final class NotchViewModel {
             return IslandGeometry.compactSize(
                 notch: notchSize,
                 menuBarHeight: menuBarHeight,
-                hasActivity: hasActivity
+                hasActivity: hasActivity,
+                width: compactWidth
             )
         case .expanded:
+            // La taille ne joue que sur le compact ; le panneau étendu est fixe.
             return IslandGeometry.expandedIslandSize(
                 notch: notchSize,
-                menuBarHeight: menuBarHeight
+                menuBarHeight: menuBarHeight,
+                width: compactWidth
             )
         }
     }

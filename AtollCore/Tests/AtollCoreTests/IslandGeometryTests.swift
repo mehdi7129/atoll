@@ -58,4 +58,38 @@ final class IslandGeometryTests: XCTestCase {
         XCTAssertLessThanOrEqual(pillExpanded.width, IslandGeometry.windowSize.width)
         XCTAssertLessThanOrEqual(pillExpanded.height, IslandGeometry.windowSize.height)
     }
+
+    func testCompactWidthScalesWings() {
+        let small = IslandGeometry.compactSize(notch: notch, menuBarHeight: 37, hasActivity: true, width: .small)
+        let medium = IslandGeometry.compactSize(notch: notch, menuBarHeight: 37, hasActivity: true, width: .medium)
+        let large = IslandGeometry.compactSize(notch: notch, menuBarHeight: 37, hasActivity: true, width: .large)
+        // La largeur croît avec la taille ; la hauteur (le notch) ne change pas.
+        XCTAssertLessThan(small.width, medium.width)
+        XCTAssertLessThan(medium.width, large.width)
+        XCTAssertEqual(small.height, notch.height)
+        XCTAssertEqual(large.height, notch.height)
+        // Chaque côté = une aile de la taille demandée.
+        XCTAssertEqual(large.width, notch.width + IslandWidth.large.wingWidth * 2)
+    }
+
+    func testCompactWidthScalesPill() {
+        XCTAssertEqual(
+            IslandGeometry.compactSize(notch: nil, menuBarHeight: 24, hasActivity: true, width: .small).width,
+            IslandWidth.small.pillWidth)
+        XCTAssertEqual(
+            IslandGeometry.compactSize(notch: nil, menuBarHeight: 24, hasActivity: true, width: .large).width,
+            IslandWidth.large.pillWidth)
+    }
+
+    func testAllWidthsFitInsideWindow() {
+        // Même en « large », l'îlot (compact et étendu) tient dans la fenêtre fixe.
+        for width in IslandWidth.allCases {
+            let compact = IslandGeometry.compactSize(notch: notch, menuBarHeight: 37, hasActivity: true, width: width)
+            XCTAssertLessThanOrEqual(compact.width, IslandGeometry.windowSize.width)
+            let expanded = IslandGeometry.expandedIslandSize(notch: notch, menuBarHeight: 37, width: width)
+            XCTAssertLessThanOrEqual(expanded.width, IslandGeometry.windowSize.width)
+            // Le panneau étendu reste inchangé (la taille ne joue que sur le compact).
+            XCTAssertEqual(expanded.width, IslandGeometry.expandedSize.width)
+        }
+    }
 }

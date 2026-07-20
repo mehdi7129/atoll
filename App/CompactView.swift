@@ -16,11 +16,11 @@ struct CompactView: View {
             if viewModel.hasActivity {
                 HStack(spacing: 0) {
                     leftWing
-                        .frame(width: IslandGeometry.wingWidth)
+                        .frame(width: viewModel.compactWidth.wingWidth)
                     Color.clear
                         .frame(width: notch.width)
                     rightWing
-                        .frame(width: IslandGeometry.wingWidth)
+                        .frame(width: viewModel.compactWidth.wingWidth)
                 }
                 .frame(height: notch.height)
             }
@@ -82,11 +82,14 @@ struct CompactView: View {
                 if viewModel.sessions.count > 1 {
                     Text("+\(viewModel.sessions.count - 1)")
                         .foregroundStyle(colors.dim)
+                        .lineLimit(1)
+                        .fixedSize()
                 }
             }
             Spacer(minLength: 0)
         }
         .font(AtollFont.mono(10))
+        .lineLimit(1)
         .padding(.leading, 12)
     }
 
@@ -113,6 +116,8 @@ struct CompactView: View {
             }
         }
         .font(AtollFont.mono(10))
+        .lineLimit(1)          // jamais de retour à la ligne (« 5h » resté entier)
+        .fixedSize()           // les chiffres du quota ne se compriment pas
         .padding(.trailing, 12)
     }
 

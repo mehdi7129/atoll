@@ -40,9 +40,33 @@ private struct GeneralPane: View {
     @AppStorage("paletteID") private var paletteID = Palette.monoOrange.id
     @AppStorage("hoverDelay") private var hoverDelay = 0.15
     @State private var launchAtLogin = false
+    /// Recalculé à l'apparition (branchement/débranchement d'écran).
+    @State private var screens: [ScreenChoice] = []
+
+    /// Un écran connecté : identifiant stable + libellé lisible.
+    private struct ScreenChoice: Identifiable {
+        let id: String       // displayUUIDString
+        let label: String
+    }
 
     var body: some View {
         Form {
+            Section("Taille de l'îlot") {
+                // Réglable INDÉPENDAMMENT par écran (ex. large sur le moniteur
+                // externe, petit sur le MacBook). N'affecte que la barre compacte.
+                ForEach(screens) { screen in
+                    Picker(screen.label, selection: widthBinding(for: screen.id)) {
+                        ForEach(IslandWidth.allCases) { width in
+                            Text(width.displayName).tag(width)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                }
+                Text("La largeur de la petite barre autour du notch (et de la pilule sur un écran sans encoche). L'encoche physique, elle, ne change pas.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Apparence") {
                 Picker("Thème", selection: $themePreference) {
                     ForEach(ThemePreference.allCases) { preference in
@@ -80,7 +104,25 @@ private struct GeneralPane: View {
         .fixedSize(horizontal: false, vertical: true)
         .onAppear {
             launchAtLogin = SMAppService.mainApp.status == .enabled
+            refreshScreens()
         }
+    }
+
+    private func refreshScreens() {
+        let main = NSScreen.main
+        screens = NSScreen.screens.enumerated().map { index, screen in
+            var label = screen.localizedName
+            if screen == main { label += " · principal" }
+            if !screen.hasNotch { label += " · sans encoche" }
+            return ScreenChoice(id: screen.displayUUIDString, label: label)
+        }
+    }
+
+    private func widthBinding(for displayID: String) -> Binding<IslandWidth> {
+        Binding(
+            get: { IslandSettings.shared.width(for: displayID) },
+            set: { IslandSettings.shared.setWidth($0, for: displayID) }
+        )
     }
 
     private func setLaunchAtLogin(_ enabled: Bool) {
