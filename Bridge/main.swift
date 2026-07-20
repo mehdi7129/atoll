@@ -212,6 +212,24 @@ enum BridgeCLI {
         _ = try fileManager.replaceItemAt(BridgePaths.wrapperURL, withItemAt: temporary)
     }
 
+    /// Installe (ou met à jour) le skill « atoll-recall » dans ~/.claude/skills.
+    /// Même pattern qu'`ensureWrapper` : idempotent (contenu identique → no-op),
+    /// temporaire écrit dans le MÊME dossier puis rename atomique — le CLI ne
+    /// peut jamais lire un SKILL.md partiellement écrit. Ne touche QUE notre
+    /// dossier `atoll-recall` (le répertoire skills contient des skills tiers).
+    static func ensureSkill() throws {
+        let fileManager = FileManager.default
+        try fileManager.createDirectory(at: BridgePaths.recallSkillDirectory, withIntermediateDirectories: true)
+        let content = RecallSkill.markdown
+        if let existing = try? String(contentsOf: BridgePaths.recallSkillURL, encoding: .utf8),
+           existing == content {
+            return
+        }
+        let temporary = BridgePaths.recallSkillDirectory.appendingPathComponent(".SKILL.md.tmp")
+        try content.write(to: temporary, atomically: true, encoding: .utf8)
+        _ = try fileManager.replaceItemAt(BridgePaths.recallSkillURL, withItemAt: temporary)
+    }
+
     /// Génère le wrapper statusline : tee non bloquant des rate_limits vers l'app,
     /// puis exécution de la statusline d'origine (lue à l'exécution depuis un
     /// fichier — survit à un déplacement de l'app). Fail-open intégral.
@@ -342,6 +360,14 @@ enum BridgeCLI {
             // Statusline (vrais quotas) : idempotent, s'installe même si les hooks
             // l'étaient déjà — relu depuis le fichier à jour.
             try installStatusline(current: current)
+
+            // Skill « atoll-recall » : NON-fatal — les hooks priment. Un échec
+            // est signalé sur stderr sans changer le code de sortie.
+            do {
+                try ensureSkill()
+            } catch {
+                FileHandle.standardError.write(Data("avertissement : skill atoll-recall non installé : \(error)\n".utf8))
+            }
             print("hooks + statusline OK (backup : \(BridgePaths.settingsBackupURL.path))")
             return 0
         } catch {
@@ -360,6 +386,11 @@ enum BridgeCLI {
         if FileManager.default.fileExists(atPath: BridgePaths.rockstarParkedDenyURL.path) {
             denyRestoreFailed = rockstarRestore() != 0
         }
+        // Skill « atoll-recall » : suppression de NOTRE dossier uniquement —
+        // ~/.claude/skills contient des skills tiers, ne JAMAIS énumérer ni
+        // toucher le parent. Avant les sorties anticipées : le skill doit
+        // disparaître même si settings.json a été vidé entre-temps.
+        try? FileManager.default.removeItem(at: BridgePaths.recallSkillDirectory)
         do {
             guard let current = try readSettings() else {
                 print("aucun settings.json — rien à désinstaller")
@@ -459,6 +490,8 @@ enum BridgeCLI {
             "wrapperPresent": FileManager.default.isExecutableFile(atPath: BridgePaths.wrapperURL.path),
             "socketPresent": FileManager.default.fileExists(atPath: BridgePaths.socketPath),
             "denyParked": FileManager.default.fileExists(atPath: BridgePaths.rockstarParkedDenyURL.path),
+            "skillInstalled": FileManager.default.fileExists(atPath: BridgePaths.recallSkillURL.path),
+            "memoryIndexPresent": FileManager.default.fileExists(atPath: BridgePaths.memoryDatabaseURL.path),
         ]
         if let data = try? JSONSerialization.data(withJSONObject: state, options: [.sortedKeys]) {
             print(String(decoding: data, as: UTF8.self))
@@ -482,6 +515,9 @@ case "rockstar-park":
     exit(BridgeCLI.rockstarPark())
 case "rockstar-restore":
     exit(BridgeCLI.rockstarRestore())
+case "recall":
+    // Recherche dans l'index mémoire (skill atoll-recall). Fail-open : exit 0.
+    exit(RecallCLI.run(arguments: Array(CommandLine.arguments.dropFirst(2))))
 case "statusline":
     // Tee des rate_limits vers l'app (fail-open, ne produit rien sur stdout).
     forwardStatusline()

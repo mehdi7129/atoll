@@ -51,4 +51,29 @@ public enum BridgePaths {
     public static var settingsBackupURL: URL {
         homeDirectory.appendingPathComponent(".claude/settings.json.atoll-backup")
     }
+
+    // MARK: - Mémoire (Phase 7a)
+
+    /// Index mémoire FTS5. Écrivain unique : l'app ; `atoll-bridge recall` ouvre
+    /// en lecture seule (repli lecture-écriture SANS création : une base WAL
+    /// jamais rouverte peut refuser un lecteur pur faute de fichier -shm).
+    public static var memoryDatabaseURL: URL {
+        homeDirectory.appendingPathComponent(".atoll/memory.db")
+    }
+
+    /// Racine des transcripts Claude Code (un dossier par cwd encodé).
+    /// Format officiellement interne et instable → parsing défensif uniquement.
+    public static var claudeProjectsURL: URL {
+        homeDirectory.appendingPathComponent(".claude/projects", isDirectory: true)
+    }
+
+    /// Dossier du SEUL skill géré par Atoll dans ~/.claude/skills — ce répertoire
+    /// contient des skills tiers : ne JAMAIS toucher les voisins.
+    public static var recallSkillDirectory: URL {
+        homeDirectory.appendingPathComponent(".claude/skills/atoll-recall", isDirectory: true)
+    }
+
+    public static var recallSkillURL: URL {
+        recallSkillDirectory.appendingPathComponent("SKILL.md")
+    }
 }

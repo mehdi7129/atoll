@@ -288,6 +288,11 @@ final class SessionStore {
             }
         case .stop, .sessionEnd:
             session.subagentCount = 0 // fin de tour : plus de sous-agents en vol
+            // Fin de tour = le transcript vient d'être complété → indexation
+            // mémoire quasi temps réel (coalescée côté indexeur).
+            if let path = session.transcriptPath {
+                MemoryIndexer.shared.nudge(transcriptPath: path)
+            }
         default:
             break
         }

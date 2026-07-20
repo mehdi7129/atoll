@@ -2,17 +2,22 @@
 
 > Document de continuité pour reprendre le dev après un compactage de conversation.
 > **À lire en premier** avec `CLAUDE.md` (règles) et `PLAN.md` (plan produit).
-> Dernière mise à jour : **2026-07-20**, app **v0.4.4** (chat/voix retirés, taille par
-> écran, correctifs quota/notch/Bienvenue).
+> Dernière mise à jour : **2026-07-20**, app **v0.5.0** (Phase 7a « Mémoire » livrée :
+> index FTS5 de tous les transcripts + skill atoll-recall).
 
 ---
 
 ## 0. TL;DR — où on en est
 
 Atoll est une « Dynamic Island » ASCII pour Claude Code sur macOS (Swift/SwiftUI, GPL-3.0,
-repo PUBLIC `github.com/mehdi7129/atoll`). **Phases 1 à 6 livrées et publiées** (v0.4.4
-sur GitHub Releases, DMG notarisé + appcast Sparkle). L'app tourne, 135 tests AtollCore
-verts, tout est poussé. Publier une nouvelle version = `Scripts/release.sh` (voir §1).
+repo PUBLIC `github.com/mehdi7129/atoll`). **Phases 1 à 6 + 7a livrées et publiées**
+(v0.5.0 sur GitHub Releases, DMG notarisé + appcast Sparkle). L'app tourne, 173 tests
+AtollCore verts, tout est poussé. Publier une nouvelle version = `Scripts/release.sh`
+(voir §1). **En cours : Phase 7 « Atoll apprend »** — plan complet validé par Mehdi
+dans `~/.claude/plans/indexed-snacking-dahl.md` (7a mémoire ✅ · 7b rétrospective
+headless read-only → quarantaine · 7c curation/revue). Prochaine étape : 7b, en
+commençant par la V0 empirique (valider les flags CLI `--safe-mode --setting-sources ""
+--json-schema` sur un appel haiku réel AVANT d'écrire le runner).
 
 Ce qui marche aujourd'hui, de bout en bout :
 - Îlot notch ASCII (thème system/light/dark, 4 palettes, mono+orange par défaut).
@@ -25,6 +30,11 @@ Ce qui marche aujourd'hui, de bout en bout :
 - Vrais quotas serveur (tee-wrapper statusline, quota périmé rejeté), jauge par modèle
   opt-in, % de contexte par session.
 - Ouvrir la session dans son terminal (« OUVRIR DANS CURSOR ») via le jump-back.
+- **Mémoire (7a)** : tous les transcripts indexés dans ~/.atoll/memory.db (FTS5,
+  backfill 329 Mo ≈ 1 min, suivi temps réel par nudges de fin de tour) ; les
+  sessions Claude interrogent via le skill `atoll-recall` → `atoll-bridge recall`
+  (fail-open exit 0 toujours). Réglages › Claude Code › Mémoire (opt-out, stats,
+  rebuild). Pièges et invariants : voir CLAUDE.md « Phase 7a ».
 
 > **Chat intégré + dictée vocale RETIRÉS le 2026-07-19** (décision de Mehdi : il
 > chatte et dicte dans Cursor). Le bouton du détail de session ouvre désormais le

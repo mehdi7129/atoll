@@ -192,10 +192,48 @@ private struct ClaudeCodePane: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             }
+
+            Section("Mémoire") {
+                Toggle("Indexer les sessions passées", isOn: memoryIndexing)
+                if let stats = MemoryIndexer.shared.stats {
+                    LabeledContent("Index", value: indexSummary(stats))
+                }
+                Button("Reconstruire l'index") {
+                    MemoryIndexer.shared.rebuild()
+                }
+                .disabled(MemoryIndexer.shared.isIndexing || !memoryIndexing.wrappedValue)
+                Text("""
+                Index local (~/.atoll/memory.db) de tous vos transcripts, interrogeable \
+                par vos sessions Claude via le skill « atoll-recall » — « retrouve quand \
+                on a parlé de… ». Rien ne quitte votre machine. Désactiver stoppe \
+                l'indexation ; supprimer ~/.atoll efface tout.
+                """)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
         .fixedSize(horizontal: false, vertical: true)
-        .onAppear { hooksInstalled = HookInstaller.isInstalled }
+        .onAppear {
+            hooksInstalled = HookInstaller.isInstalled
+            MemoryIndexer.shared.refreshStats()
+        }
+    }
+
+    private func indexSummary(_ stats: MemoryIndex.Stats) -> String {
+        let bytes = ByteCountFormatter.string(fromByteCount: stats.databaseBytes,
+                                              countStyle: .file)
+        return "\(stats.sessionCount) session(s) · \(stats.messageCount) message(s) · \(bytes)"
+    }
+
+    private var memoryIndexing: Binding<Bool> {
+        Binding(
+            get: { UserDefaults.standard.object(forKey: MemoryIndexer.enabledKey) as? Bool ?? true },
+            set: {
+                UserDefaults.standard.set($0, forKey: MemoryIndexer.enabledKey)
+                MemoryIndexer.shared.syncWithSettings()
+            }
+        )
     }
 
     private var perModelQuota: Binding<Bool> {

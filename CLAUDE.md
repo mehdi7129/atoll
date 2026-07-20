@@ -89,6 +89,30 @@ Pièges de build appris à la dure :
 - ✅ Phase 5 — quota exact (tee-wrapper statusline, rate_limits serveur + indicateur
   d'âge ; jauge par modèle opt-in ; % de contexte par session)
 - ✅ Phase 6 — distribution (Developer ID + notarisation, DMG, Sparkle, onboarding)
+- ✅ Phase 7a — mémoire (v0.5.0) : index FTS5 de TOUS les transcripts →
+  ~/.atoll/memory.db + verbe `atoll-bridge recall` + skill `atoll-recall`
+- 🚧 Phase 7b — rétrospective (claude -p read-only en fin de session → notes +
+  skills en QUARANTAINE) ; Phase 7c — curation (revue, stats d'usage). Plan
+  détaillé validé par Mehdi : ~/.claude/plans/indexed-snacking-dahl.md
+
+**Phase 7a — Mémoire (v0.5.0, 2026-07-20)** — « Atoll se rappelle de tout » :
+- AtollCore : `TranscriptLineParser` (parse défensif → fragments rôlés, thinking
+  inclus cap 4000, anti-base64), `TranscriptLineSplitter` (découpe crash-safe :
+  une ligne sans \n n'avance JAMAIS l'offset), `MemoryIndex` (FTS5 external
+  content, unicode61 remove_diacritics 2, bm25+snippet, `sanitizedMatchQuery`
+  anti-injection MATCH, LIKE avec ESCAPE), `RecallSkill`. App : `MemoryIndexer`
+  (@Observable + actor worker, scan 30 s + nudges fin de tour, backfill 329 Mo
+  ≈ 1 min). Bridge : verbe `recall` (fail-open exit 0 TOUJOURS), `ensureSkill()`.
+- Pièges appris : TranscriptTailer INADAPTÉ à l'indexation (saut > 1 Mo, 24
+  watches max) → l'indexeur lit lui-même ; lecteur WAL read-only peut échouer
+  sans -shm → repli RW-sans-création côté bridge ; `import SQLite3` marche
+  nativement en SPM ; un échec d'ingest ne doit JAMAIS être avalé-puis-dépassé
+  (l'offset avancerait par-dessus le trou : perte permanente silencieuse —
+  trouvé par revue adversariale) ; `~/.claude/skills/` contient des skills
+  tiers → ne toucher QUE atoll-recall/.
+- Debug : `sqlite3 ~/.atoll/memory.db "SELECT COUNT(*) FROM messages;"` ;
+  `~/.atoll/bin/atoll-bridge recall "mots clés" --limit 5` ; logs catégorie
+  `memory`. Réglages › Claude Code › Mémoire (toggle opt-out, stats, rebuild).
 
 **Chat intégré + dictée vocale : RETIRÉS le 2026-07-19** (décision de Mehdi — il
 préfère parler et chatter dans Cursor). Supprimés : ChatCenter/ChatDriver/ChatView/

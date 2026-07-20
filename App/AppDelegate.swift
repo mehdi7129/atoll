@@ -79,6 +79,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         try? server.start()
         store.start()
 
+        // Index mémoire (opt-out) : backfill + suivi incrémental des transcripts,
+        // entièrement hors bande — jamais dans le chemin des hooks.
+        MemoryIndexer.shared.syncWithSettings()
+
         rebuildWindows()
         registerDebugTriggers()
 
