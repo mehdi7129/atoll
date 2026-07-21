@@ -25,9 +25,9 @@ y compris pour les sessions lancées depuis le terminal de Cursor.
 | 6 · Distribution (Developer ID, notarisation, DMG, Sparkle) | ✅ |
 | 7a · Mémoire (index FTS5 de tous les transcripts + skill `atoll-recall`) | ✅ |
 | 7b · Rétrospective (leçons + skills proposés en fin de session) | ✅ |
-| 7c · Curation (revue des skills, stats d'usage, hygiène) | 🚧 |
+| 7c · Curation (revue des skills, stats d'usage, hygiène) | ✅ |
 
-**Version courante : v0.6.0** (voir les [Releases](https://github.com/mehdi7129/atoll/releases)).
+**Version courante : v0.7.0** (voir les [Releases](https://github.com/mehdi7129/atoll/releases)).
 
 Voir le [plan détaillé](PLAN.md), la [recherche](docs/research/) et [CLAUDE.md](CLAUDE.md)
 pour contribuer.
@@ -51,6 +51,12 @@ pour contribuer.
   recall) et éventuels skills proposés, placés en QUARANTAINE, jamais actifs sans
   votre approbation. Atoll apprend de vos sessions, sur votre souscription, avec
   des garde-fous durs (plafond de runs, budget, kill-switch immédiat).
+- **Revue des skills appris** : les skills proposés se revoient dans une fenêtre
+  dédiée (le SKILL.md complet est affiché avant toute décision — ⌘⏎ approuver,
+  ⌘⌫ rejeter). Un skill approuvé devient un vrai skill Claude Code
+  (`~/.claude/skills/atoll-<nom>/`) ; l'onglet Apprentissage montre l'usage de
+  chacun et suggère d'archiver les inutilisés. Désinstallation chirurgicale
+  (manifeste + empreinte SHA-256) : vos 18 skills tiers ne sont jamais touchés.
 - **Retour au terminal** : un clic ouvre la fenêtre de la session (Cursor/VS Code direct,
   Terminal.app / iTerm2 via automatisation).
 - **Personnalisable** : thème clair/sombre/auto, 4 palettes, et **taille de la barre

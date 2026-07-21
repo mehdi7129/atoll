@@ -258,6 +258,7 @@ private actor MemoryIndexWorker {
         let sessionID = url.deletingPathExtension().lastPathComponent
         var splitter = TranscriptLineSplitter(startOffset: state.offset)
         var batch: [(line: TranscriptLine, syntheticUUID: String)] = []
+        var skillUses: [SkillInvocation] = [] // invocations de skills pour les stats (7c)
 
         // INVARIANT DE LA REVUE : un lot dont l'ingestion échoue n'est JAMAIS
         // jeté-puis-dépassé. Tout échec abandonne le fichier ENTIER sans poser
@@ -269,11 +270,19 @@ private actor MemoryIndexWorker {
                 try index.ingest(lines: batch, fileState: state, sessionID: sessionID,
                                  projectDir: projectDir, newOffset: splitter.consumedOffset)
                 batch.removeAll(keepingCapacity: true)
-                return true
             } catch {
                 log.error("ingest \(url.lastPathComponent, privacy: .public) : \(error.localizedDescription) — lot abandonné, retente au prochain scan")
                 return false
             }
+            // Usage des skills (7c) : enregistré AU RYTHME des lots (pas au flush
+            // final) — sinon, si un lot ultérieur échoue, l'offset a déjà avancé
+            // et l'usage des premiers lots serait perdu à jamais. Idempotent
+            // (INSERT OR IGNORE par toolUseID), hors transaction, non critique.
+            if !skillUses.isEmpty {
+                try? index.recordSkillUsage(skillUses)
+                skillUses.removeAll(keepingCapacity: true)
+            }
+            return true
         }
 
         while true {
@@ -283,6 +292,7 @@ private actor MemoryIndexWorker {
                 if let parsed = TranscriptLineParser.parse(line.data) {
                     batch.append((parsed, "line-\(line.startOffset)"))
                 }
+                skillUses.append(contentsOf: SkillUsageParser.invocations(inLine: line.data))
                 if batch.count >= Self.batchSize, !flush() { return }
             }
             await Task.yield() // backfill de centaines de Mo sans monopoliser un cœur

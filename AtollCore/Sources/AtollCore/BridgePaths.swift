@@ -106,4 +106,19 @@ public enum BridgePaths {
     public static var learningStateURL: URL {
         learningDirectory.appendingPathComponent("retrospectives.json")
     }
+
+    // MARK: - Curation (Phase 7c)
+
+    /// Dossier des skills Claude Code de l'utilisateur. Contient des skills
+    /// TIERS : Atoll ne touche QUE les sous-dossiers préfixés `atoll-`.
+    public static var claudeSkillsDirectory: URL {
+        homeDirectory.appendingPathComponent(".claude/skills", isDirectory: true)
+    }
+
+    /// Manifeste des skills appris qu'Atoll a activés dans ~/.claude/skills
+    /// (slug, hash SHA256, dates). Source de vérité de la désinstallation :
+    /// manifeste illisible → FAIL-CLOSED, aucune suppression.
+    public static var installedSkillsManifestURL: URL {
+        learningDirectory.appendingPathComponent("installed.json")
+    }
 }

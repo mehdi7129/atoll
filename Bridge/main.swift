@@ -391,6 +391,12 @@ enum BridgeCLI {
         // toucher le parent. Avant les sorties anticipées : le skill doit
         // disparaître même si settings.json a été vidé entre-temps.
         try? FileManager.default.removeItem(at: BridgePaths.recallSkillDirectory)
+        // Skills APPRIS (7c) : retrait piloté par le manifeste UNIQUEMENT
+        // (préfixe atoll- + entrée listée), fail-closed si illisible. Les
+        // DONNÉES d'apprentissage (~/.atoll/learning) sont conservées.
+        if let report = try? LearnedSkillStore().uninstallAll(), !report.removed.isEmpty {
+            print("skills appris retirés : \(report.removed.joined(separator: ", "))")
+        }
         do {
             guard let current = try readSettings() else {
                 print("aucun settings.json — rien à désinstaller")
@@ -492,6 +498,7 @@ enum BridgeCLI {
             "denyParked": FileManager.default.fileExists(atPath: BridgePaths.rockstarParkedDenyURL.path),
             "skillInstalled": FileManager.default.fileExists(atPath: BridgePaths.recallSkillURL.path),
             "memoryIndexPresent": FileManager.default.fileExists(atPath: BridgePaths.memoryDatabaseURL.path),
+            "learnedSkills": LearnedSkillStore().installedSkills().count,
         ]
         if let data = try? JSONSerialization.data(withJSONObject: state, options: [.sortedKeys]) {
             print(String(decoding: data, as: UTF8.self))

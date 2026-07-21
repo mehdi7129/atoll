@@ -65,6 +65,8 @@ final class MemoryIndexTests: XCTestCase {
     // MARK: - Schéma
 
     func testCreateSchemaSetsUserVersion() throws {
+        // v2 = arrivée de la table skill_usage (une base v1 est reconstruite).
+        XCTAssertEqual(MemoryIndex.schemaVersion, 2)
         XCTAssertEqual(try index.storedSchemaVersion(), MemoryIndex.schemaVersion)
 
         // Ré-ouverture d'une base à jour : version reconnue, rien n'est recréé
@@ -284,5 +286,55 @@ final class MemoryIndexTests: XCTestCase {
         let bounds = try XCTUnwrap(try index.sessionTimeBounds(sessionID: "session-1"))
         XCTAssertEqual(bounds.first, 1_000)
         XCTAssertEqual(bounds.last, 3_000)
+    }
+
+    // MARK: - Usage des skills
+
+    func testRecordAndQuerySkillUsage() throws {
+        let early = Date(timeIntervalSince1970: 1_000)
+        let late = Date(timeIntervalSince1970: 2_000)
+        try index.recordSkillUsage([
+            SkillInvocation(toolUseID: "toolu_1", skill: "atoll-recall",
+                            sessionID: "s1", timestamp: early),
+            SkillInvocation(toolUseID: "toolu_2", skill: "atoll-recall",
+                            sessionID: "s2", timestamp: late),
+            // Doublon d'uuid (rejeu du même bloc) : INSERT OR IGNORE le neutralise.
+            SkillInvocation(toolUseID: "toolu_1", skill: "atoll-recall",
+                            sessionID: "s1", timestamp: early),
+        ])
+
+        let stats = try index.skillUsage()
+        XCTAssertEqual(stats.count, 1)
+        let stat = try XCTUnwrap(stats.first)
+        XCTAssertEqual(stat.skill, "atoll-recall")
+        XCTAssertEqual(stat.count, 2, "le doublon d'uuid ne compte qu'une fois")
+        XCTAssertEqual(stat.lastUsed, late, "lastUsed = MAX(ts)")
+
+        // Rejeu du lot COMPLET (crash simulé côté appelant) : rien ne bouge.
+        try index.recordSkillUsage([
+            SkillInvocation(toolUseID: "toolu_2", skill: "atoll-recall",
+                            sessionID: "s2", timestamp: late),
+        ])
+        XCTAssertEqual(try index.skillUsage().first?.count, 2)
+    }
+
+    func testSkillUsagePrefixFilter() throws {
+        try index.recordSkillUsage([
+            SkillInvocation(toolUseID: "a", skill: "atoll-recall", sessionID: nil, timestamp: nil),
+            SkillInvocation(toolUseID: "b", skill: "atoll-notch", sessionID: nil, timestamp: nil),
+            SkillInvocation(toolUseID: "c", skill: "commit", sessionID: nil, timestamp: nil),
+        ])
+
+        let all = try index.skillUsage()
+        XCTAssertEqual(all.count, 3)
+
+        let filtered = try index.skillUsage(prefix: "atoll-")
+        XCTAssertEqual(filtered.map(\.skill).sorted(), ["atoll-notch", "atoll-recall"])
+        // Sans timestamp, la ligne compte mais ne date pas : lastUsed nil.
+        XCTAssertEqual(filtered.first?.lastUsed, nil)
+
+        // Jokers LIKE neutralisés (escapedLikePrefix) : « atoll_ » est le
+        // littéral underscore, pas « atoll + n'importe quel caractère ».
+        XCTAssertTrue(try index.skillUsage(prefix: "atoll_").isEmpty)
     }
 }

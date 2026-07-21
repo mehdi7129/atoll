@@ -11,6 +11,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var bridgeServer: BridgeServer?
     private var debugTokens: [Int32] = []
     private var onboardingController: OnboardingWindowController?
+    private var skillReviewController: SkillReviewWindowController?
+
+    /// Affiche la fenêtre de revue des skills — recréée à neuf (comme l'onboarding).
+    func showSkillReview() {
+        skillReviewController?.close()
+        skillReviewController = SkillReviewWindowController()
+        skillReviewController?.show()
+    }
 
     /// Affiche la fenêtre de bienvenue — appelée par le menu et au 1er lancement.
     /// Recréée à NEUF à chaque fois : évite tout état résiduel après fermeture
@@ -39,6 +47,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             forName: .atollShowOnboarding, object: nil, queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.showOnboarding() }
+        }
+        NotificationCenter.default.addObserver(
+            forName: .atollShowSkillReview, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.showSkillReview() }
         }
 
         // Premier lancement : fenêtre de bienvenue (hooks, fail-open, autonomie).
@@ -95,6 +108,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         RetrospectiveRunner.shared.noteSink = { url, note in
             MemoryIndexer.shared.indexNote(url: url, slug: note.slug)
         }
+        // Rafraîchir la file de revue quand une rétrospective vient d'écrire.
+        RetrospectiveRunner.shared.onProposalsChanged = {
+            SkillReviewCenter.shared.refresh()
+        }
+
+        // Curation : réconcilie le manifeste des skills appris avec le disque
+        // (orphelins, déplacements inachevés) puis découvre les propositions.
+        SkillReviewCenter.shared.reconcileAndScan()
 
         rebuildWindows()
         registerDebugTriggers()
@@ -185,6 +206,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         debugTokens.append(retroToken)
+
+        // Curation (décisions → DEBUG uniquement).
+        var seedToken: Int32 = 0
+        notify_register_dispatch("dev.mehdiguiard.atoll.debug.seedSkill", &seedToken, DispatchQueue.main) { _ in
+            MainActor.assumeIsolated { SkillReviewCenter.shared.debugSeedProposal() }
+        }
+        var skillReviewToken: Int32 = 0
+        notify_register_dispatch("dev.mehdiguiard.atoll.debug.skillReview", &skillReviewToken, DispatchQueue.main) { _ in
+            MainActor.assumeIsolated {
+                NSApp.activate(ignoringOtherApps: true)
+                NotificationCenter.default.post(name: .atollShowSkillReview, object: nil)
+            }
+        }
+        var approveSkillToken: Int32 = 0
+        notify_register_dispatch("dev.mehdiguiard.atoll.debug.approveSkill", &approveSkillToken, DispatchQueue.main) { _ in
+            MainActor.assumeIsolated {
+                if let first = SkillReviewCenter.shared.proposals.first {
+                    SkillReviewCenter.shared.approve(first.id)
+                }
+            }
+        }
+        var rejectSkillToken: Int32 = 0
+        notify_register_dispatch("dev.mehdiguiard.atoll.debug.rejectSkill", &rejectSkillToken, DispatchQueue.main) { _ in
+            MainActor.assumeIsolated {
+                if let first = SkillReviewCenter.shared.proposals.first {
+                    SkillReviewCenter.shared.reject(first.id)
+                }
+            }
+        }
+        debugTokens.append(contentsOf: [seedToken, skillReviewToken, approveSkillToken, rejectSkillToken])
 
         var allowToken: Int32 = 0
         notify_register_dispatch("dev.mehdiguiard.atoll.debug.allow", &allowToken, DispatchQueue.main) { _ in
@@ -280,6 +331,8 @@ extension Notification.Name {
     /// Le menu « Bienvenue… » demande l'ouverture de l'onboarding (l'AppDelegate
     /// l'observe — le cast NSApp.delegate as? AppDelegate échoue).
     static let atollShowOnboarding = Notification.Name("dev.mehdiguiard.atoll.showOnboarding")
+    /// Ouvre la fenêtre de revue des skills proposés (même chemin que l'onboarding).
+    static let atollShowSkillReview = Notification.Name("dev.mehdiguiard.atoll.showSkillReview")
     #if DEBUG
     /// Relaie le trigger Darwin debug.settings vers la vue SwiftUI qui détient
     /// l'action openSettings (fiable, contrairement à showSettingsWindow:).

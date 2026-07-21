@@ -93,8 +93,32 @@ Pièges de build appris à la dure :
   ~/.atoll/memory.db + verbe `atoll-bridge recall` + skill `atoll-recall`
 - ✅ Phase 7b — rétrospective (v0.6.0) : en fin de session substantielle,
   claude -p READ-ONLY → notes mémoire + skills en QUARANTAINE
-- 🚧 Phase 7c — curation (revue des skills proposés, stats d'usage, hygiène).
-  Plan détaillé validé par Mehdi : ~/.claude/plans/indexed-snacking-dahl.md
+- ✅ Phase 7c — curation (v0.7.0) : revue des skills proposés (fenêtre dédiée),
+  activation dans ~/.claude/skills, stats d'usage, désinstallation chirurgicale
+
+**Phase 7c — Curation (v0.7.0, 2026-07-21)** — la boucle qui empêche la pourriture :
+- AtollCore : `SkillSlug` (validation stricte anti-traversée), `SkillProposal`
+  (machine à états proposed→approved|rejected, approved→archived ; décodage
+  défensif), `InstalledSkillsManifest` (+ SHA256 CryptoKit), `LearnedSkillStore`
+  (racines injectées → testable ; approve crash-safe avec REPRISE d'une install
+  interrompue ; uninstallAll fail-closed piloté par le manifeste ;
+  sweepStagingLeaks ; atoll-recall = infra jamais « non géré »),
+  `SkillUsageParser` (tool_use name=="Skill") + table skill_usage (schemaVersion
+  1→2), `NotesCuration` (planner + garde-fous rétrécissement). App :
+  `SkillReviewCenter` (@Observable), `SkillReviewWindow` (ASCII, ⌘⏎ approuver /
+  ⌘⌫ rejeter — friction voulue vs ⌘Y/⌘N des permissions), onglet Apprentissage
+  (regroupe rétrospective + skills proposés/appris + mémoire), glyphe `+`
+  compact, bannière ExpandedView, item menu « ◆ Skill proposé (N)… ».
+- VÉRIFIÉ EN VRAI : seedSkill → glyphe → fenêtre → approve → skill ACTIF (le
+  system-reminder l'a listé comme skill Claude Code !) → uninstall retire SEULEMENT
+  les skills du manifeste (16 tiers intacts, settings.json = backup).
+- Pièges (revue adversariale, 36 agents, 5 confirmés corrigés) : approve doit
+  REPRENDRE une install interrompue (dossier posé mais hors manifeste = collision
+  éternelle sinon) ; moveItem final tolérant (pair concurrent) ; staging orphelin
+  balayé au reconcile ; usage enregistré au rythme des lots (pas au flush final).
+- Debug (#if DEBUG) : seedSkill, skillReview, approveSkill, rejectSkill.
+
+- Plan détaillé de la Phase 7 (validé par Mehdi) : ~/.claude/plans/indexed-snacking-dahl.md
 
 **Phase 7b — Rétrospective (v0.6.0, 2026-07-20)** — « Atoll apprend » :
 - Chaîne : SessionStore.markEnded (3 chemins unifiés : hook SessionEnd, kqueue,

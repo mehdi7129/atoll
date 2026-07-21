@@ -23,6 +23,8 @@ final class RetrospectiveRunner {
 
     /// Branchement vers l'index mémoire 7a : chaque note écrite est indexée.
     @ObservationIgnored var noteSink: ((URL, RetrospectiveReport.Note) -> Void)?
+    /// Prévient la 7c qu'au moins un skill vient d'être proposé (rafraîchit la file).
+    @ObservationIgnored var onProposalsChanged: (() -> Void)?
 
     @ObservationIgnored private var queue: [Job] = []
     @ObservationIgnored private var pendingDelay: Task<Void, Never>?
@@ -338,6 +340,7 @@ final class RetrospectiveRunner {
                 log.error("écriture skill \(skill.slug, privacy: .public) : \(error.localizedDescription)")
             }
         }
+        if !report.skills.isEmpty { onProposalsChanged?() }
     }
 
     private func finish(_ job: Job, outcome: String, transcriptBytes: Int) {

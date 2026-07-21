@@ -132,6 +132,11 @@ struct CompactView: View {
         } else if viewModel.attentionCount > 0 {
             Text("?")
                 .foregroundStyle(rockstar ? rockstarRed : colors.warn)
+        } else if SkillReviewCenter.shared.pendingCount > 0 {
+            // Un skill appris attend une revue : « + » (quelque chose à ajouter),
+            // distinct du « ? » d'une permission. Rouge en rockstar par cohérence.
+            Text("+")
+                .foregroundStyle(rockstar ? rockstarRed : colors.accent)
         } else {
             // Au repos : losange rouge en rockstar, sinon point discret.
             Text(rockstar ? "◆" : "·")

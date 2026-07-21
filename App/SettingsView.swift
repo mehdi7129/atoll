@@ -22,6 +22,9 @@ struct SettingsView: View {
             AutonomyPane()
                 .tabItem { Label("Autonomie", systemImage: "bolt") }
                 .tag("autonomie")
+            LearningPane()
+                .tabItem { Label("Apprentissage", systemImage: "graduationcap") }
+                .tag("apprentissage")
             UpdatesPane(updaterModel: updaterModel)
                 .tabItem { Label("Mises à jour", systemImage: "arrow.triangle.2.circlepath") }
                 .tag("maj")
@@ -212,31 +215,6 @@ private struct ClaudeCodePane: View {
                 .foregroundStyle(.secondary)
             }
 
-            Section("Rétrospective (expérimental)") {
-                Toggle("Apprendre des sessions terminées", isOn: learningEnabled)
-                if learningEnabled.wrappedValue {
-                    Picker("Seuil de quota 5 h", selection: learningThreshold) {
-                        Text("50 %").tag(0.5)
-                        Text("60 %").tag(0.6)
-                        Text("70 %").tag(0.7)
-                        Text("80 %").tag(0.8)
-                    }
-                    Picker("Modèle", selection: learningModel) {
-                        Text("Haiku (économe)").tag("haiku")
-                        Text("Sonnet (recommandé)").tag("sonnet")
-                        Text("Fable (gourmand)").tag("fable")
-                    }
-                }
-                Text("""
-                Après chaque session substantielle (et si votre fenêtre 5 h a de la \
-                marge), une analyse en lecture seule extrait les leçons durables : notes \
-                mémoire dans ~/.atoll/learning/, et éventuels skills proposés — en \
-                QUARANTAINE, jamais actifs sans votre approbation. Consomme du quota. \
-                Désactiver arrête tout immédiatement.
-                """)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
         }
         .formStyle(.grouped)
         .fixedSize(horizontal: false, vertical: true)
@@ -259,30 +237,6 @@ private struct ClaudeCodePane: View {
                 UserDefaults.standard.set($0, forKey: MemoryIndexer.enabledKey)
                 MemoryIndexer.shared.syncWithSettings()
             }
-        )
-    }
-
-    private var learningEnabled: Binding<Bool> {
-        Binding(
-            get: { UserDefaults.standard.bool(forKey: LearningSettings.enabledKey) },
-            set: {
-                UserDefaults.standard.set($0, forKey: LearningSettings.enabledKey)
-                LearningSettings.shared.syncWithSettings()
-            }
-        )
-    }
-
-    private var learningThreshold: Binding<Double> {
-        Binding(
-            get: { UserDefaults.standard.object(forKey: LearningSettings.thresholdKey) as? Double ?? 0.7 },
-            set: { UserDefaults.standard.set($0, forKey: LearningSettings.thresholdKey) }
-        )
-    }
-
-    private var learningModel: Binding<String> {
-        Binding(
-            get: { UserDefaults.standard.string(forKey: LearningSettings.modelKey) ?? "sonnet" },
-            set: { UserDefaults.standard.set($0, forKey: LearningSettings.modelKey) }
         )
     }
 
@@ -312,6 +266,130 @@ private struct ClaudeCodePane: View {
         // règles (fait par le helper), réinstaller en Rockstar les reparque.
         let level = AutonomyLevel(rawValue: UserDefaults.standard.string(forKey: InteractionCenter.autonomyKey) ?? "") ?? .manual
         denyParkingError = HookInstaller.syncDenyParking(level: level)
+    }
+}
+
+// MARK: - Apprentissage (mémoire + rétrospective + revue des skills)
+
+private struct LearningPane: View {
+    @State private var center = SkillReviewCenter.shared
+    @State private var indexer = MemoryIndexer.shared
+
+    var body: some View {
+        Form {
+            Section("Rétrospective") {
+                Toggle("Apprendre des sessions terminées", isOn: learningEnabled)
+                if learningEnabled.wrappedValue {
+                    Picker("Seuil de quota 5 h", selection: learningThreshold) {
+                        Text("50 %").tag(0.5)
+                        Text("60 %").tag(0.6)
+                        Text("70 %").tag(0.7)
+                        Text("80 %").tag(0.8)
+                    }
+                    Picker("Modèle", selection: learningModel) {
+                        Text("Haiku (économe)").tag("haiku")
+                        Text("Sonnet (recommandé)").tag("sonnet")
+                        Text("Fable (gourmand)").tag("fable")
+                    }
+                }
+                Text("""
+                Après chaque session substantielle (si votre fenêtre 5 h a de la marge), \
+                une analyse en LECTURE SEULE extrait les leçons durables — notes mémoire \
+                et skills proposés en QUARANTAINE. Consomme du quota ; désactiver arrête \
+                tout immédiatement.
+                """)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+
+            Section("Skills proposés (\(center.pendingCount))") {
+                if center.proposals.isEmpty {
+                    Text("Aucune proposition — elles apparaissent après les rétrospectives.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(center.proposals) { proposal in
+                        LabeledContent(proposal.title,
+                                       value: proposal.createdAt.formatted(date: .abbreviated, time: .omitted))
+                    }
+                    Button("Revoir…") { center.requestReviewWindow() }
+                }
+            }
+
+            Section("Skills appris") {
+                if center.installed.isEmpty {
+                    Text("Aucun skill appris actif.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(center.installed) { row in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(SkillSlug.dirName(for: row.skill.slug))
+                                Text(usageLabel(row))
+                                    .font(.caption)
+                                    .foregroundStyle(row.suggestedForArchive ? .orange : .secondary)
+                            }
+                            Spacer()
+                            if row.userModified {
+                                Text("modifié").font(.caption).foregroundStyle(.orange)
+                            }
+                            Button("Archiver") { center.archiveInstalled(slug: row.skill.slug) }
+                                .buttonStyle(.borderless)
+                        }
+                    }
+                }
+                ForEach(center.reconcileNotes, id: \.self) { note in
+                    Text(note).font(.caption).foregroundStyle(.secondary)
+                }
+            }
+
+            Section("Mémoire") {
+                if let stats = indexer.stats {
+                    LabeledContent("Index", value: "\(stats.sessionCount) session(s) · \(stats.messageCount) message(s)")
+                }
+                Button("Ouvrir le dossier ~/.atoll/learning") {
+                    NSWorkspace.shared.open(BridgePaths.learningDirectory)
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .fixedSize(horizontal: false, vertical: true)
+        .onAppear {
+            center.refresh()
+            indexer.refreshStats()
+        }
+    }
+
+    private func usageLabel(_ row: InstalledSkillRow) -> String {
+        if let last = row.lastUsedAt {
+            return "\(row.usageCount) usage(s) · dernier \(last.formatted(.relative(presentation: .named)))"
+        }
+        return row.suggestedForArchive ? "jamais utilisé (inactif > 30 j)" : "jamais utilisé"
+    }
+
+    private var learningEnabled: Binding<Bool> {
+        Binding(
+            get: { UserDefaults.standard.bool(forKey: LearningSettings.enabledKey) },
+            set: {
+                UserDefaults.standard.set($0, forKey: LearningSettings.enabledKey)
+                LearningSettings.shared.syncWithSettings()
+            }
+        )
+    }
+
+    private var learningThreshold: Binding<Double> {
+        Binding(
+            get: { UserDefaults.standard.object(forKey: LearningSettings.thresholdKey) as? Double ?? 0.7 },
+            set: { UserDefaults.standard.set($0, forKey: LearningSettings.thresholdKey) }
+        )
+    }
+
+    private var learningModel: Binding<String> {
+        Binding(
+            get: { UserDefaults.standard.string(forKey: LearningSettings.modelKey) ?? "sonnet" },
+            set: { UserDefaults.standard.set($0, forKey: LearningSettings.modelKey) }
+        )
     }
 }
 

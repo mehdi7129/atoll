@@ -106,6 +106,13 @@ struct MenuBarMenu: View {
             NotificationCenter.default.post(name: .atollShowOnboarding, object: nil)
         }
 
+        if SkillReviewCenter.shared.pendingCount > 0 {
+            Button("◆ Skill proposé (\(SkillReviewCenter.shared.pendingCount))…") {
+                NSApp.activate(ignoringOtherApps: true)
+                NotificationCenter.default.post(name: .atollShowSkillReview, object: nil)
+            }
+        }
+
         Divider()
 
         Button(model.updateAvailable

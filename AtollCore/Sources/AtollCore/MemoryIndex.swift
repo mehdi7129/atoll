@@ -102,9 +102,27 @@ public final class MemoryIndex {
         }
     }
 
+    /// Statistique agrégée d'usage d'un skill (table `skill_usage`) : nombre
+    /// total d'invocations et date de la plus récente (nil si aucune n'était
+    /// datée — les invocations sans timestamp comptent mais ne datent pas).
+    public struct SkillUsageStat: Equatable, Sendable {
+        public let skill: String
+        public let count: Int
+        public let lastUsed: Date?
+
+        public init(skill: String, count: Int, lastUsed: Date?) {
+            self.skill = skill
+            self.count = count
+            self.lastUsed = lastUsed
+        }
+    }
+
     /// Version du schéma, stockée dans `PRAGMA user_version`. Toute autre
     /// valeur non nulle rencontrée → suppression + recréation (pas de migration).
-    public static let schemaVersion: Int32 = 1
+    /// v2 : arrivée de la table `skill_usage` — une base v1 est donc détruite et
+    /// reconstruite au prochain lancement (donnée dérivée, backfill ~1 min,
+    /// c'est le comportement assumé sur tout mismatch).
+    public static let schemaVersion: Int32 = 2
 
     private let url: URL
     private let mode: Mode
@@ -298,6 +316,69 @@ public final class MemoryIndex {
         return Stats(sessionCount: Int(sessions),
                      messageCount: Int(messages),
                      databaseBytes: bytes)
+    }
+
+    // MARK: - Usage des skills
+
+    /// Enregistre un lot d'invocations de skills (extraites par
+    /// `SkillUsageParser`) en UNE transaction. Dédup par `toolUseID` (clé
+    /// primaire `uuid`, `INSERT OR IGNORE`) : le rejeu d'un lot déjà ingéré est
+    /// neutre — même contrat d'idempotence que `ingest`. Une invocation dont le
+    /// `toolUseID` est vide est écartée (pas d'identité stable → pas de dédup
+    /// possible, elle gonflerait les stats à chaque rejeu). Un timestamp absent
+    /// est stocké 0 (compte dans `count`, ignoré par `lastUsed`).
+    public func recordSkillUsage(_ invocations: [SkillInvocation]) throws {
+        guard !invocations.isEmpty else { return }
+        try withTransaction {
+            let insert = try prepare(
+                "INSERT OR IGNORE INTO skill_usage(uuid, skill, session_id, ts) VALUES(?1, ?2, ?3, ?4)"
+            )
+            defer { sqlite3_finalize(insert) }
+            for invocation in invocations where !invocation.toolUseID.isEmpty {
+                sqlite3_reset(insert)
+                sqlite3_clear_bindings(insert)
+                try apply([
+                    .text(invocation.toolUseID),
+                    .text(invocation.skill),
+                    .optionalText(invocation.sessionID),
+                    .real(invocation.timestamp?.timeIntervalSince1970 ?? 0),
+                ], to: insert)
+                _ = try step(insert)
+            }
+        }
+    }
+
+    /// Agrégat par skill : nombre d'invocations et dernière date connue.
+    /// `prefix` restreint aux skills dont le nom COMMENCE par ce préfixe —
+    /// motif LIKE échappé par `escapedLikePrefix` (les jokers `%` `_` du
+    /// préfixe sont littéraux, même piège que `search`). Tri : les plus
+    /// utilisés d'abord, puis alphabétique (rendu déterministe).
+    public func skillUsage(prefix: String? = nil) throws -> [SkillUsageStat] {
+        let pattern = prefix.map { Self.escapedLikePrefix($0) + "%" }
+        let stmt = try prepare(
+            """
+            SELECT skill, COUNT(*), MAX(ts)
+            FROM skill_usage
+            WHERE (?1 IS NULL OR skill LIKE ?1 ESCAPE '\\')
+            GROUP BY skill
+            ORDER BY COUNT(*) DESC, skill
+            """
+        )
+        defer { sqlite3_finalize(stmt) }
+        try apply([.optionalText(pattern)], to: stmt)
+
+        var stats: [SkillUsageStat] = []
+        while try step(stmt) {
+            // ts = 0 encode « pas de date » : un MAX nul signifie qu'aucune
+            // invocation du groupe n'était datée → lastUsed nil.
+            let maxTS = sqlite3_column_double(stmt, 2)
+            stats.append(SkillUsageStat(
+                skill: columnText(stmt, 0) ?? "",
+                count: Int(sqlite3_column_int64(stmt, 1)),
+                lastUsed: maxTS > 0 ? Date(timeIntervalSince1970: maxTS) : nil
+            ))
+        }
+        return stats
     }
 
     /// Neutralise une requête utilisateur pour FTS5 : chaque token (découpe sur
@@ -611,9 +692,12 @@ public final class MemoryIndex {
             .replacingOccurrences(of: "_", with: "\\_")
     }
 
-    /// Schéma v1. Le FTS est en contenu externe (`content='messages'`) :
+    /// Schéma v2. Le FTS est en contenu externe (`content='messages'`) :
     /// il n'est cohérent QUE parce que messages est append-only — d'où
     /// l'absence délibérée de trigger UPDATE (seuls INSERT et DELETE existent).
+    /// `skill_usage` (v2) est volontairement autonome : clé primaire = id du
+    /// bloc tool_use (dédup au rejeu), aucune FK vers sessions — les stats
+    /// d'usage survivent à la purge des messages d'un fichier.
     private static let schemaSQL = """
         CREATE TABLE files(
             id INTEGER PRIMARY KEY,
@@ -657,5 +741,12 @@ public final class MemoryIndex {
         CREATE TRIGGER messages_ad AFTER DELETE ON messages BEGIN
             INSERT INTO messages_fts(messages_fts, rowid, text) VALUES ('delete', old.id, old.text);
         END;
+        CREATE TABLE skill_usage(
+            uuid TEXT PRIMARY KEY,
+            skill TEXT NOT NULL,
+            session_id TEXT,
+            ts REAL NOT NULL
+        );
+        CREATE INDEX idx_skill_usage ON skill_usage(skill, ts);
         """
 }

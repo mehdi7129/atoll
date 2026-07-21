@@ -37,6 +37,11 @@ struct ExpandedView: View {
             } else {
                 sessionList
                 Spacer(minLength: 0)
+                // Bannière passive : jamais par-dessus une carte de permission
+                // (branche else uniquement), aucune ouverture forcée.
+                if SkillReviewCenter.shared.pendingCount > 0 {
+                    learningBanner
+                }
                 footer
             }
         }
@@ -95,6 +100,34 @@ struct ExpandedView: View {
                     .foregroundStyle(colors.dim)
             }
         }
+    }
+
+    private var learningBanner: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(AsciiArt.sectionHeader("APPRENTISSAGE", width: 72))
+                .lineLimit(1)
+                .foregroundStyle(colors.dim)
+            HStack(spacing: 8) {
+                Text("+")
+                    .foregroundStyle(colors.accent)
+                Text(learningBannerLabel)
+                    .lineLimit(1)
+                    .foregroundStyle(colors.fg)
+                Spacer(minLength: 6)
+                AsciiButton(label: "REVOIR ⏎", color: colors.accent,
+                            shortcut: .return, modifiers: []) {
+                    SkillReviewCenter.shared.requestReviewWindow()
+                }
+            }
+        }
+    }
+
+    private var learningBannerLabel: String {
+        let count = SkillReviewCenter.shared.pendingCount
+        let names = SkillReviewCenter.shared.proposals.prefix(2)
+            .map(\.title).joined(separator: ", ")
+        return count > 1 ? "\(count) skills proposés · \(names)…"
+                         : "1 skill proposé · \(names)"
     }
 
     private var footer: some View {
