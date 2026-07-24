@@ -12,12 +12,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var debugTokens: [Int32] = []
     private var onboardingController: OnboardingWindowController?
     private var skillReviewController: SkillReviewWindowController?
+    private var launcherController: FleetLauncherWindowController?
 
     /// Affiche la fenêtre de revue des skills — recréée à neuf (comme l'onboarding).
     func showSkillReview() {
         skillReviewController?.close()
         skillReviewController = SkillReviewWindowController()
         skillReviewController?.show()
+    }
+
+    /// Affiche la fenêtre de lancement d'une tâche — recréée à neuf, pré-remplie
+    /// avec le dossier de la session sélectionnée s'il y en a une.
+    func showLauncher() {
+        // Indice de dossier : une session vivante (souvent le projet courant).
+        // Le lanceur préfère de toute façon le dernier dossier utilisé.
+        let selectedCwd = SessionStore.shared.sessions.first { $0.phase.isAlive }?.cwd
+        launcherController?.close()
+        launcherController = FleetLauncherWindowController(suggestedCwd: selectedCwd)
+        launcherController?.show()
     }
 
     /// Affiche la fenêtre de bienvenue — appelée par le menu et au 1er lancement.
@@ -52,6 +64,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             forName: .atollShowSkillReview, object: nil, queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.showSkillReview() }
+        }
+        NotificationCenter.default.addObserver(
+            forName: .atollShowLauncher, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.showLauncher() }
         }
 
         // Premier lancement : fenêtre de bienvenue (hooks, fail-open, autonomie).
@@ -225,6 +242,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 NotificationCenter.default.post(name: .atollShowSkillReview, object: nil)
             }
         }
+        var launcherToken: Int32 = 0
+        notify_register_dispatch("dev.mehdiguiard.atoll.debug.launcher", &launcherToken, DispatchQueue.main) { _ in
+            MainActor.assumeIsolated {
+                NSApp.activate(ignoringOtherApps: true)
+                NotificationCenter.default.post(name: .atollShowLauncher, object: nil)
+            }
+        }
+        debugTokens.append(launcherToken)
         var approveSkillToken: Int32 = 0
         notify_register_dispatch("dev.mehdiguiard.atoll.debug.approveSkill", &approveSkillToken, DispatchQueue.main) { _ in
             MainActor.assumeIsolated {
@@ -339,6 +364,8 @@ extension Notification.Name {
     static let atollShowOnboarding = Notification.Name("dev.mehdiguiard.atoll.showOnboarding")
     /// Ouvre la fenêtre de revue des skills proposés (même chemin que l'onboarding).
     static let atollShowSkillReview = Notification.Name("dev.mehdiguiard.atoll.showSkillReview")
+    /// Ouvre la fenêtre de lancement d'une tâche en arrière-plan (cockpit).
+    static let atollShowLauncher = Notification.Name("dev.mehdiguiard.atoll.showLauncher")
     #if DEBUG
     /// Relaie le trigger Darwin debug.settings vers la vue SwiftUI qui détient
     /// l'action openSettings (fiable, contrairement à showSettingsWindow:).

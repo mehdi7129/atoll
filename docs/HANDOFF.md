@@ -2,8 +2,8 @@
 
 > Document de continuité pour reprendre le dev après un compactage de conversation.
 > **À lire en premier** avec `CLAUDE.md` (règles) et `PLAN.md` (plan produit).
-> Dernière mise à jour : **2026-07-24**, app **v0.8.0** (Phase 8 « Sur rails » :
-> découverte des sessions via `claude agents --json`, Milestone A d'« Atoll 2 »).
+> Dernière mise à jour : **2026-07-24**, app **v0.9.0** (Phase 9 « Cockpit ambiant » :
+> lancer une tâche en arrière-plan depuis le notch, Milestone C d'« Atoll 2 »).
 
 ---
 
@@ -24,14 +24,22 @@ découverte des sessions passe du scan de processus (cassé par le daemon d'arri
 de l'Agent View) à l'interface SUPPORTÉE `claude agents --json` (autorité) + hooks
 (temps réel) ; scan en repli. Détail complet + pièges : voir CLAUDE.md « Phase 8 ».
 
-**Prochaines étapes de la feuille de route « Atoll 2 » (non démarrées)** :
+**Phase 9 « Cockpit ambiant » livrée (v0.9.0)** — Milestone C : `FleetLauncher` +
+`FleetLauncherWindow` (lancer `claude --bg` depuis le notch, fenêtre dédiée),
+bouton ARRÊTER avec confirmation, item menu « Lancer une tâche… » (⌘N). Détail +
+pièges : CLAUDE.md « Phase 9 ».
+
+**Prochaines étapes** :
+- **CLARTÉ des sessions (demandé par Mehdi, à faire en PREMIER)** : depuis le
+  Milestone A, `claude agents --json` liste TOUTE la flotte (tous projets, sessions
+  oubliées, sessions imbriquées) → l'îlot peut montrer plus de sessions que
+  l'utilisateur n'en compte (vécu : 3 affichées pour 2 « ouvertes », la 3e étant la
+  session de dev imbriquée). Ce n'est PAS un bug (toutes réelles), mais déroutant.
+  Pistes proposées : libellé projet plus net + marqueur « autre projet », grouper
+  par projet, marquer la session courante. Attente du choix de Mehdi.
 - **Milestone B — Mémoire approfondie** : brancher la curation périodique des notes
-  (`NotesCuration` existe en AtollCore, non branchée à un service App), recall
-  proactif, partage de skills entre projets, dédup inter-fichiers de l'index.
-- **Milestone C — Cockpit ambiant** : lancer une tâche/skill en arrière-plan
-  (`claude --bg`) DEPUIS le notch (lancement explicite, pas d'objectif auto-généré),
-  répondre à la flotte, vue par état. `FleetPoller`/`AgentsSnapshot` sont la
-  fondation ; il reste un `FleetLauncher` (wrap `--bg`/`stop`) + l'UI.
+  (`NotesCuration` existe en AtollCore, non branchée), recall proactif, partage de
+  skills entre projets, dédup inter-fichiers de l'index.
 
 Ce qui marche aujourd'hui, de bout en bout :
 - Îlot notch ASCII (thème system/light/dark, 4 palettes, mono+orange par défaut).

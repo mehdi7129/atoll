@@ -106,6 +106,12 @@ struct MenuBarMenu: View {
             NotificationCenter.default.post(name: .atollShowOnboarding, object: nil)
         }
 
+        Button("Lancer une tâche…") {
+            NSApp.activate(ignoringOtherApps: true)
+            NotificationCenter.default.post(name: .atollShowLauncher, object: nil)
+        }
+        .keyboardShortcut("n")
+
         if SkillReviewCenter.shared.pendingCount > 0 {
             Button("◆ Skill proposé (\(SkillReviewCenter.shared.pendingCount))…") {
                 NSApp.activate(ignoringOtherApps: true)

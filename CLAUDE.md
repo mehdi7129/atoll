@@ -98,6 +98,36 @@ Pièges de build appris à la dure :
 - ✅ Phase 8 — « Sur rails » (v0.8.0) : découverte des sessions via l'interface
   SUPPORTÉE `claude agents --json` (autorité), hooks = temps réel, scan de
   processus = repli. Milestone A de la feuille de route « Atoll 2 ».
+- ✅ Phase 9 — « Cockpit ambiant » (v0.9.0) : lancer une tâche en arrière-plan
+  (`claude --bg`) depuis le notch (fenêtre dédiée), arrêter une session
+  (`claude stop`, avec confirmation). Milestone C de la feuille de route.
+
+**Phase 9 — « Cockpit ambiant » (v0.9.0, 2026-07-24)** — piloter la flotte depuis
+le notch (lancement sur demande EXPLICITE, pas d'objectif auto-généré) :
+- AtollCore : `FleetLaunch` (parseSessionID défensif de la sortie `claude --bg`
+  colorée ANSI — ne PAS dépendre du format, l'autorité reste le FleetPoller ;
+  shellQuote ; isValidTask ; testé). App : `FleetLauncher` (@Observable ;
+  launch(task,cwd) = spawn `zsh -l -c "unset ANTHROPIC_API_KEY; exec claude --bg
+  <task>"` avec cwd + watchdog ; stop(id) async avec retour ; mémoire du dernier
+  dossier ; GARDE de ré-entrance : isLaunching posé AVANT l'await, sinon
+  double-clic = deux `claude --bg`), `FleetLauncherWindow`/View (ASCII : TextEditor
+  tâche + dossier pré-rempli/Parcourir + LANCER ⌘⏎ + avertissement Rockstar).
+  Item menu « Lancer une tâche… » (⌘N). Bouton ARRÊTER dans SessionDetailView
+  avec CONFIRMATION (footgun : arrête n'importe quelle session vivante, dont la
+  tienne). La tâche lancée est une session Claude normale → FleetPoller + hooks la
+  suivent ; permissions en cartes dans le notch (auto-approuvées en Rockstar).
+- Pièges (revue adversariale, 48 agents, 4 confirmés + 2 sûretés corrigés) :
+  double-lancement (bouton non désactivé + isLaunching après l'await) ; stop
+  fire-and-forget qui ment sur son résultat ; resolveClaudePath sans garde
+  triedLoginResolve ; lastError périmé à la réouverture ; + confirmation d'arrêt
+  et avertissement Rockstar.
+- Debug : `notifyutil -p dev.mehdiguiard.atoll.debug.launcher`.
+- RESTE de la feuille de route « Atoll 2 » : Milestone B (mémoire approfondie).
+  À FAIRE ensuite (demandé par Mehdi) : CLARTÉ de l'affichage des sessions —
+  `claude agents --json` liste TOUTE la flotte (tous projets, sessions oubliées,
+  session imbriquée) → peut afficher plus de sessions que l'utilisateur n'en
+  compte. Pistes : libellé projet plus net + marqueur « autre projet », grouper
+  par projet, marquer la session courante.
 
 **Phase 8 — « Sur rails supportés » (v0.8.0, 2026-07-24)** — profiter des MAJ de
 Claude sans casse :

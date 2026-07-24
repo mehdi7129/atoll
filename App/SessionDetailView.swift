@@ -10,6 +10,8 @@ struct SessionDetailView: View {
 
     @State private var jumpMessage: String?
     @State private var needsPermissionApp: String?
+    @State private var confirmingStop = false
+    @State private var stopMessage: String?
 
     private var store: SessionStore { .shared }
 
@@ -61,6 +63,21 @@ struct SessionDetailView: View {
 
             Spacer(minLength: 0)
         }
+        .alert("Arrêter cette session ?", isPresented: $confirmingStop) {
+            Button("Annuler", role: .cancel) { }
+            Button("Arrêter", role: .destructive) {
+                Task {
+                    let ok = await FleetLauncher.shared.stop(sessionID: session.id)
+                    if ok {
+                        onBack() // la session disparaîtra du notch au prochain poll
+                    } else {
+                        stopMessage = FleetLauncher.shared.lastError ?? "Arrêt échoué."
+                    }
+                }
+            }
+        } message: {
+            Text("« \(session.projectName) » sera arrêtée (claude stop). Son travail en cours s'interrompt.")
+        }
     }
 
     /// Bouton d'ouverture du terminal de la session (ramène la fenêtre Cursor /
@@ -77,6 +94,17 @@ struct SessionDetailView: View {
                         .foregroundStyle(colors.dim)
                 }
                 Spacer()
+                // Kill-switch par session (`claude stop`). CONFIRMATION obligatoire :
+                // le bouton s'affiche pour toute session vivante, y compris la tienne
+                // — un clic direct arrêterait ta session de travail (footgun).
+                if session.status != .done {
+                    AsciiButton(label: "ARRÊTER", color: colors.warn, shortcut: nil) {
+                        confirmingStop = true
+                    }
+                }
+            }
+            if let stopMessage {
+                Text(stopMessage).font(AtollFont.mono(9)).foregroundStyle(colors.warn)
             }
             if let needsPermissionApp {
                 Button {

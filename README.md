@@ -27,8 +27,9 @@ y compris pour les sessions lancées depuis le terminal de Cursor.
 | 7b · Rétrospective (leçons + skills proposés en fin de session) | ✅ |
 | 7c · Curation (revue des skills, stats d'usage, hygiène) | ✅ |
 | 8 · Sur rails supportés (`claude agents --json` = autorité de découverte) | ✅ |
+| 9 · Cockpit ambiant (lancer une tâche en arrière-plan depuis le notch) | ✅ |
 
-**Version courante : v0.8.0** (voir les [Releases](https://github.com/mehdi7129/atoll/releases)).
+**Version courante : v0.9.0** (voir les [Releases](https://github.com/mehdi7129/atoll/releases)).
 
 Voir le [plan détaillé](PLAN.md), la [recherche](docs/research/) et [CLAUDE.md](CLAUDE.md)
 pour contribuer.
@@ -60,6 +61,10 @@ pour contribuer.
   (manifeste + empreinte SHA-256) : vos 18 skills tiers ne sont jamais touchés.
 - **Retour au terminal** : un clic ouvre la fenêtre de la session (Cursor/VS Code direct,
   Terminal.app / iTerm2 via automatisation).
+- **Cockpit ambiant** : lancez une tâche en arrière-plan (`claude --bg`) depuis le notch
+  — une fenêtre dédiée (tâche + dossier), la session tourne détachée et apparaît dans
+  l'îlot ; arrêtez-la d'un clic (avec confirmation). Répondez à ses permissions depuis
+  le notch, sans ouvrir de terminal.
 - **Personnalisable** : thème clair/sombre/auto, 4 palettes, et **taille de la barre
   compacte réglable par écran** (petit / moyen / large — ex. large sur un moniteur externe,
   moyen sur le MacBook).
