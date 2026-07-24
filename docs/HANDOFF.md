@@ -2,44 +2,73 @@
 
 > Document de continuité pour reprendre le dev après un compactage de conversation.
 > **À lire en premier** avec `CLAUDE.md` (règles) et `PLAN.md` (plan produit).
-> Dernière mise à jour : **2026-07-24**, app **v0.9.0** (Phase 9 « Cockpit ambiant » :
-> lancer une tâche en arrière-plan depuis le notch, Milestone C d'« Atoll 2 »).
+> Dernière mise à jour : **2026-07-24**, app **v0.9.1** (cockpit ambiant + regroupement
+> des sessions par projet).
 
 ---
 
-## 0. TL;DR — où on en est
+## 0. TL;DR — REPRISE APRÈS COMPACTAGE (lire ceci d'abord)
 
 Atoll est une « Dynamic Island » ASCII pour Claude Code sur macOS (Swift/SwiftUI, GPL-3.0,
-repo PUBLIC `github.com/mehdi7129/atoll`). **Phases 1 à 8 livrées et publiées**
-(v0.8.0 sur GitHub Releases, DMG notarisé + appcast Sparkle). L'app tourne, 285 tests
-AtollCore verts, tout est poussé. Publier une nouvelle version = `Scripts/release.sh`
-(voir §1).
+repo PUBLIC `github.com/mehdi7129/atoll`). **Phases 1 à 9 + clarté des sessions livrées et
+publiées** (v0.9.1, GitHub Releases, DMG notarisé + appcast Sparkle). L'app tourne, ~291
+tests AtollCore verts, `main` synchronisé. Publier = `Scripts/release.sh` puis
+`gh release create` + `git push` (voir §1).
 
-**Phase 7 « Atoll apprend » COMPLÈTE** — Atoll se souvient (mémoire FTS5 + recall),
-apprend (rétrospective read-only → notes + skills proposés), cure (revue humaine).
+**Feuille de route « Atoll 2 »** (`~/.claude/plans/indexed-snacking-dahl.md`, validée par
+Mehdi) — la boussole du moment. Séquence choisie : A robustesse ✅ · B mémoire approfondie
+(À FAIRE) · C cockpit ✅ (fait avant B car la fondation flotte le rendait bon marché).
+Fondations : migration sur interfaces SUPPORTÉES ; autonomie = lancer sur demande
+EXPLICITE (jamais d'objectif auto) ; perso d'abord.
 
-**Phase 8 « Sur rails » livrée (v0.8.0)** — Milestone A de la feuille de route
-« Atoll 2 » (`~/.claude/plans/indexed-snacking-dahl.md`, validée par Mehdi). La
-découverte des sessions passe du scan de processus (cassé par le daemon d'arrière-plan
-de l'Agent View) à l'interface SUPPORTÉE `claude agents --json` (autorité) + hooks
-(temps réel) ; scan en repli. Détail complet + pièges : voir CLAUDE.md « Phase 8 ».
+**Ce qui vient d'être livré (cette session) :**
+- **Phase 7 « Atoll apprend » (v0.5→0.7)** : mémoire FTS5 + `atoll-recall` ; rétrospective
+  read-only → notes + skills proposés ; curation (revue humaine).
+- **Phase 8 « Sur rails » (v0.8.0)** = Milestone A : découverte des sessions via
+  `claude agents --json` (autorité) + hooks (temps réel), scan de processus en REPLI
+  (le daemon d'arrière-plan de l'Agent View cassait le scan). Voir CLAUDE.md « Phase 8 ».
+- **Phase 9 « Cockpit ambiant » (v0.9.0)** = Milestone C : `FleetLauncher` +
+  `FleetLauncherWindow` (lancer `claude --bg` depuis le notch), ARRÊTER avec confirmation,
+  menu « Lancer une tâche… » ⌘N. Voir CLAUDE.md « Phase 9 ».
+- **Clarté des sessions (v0.9.1)** : l'îlot regroupe les sessions PAR PROJET (racine `.git`)
+  — un projet à 1 session = ligne directe, à ≥2 sessions = dossier pliable `▸ Nom · N`
+  (repli par défaut, flèche pour déplier). Règle la confusion « 3 sessions pour 2 »
+  (la 3e = la session de dev imbriquée dans le même projet). Code :
+  `App/ExpandedView.swift` (`projectGroups`, `folderHeader`, enum `ProjectRoot`).
 
-**Phase 9 « Cockpit ambiant » livrée (v0.9.0)** — Milestone C : `FleetLauncher` +
-`FleetLauncherWindow` (lancer `claude --bg` depuis le notch, fenêtre dédiée),
-bouton ARRÊTER avec confirmation, item menu « Lancer une tâche… » (⌘N). Détail +
-pièges : CLAUDE.md « Phase 9 ».
+**PROCHAINE ÉTAPE (quand Mehdi le dira) : Milestone B — Mémoire approfondie.**
+- Brancher la **curation périodique des notes** : `NotesCuration` (planner + garde-fous
+  rétrécissement) EXISTE en AtollCore mais N'EST PAS branchée à un service App → écrire
+  `App/NotesCurationService.swift` qui la déclenche (hebdo opt-in / bouton) via le
+  `RetrospectiveRunner` généralisé, archive vérifiée AVANT remplacement.
+- **Recall proactif** (opt-in) : suggérer la mémoire pertinente via un hook
+  UserPromptSubmit (`additionalContext`) ou une carte notch, sans polluer le contexte.
+- **Partage de skills entre projets** ; **dédup inter-fichiers** de l'index (aujourd'hui
+  intra-fichier seulement).
+- Détail dans le plan « Atoll 2 » § Milestone B.
 
-**Prochaines étapes** :
-- **CLARTÉ des sessions (demandé par Mehdi, à faire en PREMIER)** : depuis le
-  Milestone A, `claude agents --json` liste TOUTE la flotte (tous projets, sessions
-  oubliées, sessions imbriquées) → l'îlot peut montrer plus de sessions que
-  l'utilisateur n'en compte (vécu : 3 affichées pour 2 « ouvertes », la 3e étant la
-  session de dev imbriquée). Ce n'est PAS un bug (toutes réelles), mais déroutant.
-  Pistes proposées : libellé projet plus net + marqueur « autre projet », grouper
-  par projet, marquer la session courante. Attente du choix de Mehdi.
-- **Milestone B — Mémoire approfondie** : brancher la curation périodique des notes
-  (`NotesCuration` existe en AtollCore, non branchée), recall proactif, partage de
-  skills entre projets, dédup inter-fichiers de l'index.
+**Idées non tranchées / backlog** : recall proactif (cadrage produit à faire avec Mehdi) ;
+notification quand une tâche bg finit ; vue flotte par état (à examiner/en cours/finies).
+
+### Méthode de travail (rappel — la même qui a marché toute cette session)
+
+Par milestone : (1) **explorer** (agents Explore, en parallèle) ; (2) **planifier**
+(mode plan, faire VALIDER par Mehdi via ExitPlanMode) ; (3) **implémenter en workflows
+parallèles** (AtollCore + tests D'ABORD, puis App/coutures faites à la main) ;
+(4) **VÉRIFIER EN VRAI** — jamais « ça compile donc ça marche » : lancer l'app, sessions
+réelles, **screenshots LUS** (notifyutil expand → screencapture → crop → Read le PNG) ;
+(5) **revue adversariale multi-agents** (Workflow : finders par dimension → 2 réfutateurs
+par trouvaille → corriger seulement les CONFIRMÉS) AVANT toute release ; (6) **release**
+notarisée (`Scripts/release.sh`) + `gh release create` + deltas + `git push` (retry si
+DNS github hoquette) + docs (README/CLAUDE.md/HANDOFF/mémoire projet).
+
+Rappels durs : `rm -rf` INTERDIT → `trash`. DerivedData HORS iCloud. Lancer la COPIE
+(~/Applications), jamais le produit de build. `/usr/bin/xattr` (le shim ~/.local/bin est
+cassé). Build : `xcodegen generate` (jamais versionner .xcodeproj) puis `xcodebuild
+-project Atoll.xcodeproj -scheme Atoll -configuration Debug -derivedDataPath "$DD" build`
+puis `ditto … ~/Applications/Atoll.app && open ~/Applications/Atoll.app`. Tests :
+`cd AtollCore && swift test`. Triggers debug : `notifyutil -p dev.mehdiguiard.atoll.debug.<x>`
+(expand/compact/retro/seedSkill/skillReview/approveSkill/rejectSkill/curation/launcher…).
 
 Ce qui marche aujourd'hui, de bout en bout :
 - Îlot notch ASCII (thème system/light/dark, 4 palettes, mono+orange par défaut).

@@ -122,6 +122,18 @@ le notch (lancement sur demande EXPLICITE, pas d'objectif auto-généré) :
   triedLoginResolve ; lastError périmé à la réouverture ; + confirmation d'arrêt
   et avertissement Rockstar.
 - Debug : `notifyutil -p dev.mehdiguiard.atoll.debug.launcher`.
+
+**Clarté des sessions — regroupement par projet (v0.9.1, 2026-07-24)** : `agents
+--json` liste TOUTE la flotte (tous projets, sessions oubliées, session de dev
+imbriquée) → l'îlot pouvait montrer plus de sessions que Mehdi n'en compte (vécu :
+3 pour 2, la 3e = notre session de dev nichée dans le même dépôt). PAS un bug (toutes
+réelles) mais déroutant. FIX (choix de Mehdi : « comme des dossiers avec une flèche
+pour voir les sous-sessions ») : `App/ExpandedView.swift` regroupe par PROJET (racine
+`.git` via l'enum `ProjectRoot` qui remonte au `.git` — regroupe un dépôt et ses
+sous-dossiers) ; adaptatif : 1 session = ligne directe, ≥2 = dossier pliable
+`▸ Nom · N` (replié par défaut, glyphe d'attention/spinner sur l'en-tête). `@State
+expandedProjects`. VÉRIFIÉ VISUELLEMENT : « ▸ Dynamic_Island · 2 » + « Val d'Isere »
+en ligne = 2 éléments pour 2 projets.
 - RESTE de la feuille de route « Atoll 2 » : Milestone B (mémoire approfondie).
   À FAIRE ensuite (demandé par Mehdi) : CLARTÉ de l'affichage des sessions —
   `claude agents --json` liste TOUTE la flotte (tous projets, sessions oubliées,

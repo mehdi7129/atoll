@@ -10,6 +10,12 @@ struct ExpandedView: View {
     @AppStorage(InteractionCenter.autonomyKey) private var autonomyRaw = AutonomyLevel.manual.rawValue
     private var level: AutonomyLevel { AutonomyLevel(rawValue: autonomyRaw) ?? .manual }
 
+    /// Projets dépliés (racines de projet). Les dossiers multi-sessions sont
+    /// repliés par défaut : on voit un dossier par projet, on déplie pour voir
+    /// les sessions — clarifie « 3 sessions pour 2 projets » (une nichée dans
+    /// notre projet de dev).
+    @State private var expandedProjects: Set<String> = []
+
     /// Hauteur de la zone « cap » en haut de l'îlot : le notch physique sur un
     /// écran à encoche, la hauteur de la pilule sinon.
     private var topInset: CGFloat {
@@ -90,9 +96,24 @@ struct ExpandedView: View {
                 Text("· aucune session — lance `claude` dans un terminal")
                     .foregroundStyle(colors.dim)
             } else {
-                ForEach(viewModel.sessions) { session in
-                    SessionRow(session: session, colors: colors) {
-                        viewModel.selectSession(session.id)
+                ForEach(projectGroups) { group in
+                    if group.sessions.count == 1 {
+                        // Un seul projet = une seule session : ligne directe
+                        // (pas de dossier inutile).
+                        SessionRow(session: group.sessions[0], colors: colors) {
+                            viewModel.selectSession(group.sessions[0].id)
+                        }
+                    } else {
+                        // Plusieurs sessions dans le même projet → dossier pliable.
+                        folderHeader(group)
+                        if expandedProjects.contains(group.id) {
+                            ForEach(group.sessions) { session in
+                                SessionRow(session: session, colors: colors) {
+                                    viewModel.selectSession(session.id)
+                                }
+                                .padding(.leading, 16)
+                            }
+                        }
                     }
                 }
                 Text("· clique une session pour ses détails")
@@ -100,6 +121,45 @@ struct ExpandedView: View {
                     .foregroundStyle(colors.dim)
             }
         }
+    }
+
+    /// Sessions regroupées par PROJET (racine `.git`), ordre de première apparition
+    /// préservé.
+    private var projectGroups: [ProjectGroup] {
+        var order: [String] = []
+        var byRoot: [String: [AgentSession]] = [:]
+        for session in viewModel.sessions {
+            let key = ProjectRoot.key(for: session)
+            if byRoot[key] == nil { order.append(key) }
+            byRoot[key, default: []].append(session)
+        }
+        return order.map { key in
+            ProjectGroup(id: key, name: ProjectRoot.name(for: key), sessions: byRoot[key] ?? [])
+        }
+    }
+
+    /// En-tête d'un dossier de projet : flèche de pliage, nom, nombre, et un
+    /// glyphe d'attention si une session du groupe a besoin de toi (sinon le
+    /// détail reste replié — l'info reste visible d'un coup d'œil).
+    private func folderHeader(_ group: ProjectGroup) -> some View {
+        let isOpen = expandedProjects.contains(group.id)
+        return Button {
+            if isOpen { expandedProjects.remove(group.id) } else { expandedProjects.insert(group.id) }
+        } label: {
+            HStack(spacing: 6) {
+                Text(isOpen ? "▾" : "▸").foregroundStyle(colors.accent)
+                Text(group.name).fontWeight(.bold).foregroundStyle(colors.fg).lineLimit(1)
+                Text("· \(group.sessions.count)").foregroundStyle(colors.dim)
+                Spacer()
+                if group.sessions.contains(where: \.needsAttention) {
+                    Text("!").foregroundStyle(colors.warn)
+                } else if group.sessions.contains(where: \.isActive) {
+                    AsciiSpinnerView(color: colors.accent)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private var learningBanner: some View {
@@ -311,5 +371,46 @@ private struct SessionRow: View {
         case .awaitingPermission, .awaitingInput: return colors.warn
         case .done: return colors.ok
         }
+    }
+}
+
+/// Un groupe de sessions partageant le même projet (racine `.git`).
+private struct ProjectGroup: Identifiable {
+    let id: String              // chemin de la racine du projet (clé de groupe)
+    let name: String            // nom affiché (dernier composant)
+    let sessions: [AgentSession]
+}
+
+/// Racine de projet d'une session : le dossier `.git` le plus proche en
+/// remontant depuis son cwd (regroupe ainsi un dépôt et ses sous-dossiers —
+/// ex. `Dynamic_Island` et `Dynamic_Island/AtollCore`). À défaut, le cwd lui-même.
+@MainActor
+enum ProjectRoot {
+    /// Cache cwd → racine (accédé depuis le rendu, MainActor).
+    private static var cache: [String: String] = [:]
+
+    static func key(for session: AgentSession) -> String {
+        guard let cwd = session.cwd, !cwd.isEmpty else { return session.id }
+        if let cached = cache[cwd] { return cached }
+        let root = gitRoot(cwd) ?? cwd
+        cache[cwd] = root
+        return root
+    }
+
+    static func name(for key: String) -> String {
+        let base = (key as NSString).lastPathComponent
+        return base.isEmpty ? key : base
+    }
+
+    private static func gitRoot(_ cwd: String) -> String? {
+        var url = URL(fileURLWithPath: cwd)
+        let fm = FileManager.default
+        while url.path != "/" {
+            if fm.fileExists(atPath: url.appendingPathComponent(".git").path) { return url.path }
+            let parent = url.deletingLastPathComponent()
+            if parent.path == url.path { break }
+            url = parent
+        }
+        return nil
     }
 }
