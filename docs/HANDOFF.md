@@ -2,23 +2,36 @@
 
 > Document de continuité pour reprendre le dev après un compactage de conversation.
 > **À lire en premier** avec `CLAUDE.md` (règles) et `PLAN.md` (plan produit).
-> Dernière mise à jour : **2026-07-21**, app **v0.7.0** (Phase 7 « Atoll apprend »
-> COMPLÈTE : mémoire 7a + rétrospective 7b + curation/revue 7c).
+> Dernière mise à jour : **2026-07-24**, app **v0.8.0** (Phase 8 « Sur rails » :
+> découverte des sessions via `claude agents --json`, Milestone A d'« Atoll 2 »).
 
 ---
 
 ## 0. TL;DR — où on en est
 
 Atoll est une « Dynamic Island » ASCII pour Claude Code sur macOS (Swift/SwiftUI, GPL-3.0,
-repo PUBLIC `github.com/mehdi7129/atoll`). **Phases 1 à 6 + Phase 7 (a/b/c) livrées et
-publiées** (v0.7.0 sur GitHub Releases, DMG notarisé + appcast Sparkle). L'app tourne,
-274 tests AtollCore verts, tout est poussé. Publier une nouvelle version =
-`Scripts/release.sh` (voir §1). **Phase 7 « Atoll apprend » COMPLÈTE** — Atoll se
-souvient (mémoire FTS5 + recall), apprend (rétrospective read-only → notes + skills
-proposés) et cure (revue humaine, activation, désinstallation chirurgicale). Plan de
-référence : `~/.claude/plans/indexed-snacking-dahl.md`. Rien de bloqué ; pistes
-futures possibles (non demandées) : curation périodique des notes (NotesCuration existe
-en AtollCore, non branchée à un service App), déduplication inter-fichiers de l'index.
+repo PUBLIC `github.com/mehdi7129/atoll`). **Phases 1 à 8 livrées et publiées**
+(v0.8.0 sur GitHub Releases, DMG notarisé + appcast Sparkle). L'app tourne, 285 tests
+AtollCore verts, tout est poussé. Publier une nouvelle version = `Scripts/release.sh`
+(voir §1).
+
+**Phase 7 « Atoll apprend » COMPLÈTE** — Atoll se souvient (mémoire FTS5 + recall),
+apprend (rétrospective read-only → notes + skills proposés), cure (revue humaine).
+
+**Phase 8 « Sur rails » livrée (v0.8.0)** — Milestone A de la feuille de route
+« Atoll 2 » (`~/.claude/plans/indexed-snacking-dahl.md`, validée par Mehdi). La
+découverte des sessions passe du scan de processus (cassé par le daemon d'arrière-plan
+de l'Agent View) à l'interface SUPPORTÉE `claude agents --json` (autorité) + hooks
+(temps réel) ; scan en repli. Détail complet + pièges : voir CLAUDE.md « Phase 8 ».
+
+**Prochaines étapes de la feuille de route « Atoll 2 » (non démarrées)** :
+- **Milestone B — Mémoire approfondie** : brancher la curation périodique des notes
+  (`NotesCuration` existe en AtollCore, non branchée à un service App), recall
+  proactif, partage de skills entre projets, dédup inter-fichiers de l'index.
+- **Milestone C — Cockpit ambiant** : lancer une tâche/skill en arrière-plan
+  (`claude --bg`) DEPUIS le notch (lancement explicite, pas d'objectif auto-généré),
+  répondre à la flotte, vue par état. `FleetPoller`/`AgentsSnapshot` sont la
+  fondation ; il reste un `FleetLauncher` (wrap `--bg`/`stop`) + l'UI.
 
 Ce qui marche aujourd'hui, de bout en bout :
 - Îlot notch ASCII (thème system/light/dark, 4 palettes, mono+orange par défaut).

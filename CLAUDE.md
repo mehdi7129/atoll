@@ -95,6 +95,41 @@ Pièges de build appris à la dure :
   claude -p READ-ONLY → notes mémoire + skills en QUARANTAINE
 - ✅ Phase 7c — curation (v0.7.0) : revue des skills proposés (fenêtre dédiée),
   activation dans ~/.claude/skills, stats d'usage, désinstallation chirurgicale
+- ✅ Phase 8 — « Sur rails » (v0.8.0) : découverte des sessions via l'interface
+  SUPPORTÉE `claude agents --json` (autorité), hooks = temps réel, scan de
+  processus = repli. Milestone A de la feuille de route « Atoll 2 ».
+
+**Phase 8 — « Sur rails supportés » (v0.8.0, 2026-07-24)** — profiter des MAJ de
+Claude sans casse :
+- CONTEXTE : l'Agent View (`claude agents`) a officialisé le dashboard multi-sessions
+  avec un DAEMON d'arrière-plan qui CASSE le scan de processus d'Atoll (les sessions
+  bg sont des descendants du daemon → exclues comme subagents ; seuls les hooks les
+  sauvaient). Réponse : migrer la découverte sur l'interface supportée.
+- AtollCore : `AgentsSnapshot` (décodage défensif de `claude agents --json` : champs
+  sessionId/pid/cwd/name/status/kind, tolérant aux nuls, startedAt en ms epoch),
+  `FleetReconciler.correlate` (par sessionId PUIS pid — l'id peut diverger à un
+  fork/compaction, le pid reste). App : `FleetPoller` (@Observable, poll ADAPTATIF
+  2 s actif / 6 s repos, watchdog 5 s tuant un `claude` figé, résolution du chemin
+  claude : check cheap ~/.local/bin à chaque fois + login shell UNE fois),
+  `SessionStore.applyFleetSnapshot` (autorité de découverte ; hooks restent
+  autoritaires pour la phase fine/permissions ; une session découverte par flotte
+  puis recevant un hook rebascule `isSynthetic→false` ; retrait par ABSENCE du JSON
+  avec tolérance 2 tours + jamais si carte de permission en attente ; no-op si rien
+  ne change = pas de re-render). Scan de processus GATÉ derrière `fleetPolled &&
+  !fleetAvailable` (repli si CLI ancien / daemon absent).
+- VÉRIFIÉ EN VRAI : sessions bg apparaissent avec vrais ids + titres (nom agent-view),
+  hooks vivants (toolRunning), session stoppée retirée (~25 s), îlot rend flotte+hooks
+  ensemble ; `claude agents --json` liste TOUTES les sessions actives (même non
+  lancées par l'agent view).
+- Pièges (revue adversariale, 40 agents, 3 confirmés corrigés) : `agents --json` SANS
+  timeout gèle la boucle de poll ET neutralise le repli (available reste true) →
+  watchdog obligatoire ; le `name` JSON ne doit toucher que les sessions de flotte
+  (sinon il écrase le titre = 1er prompt d'une session à hooks) ; ne pas re-sourcer
+  le login shell à chaque poll ; le pid d'une session bg (enrich) SURVIT à `claude
+  stop` → ne PAS l'utiliser pour la liveness, le JSON du daemon est l'autorité.
+- Feuille de route « Atoll 2 » complète (validée par Mehdi) :
+  ~/.claude/plans/indexed-snacking-dahl.md — Milestone A (robustesse) ✅, B (mémoire
+  approfondie), C (cockpit ambiant : lancer une tâche/skill en bg depuis le notch).
 
 **Phase 7c — Curation (v0.7.0, 2026-07-21)** — la boucle qui empêche la pourriture :
 - AtollCore : `SkillSlug` (validation stricte anti-traversée), `SkillProposal`

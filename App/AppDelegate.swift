@@ -92,6 +92,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         try? server.start()
         store.start()
 
+        // Découverte de la flotte sur interface SUPPORTÉE (`claude agents --json`) :
+        // autorité de découverte des sessions, le scan de processus n'est plus
+        // qu'un repli (le daemon d'arrière-plan casse le scan).
+        FleetPoller.shared.start()
+
         // Index mémoire (opt-out) : backfill + suivi incrémental des transcripts,
         // entièrement hors bande — jamais dans le chemin des hooks.
         MemoryIndexer.shared.syncWithSettings()
@@ -135,6 +140,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        FleetPoller.shared.stop()
         RetrospectiveRunner.shared.terminateActive()
         bridgeServer?.stop()
     }

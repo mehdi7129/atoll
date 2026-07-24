@@ -26,8 +26,9 @@ y compris pour les sessions lancées depuis le terminal de Cursor.
 | 7a · Mémoire (index FTS5 de tous les transcripts + skill `atoll-recall`) | ✅ |
 | 7b · Rétrospective (leçons + skills proposés en fin de session) | ✅ |
 | 7c · Curation (revue des skills, stats d'usage, hygiène) | ✅ |
+| 8 · Sur rails supportés (`claude agents --json` = autorité de découverte) | ✅ |
 
-**Version courante : v0.7.0** (voir les [Releases](https://github.com/mehdi7129/atoll/releases)).
+**Version courante : v0.8.0** (voir les [Releases](https://github.com/mehdi7129/atoll/releases)).
 
 Voir le [plan détaillé](PLAN.md), la [recherche](docs/research/) et [CLAUDE.md](CLAUDE.md)
 pour contribuer.
@@ -66,8 +67,10 @@ pour contribuer.
 ## Principes
 
 - **Natif** — Swift/SwiftUI, < 50 MB RAM, zéro Electron, zéro télémétrie.
-- **Fiable** — cycle de vie des sessions surveillé au niveau noyau (kqueue), pas de
-  sessions fantômes.
+- **Fiable & durable** — la découverte des sessions s'appuie sur l'interface
+  **supportée** `claude agents --json` (autorité) + les hooks (temps réel), pas sur
+  du reverse-engineering fragile : les mises à jour de Claude Code profitent à Atoll
+  au lieu de le casser. Repli automatique sur le scan de processus si besoin.
 - **Exact** — quota 5 h/7 j issu du serveur Anthropic, jamais estimé.
 - **ASCII** — grille de caractères disciplinée, box-drawing, spinners braille,
   mono + un accent.

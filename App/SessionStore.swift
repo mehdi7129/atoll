@@ -85,6 +85,18 @@ final class SessionStore {
     func registerInternalPid(_ pid: pid_t) { internalPids.insert(pid) }
     func unregisterInternalPid(_ pid: pid_t) { internalPids.remove(pid) }
 
+    /// Vrai quand `claude agents --json` répond : c'est alors l'AUTORITÉ de
+    /// découverte (le scan de processus est rétrogradé au repli). Le daemon
+    /// d'arrière-plan casse le scan → cette bascule est le cœur du Milestone A.
+    @ObservationIgnored private(set) var fleetAvailable = false
+    /// La flotte a-t-elle été sondée au moins une fois ? Tant que non, on ne fait
+    /// PAS le scan de processus (sinon on créerait un synthétique `pid-<pid>` juste
+    /// avant que le premier poll ne le remplace par la vraie session — course vécue).
+    @ObservationIgnored private var fleetPolled = false
+    /// Compteur d'absences consécutives du JSON par session de flotte (tolérance
+    /// avant clôture : un snapshot transitoirement vide ne tue pas une session).
+    @ObservationIgnored private var fleetMissed: [String: Int] = [:]
+
     @ObservationIgnored private var exitWatchers: [pid_t: DispatchSourceProcess] = [:]
     @ObservationIgnored private var reconcileTask: Task<Void, Never>?
     @ObservationIgnored private var snapshotTask: Task<Void, Never>?
@@ -225,6 +237,11 @@ final class SessionStore {
 
         if let index = sessions.firstIndex(where: { $0.id == event.sessionID }) {
             var session = sessions[index]
+            // Un hook prouve que la session est désormais pilotée par les hooks
+            // (machine à états fine) : si la flotte l'avait d'abord découverte
+            // (isSynthetic), on rebascule — sinon sa phase resterait pilotée par
+            // le statut grossier de `agents --json`.
+            session.isSynthetic = false
             let previousPhase = session.phase
             var resurrected = false
             // Résurrection : `claude --resume` reprend le MÊME session_id après un
@@ -292,6 +309,7 @@ final class SessionStore {
     private func markEnded(at index: Int, reason: SessionEndReason) {
         sessions[index].phase = .ended
         let snapshot = sessions[index]
+        fleetMissed[snapshot.id] = nil
         tailer.stopWatching(snapshot.id)
         InteractionCenter.shared.cancelForSession(snapshot.id)
         idleTimers[snapshot.id]?.cancel()
@@ -482,6 +500,9 @@ final class SessionStore {
     /// attente » (aucun hook Stop ne le signalera pour ces sessions). Les
     /// sessions à hooks gardent leur phase pilotée par la machine à états.
     private func transcriptActivity(_ sessionID: String) {
+        // Quand la flotte (`agents --json`) pilote la phase, ce signal de secours
+        // par transcript devient redondant et pourrait entrer en conflit.
+        guard !fleetAvailable else { return }
         guard let index = sessions.firstIndex(where: { $0.id == sessionID }),
               sessions[index].isSynthetic else { return }
         // Ne pas écraser une demande de permission en attente.
@@ -520,6 +541,10 @@ final class SessionStore {
         //    événement n'arrive (bridge sans ancêtre claude, SessionEnd perdu)
         //    ne doit pas rester immortelle.
         for index in sessions.indices where sessions[index].phase.isAlive {
+            // Sessions de flotte : leur liveness est pilotée par `agents --json`
+            // (présence dans le snapshot), pas par un pid — qui peut être un
+            // processus-hôte transitoire du daemon. On ne les GC pas ici.
+            if fleetAvailable, sessions[index].isSynthetic { continue }
             guard let pid = sessions[index].pid else {
                 // Session hook SANS pid : rien ne l'ancre à un processus vivant
                 // (enveloppe forgée, ancêtre claude introuvable — ex. hook lancé
@@ -550,7 +575,10 @@ final class SessionStore {
         //       attente » (corrige aussi une session découverte « busy » qui
         //       n'a plus jamais écrit — le minuteur temps réel ne s'arme que sur
         //       une écriture, ce filet couvre l'absence d'écriture).
+        //       Rétrogradé au repli : quand `agents --json` répond, le statut
+        //       du JSON pilote la phase (plus fiable que le mtime du transcript).
         let now = Date()
+        if !fleetAvailable {
         for index in sessions.indices
         where sessions[index].isSynthetic && sessions[index].phase.isAlive {
             switch sessions[index].phase {
@@ -568,9 +596,17 @@ final class SessionStore {
                 break
             }
         }
+        } // fin du filet 1bis (repli seulement)
 
-        // 2. Découverte des sessions hookless (claude lancé avant Atoll,
-        //    ou hooks non installés).
+        // 2. Découverte des sessions hookless — REPLI uniquement, et SEULEMENT
+        //    une fois qu'un poll a confirmé que `agents --json` est indisponible
+        //    (CLI trop ancien). Tant que la flotte n'a pas répondu (démarrage) ou
+        //    qu'elle répond, applyFleetSnapshot() fait la découverte sur une
+        //    interface supportée que le daemon ne casse pas.
+        guard fleetPolled, !fleetAvailable else {
+            scheduleSnapshot()
+            return
+        }
         let knownPids = Set(sessions.compactMap(\.pid))
         let claudePids = ProcessInspector.allClaudePids()
         log.debug("réconciliation: \(claudePids.count) processus claude, \(knownPids.count) connus")
@@ -625,6 +661,161 @@ final class SessionStore {
             armExitWatch(pid: pid)
         }
         scheduleSnapshot()
+    }
+
+    // MARK: - Découverte via `claude agents --json` (autorité)
+
+    /// Réconcilie la flotte rapportée par `claude agents --json` avec les sessions
+    /// suivies. Autorité pour l'EXISTENCE, le vrai id, le nom (→ titre) et le
+    /// statut des sessions NON pilotées par les hooks ; les hooks restent
+    /// autoritaires pour la phase fine (toolRunning/waitingPermission/compacting)
+    /// et les permissions. Corrélation par id exact puis par pid (l'id peut
+    /// diverger à un fork/compaction, le pid reste stable).
+    func applyFleetSnapshot(_ infos: [AgentSessionInfo], available: Bool) {
+        fleetAvailable = available
+        fleetPolled = true
+        guard available else { return }
+
+        // Ids des sessions suivies CORRÉLÉES à une entrée du JSON ce tour-ci —
+        // par id OU par pid. La passe de retrait s'appuie dessus (une session
+        // corrélée-par-pid ne doit pas être vue « absente » et clôturée à tort).
+        var seen = Set<String>()
+        // Ne re-render (observation) et ne réécrire state.json QUE si la flotte a
+        // réellement changé — sinon un poll sur une flotte inchangée churnerait
+        // l'UI toutes les 2-6 s pour rien.
+        var changed = false
+
+        for info in infos {
+            if let pid = info.pid, internalPids.contains(pid) { continue }
+            if let cwd = info.cwd, cwd.contains("/.claude/worktrees/") { continue }
+            // Recalculé par itération : appendFleetSession a pu ajouter une session.
+            let existing = sessions.map { FleetReconciler.Existing(id: $0.id, pid: $0.pid) }
+            switch FleetReconciler.correlate(info, among: existing) {
+            case .existing(let id):
+                seen.insert(id)
+                if let index = sessions.firstIndex(where: { $0.id == id }) {
+                    if updateFromFleet(at: index, info) { changed = true }
+                }
+            case .new:
+                // Rétrospective orpheline (Atoll redémarré en plein run) : reconnue
+                // à son marqueur d'env, jamais affichée comme session utilisateur.
+                if let pid = info.pid,
+                   ProcessInspector.environment(of: pid)["ATOLL_RETROSPECTIVE"] == "1" { continue }
+                appendFleetSession(info)
+                seen.insert(info.sessionID)
+                changed = true
+            }
+        }
+
+        // Retrait : `claude agents --json` liste TOUTES les sessions actives
+        // (vérifié : les sessions non lancées par l'agent view y figurent aussi).
+        // Une session absente du snapshot est donc terminée — hook comprise (une
+        // session bg stoppée sans SessionEnd propre traînerait sinon 5 min).
+        // GARDE-FOUS : (1) tolérance de 2 absences consécutives — un snapshot
+        // transitoirement vide/partiel ne tue pas une session vivante ; (2) une
+        // carte de permission en attente prouve la session vivante (un helper y
+        // est bloqué) → jamais clôturée.
+        for index in sessions.indices where sessions[index].phase.isAlive {
+            let id = sessions[index].id
+            if seen.contains(id) {
+                fleetMissed[id] = 0
+                continue
+            }
+            // Carte de permission en attente = session vivante (un helper y est
+            // bloqué) → jamais clôturée sur simple absence.
+            //
+            // On NE teste PAS le pid : celui d'une session bg est un processus géré
+            // par le daemon qui SURVIT à l'arrêt de la session → il ne dit rien de
+            // la vie de la session. Le JSON du daemon est l'autorité (il retire une
+            // session stoppée) ; la tolérance de 2 tours couvre les creux transitoires.
+            let missed = (fleetMissed[id] ?? 0) + 1
+            fleetMissed[id] = missed
+            if missed >= 2 {
+                markEnded(at: index, reason: .reconcileGC)
+                changed = true
+            }
+        }
+        if changed { scheduleSnapshot() }
+    }
+
+    /// Met à jour une session existante depuis son entrée `agents --json`.
+    /// Retourne `true` si un champ a réellement changé (sinon on n'écrit RIEN,
+    /// pour ne pas déclencher d'observation/re-render inutile).
+    @discardableResult
+    private func updateFromFleet(at index: Int, _ info: AgentSessionInfo) -> Bool {
+        var changed = false
+        // Titre depuis le nom agent-view : SEULEMENT pour les sessions de flotte.
+        // Une session à hooks garde son titre = 1er prompt de l'utilisateur (sinon
+        // un poll tombant avant le 1er UserPromptSubmit l'écraserait — régression).
+        if sessions[index].isSynthetic,
+           sessions[index].title == nil, let name = info.name, !name.isEmpty {
+            sessions[index].title = Self.condense(name); changed = true
+        }
+        if sessions[index].cwd == nil, let cwd = info.cwd { sessions[index].cwd = cwd; changed = true }
+        // Pid renseigné pour l'enrichissement/jump-back, mais PAS d'exit-watch :
+        // la liveness d'une session de flotte vient du JSON, pas du pid.
+        if sessions[index].pid == nil, let pid = info.pid { sessions[index].pid = pid; changed = true }
+        // Statut terminal du JSON : vaut pour TOUTES les sessions (hook comprises —
+        // `claude stop`, échec — le SessionEnd du hook peut ne pas venir).
+        if info.status.isTerminal {
+            if sessions[index].phase.isAlive { markEnded(at: index, reason: .reconcileGC); return true }
+            return changed
+        }
+        // Phase courante : SEULEMENT pour les sessions non pilotées par les hooks
+        // (les hooks ont une machine à états plus fine — ne pas l'écraser), et
+        // seulement si elle DIFFÈRE (sinon pas d'écriture → pas de re-render).
+        if sessions[index].isSynthetic,
+           let phase = Self.fleetPhase(for: info.status, current: sessions[index].phase),
+           sessions[index].phase != phase {
+            sessions[index].phase = phase; changed = true
+        }
+        return changed
+    }
+
+    /// Crée une session de flotte depuis son entrée JSON (vrai id, plus de
+    /// `pid-<pid>` synthétique). Enrichissement d'ancrage terminal via
+    /// ProcessInspector — son rôle rétrogradé (enrichir un pid connu, plus découvrir).
+    private func appendFleetSession(_ info: AgentSessionInfo) {
+        guard !info.status.isTerminal else { return } // --all liste les finies : ne pas ressusciter
+        let now = Date()
+        var session = Tracked(
+            id: info.sessionID,
+            pid: info.pid,
+            pidStartTime: info.pid.flatMap { ProcessInspector.startTime(of: $0) },
+            cwd: info.cwd,
+            transcriptPath: info.cwd.flatMap { Self.newestTranscript(forCwd: $0)?.path },
+            phase: Self.fleetPhase(for: info.status, current: .waitingInput) ?? .waitingInput,
+            title: info.name.map { Self.condense($0) },
+            terminalHint: nil,
+            isSynthetic: true,
+            firstSeenAt: info.startedAt ?? now,
+            lastEventAt: now
+        )
+        if let pid = info.pid {
+            let env = ProcessInspector.environment(of: pid)
+            session.tty = ProcessInspector.tty(of: pid)
+            session.bundleID = env["__CFBundleIdentifier"]
+            session.termProgram = env["TERM_PROGRAM"]
+            session.entrypoint = env["CLAUDE_CODE_ENTRYPOINT"]
+            session.env = env.filter { Self.anchorEnvKeys.contains($0.key) }
+            // Pas d'exit-watch : liveness = présence dans le JSON (le pid peut
+            // être un processus-hôte transitoire du daemon).
+        }
+        sessions.append(session)
+        if let path = session.transcriptPath { MemoryIndexer.shared.nudge(transcriptPath: path) }
+    }
+
+    /// Traduit un statut `agents --json` en phase, pour les sessions non-hook.
+    /// nil = ne rien changer (statut inconnu, ou attente de permission posée par
+    /// un hook qu'on ne doit jamais écraser). Le terminal est géré à part.
+    private static func fleetPhase(for status: AgentSessionInfo.Status,
+                                   current: SessionPhase) -> SessionPhase? {
+        if case .waitingPermission = current { return nil }
+        switch status {
+        case .busy: return .busy
+        case .idle, .needsInput: return .waitingInput
+        case .completed, .failed, .stopped, .unknown: return nil
+        }
     }
 
     // MARK: - Instantané de debug
