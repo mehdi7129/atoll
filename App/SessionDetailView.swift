@@ -88,11 +88,6 @@ struct SessionDetailView: View {
                 AsciiButton(label: openLabel, color: colors.accent, shortcut: nil) {
                     performJump()
                 }
-                if let terminal = terminalName {
-                    Text(terminal)
-                        .font(AtollFont.mono(9))
-                        .foregroundStyle(colors.dim)
-                }
                 Spacer()
                 // Kill-switch par session (`claude stop`). CONFIRMATION obligatoire :
                 // le bouton s'affiche pour toute session vivante, y compris la tienne
@@ -125,17 +120,12 @@ struct SessionDetailView: View {
 
     /// Libellé du bouton : nomme l'app cible quand on la connaît (« OUVRIR DANS
     /// CURSOR »), sinon générique. C'est l'action principale du détail — ouvrir
-    /// la fenêtre où la session vit pour y travailler (chat, dictée…).
+    /// la fenêtre où la session vit pour y travailler.
     private var openLabel: String {
         guard let anchor = store.terminalAnchor(for: session.id) else {
             return "ALLER AU TERMINAL ↵"
         }
         return "OUVRIR DANS \(TerminalResolver.resolve(anchor).displayName.uppercased()) ↵"
-    }
-
-    private var terminalName: String? {
-        // Le nom figure déjà dans le libellé du bouton — pas de doublon.
-        nil
     }
 
     private func performJump() {

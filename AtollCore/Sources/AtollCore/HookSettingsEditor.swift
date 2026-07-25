@@ -8,8 +8,6 @@ import Foundation
 /// - un fichier non-JSON (JSONC, corrompu) fait échouer l'opération SANS écriture ;
 /// - installation idempotente, désinstallation complète.
 public enum HookSettingsEditor {
-    public static let managedMarker = "atoll-bridge"
-
     public struct ManagedEvent: Sendable {
         public let name: String
         /// Fire-and-forget (n'ajoute aucune latence au CLI).

@@ -8,7 +8,12 @@ struct NotchRootView: View {
 
     @AppStorage("paletteID") private var paletteID = Palette.monoOrange.id
     @AppStorage("hoverDelay") private var hoverDelay = 0.15
+    @AppStorage(VisualEffects.enabledKey) private var visualEffects = true
+    @AppStorage(VisualEffects.glassTransparencyKey) private var glassTransparency = VisualEffects.defaultGlassTransparency
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Rejoue l'onde d'expansion : incrémenté à chaque passage → étendu.
+    @State private var rippleTrigger = 0
     #if DEBUG
     @Environment(\.openSettings) private var openSettings
     #endif
@@ -77,6 +82,8 @@ struct NotchRootView: View {
             // Le focus clavier suit l'état visible : replié → rendu au terminal,
             // déployé avec carte → repris.
             viewModel.onKeyFocusRequest?(viewModel.isPrimary && newState == .expanded && wantsFocus)
+            // Rejoue l'onde à chaque ouverture (débordement volontairement ignoré).
+            if newState == .expanded { rippleTrigger &+= 1 }
         }
         .onAppear {
             // Fenêtre reconstruite pendant une carte active : réappliquer.
@@ -92,7 +99,14 @@ struct NotchRootView: View {
         let shape = NotchShape(topRadius: topRadius, bottomRadius: bottomRadius)
 
         ZStack(alignment: .top) {
-            shape.fill(isCompactCap ? Color.black : colors.bg)
+            IslandBackground(
+                shape: shape,
+                colors: colors,
+                isCompactCap: isCompactCap,
+                isExpanded: viewModel.state == .expanded,
+                effectsEnabled: visualEffects,
+                glassTransparency: glassTransparency
+            )
 
             // Étendu sur écran à encoche : bandeau noir en haut, à hauteur du notch
             // physique, pour que l'encoche reste visuellement intégrée même en clair.
@@ -103,6 +117,8 @@ struct NotchRootView: View {
             }
 
             content
+                .expansionRipple(trigger: rippleTrigger,
+                                 active: visualEffects && !reduceMotion)
         }
         .frame(width: size.width, height: size.height)
         .clipShape(shape)

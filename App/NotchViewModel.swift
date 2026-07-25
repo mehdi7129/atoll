@@ -47,12 +47,14 @@ final class NotchViewModel {
     /// se redimensionne en direct quand on change le réglage).
     var compactWidth: IslandWidth { IslandSettings.shared.width(for: displayID) }
 
-    init(screen: NSScreen, isPrimary: Bool, store: SessionStore = .shared) {
+    init(screen: NSScreen, isPrimary: Bool, store: SessionStore? = nil) {
         notchSize = screen.notchSize
         menuBarHeight = screen.menuBarHeight
         displayID = screen.displayUUIDString
         self.isPrimary = isPrimary
-        self.store = store
+        // Résolu ICI (init MainActor) et non en argument par défaut, qui
+        // s'évalue en contexte nonisolated → warning d'isolation (erreur Swift 6).
+        self.store = store ?? .shared
     }
 
     // MARK: - Cartes interactives

@@ -1,7 +1,7 @@
 # CLAUDE.md — instructions projet Atoll
 
 > 📌 **REPRISE DE DEV : lire `docs/HANDOFF.md` en premier** — état exact, méthode de
-> travail, et TOUS les pièges appris à la dure. (v0.4.4 publiée ; chat/voix retirés.)
+> travail, et TOUS les pièges appris à la dure. (v0.10.0 publiée : Liquid Glass + hygiène.)
 
 Atoll est une app macOS native (Swift/SwiftUI) : une « Dynamic Island » autour du notch,
 esthétique ASCII, pour suivre et piloter les sessions Claude Code. Gratuit, open source,
@@ -26,6 +26,9 @@ Pièges de build appris à la dure :
 - **Lancer une copie** (~/Applications) : lancer le .app du dossier de build lui colle
   `com.apple.provenance` (ineffaçable) et casse le CodeSign du build suivant.
 - `~/.local/bin/xattr` est un shim Blender **cassé** — toujours `/usr/bin/xattr`.
+- **Metal Toolchain (Xcode 26)** : composant TÉLÉCHARGEABLE à part
+  (`xcodebuild -downloadComponent MetalToolchain`, ~700 Mo) — requis pour compiler
+  `App/ExpansionRipple.metal` (sinon `CompileMetalFile` échoue « missing Metal Toolchain »).
 - Debug : `/usr/bin/log stream --predicate 'subsystem == "dev.mehdiguiard.atoll"' --level debug`
   (les niveaux info/debug ne sont pas persistés — `log show` ne les voit pas) ; état des
   sessions dans `~/Library/Application Support/Atoll/state.json`.
@@ -101,6 +104,41 @@ Pièges de build appris à la dure :
 - ✅ Phase 9 — « Cockpit ambiant » (v0.9.0) : lancer une tâche en arrière-plan
   (`claude --bg`) depuis le notch (fenêtre dédiée), arrêter une session
   (`claude stop`, avec confirmation). Milestone C de la feuille de route.
+- ✅ Phase 10 — « Verre & ondulation » (v0.10.0) : fond Liquid Glass (API PUBLIQUE,
+  macOS 26) sur le panneau étendu, transparence réglable, onde d'expansion + hygiène.
+
+**Phase 10 — « Verre & ondulation » (v0.10.0, 2026-07-25)** — polish visuel + hygiène :
+- LIQUID GLASS (choix « sur rails supportés ») : le panneau étendu utilise l'**API
+  PUBLIQUE** `.glassEffect(.regular, in:)` gardée `if #available(macOS 26.0, *)`, repli
+  `shape.fill(colors.bg)` sur macOS 14/15. On n'a PAS copié le hack d'AgentGlance
+  (CABackdropLayer + filtre PRIVÉ `glassBackground` + CASDFLayer) : API privée qui
+  casserait à une MAJ macOS, contraire au principe directeur. `App/IslandVisuals.swift` :
+  `IslandBackground` (compact/encoche = noir opaque, JAMAIS de verre ; étendu = verre
+  `.regular` + SCRIM `colors.bg.opacity(1 − transparence)` PAR-DESSUS → contraste ASCII
+  ET vraie translucidité pilotable). PIÈGE VÉCU : le teint `Glass.tint` SEUL était
+  imperceptible sur fond sombre (le curseur « semblait mort ») → c'est le scrim, blend
+  alpha direct, qui donne l'effet net. Réglage « Transparence du verre » (0–100 %, défaut
+  50 %, `@AppStorage glassTransparency`) dans Réglages › Général, gardé macOS 26.
+- ONDE d'expansion : shader Metal `App/ExpansionRipple.metal` (exemple officiel Apple,
+  `[[stitchable]]` + `SwiftUI::Layer`) via `layerEffect`/`keyframeAnimator`/`ShaderLibrary.default`
+  (API PUBLIQUE, macOS 14+), appliqué au CONTENU (pas au verre → évite le compositing),
+  rejoué → étendu (`trigger > 0` : jamais au 1er rendu), respecte Reduce Motion. Constantes
+  `nonisolated` (lues dans la closure Sendable de layerEffect).
+- HYGIÈNE (audit multi-agents + 2 revues adversariales) : 3 warnings d'isolation MainActor
+  corrigés (constantes shader / `NotchViewModel.store` résolu DANS l'init / `Retrospective
+  Runner.stdoutCapBytes` → `nonisolated`) ; 9 symboles morts retirés (`terminalName`,
+  `HookInstaller.backupExists`, `TerminalScripts.tmuxSelect`/`tmuxListPanes`,
+  `TerminalAnchor.tmuxPane`/`itermSessionID`, `BridgePaths.installedSkillsManifestURL`
+  [doublon mort : `LearnedSkillStore.manifestURL` reste l'autorité injectable],
+  `HookSettingsEditor.managedMarker` [distinct de `SkillSlug.managedPrefix`, gardé],
+  `AutonomyLevel.isAutonomous`). GARDÉS car échafaudage assumé : `NotesCuration`
+  (Milestone B), `MockData`/helpers testés, champs de hook parsés défensivement.
+- CONTEXTE : né de l'analyse du dépôt jumeau **AgentGlance** (github.com/ixjosemi/AgentGlance,
+  MIT, multi-provider Codex/OpenCode/Pi/Convoy, découverte par SCAN DE PROCESSUS — PAS
+  `agents --json`, donc VULNÉRABLE au daemon qu'Atoll a réglé). Leur verre = API PRIVÉE
+  (CAFilter `glassBackground`). Retenu par Mehdi : l'onde (API publique) ; verre en API
+  publique, pas leur hack. Reste en réserve : jump-back Ghostty/tmux, multi-provider.
+- Debug : `notifyutil -p dev.mehdiguiard.atoll.debug.expand` (le verre + l'onde jouent).
 
 **Phase 9 — « Cockpit ambiant » (v0.9.0, 2026-07-24)** — piloter la flotte depuis
 le notch (lancement sur demande EXPLICITE, pas d'objectif auto-généré) :

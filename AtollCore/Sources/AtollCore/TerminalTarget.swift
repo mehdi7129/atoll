@@ -20,9 +20,7 @@ public struct TerminalAnchor: Equatable, Sendable {
         self.env = env
     }
 
-    public var itermSessionID: String? { env["ITERM_SESSION_ID"] }
     public var tmux: String? { env["TMUX"] }
-    public var tmuxPane: String? { env["TMUX_PANE"] }
 
     /// La session tourne-t-elle sous tmux ? (le focus passe alors par le
     /// terminal hôte + une sélection de pane).

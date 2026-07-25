@@ -13,10 +13,6 @@ enum HookInstaller {
         HookSettingsEditor.isInstalled(in: try? Data(contentsOf: BridgePaths.claudeSettingsURL))
     }
 
-    static var backupExists: Bool {
-        FileManager.default.fileExists(atPath: BridgePaths.settingsBackupURL.path)
-    }
-
     enum InstallerError: LocalizedError {
         case helperMissing
         case helperFailed(String)

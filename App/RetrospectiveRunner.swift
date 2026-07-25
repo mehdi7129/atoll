@@ -36,7 +36,8 @@ final class RetrospectiveRunner {
 
     private static let startDelaySeconds: TimeInterval = 15 // fenêtre résurrection 8 s + dernière statusline
     private static let timeoutSeconds: TimeInterval = 600
-    private static let stdoutCapBytes = 4 * 1024 * 1024
+    // `nonisolated` : lue dans un Task.detached (contexte nonisolated) plus bas.
+    nonisolated private static let stdoutCapBytes = 4 * 1024 * 1024
 
     // MARK: - Entrées (branchées par l'AppDelegate)
 

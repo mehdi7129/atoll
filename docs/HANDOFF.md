@@ -2,18 +2,18 @@
 
 > Document de continuité pour reprendre le dev après un compactage de conversation.
 > **À lire en premier** avec `CLAUDE.md` (règles) et `PLAN.md` (plan produit).
-> Dernière mise à jour : **2026-07-24**, app **v0.9.1** (cockpit ambiant + regroupement
-> des sessions par projet).
+> Dernière mise à jour : **2026-07-25**, app **v0.10.0** (Liquid Glass + transparence
+> réglable + ondulation + passe d'hygiène).
 
 ---
 
 ## 0. TL;DR — REPRISE APRÈS COMPACTAGE (lire ceci d'abord)
 
 Atoll est une « Dynamic Island » ASCII pour Claude Code sur macOS (Swift/SwiftUI, GPL-3.0,
-repo PUBLIC `github.com/mehdi7129/atoll`). **Phases 1 à 9 + clarté des sessions livrées et
-publiées** (v0.9.1, GitHub Releases, DMG notarisé + appcast Sparkle). L'app tourne, ~291
-tests AtollCore verts, `main` synchronisé. Publier = `Scripts/release.sh` puis
-`gh release create` + `git push` (voir §1).
+repo PUBLIC `github.com/mehdi7129/atoll`). **Phases 1 à 10 livrées et publiées** (v0.10.0,
+GitHub Releases, DMG notarisé + appcast Sparkle). L'app tourne, 291 tests AtollCore verts,
+`main` synchronisé. Publier = `Scripts/release.sh` puis `gh release create` + `git push`
+(voir §1).
 
 **Feuille de route « Atoll 2 »** (`~/.claude/plans/indexed-snacking-dahl.md`, validée par
 Mehdi) — la boussole du moment. Séquence choisie : A robustesse ✅ · B mémoire approfondie
@@ -35,6 +35,13 @@ EXPLICITE (jamais d'objectif auto) ; perso d'abord.
   (repli par défaut, flèche pour déplier). Règle la confusion « 3 sessions pour 2 »
   (la 3e = la session de dev imbriquée dans le même projet). Code :
   `App/ExpandedView.swift` (`projectGroups`, `folderHeader`, enum `ProjectRoot`).
+- **Phase 10 « Verre & ondulation » (v0.10.0)** : fond **Liquid Glass** (API PUBLIQUE
+  `.glassEffect`, macOS 26 + repli macOS 14/15) sur le panneau étendu, **transparence
+  réglable** (Réglages › Général), onde d'expansion (shader Metal `layerEffect`, macOS 14+,
+  respecte Reduce Motion) — `App/IslandVisuals.swift` + `App/ExpansionRipple.metal`. + passe
+  d'HYGIÈNE (3 warnings d'isolation, 9 symboles morts). Né de l'analyse du dépôt jumeau
+  **AgentGlance** (verre en API PUBLIQUE, PAS leur hack d'API privée CAFilter). Voir
+  CLAUDE.md « Phase 10 ». PIÈGE BUILD : Metal Toolchain à télécharger sous Xcode 26.
 
 **PROCHAINE ÉTAPE (quand Mehdi le dira) : Milestone B — Mémoire approfondie.**
 - Brancher la **curation périodique des notes** : `NotesCuration` (planner + garde-fous

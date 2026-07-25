@@ -63,14 +63,4 @@ public enum TerminalScripts {
         """
     }
 
-    /// tmux : commandes pour sélectionner la fenêtre + le pane hébergeant le tty.
-    /// (Le focus du terminal HÔTE est fait séparément par son propre adaptateur.)
-    public static func tmuxSelect(pane: String) -> [[String]] {
-        [
-            ["select-pane", "-t", pane],
-        ]
-    }
-
-    /// tmux : retrouve le pane par tty (quand TMUX_PANE n'est pas fiable).
-    public static let tmuxListPanes = ["list-panes", "-a", "-F", "#{pane_id} #{pane_tty} #{session_name}:#{window_index}"]
 }

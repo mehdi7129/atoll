@@ -28,8 +28,9 @@ y compris pour les sessions lancées depuis le terminal de Cursor.
 | 7c · Curation (revue des skills, stats d'usage, hygiène) | ✅ |
 | 8 · Sur rails supportés (`claude agents --json` = autorité de découverte) | ✅ |
 | 9 · Cockpit ambiant (lancer une tâche en arrière-plan depuis le notch) | ✅ |
+| 10 · Verre & ondulation (Liquid Glass macOS 26 · transparence réglable) | ✅ |
 
-**Version courante : v0.9.0** (voir les [Releases](https://github.com/mehdi7129/atoll/releases)).
+**Version courante : v0.10.0** (voir les [Releases](https://github.com/mehdi7129/atoll/releases)).
 
 Voir le [plan détaillé](PLAN.md), la [recherche](docs/research/) et [CLAUDE.md](CLAUDE.md)
 pour contribuer.
@@ -68,6 +69,10 @@ pour contribuer.
 - **Personnalisable** : thème clair/sombre/auto, 4 palettes, et **taille de la barre
   compacte réglable par écran** (petit / moyen / large — ex. large sur un moniteur externe,
   moyen sur le MacBook).
+- **Apparence en verre** (macOS 26) : le panneau étendu se pose sur un vrai fond
+  **Liquid Glass** (API publique — repli sobre sur macOS 14/15), avec un curseur de
+  **transparence réglable** et une onde discrète à l'ouverture (respecte « Réduire les
+  animations »). Le contenu ASCII reste net par-dessus.
 
 ## Principes
 

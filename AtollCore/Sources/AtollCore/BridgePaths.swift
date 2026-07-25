@@ -115,10 +115,4 @@ public enum BridgePaths {
         homeDirectory.appendingPathComponent(".claude/skills", isDirectory: true)
     }
 
-    /// Manifeste des skills appris qu'Atoll a activés dans ~/.claude/skills
-    /// (slug, hash SHA256, dates). Source de vérité de la désinstallation :
-    /// manifeste illisible → FAIL-CLOSED, aucune suppression.
-    public static var installedSkillsManifestURL: URL {
-        learningDirectory.appendingPathComponent("installed.json")
-    }
 }

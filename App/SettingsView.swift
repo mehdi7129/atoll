@@ -42,6 +42,8 @@ private struct GeneralPane: View {
     @AppStorage(ThemeManager.themeKey) private var themePreference = ThemePreference.system.rawValue
     @AppStorage("paletteID") private var paletteID = Palette.monoOrange.id
     @AppStorage("hoverDelay") private var hoverDelay = 0.15
+    @AppStorage(VisualEffects.enabledKey) private var visualEffects = true
+    @AppStorage(VisualEffects.glassTransparencyKey) private var glassTransparency = VisualEffects.defaultGlassTransparency
     @State private var launchAtLogin = false
     /// Recalculé à l'apparition (branchement/débranchement d'écran).
     @State private var screens: [ScreenChoice] = []
@@ -85,6 +87,28 @@ private struct GeneralPane: View {
                         Text(palette.displayName).tag(palette.id)
                     }
                 }
+
+                Toggle("Effets visuels", isOn: $visualEffects)
+                if #available(macOS 26.0, *) {
+                    VStack(alignment: .leading) {
+                        Slider(value: $glassTransparency, in: 0...1, step: 0.05) {
+                            Text("Transparence du verre")
+                        }
+                        Text("\(Int(glassTransparency * 100)) %")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .disabled(!visualEffects)
+                }
+                Text("""
+                Fond en verre translucide autour du notch (Liquid Glass, macOS 26 ; \
+                aplat sobre en deçà) et une onde discrète à l'ouverture de l'îlot. \
+                Plus la transparence est haute, plus le verre laisse passer le fond \
+                (au prix du contraste). Désactivé : fond opaque, aucune animation. \
+                L'onde respecte toujours « Réduire les animations » du système.
+                """)
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
 
             Section("Comportement") {

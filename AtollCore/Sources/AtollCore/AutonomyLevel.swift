@@ -33,7 +33,4 @@ public enum AutonomyLevel: String, CaseIterable, Sendable {
             return "Aucune protection : tout est approuvé et vos règles deny sont suspendues. À vos risques et périls."
         }
     }
-
-    /// Ce niveau auto-approuve-t-il au moins quelque chose ? (badge sur l'îlot).
-    public var isAutonomous: Bool { self != .manual }
 }
