@@ -210,7 +210,7 @@ final class RetrospectiveRunner {
         // GUI — piège vécu) ; `claude` est résolu par le PATH du shell.
         // L'unset APRÈS le sourcing du profil garantit l'auth par souscription.
         let shellCommand = "unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN; exec claude "
-            + arguments.map(Self.shellQuote).joined(separator: " ")
+            + arguments.map(FleetLaunch.shellQuote).joined(separator: " ")
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/zsh")
@@ -250,22 +250,30 @@ final class RetrospectiveRunner {
 
         // Lectures BLOQUANTES sur des tâches détachées (readabilityHandler est
         // inopérant en LSUIElement — piège vécu) ; livraison au MainActor.
-        let output: Data = await Task.detached(priority: .utility) {
+        // Les DEUX pipes sont drainés EN PARALLÈLE (revue) : en série, un
+        // stderr saturé (~64 Ko) bloque `claude` dans son `write`, stdout ne
+        // se ferme jamais et il faut attendre le timeout. Au-delà du cap on
+        // continue de lire en jetant : on ne cesse jamais de vider le tuyau.
+        async let outputTask: Data = Task.detached(priority: .utility) {
             var collected = Data()
+            var overflowed = false
             let handle = stdout.fileHandleForReading
             while let chunk = try? handle.read(upToCount: 1 << 16), !chunk.isEmpty {
+                if overflowed { continue }
                 collected.append(chunk)
-                if collected.count > Self.stdoutCapBytes { break } // borné
+                if collected.count > Self.stdoutCapBytes { overflowed = true } // borné
             }
             return collected
         }.value
-        let errorTail: String = await Task.detached(priority: .utility) {
+        async let errorTask: String = Task.detached(priority: .utility) {
             let data = (try? stderr.fileHandleForReading.readToEnd()) ?? Data()
             let text = String(decoding: data.suffix(2000), as: UTF8.self)
             return text.trimmingCharacters(in: .whitespacesAndNewlines)
         }.value
+        let output = await outputTask
+        let errorTail = await errorTask
 
-        process.waitUntilExit()
+        await Task.detached(priority: .utility) { process.waitUntilExit() }.value
         timeoutTask?.cancel()
         timeoutTask = nil
         SessionStore.shared.unregisterInternalPid(pid)
@@ -412,9 +420,5 @@ final class RetrospectiveRunner {
             else { return stem }
             return String(stem.dropFirst(11))
         }
-    }
-
-    private static func shellQuote(_ argument: String) -> String {
-        "'" + argument.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 }

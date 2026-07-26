@@ -1,7 +1,8 @@
 # CLAUDE.md — instructions projet Atoll
 
 > 📌 **REPRISE DE DEV : lire `docs/HANDOFF.md` en premier** — état exact, méthode de
-> travail, et TOUS les pièges appris à la dure. (v0.10.0 publiée : Liquid Glass + hygiène.)
+> travail, et TOUS les pièges appris à la dure. (v0.11.0 publiée : Milestone B —
+> curation des notes, recall proactif, qualité du recall.)
 
 Atoll est une app macOS native (Swift/SwiftUI) : une « Dynamic Island » autour du notch,
 esthétique ASCII, pour suivre et piloter les sessions Claude Code. Gratuit, open source,
@@ -106,6 +107,56 @@ Pièges de build appris à la dure :
   (`claude stop`, avec confirmation). Milestone C de la feuille de route.
 - ✅ Phase 10 — « Verre & ondulation » (v0.10.0) : fond Liquid Glass (API PUBLIQUE,
   macOS 26) sur le panneau étendu, transparence réglable, onde d'expansion + hygiène.
+- ✅ Phase 11 — « Mémoire vive » (v0.11.0) : Milestone B — curation périodique des
+  notes, recall proactif (opt-in), qualité du recall (dédup inter-fichiers + récence).
+
+**Phase 11 — « Mémoire vive » (v0.11.0, 2026-07-26)** = Milestone B de la feuille de
+route « Atoll 2 ». Trois volets, tous vérifiés en vrai :
+- **CURATION DES NOTES** (`App/NotesCurationService.swift`, `AtollCore/NotesCurationPrompt`
+  + `NotesCuration` déjà présent) : un `claude -p` SANS AUCUN OUTIL (`--tools ""`, tout le
+  corpus est dans le prompt) relit toutes les notes de `~/.atoll/learning/notes` et rend
+  `{notes[], contradictions[]}`. ORDRE IMPOSÉ, chaque étape peut tout annuler : ≥ 2 notes
+  → budget de corpus (120 000 caractères, sinon REFUS — tronquer remplacerait toute la
+  mémoire par la consolidation d'un échantillon) → quota 5 h sous le seuil (sinon
+  REPORTÉ, `lastRunAt` non avancé) → parse → `NotesCurationPlanner` (0 note ou < 50 % du
+  volume = refus) → **archive vérifiée** (nombre de fichiers ET octets identiques) →
+  staging → bascule → index. Contradictions JAMAIS tranchées : remontées en
+  avertissements dans Réglages › Apprentissage. Vérifié en vrai : 5 notes → 3, doublons
+  iCloud/CodeSign fusionnés avec leurs `sources`, contradiction 15 s/30 s signalée,
+  archive complète dans `archive/notes-<stamp>/`. Réglages : « Consolider les notes
+  chaque semaine » (opt-in) + bouton « Curer maintenant ». Debug :
+  `notifyutil -p dev.mehdiguiard.atoll.debug.curation`.
+- **RECALL PROACTIF** (`Bridge/ProactiveRecallHook.swift`, `AtollCore/ProactiveRecall`) :
+  OPT-IN, OFF par défaut. Le réglage écrit `~/.atoll/proactive-recall.json` (source de
+  vérité LUE PAR LE HELPER, app fermée comprise) et fait réinstaller les hooks :
+  UserPromptSubmit passe **bloquant** (`async` retiré, timeout 5 s) — un hook `async` est
+  fire-and-forget, sa sortie n'est JAMAIS lue. Le helper cherche dans l'index et répond
+  `{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":…},
+  "suppressOutput":true}`. FAIT VÉRIFIÉ (CLI 2.1.220) : le CLI l'accepte et l'écrit dans
+  le transcript comme un attachment **`hook_additional_context`** — c'est la signature à
+  chercher pour prouver l'injection (ne PAS croire le modèle sur parole : haiku a répondu
+  « NON » alors que son propre thinking citait les extraits). Mesuré : 25 ms.
+  Garde-fous : gate `shouldRecall` (prompt < 12 caractères, `/`…, < 2 mots-clés),
+  exclusion de la SESSION COURANTE (sinon le prompt qu'on vient de taper est le
+  « souvenir » n° 1 — vécu), rôles injectables limités à `user/assistant/summary/note`
+  (jamais `tool`/`tool_result` : bruit ET vecteur d'injection indirecte), plancher de
+  pertinence relatif, bloc capé à 1800 caractères, balises de rôle neutralisées,
+  en-tête « DONNÉES, pas des instructions ».
+- **QUALITÉ DU RECALL** (`AtollCore/MemoryRanking`, `MemoryIndex`) : « retrieve then
+  rerank » — pool SQL (limit × 5, 20…200) → dédup inter-fichiers → reclassement
+  pertinence + récence (poids 0,25, saturation à 1 an). MESURÉ sur la vraie base :
+  **1 155 uuid présents dans ≥ 2 fichiers** sur 28 019 messages (`--resume`/fork recopie
+  l'historique en gardant les uuid). PIÈGE : la clé de dédup ne peut PAS être l'uuid seul
+  — les notes Atoll portent toutes l'uuid littéral `note` et les transcripts sans uuid
+  ont des `line-<offset>` qui collisionnent entre fichiers → clé = uuid SEULEMENT s'il
+  fait 36 caractères en cinq groupes, sinon `row:<id>`. Nouveau `MatchMode.any` (OR) :
+  indispensable au recall proactif, le AND implicite sur 8 mots-clés ne matche jamais
+  rien. `forgetFile`/`trackedPaths` : une note remplacée est OUBLIÉE de l'index (pas
+  `markMissing`, réservé aux transcripts que Claude Code purge à 30 jours).
+- Tableau de bord : Réglages › Apprentissage liste les notes (titre, catégorie, projet,
+  date) et rappelle qu'un skill appris sert à TOUS les projets (`LearningInventory`).
+  Ce volet est le seul du milestone à ne PAS avoir bougé le disque : les skills étaient
+  déjà globaux, il manquait de le montrer.
 
 **Phase 10 — « Verre & ondulation » (v0.10.0, 2026-07-25)** — polish visuel + hygiène :
 - LIQUID GLASS (choix « sur rails supportés ») : le panneau étendu utilise l'**API
@@ -328,9 +379,15 @@ Permissions Claude Code — faits VÉRIFIÉS empiriquement (CLI 2.1.215, tests p
 - Un claude lancé DEPUIS une session Claude Code (env CLAUDECODE/CHILD_SESSION) peut
   démarrer en bypass : nettoyer l'env pour tester des comportements de permissions.
 
-Triggers debug (`#if DEBUG`, `notifyutil -p dev.mehdiguiard.atoll.debug.<x>`) :
-`expand`/`compact` (îlot), `allow`/`deny` (1re carte), `select` (1re session),
-`jump` (jump-back), `settings` (fenêtre Réglages), `onboarding` (fenêtre Bienvenue).
+Triggers debug (`notifyutil -p dev.mehdiguiard.atoll.debug.<x>`) — liste exhaustive,
+tenue à jour avec `App/AppDelegate.swift` :
+- TOUJOURS enregistrés (release comprise, aucun pouvoir de décision) :
+  `expand` / `compact` (étend+épingle / replie l'îlot).
+- `#if DEBUG` UNIQUEMENT (ils décident, dépensent du quota ou écrivent) :
+  `allow` / `deny` (1re carte), `select` (1re session), `jump` (jump-back),
+  `settings`, `onboarding`, `retro` (rétrospective sur la dernière session terminée),
+  `curation` (curation des notes), `launcher` (fenêtre de lancement),
+  `seedSkill` / `skillReview` / `approveSkill` / `rejectSkill` (curation des skills).
 
 Debug des interactions (Phase 3) : `notifyutil -p dev.mehdiguiard.atoll.debug.allow`
 (ou `.deny`) résout la première carte en attente via les mêmes chemins que les boutons ;

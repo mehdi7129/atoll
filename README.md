@@ -29,8 +29,9 @@ y compris pour les sessions lancées depuis le terminal de Cursor.
 | 8 · Sur rails supportés (`claude agents --json` = autorité de découverte) | ✅ |
 | 9 · Cockpit ambiant (lancer une tâche en arrière-plan depuis le notch) | ✅ |
 | 10 · Verre & ondulation (Liquid Glass macOS 26 · transparence réglable) | ✅ |
+| 11 · Mémoire vive (curation des notes · souvenirs proposés d'office · recall trié) | ✅ |
 
-**Version courante : v0.10.0** (voir les [Releases](https://github.com/mehdi7129/atoll/releases)).
+**Version courante : v0.11.0** (voir les [Releases](https://github.com/mehdi7129/atoll/releases)).
 
 Voir le [plan détaillé](PLAN.md), la [recherche](docs/research/) et [CLAUDE.md](CLAUDE.md)
 pour contribuer.
@@ -48,6 +49,21 @@ pour contribuer.
   (SQLite FTS5, ~/.atoll/memory.db — rien ne quitte la machine). Vos sessions
   Claude interrogent ce passé via le skill `atoll-recall` : « retrouve quand on a
   parlé de… » cite dates, projets et sessions à reprendre (`claude --resume`).
+  Les résultats sont dédoublonnés entre fichiers (un `--resume` recopie
+  l'historique — mesuré : 1 155 messages en double sur 28 000) et classés
+  pertinence **+ récence**.
+- **Souvenirs proposés d'office (opt-in)** : sans attendre que Claude pense au
+  skill, Atoll joint à chaque message les extraits de vos sessions passées liés à
+  ce que vous écrivez (3 par défaut, limités au projet courant, marqués comme
+  DONNÉES — jamais des instructions, et jamais des sorties d'outils). Recherche
+  100 % locale en quelques millisecondes ; fail-open : à la moindre anicroche,
+  rien n'est injecté et le CLI continue.
+- **Curation des notes (opt-in)** : les notes accumulées par les rétrospectives
+  finissent par se répéter et se contredire. Une analyse en LECTURE SEULE (sans
+  aucun outil) les relit toutes et propose une version fusionnée ; les
+  contradictions sont SIGNALÉES, jamais tranchées. L'ancienne version part dans
+  `~/.atoll/learning/archive` — **vérifiée avant tout remplacement** —, et un
+  résultat vide ou trop rétréci est refusé.
 - **Rétrospective (opt-in, expérimental)** : après chaque session substantielle —
   et seulement si votre fenêtre de quota 5 h a de la marge — une analyse en
   LECTURE SEULE extrait les leçons durables : notes mémoire (indexées, citées par
@@ -59,7 +75,10 @@ pour contribuer.
   ⌘⌫ rejeter). Un skill approuvé devient un vrai skill Claude Code
   (`~/.claude/skills/atoll-<nom>/`) ; l'onglet Apprentissage montre l'usage de
   chacun et suggère d'archiver les inutilisés. Désinstallation chirurgicale
-  (manifeste + empreinte SHA-256) : vos 18 skills tiers ne sont jamais touchés.
+  (manifeste + empreinte SHA-256) : vos skills tiers ne sont jamais touchés.
+  Un skill appris vit dans `~/.claude/skills` : il sert donc à **tous vos
+  projets**, pas seulement à celui qui l'a fait naître. L'onglet Apprentissage
+  liste aussi les notes mémoire et leur projet d'origine.
 - **Retour au terminal** : un clic ouvre la fenêtre de la session (Cursor/VS Code direct,
   Terminal.app / iTerm2 via automatisation).
 - **Cockpit ambiant** : lancez une tâche en arrière-plan (`claude --bg`) depuis le notch
@@ -100,8 +119,12 @@ fonctionne exactement comme avant, et la désinstallation restitue votre
 
 ## Builder
 
-Prérequis : Xcode 16+, [XcodeGen](https://github.com/yonaskolb/XcodeGen)
-(`brew install xcodegen`).
+Prérequis : **Xcode 26** (SDK macOS 26 — le fond Liquid Glass utilise
+`.glassEffect`, gardé `if #available`, mais il faut le SDK pour compiler) +
+la **Metal Toolchain** (`xcodebuild -downloadComponent MetalToolchain`, composant
+téléchargeable à part, requis par le shader de l'onde) et
+[XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`).
+L'app tourne, elle, à partir de macOS 14.
 
 ```sh
 xcodegen generate
@@ -129,8 +152,12 @@ cd AtollCore && swift test
 ## Structure
 
 ```
-App/         cible app (fenêtre notch, thème, vues SwiftUI)
-AtollCore/   package SPM : logique pure testée (palettes, ASCII, géométrie, modèles)
+App/         cible app (fenêtre notch, thème, vues SwiftUI, services)
+AtollCore/   package SPM : logique pure testée (palettes, ASCII, géométrie, modèles,
+             index mémoire, prompts, garde-fous) — 370 tests
+Bridge/      helper CLI `atoll-bridge` embarqué dans le bundle : appelé par les
+             hooks Claude Code, parle à l'app par socket Unix, fail-open absolu
+Shared/      code partagé app ↔ helper (inspection de processus)
 docs/        recherche et documents de conception
 project.yml  définition XcodeGen (Atoll.xcodeproj est généré, non versionné)
 ```

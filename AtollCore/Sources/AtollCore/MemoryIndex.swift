@@ -61,10 +61,16 @@ public final class MemoryIndex {
         public let snippet: String
         /// Score bm25 brut : plus NÉGATIF = plus pertinent (c'est l'ordre de tri).
         public let rank: Double
+        /// Identité du message À TRAVERS les fichiers, pour le dédoublonnage
+        /// (cf. `MemoryRanking.deduplicated`) : `--resume`/fork recopient un
+        /// message dans un nouveau transcript en gardant son uuid. Calculée en
+        /// SQL (`Self.dedupKeySQL`) ; vide sur un Hit construit à la main —
+        /// une clé vide n'est jamais fusionnée.
+        public let dedupKey: String
 
         public init(sessionID: String, projectPath: String?, projectDir: String,
                     title: String?, role: String, timestamp: Date?,
-                    snippet: String, rank: Double) {
+                    snippet: String, rank: Double, dedupKey: String = "") {
             self.sessionID = sessionID
             self.projectPath = projectPath
             self.projectDir = projectDir
@@ -73,6 +79,7 @@ public final class MemoryIndex {
             self.timestamp = timestamp
             self.snippet = snippet
             self.rank = rank
+            self.dedupKey = dedupKey
         }
     }
 
@@ -200,6 +207,49 @@ public final class MemoryIndex {
         try run("UPDATE files SET missing = 1 WHERE path = ?1", binds: [.text(path)])
     }
 
+    /// Chemins actuellement suivis commençant par `prefix` (motif LIKE dont
+    /// les jokers sont neutralisés, comme `search`). Sert au ménage des
+    /// artefacts dont Atoll est propriétaire — typiquement : quelles notes
+    /// l'index connaît-il encore alors qu'elles ont disparu du disque ?
+    public func trackedPaths(prefix: String) throws -> [String] {
+        let stmt = try prepare("SELECT path FROM files WHERE path LIKE ?1 ESCAPE '\\'")
+        defer { sqlite3_finalize(stmt) }
+        try apply([.text(Self.escapedLikePrefix(prefix) + "%")], to: stmt)
+        var paths: [String] = []
+        while try step(stmt) {
+            if let path = columnText(stmt, 0) { paths.append(path) }
+        }
+        return paths
+    }
+
+    /// OUBLI EXPLICITE d'un fichier : ses messages sont supprimés (le trigger
+    /// `messages_ad` les désindexe du FTS) et son suivi disparaît de `files`.
+    ///
+    /// Réservé aux fichiers dont Atoll est PROPRIÉTAIRE et qui n'existent
+    /// plus : les notes mémoire remplacées par une curation. Un transcript de
+    /// `~/.claude/projects` disparu se marque `missing` et GARDE ses messages
+    /// (le ménage 30 jours de Claude Code ne doit pas amnésier Atoll) — ne pas
+    /// confondre les deux.
+    ///
+    /// Les deux suppressions sont dans UNE transaction : jamais de fichier
+    /// oublié dont les messages survivraient (ils deviendraient inatteignables
+    /// et impossibles à purger, `file_id` ne pointant plus sur rien).
+    /// Chemin inconnu → no-op silencieux.
+    public func forgetFile(path: String) throws {
+        try withTransaction {
+            guard let existing = try selectFile(path: path) else { return }
+            try run("DELETE FROM messages WHERE file_id = ?1", binds: [.int(existing.id)])
+            try run("DELETE FROM files WHERE id = ?1", binds: [.int(existing.id)])
+            // Sessions devenues vides : sans ce ménage, chaque curation
+            // laisserait une pseudo-session `atoll-note-<slug>` fantôme qui
+            // gonfle le compteur des Réglages (revue).
+            try run("""
+                DELETE FROM sessions
+                WHERE id NOT IN (SELECT DISTINCT session_id FROM messages)
+                """)
+        }
+    }
+
     // MARK: - Ingestion
 
     /// Ingère un lot de lignes lues entre `fileState.offset` et `newOffset`,
@@ -277,23 +327,73 @@ public final class MemoryIndex {
     /// `sanitizedMatchQuery` — l'utilisateur ne parle jamais directement à
     /// FTS5 ; une requête vide après sanitisation rend `[]` sans exécuter de
     /// MATCH. `projectPrefix` restreint aux sessions dont `project_path`
-    /// commence par ce préfixe. Tri par pertinence bm25 (négatif croissant).
-    public func search(rawQuery: String, limit: Int, projectPrefix: String?) throws -> [Hit] {
-        let match = Self.sanitizedMatchQuery(rawQuery)
+    /// commence par ce préfixe.
+    ///
+    /// Deux étapes, façon « retrieve then rerank » (Milestone B) :
+    /// 1. SQL : les `poolSize` meilleurs par pertinence bm25 pure — un POOL
+    ///    plus large que `limit`, sinon les doublons inter-fichiers mangeraient
+    ///    des places du top N et la récence n'aurait rien à départager ;
+    /// 2. Swift (pur, testé) : `MemoryRanking.deduplicated` (un seul exemplaire
+    ///    d'un message recopié par `--resume`/fork) puis, si `now` est fourni,
+    ///    `MemoryRanking.reranked` (pertinence + récence). `now == nil` garde
+    ///    l'ordre bm25 historique — la dédup, elle, s'applique TOUJOURS.
+    ///
+    /// `excludingSessionID` retire une session entière des résultats. Cas
+    /// réel et non théorique : le recall PROACTIF cherche à partir du prompt
+    /// que l'utilisateur vient d'envoyer — or ce prompt est déjà écrit dans le
+    /// transcript de la session courante et indexé quelques secondes plus
+    /// tard. Sans exclusion, le premier « souvenir » proposé est le message
+    /// qu'on vient de taper (vérifié en vrai, 2026-07-26).
+    ///
+    /// `roles` restreint aux rôles donnés (nil = tous). Le recall PROACTIF s'en
+    /// sert pour n'injecter que de l'intention et des conclusions
+    /// (`user`/`assistant`/`summary`/`note`) : les rôles `tool`/`tool_result`
+    /// contiennent des sorties de commandes, de fichiers et de pages web —
+    /// bruyantes, et surtout le vecteur d'injection indirecte le plus probable
+    /// dans un contexte réinjecté d'office.
+    public func search(rawQuery: String, limit: Int, projectPrefix: String?,
+                       now: Date? = nil, excludingSessionID: String? = nil,
+                       mode: MatchMode = .all,
+                       roles: Set<TranscriptLine.Role>? = nil) throws -> [Hit] {
+        let match = Self.sanitizedMatchQuery(rawQuery, mode: mode)
         guard !match.isEmpty, limit > 0 else { return [] }
+        // Un filtre de rôles VIDE ne rendrait jamais rien : c'est sûrement une
+        // erreur d'appel, on la traite comme « aucun filtre ».
+        let roleFilter = (roles?.isEmpty == false) ? roles : nil
 
         // Le préfixe devient un motif LIKE : ses jokers (% _) et l'échappement
         // eux-mêmes sont neutralisés, sinon un chemin comme Dynamic_Island
         // matcherait aussi DynamicXIsland (vécu en revue).
-        let prefixPattern = projectPrefix.map { Self.escapedLikePrefix($0) + "%" }
+        //
+        // FRONTIÈRE DE CHEMIN (revue) : le motif porte sur `préfixe + "/"`, et
+        // le projet lui-même est repris par une ÉGALITÉ. Un préfixe nu
+        // ramassait les dossiers frères — `/Users/x/proj` matchait
+        // `/Users/x/proj-client` et `/Users/x/proj_secret` (vérifié en SQL) :
+        // les souvenirs d'un projet fuyaient dans un autre.
+        let normalizedPrefix = projectPrefix.map { prefix -> String in
+            prefix.hasSuffix("/") ? String(prefix.dropLast()) : prefix
+        }
+        let prefixPattern = normalizedPrefix.map { Self.escapedLikePrefix($0 + "/") + "%" }
+        // Pool borné : 5 × la demande (au moins 20, au plus 200) — assez pour
+        // absorber les doublons et donner de la matière au reclassement, assez
+        // petit pour rester une recherche instantanée dans un hook. Le plafond
+        // ne descend JAMAIS sous `limit` (revue) : sinon une demande de 250
+        // rendrait 200 résultats, en silence.
+        let poolSize = min(max(limit * 5, 20), max(200, limit))
 
-        let stmt = try prepare(Self.searchSQL)
+        let stmt = try prepare(Self.searchSQL(roles: roleFilter))
         defer { sqlite3_finalize(stmt) }
-        try apply([.text(match), .optionalText(prefixPattern), .int(Int64(limit))], to: stmt)
+        try apply([
+            .text(match),
+            .optionalText(prefixPattern),
+            .optionalText(excludingSessionID.flatMap { $0.isEmpty ? nil : $0 }),
+            .int(Int64(poolSize)),
+            .optionalText(normalizedPrefix),
+        ], to: stmt)
 
-        var hits: [Hit] = []
+        var pool: [Hit] = []
         while try step(stmt) {
-            hits.append(Hit(
+            pool.append(Hit(
                 sessionID: columnText(stmt, 0) ?? "",
                 projectPath: columnText(stmt, 1),
                 projectDir: columnText(stmt, 2) ?? "",
@@ -301,10 +401,16 @@ public final class MemoryIndex {
                 role: columnText(stmt, 4) ?? "",
                 timestamp: columnEpoch(stmt, 5),
                 snippet: columnText(stmt, 6) ?? "",
-                rank: sqlite3_column_double(stmt, 7)
+                rank: sqlite3_column_double(stmt, 7),
+                dedupKey: columnText(stmt, 8) ?? ""
             ))
         }
-        return hits
+
+        var hits = MemoryRanking.deduplicated(pool)
+        if let now {
+            hits = MemoryRanking.reranked(hits, now: now)
+        }
+        return Array(hits.prefix(limit))
     }
 
     /// Statistiques globales : nombre de sessions, de messages, et taille
@@ -381,6 +487,21 @@ public final class MemoryIndex {
         return stats
     }
 
+    /// Comment combiner les termes d'une requête.
+    ///
+    /// - `.all` : AND implicite de FTS5 — le comportement historique, celui de
+    ///   `atoll-bridge recall` où l'utilisateur choisit ses mots.
+    /// - `.any` : OR — celui du recall PROACTIF, dont les mots-clés sont
+    ///   extraits automatiquement d'une phrase entière. Vérifié en vrai : avec
+    ///   6 à 8 mots-clés tirés d'un prompt, le AND ne trouve JAMAIS rien (il
+    ///   faudrait un message contenant tous les mots). bm25 fait le tri : un
+    ///   message couvrant plusieurs termes rares sort devant un message qui
+    ///   n'en a qu'un, et seuls les 3 premiers sont injectés.
+    public enum MatchMode: Equatable, Sendable {
+        case all
+        case any
+    }
+
     /// Neutralise une requête utilisateur pour FTS5 : chaque token (découpe sur
     /// l'espace) devient une chaîne entre guillemets — les opérateurs FTS5
     /// (`AND OR NOT NEAR ( ) - ^ :`) deviennent des littéraux inertes, et une
@@ -389,8 +510,8 @@ public final class MemoryIndex {
     /// SEULE syntaxe préservée : l'étoile finale (`géom*` → `"géom"*`, requête
     /// par préfixe). Les guillemets internes sont doublés (échappement FTS5),
     /// les tokens vides (ou réduits à des étoiles) sont ignorés ; les tokens
-    /// sont joints par espace, le AND implicite de FTS5.
-    public static func sanitizedMatchQuery(_ raw: String) -> String {
+    /// sont joints par espace (AND implicite) ou par ` OR ` selon `mode`.
+    public static func sanitizedMatchQuery(_ raw: String, mode: MatchMode = .all) -> String {
         var pieces: [String] = []
         for token in raw.split(whereSeparator: { $0.isWhitespace }) {
             var body = token[...]
@@ -403,7 +524,7 @@ public final class MemoryIndex {
             let escaped = body.replacingOccurrences(of: "\"", with: "\"\"")
             pieces.append(isPrefix ? "\"\(escaped)\"*" : "\"\(escaped)\"")
         }
-        return pieces.joined(separator: " ")
+        return pieces.joined(separator: mode == .all ? " " : " OR ")
     }
 
     // MARK: - Accès internes (tests)
@@ -437,13 +558,16 @@ public final class MemoryIndex {
     }
 
     private func configureForWriting() throws {
+        // busy_timeout EN PREMIER (revue) : `journal_mode=WAL` prend un verrou
+        // et rendrait SQLITE_BUSY immédiatement avec le défaut à 0 — l'ordre
+        // inverse annulait l'attente pour le pragma qui en a le plus besoin.
         // WAL : les lecteurs (bridge) ne sont jamais bloqués par l'écrivain.
         // NORMAL suffit : une transaction perdue sur coupure de courant sera
         // ré-ingérée au prochain passage — l'offset n'avance qu'avec ses
         // messages. busy_timeout court : personne ne doit attendre l'index.
+        try exec("PRAGMA busy_timeout=2000")
         try exec("PRAGMA journal_mode=WAL")
         try exec("PRAGMA synchronous=NORMAL")
-        try exec("PRAGMA busy_timeout=2000")
     }
 
     private func migrateIfNeeded() throws {
@@ -668,21 +792,62 @@ public final class MemoryIndex {
             first_ts = MIN(COALESCE(first_ts, excluded.first_ts), COALESCE(excluded.first_ts, first_ts))
         """
 
+    /// Identité d'un message À TRAVERS les fichiers (colonne `dedup_key`).
+    ///
+    /// Un vrai uuid de transcript (36 caractères, cinq groupes) survit à un
+    /// `--resume`/fork : c'est LUI qui identifie le message, quel que soit le
+    /// fichier. Tout le reste retombe sur la ligne elle-même (`row:<id>`,
+    /// jamais fusionné) — deux pièges bien réels :
+    /// - les uuid SYNTHÉTIQUES `line-<offset>` (transcript sans uuid) sont
+    ///   dérivés d'un offset : le même offset dans deux fichiers différents
+    ///   désigne deux messages sans rapport ;
+    /// - les notes d'apprentissage indexées par Atoll portent TOUTES l'uuid
+    ///   littéral `note` (un fichier .md chacune) — les fusionner effacerait
+    ///   toutes les notes sauf une du résultat (piège vu en vrai sur la base).
+    ///
+    /// Le motif est un GLOB de FORME EXACTE (8-4-4-4-12, tirets aux positions
+    /// 9/14/19/24) et non un `LIKE '%-%-%-%-%'` : ce dernier ne vérifiait que
+    /// « au moins quatre tirets quelque part », si bien qu'un identifiant de
+    /// 36 caractères mal placé (`aaaa-bbbb-cccc-dddd-eeeeeeeeeeeeeeee`)
+    /// passait pour un uuid et fusionnait deux messages DIFFÉRENTS — perte
+    /// silencieuse d'un souvenir, démontrée en revue.
+    private static let dedupKeySQL = """
+        CASE WHEN m.uuid GLOB '????????-????-????-????-????????????'
+             THEN m.uuid || ':' || m.block_idx
+             ELSE 'row:' || m.id END
+        """
+
     /// La recherche : FTS5 → messages → sessions, filtre optionnel par préfixe
     /// de project_path, tri bm25 (négatif croissant = pertinence décroissante).
-    private static let searchSQL = """
+    /// La dernière colonne sert au dédoublonnage inter-fichiers côté Swift ;
+    /// le `LIMIT` reçoit la taille du POOL, pas la limite demandée par
+    /// l'appelant (dédup et reclassement se font ensuite).
+    ///
+    /// La clause de rôles est INTERPOLÉE et non liée : ses valeurs viennent des
+    /// `rawValue` d'un enum fermé (`TranscriptLine.Role`), jamais d'une entrée
+    /// externe — aucune injection possible, et un `IN (?)` ne sait de toute
+    /// façon pas prendre une liste en SQLite.
+    private static func searchSQL(roles: Set<TranscriptLine.Role>?) -> String {
+        let roleClause = roles.map { set in
+            let list = set.map { "'\($0.rawValue)'" }.sorted().joined(separator: ",")
+            return "  AND m.role IN (\(list))\n"
+        } ?? ""
+        return """
         SELECT s.session_id, s.project_path, s.project_dir, s.title,
                m.role, m.ts,
                snippet(messages_fts, 0, '«', '»', ' … ', 14),
-               bm25(messages_fts)
+               bm25(messages_fts),
+               \(dedupKeySQL)
         FROM messages_fts
         JOIN messages m ON m.id = messages_fts.rowid
         JOIN sessions s ON s.id = m.session_id
         WHERE messages_fts MATCH ?1
-          AND (?2 IS NULL OR s.project_path LIKE ?2 ESCAPE '\\')
-        ORDER BY bm25(messages_fts)
-        LIMIT ?3
+          AND (?2 IS NULL OR s.project_path LIKE ?2 ESCAPE '\\' OR s.project_path = ?5)
+          AND (?3 IS NULL OR s.session_id <> ?3)
+        \(roleClause)ORDER BY bm25(messages_fts)
+        LIMIT ?4
         """
+    }
 
     /// Échappe un préfixe pour LIKE : `\` `%` `_` deviennent littéraux
     /// (l'appelant ajoute le `%` final, non échappé, lui).

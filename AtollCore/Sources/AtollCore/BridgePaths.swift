@@ -77,6 +77,15 @@ public enum BridgePaths {
         recallSkillDirectory.appendingPathComponent("SKILL.md")
     }
 
+    /// Config du recall proactif (Milestone B) : ÉCRITE par l'app quand
+    /// l'utilisateur bascule le réglage, LUE par le helper à chaque
+    /// UserPromptSubmit et à l'installation des hooks (elle décide si ce hook
+    /// est bloquant). Fichier absent = fonction désactivée — l'opt-in ne
+    /// dépend d'aucun état d'application.
+    public static var proactiveRecallConfigURL: URL {
+        homeDirectory.appendingPathComponent(".atoll/proactive-recall.json")
+    }
+
     // MARK: - Apprentissage (Phase 7b)
 
     /// Racine des artefacts d'apprentissage. Créée à l'ACTIVATION du réglage

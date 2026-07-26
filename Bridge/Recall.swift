@@ -158,8 +158,8 @@ enum RecallCLI {
         return abbreviated(path)
     }
 
-    /// Remplace le préfixe home par `~` (jamais au milieu d'un composant :
-    /// `/Users/mehdiguiard2/…` reste intact).
+    /// Remplace le préfixe home par `~` (jamais au milieu d'un composant : si
+    /// le home est `/Users/alice`, un chemin `/Users/alice2/…` reste intact).
     private static func abbreviated(_ path: String) -> String {
         let home = BridgePaths.homeDirectory.path
         guard path == home || path.hasPrefix(home + "/") else { return path }

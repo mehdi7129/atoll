@@ -102,6 +102,46 @@ final class MemoryIndexer {
         }
     }
 
+    /// Curation (Milestone B) : les notes remplacées sont OUBLIÉES de l'index
+    /// (pas seulement marquées absentes — une note consolidée ne doit plus
+    /// jamais remonter dans un recall) et les nouvelles sont indexées.
+    /// L'ordre compte : oublier d'abord, sinon une nouvelle note portant le
+    /// même chemin qu'une ancienne serait effacée juste après son insertion.
+    func replaceNotes(forgotten: [String], written: [URL]) {
+        Task(priority: .utility) { [weak self] in
+            guard let self else { return }
+            // L'OUBLI a lieu même si l'indexation est coupée (revue) : sinon
+            // les notes remplacées restaient dans une base que `recall` et le
+            // recall proactif lisent DIRECTEMENT, sans consulter le réglage —
+            // du contenu effacé du disque continuait d'être injecté. Le worker
+            // ne touche pas à une base absente.
+            await self.worker.forgetFilesIfDatabaseExists(forgotten)
+            guard self.isEnabled else { return }
+            for url in written {
+                await self.worker.indexNoteFile(url: url, slug: MemoryIndexer.noteSlug(for: url))
+            }
+            await self.refreshStatsNow()
+        }
+    }
+
+    /// « 2026-07-20-mon-slug.md » → « mon-slug » ; « 01-mon-titre.md »
+    /// (note curée) → « 01-mon-titre ». Seul un préfixe de 11 caractères
+    /// entièrement composé de chiffres et de tirets est retiré.
+    /// `nonisolated` : appelée aussi depuis le worker (contexte non-MainActor).
+    nonisolated static func noteSlug(for url: URL) -> String {
+        let stem = url.deletingPathExtension().lastPathComponent
+        // Motif STRICT `AAAA-MM-JJ-` (revue) : « 11 caractères de chiffres et
+        // de tirets » amputait une note curée titrée « 2026 07 20 : bilan »
+        // (fichier `01-2026-07-20-bilan.md` → slug « 20-bilan »).
+        let prefix = stem.prefix(11)
+        let isDateStamp = prefix.count == 11
+            && prefix.enumerated().allSatisfy { index, character in
+                (index == 4 || index == 7 || index == 10) ? character == "-" : character.isNumber
+            }
+        guard stem.count > 11, isDateStamp else { return stem }
+        return String(stem.dropFirst(11))
+    }
+
     private func startScanLoop() {
         guard scanTask == nil else { return }
         scanTask = Task(priority: .utility) { [weak self] in
@@ -186,14 +226,25 @@ private actor MemoryIndexWorker {
         // un rebuild les orphelinait de recall pour toujours).
         if let notes = try? fm.contentsOfDirectory(
             at: BridgePaths.learningNotesDirectory, includingPropertiesForKeys: nil) {
+            var seenNotes = Set<String>()
             for note in notes where note.pathExtension == "md" {
                 if Task.isCancelled { return }
                 seenPaths.insert(note.path)
-                // "2026-07-20-slug.md" → "slug" (préfixe date retiré si présent).
-                let stem = note.deletingPathExtension().lastPathComponent
-                let slug = stem.count > 11 && stem.prefix(11).allSatisfy({ $0.isNumber || $0 == "-" })
-                    ? String(stem.dropFirst(11)) : stem
-                indexNoteFile(url: note, slug: slug)
+                seenNotes.insert(note.path)
+                indexNoteFile(url: note, slug: MemoryIndexer.noteSlug(for: note))
+            }
+            // Notes disparues du dossier (curation appliquée alors que
+            // l'indexation était coupée, suppression manuelle) : OUBLIÉES, pas
+            // marquées absentes. Une note remplacée qui continuerait de
+            // remonter dans recall serait pire que pas de note du tout.
+            // Ce ménage n'a lieu QUE si le dossier a pu être listé (un dossier
+            // momentanément illisible ne doit rien effacer).
+            let notesPrefix = BridgePaths.learningNotesDirectory.path + "/"
+            if let tracked = try? index.trackedPaths(prefix: notesPrefix) {
+                for path in tracked where !seenNotes.contains(path) {
+                    try? index.forgetFile(path: path)
+                    lastSeen[path] = nil
+                }
             }
         }
 
@@ -201,6 +252,26 @@ private actor MemoryIndexWorker {
         // (le purge 30 j de Claude Code ne doit pas amnésier Atoll).
         for path in lastSeen.keys where !seenPaths.contains(path) {
             try? index.markMissing(path: path)
+            lastSeen[path] = nil
+        }
+    }
+
+    /// Comme `forgetFiles`, mais SANS jamais créer la base : appelé quand
+    /// l'indexation est désactivée, où ouvrir l'index reviendrait à fabriquer
+    /// un fichier que l'utilisateur ne veut pas.
+    func forgetFilesIfDatabaseExists(_ paths: [String]) {
+        guard FileManager.default.fileExists(atPath: BridgePaths.memoryDatabaseURL.path) else {
+            return
+        }
+        forgetFiles(paths)
+    }
+
+    /// Oubli d'artefacts dont Atoll est propriétaire (notes remplacées par une
+    /// curation) : messages supprimés ET suivi retiré, best-effort par fichier.
+    func forgetFiles(_ paths: [String]) {
+        guard let index = openIndexIfNeeded() else { return }
+        for path in paths {
+            try? index.forgetFile(path: path)
             lastSeen[path] = nil
         }
     }

@@ -45,6 +45,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ThemeManager.applyStored()
         InteractionCenter.migrateAutonomyIfNeeded()
 
+        // Config du recall proactif AVANT toute réinstallation des hooks
+        // (revue) : `repairIfInstalled` relit ce fichier pour décider si
+        // UserPromptSubmit est bloquant — l'écrire après faisait réécrire
+        // settings.json deux fois de suite, dans deux modes opposés.
+        LearningSettings.shared.syncProactiveRecall()
+
         // Répare le wrapper ~/.atoll/bin si l'app a été déplacée (idempotent).
         HookInstaller.repairIfInstalled()
 
@@ -118,6 +124,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // entièrement hors bande — jamais dans le chemin des hooks.
         MemoryIndexer.shared.syncWithSettings()
 
+        // Curation des notes (Milestone B) : les notes remplacées sont
+        // oubliées de l'index, les nouvelles indexées. Branché AVANT
+        // syncWithSettings, qui arme le planificateur hebdomadaire.
+        NotesCurationService.shared.onNotesReplaced = { forgotten, written in
+            MemoryIndexer.shared.replaceNotes(forgotten: forgotten, written: written)
+        }
+
         // Apprentissage (opt-in, OFF par défaut) : rétrospectives de fin de
         // session. Le store notifie le runner, le runner indexe ses notes.
         LearningSettings.shared.syncWithSettings()
@@ -159,6 +172,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         FleetPoller.shared.stop()
         RetrospectiveRunner.shared.terminateActive()
+        // Une curation en vol est un `claude -p` facturé : ne pas le laisser
+        // orphelin quand Atoll s'en va.
+        NotesCurationService.shared.cancel()
         bridgeServer?.stop()
     }
 
@@ -229,6 +245,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         debugTokens.append(retroToken)
+
+        // Curation des notes (consomme du quota ET réécrit la mémoire :
+        // jamais en release). Ignore l'échéance hebdomadaire, PAS les
+        // garde-fous (opt-in, budget, archive vérifiée).
+        var curationToken: Int32 = 0
+        notify_register_dispatch("dev.mehdiguiard.atoll.debug.curation", &curationToken, DispatchQueue.main) { _ in
+            MainActor.assumeIsolated {
+                NotesCurationService.shared.curateNow()
+            }
+        }
+        debugTokens.append(curationToken)
 
         // Curation (décisions → DEBUG uniquement).
         var seedToken: Int32 = 0

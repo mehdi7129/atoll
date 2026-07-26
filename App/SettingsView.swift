@@ -172,6 +172,7 @@ private struct ClaudeCodePane: View {
     @State private var hooksInstalled = false
     @State private var hookError: String?
     @State private var denyParkingError: String?
+    @State private var proactiveRecallError: String?
 
     private var store: SessionStore { .shared }
 
@@ -239,6 +240,34 @@ private struct ClaudeCodePane: View {
                 .foregroundStyle(.secondary)
             }
 
+            Section("Souvenirs proposés d'office") {
+                Toggle("Rappeler les sessions liées à chaque message", isOn: proactiveRecall)
+                    .disabled(!memoryIndexing.wrappedValue)
+                if proactiveRecall.wrappedValue {
+                    Picker("Souvenirs injectés", selection: proactiveRecallMaxHits) {
+                        ForEach(1...5, id: \.self) { count in
+                            Text("\(count)").tag(count)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    Toggle("Limiter au projet courant", isOn: proactiveRecallProjectScoped)
+                }
+                if let proactiveRecallError {
+                    Text(proactiveRecallError)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+                Text("""
+                Sans attendre que Claude pense au skill : à chaque message, Atoll cherche \
+                localement les extraits de vos sessions passées liés à ce que vous écrivez \
+                et les joint en contexte, marqués comme DONNÉES (jamais des instructions). \
+                Activer rend le hook UserPromptSubmit bloquant — quelques millisecondes, \
+                et fail-open : à la moindre anicroche, rien n'est injecté.
+                """)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+
         }
         .formStyle(.grouped)
         .fixedSize(horizontal: false, vertical: true)
@@ -246,6 +275,42 @@ private struct ClaudeCodePane: View {
             hooksInstalled = HookInstaller.isInstalled
             MemoryIndexer.shared.refreshStats()
         }
+    }
+
+    private var proactiveRecall: Binding<Bool> {
+        Binding(
+            get: { UserDefaults.standard.bool(forKey: LearningSettings.proactiveRecallKey) },
+            set: {
+                UserDefaults.standard.set($0, forKey: LearningSettings.proactiveRecallKey)
+                proactiveRecallError = LearningSettings.shared.syncProactiveRecall()
+            }
+        )
+    }
+
+    private var proactiveRecallMaxHits: Binding<Int> {
+        Binding(
+            get: {
+                UserDefaults.standard.object(forKey: LearningSettings.proactiveRecallMaxHitsKey)
+                    as? Int ?? ProactiveRecallConfig.defaultMaxHits
+            },
+            set: {
+                UserDefaults.standard.set($0, forKey: LearningSettings.proactiveRecallMaxHitsKey)
+                proactiveRecallError = LearningSettings.shared.syncProactiveRecall()
+            }
+        )
+    }
+
+    private var proactiveRecallProjectScoped: Binding<Bool> {
+        Binding(
+            get: {
+                UserDefaults.standard.object(
+                    forKey: LearningSettings.proactiveRecallProjectScopedKey) as? Bool ?? true
+            },
+            set: {
+                UserDefaults.standard.set($0, forKey: LearningSettings.proactiveRecallProjectScopedKey)
+                proactiveRecallError = LearningSettings.shared.syncProactiveRecall()
+            }
+        )
     }
 
     private func indexSummary(_ stats: MemoryIndex.Stats) -> String {
@@ -257,9 +322,17 @@ private struct ClaudeCodePane: View {
     private var memoryIndexing: Binding<Bool> {
         Binding(
             get: { UserDefaults.standard.object(forKey: MemoryIndexer.enabledKey) as? Bool ?? true },
-            set: {
-                UserDefaults.standard.set($0, forKey: MemoryIndexer.enabledKey)
+            set: { enabled in
+                UserDefaults.standard.set(enabled, forKey: MemoryIndexer.enabledKey)
                 MemoryIndexer.shared.syncWithSettings()
+                // Couper l'indexation coupe aussi le recall proactif (revue) :
+                // son interrupteur devient grisé, il ne faut pas qu'il reste
+                // actif — et surtout pas que le hook UserPromptSubmit reste
+                // BLOQUANT sans plus rien à proposer.
+                if !enabled, LearningSettings.shared.isProactiveRecallEnabled {
+                    UserDefaults.standard.set(false, forKey: LearningSettings.proactiveRecallKey)
+                    proactiveRecallError = LearningSettings.shared.syncProactiveRecall()
+                }
             }
         )
     }
@@ -298,6 +371,11 @@ private struct ClaudeCodePane: View {
 private struct LearningPane: View {
     @State private var center = SkillReviewCenter.shared
     @State private var indexer = MemoryIndexer.shared
+    @State private var curation = NotesCurationService.shared
+    /// Inventaire des notes, relu à l'apparition et après chaque curation.
+    @State private var notes: [LearningNoteSummary] = []
+    @State private var noteProjects: [(project: String, count: Int)] = []
+    @State private var noteVolume = 0
 
     var body: some View {
         Form {
@@ -321,6 +399,39 @@ private struct LearningPane: View {
                 une analyse en LECTURE SEULE extrait les leçons durables — notes mémoire \
                 et skills proposés en QUARANTAINE. Consomme du quota ; désactiver arrête \
                 tout immédiatement.
+                """)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+
+            Section("Curation des notes") {
+                Toggle("Consolider les notes chaque semaine", isOn: curationScheduled)
+                HStack {
+                    Button(curation.phase == .running ? "Curation en cours…" : "Curer maintenant") {
+                        curation.curateNow()
+                    }
+                    .disabled(curation.phase == .running || notes.count < 2)
+                    if curation.phase == .running {
+                        ProgressView().controlSize(.small)
+                    }
+                }
+                if let outcome = curation.lastOutcome {
+                    LabeledContent("Dernier passage", value: outcome)
+                        .font(.caption)
+                }
+                ForEach(curation.warnings, id: \.self) { warning in
+                    // Les contradictions ne sont JAMAIS tranchées automatiquement :
+                    // elles remontent ici, à vous d'arbitrer dans les fichiers.
+                    Text(warning)
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+                Text("""
+                Une analyse en lecture seule relit toutes vos notes et en propose une \
+                version fusionnée (doublons réunis, contradictions SIGNALÉES, jamais \
+                tranchées). L'ancienne version part d'abord dans ~/.atoll/learning/archive \
+                — vérifiée avant tout remplacement. Consomme du quota ; refusée si le \
+                corpus est trop gros ou si le résultat rétrécit trop.
                 """)
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -366,9 +477,36 @@ private struct LearningPane: View {
                 ForEach(center.reconcileNotes, id: \.self) { note in
                     Text(note).font(.caption).foregroundStyle(.secondary)
                 }
+                Text("""
+                Un skill appris est actif dans TOUS vos projets (il vit dans \
+                ~/.claude/skills) : ce qu'Atoll apprend d'un dépôt sert aux autres.
+                """)
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
 
-            Section("Mémoire") {
+            Section("Notes mémoire (\(notes.count))") {
+                if notes.isEmpty {
+                    Text("Aucune note — elles arrivent avec les rétrospectives.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    // Les 5 plus récentes : un aperçu, pas un explorateur.
+                    ForEach(notes.prefix(5)) { note in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(note.title)
+                            Text(noteSubtitle(note))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    if noteProjects.count > 1 {
+                        LabeledContent("Projets", value: projectsSummary)
+                            .font(.caption)
+                    }
+                    LabeledContent("Volume", value: volumeSummary)
+                        .font(.caption)
+                }
                 if let stats = indexer.stats {
                     LabeledContent("Index", value: "\(stats.sessionCount) session(s) · \(stats.messageCount) message(s)")
                 }
@@ -378,11 +516,66 @@ private struct LearningPane: View {
             }
         }
         .formStyle(.grouped)
-        .fixedSize(horizontal: false, vertical: true)
+        // Seul volet à ne PAS prendre sa hauteur intrinsèque : avec ses six
+        // sections (rétrospective, curation, skills proposés, skills appris,
+        // notes), `fixedSize` faisait déborder la fenêtre sous le bas de
+        // l'écran (vérifié en capture). Hauteur bornée → le Form défile.
+        .frame(minHeight: 420, idealHeight: 560, maxHeight: 620)
         .onAppear {
             center.refresh()
             indexer.refreshStats()
+            refreshNotes()
         }
+        // Une curation qui se termine réécrit les fichiers : on relit.
+        .onChange(of: curation.lastRunAt) { _, _ in refreshNotes() }
+    }
+
+    private func refreshNotes() {
+        let inventory = LearningInventory()
+        notes = inventory.notes()
+        noteProjects = inventory.projects()
+        noteVolume = inventory.totalCharacterCount()
+    }
+
+    /// « 12 400 caractères · 15 % du budget de curation » — le budget est ce
+    /// qui décide si une curation est possible, autant le montrer.
+    private var volumeSummary: String {
+        let percent = Int(Double(noteVolume) / Double(NotesCurationPrompt.maxCorpusCharacters) * 100)
+        return "\(noteVolume) caractères · \(percent) % du budget de curation"
+    }
+
+    /// « pitfall · Dynamic_Island · 20 juil. » — les champs absents disparaissent.
+    private func noteSubtitle(_ note: LearningNoteSummary) -> String {
+        var parts: [String] = []
+        if let category = note.category { parts.append(category) }
+        if let project = note.project, !project.isEmpty {
+            parts.append((project as NSString).lastPathComponent)
+        }
+        if let date = note.createdAt {
+            parts.append(date.formatted(date: .abbreviated, time: .omitted))
+        }
+        return parts.isEmpty ? note.fileName : parts.joined(separator: " · ")
+    }
+
+    /// « Dynamic_Island 12 · Val d'Isere 3 » (3 premiers projets).
+    private var projectsSummary: String {
+        noteProjects.prefix(3).map { entry in
+            let name = entry.project.isEmpty
+                ? "sans projet"
+                : (entry.project as NSString).lastPathComponent
+            return "\(name) \(entry.count)"
+        }
+        .joined(separator: " · ")
+    }
+
+    private var curationScheduled: Binding<Bool> {
+        Binding(
+            get: { UserDefaults.standard.bool(forKey: LearningSettings.curationScheduledKey) },
+            set: {
+                UserDefaults.standard.set($0, forKey: LearningSettings.curationScheduledKey)
+                NotesCurationService.shared.syncWithSettings()
+            }
+        )
     }
 
     private func usageLabel(_ row: InstalledSkillRow) -> String {

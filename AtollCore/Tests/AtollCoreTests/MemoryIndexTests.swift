@@ -337,4 +337,215 @@ final class MemoryIndexTests: XCTestCase {
         // littéral underscore, pas « atoll + n'importe quel caractère ».
         XCTAssertTrue(try index.skillUsage(prefix: "atoll_").isEmpty)
     }
+
+    // MARK: - Dédup inter-fichiers et récence (Milestone B)
+
+    /// Le cas RÉEL : `--resume`/fork recopie l'historique dans un nouveau
+    /// transcript en gardant l'uuid de chaque message (mesuré : 1 155 uuid
+    /// dans ≥ 2 fichiers sur la base de dev). Le même souvenir ne doit sortir
+    /// qu'UNE fois — sinon il mange toutes les places du top N.
+    func testSearchDeduplicatesSameMessageAcrossFiles() throws {
+        let uuid = "11111111-2222-3333-4444-555555555555"
+        try ingest([Entry(uuid: uuid, text: "le socket unix casse avec NWListener")],
+                   sessionID: "s1", path: "/transcripts/s1.jsonl", inode: 1)
+        try ingest([Entry(uuid: uuid, text: "le socket unix casse avec NWListener")],
+                   sessionID: "s2", path: "/transcripts/s2.jsonl", inode: 2)
+
+        let hits = try index.search(rawQuery: "NWListener", limit: 10, projectPrefix: nil)
+        XCTAssertEqual(hits.count, 1)
+        XCTAssertFalse(hits[0].dedupKey.isEmpty)
+    }
+
+    /// PIÈGE VÉCU : toutes les notes d'apprentissage sont indexées avec l'uuid
+    /// littéral « note » (un fichier .md chacune). Les fusionner ferait
+    /// disparaître toutes les notes sauf une des résultats — la clé de dédup
+    /// doit retomber sur la ligne pour tout uuid qui n'est pas un vrai uuid.
+    func testSearchKeepsDistinctNotesSharingLiteralUUID() throws {
+        try ingest([Entry(uuid: "note", text: "note un : garder DerivedData hors iCloud")],
+                   sessionID: "atoll-note-a", path: "/notes/a.md", inode: 10)
+        try ingest([Entry(uuid: "note", text: "note deux : garder les hooks fail-open")],
+                   sessionID: "atoll-note-b", path: "/notes/b.md", inode: 11)
+
+        let hits = try index.search(rawQuery: "garder", limit: 10, projectPrefix: nil)
+        XCTAssertEqual(hits.count, 2)
+        XCTAssertEqual(Set(hits.map(\.sessionID)), ["atoll-note-a", "atoll-note-b"])
+    }
+
+    /// Un identifiant de 36 caractères avec des tirets « quelque part » n'est
+    /// PAS un uuid : le motif de dédup vérifie la forme exacte 8-4-4-4-12,
+    /// sinon deux messages différents fusionnaient (perte silencieuse).
+    func testSearchDoesNotMergeUUIDLookalikes() throws {
+        let lookalike = "aaaa-bbbb-cccc-dddd-eeeeeeeeeeeeeeee" // 36 caractères, mauvaises positions
+        XCTAssertEqual(lookalike.count, 36)
+        try ingest([Entry(uuid: lookalike, text: "sentinelle numéro un")],
+                   sessionID: "s1", path: "/transcripts/l1.jsonl", inode: 90)
+        try ingest([Entry(uuid: lookalike, text: "sentinelle numéro deux")],
+                   sessionID: "s2", path: "/transcripts/l2.jsonl", inode: 91)
+
+        XCTAssertEqual(try index.search(rawQuery: "sentinelle", limit: 5, projectPrefix: nil).count, 2)
+    }
+
+    /// Frontière de chemin du filtre projet : un dossier FRÈRE ne doit jamais
+    /// entrer dans le périmètre (« proj » ramassait « proj-client »).
+    func testSearchProjectPrefixRespectsPathBoundary() throws {
+        try ingest([Entry(uuid: "p1", text: "secret du projet principal", cwd: "/w/proj")],
+                   sessionID: "s1", path: "/transcripts/p1.jsonl", inode: 95)
+        try ingest([Entry(uuid: "p2", text: "secret du projet client", cwd: "/w/proj-client")],
+                   sessionID: "s2", path: "/transcripts/p2.jsonl", inode: 96)
+        try ingest([Entry(uuid: "p3", text: "secret du sous-dossier", cwd: "/w/proj/App")],
+                   sessionID: "s3", path: "/transcripts/p3.jsonl", inode: 97)
+
+        let hits = try index.search(rawQuery: "secret", limit: 10, projectPrefix: "/w/proj")
+        // Le projet lui-même et ses sous-dossiers, jamais le voisin.
+        XCTAssertEqual(Set(hits.map(\.sessionID)), ["s1", "s3"])
+
+        // Un préfixe avec slash final donne exactement le même résultat.
+        XCTAssertEqual(
+            Set(try index.search(rawQuery: "secret", limit: 10, projectPrefix: "/w/proj/").map(\.sessionID)),
+            ["s1", "s3"]
+        )
+    }
+
+    /// Même piège pour les uuid SYNTHÉTIQUES `line-<offset>` : deux fichiers
+    /// différents produisent le même « line-0 » pour deux messages sans rapport.
+    func testSearchKeepsDistinctSyntheticUUIDsAcrossFiles() throws {
+        try ingest([Entry(uuid: "line-0", text: "premier message orphelin quota")],
+                   sessionID: "s1", path: "/transcripts/x.jsonl", inode: 20)
+        try ingest([Entry(uuid: "line-0", text: "second message orphelin quota")],
+                   sessionID: "s2", path: "/transcripts/y.jsonl", inode: 21)
+
+        let hits = try index.search(rawQuery: "orphelin", limit: 10, projectPrefix: nil)
+        XCTAssertEqual(hits.count, 2)
+    }
+
+    /// `now` fourni → reclassement pertinence + récence : à pertinence
+    /// comparable, le souvenir récent passe devant le très ancien.
+    func testSearchWithNowPrefersRecentAtSimilarRelevance() throws {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let old = now.addingTimeInterval(-400 * 86_400)
+        let fresh = now.addingTimeInterval(-2 * 86_400)
+        try ingest([Entry(uuid: "a1", text: "réglage du quota statusline", timestamp: old)],
+                   sessionID: "s1", path: "/transcripts/old.jsonl", inode: 30)
+        try ingest([Entry(uuid: "b1", text: "réglage du quota statusline", timestamp: fresh)],
+                   sessionID: "s2", path: "/transcripts/new.jsonl", inode: 31)
+
+        let ranked = try index.search(rawQuery: "quota statusline", limit: 2,
+                                      projectPrefix: nil, now: now)
+        XCTAssertEqual(ranked.count, 2)
+        XCTAssertEqual(ranked.first?.sessionID, "s2")
+
+        // Sans `now`, l'ordre historique (bm25 pur) est conservé : les deux
+        // sont là, la récence ne s'invite pas dans le classement.
+        let plain = try index.search(rawQuery: "quota statusline", limit: 2, projectPrefix: nil)
+        XCTAssertEqual(plain.count, 2)
+    }
+
+    /// La limite demandée est respectée APRÈS dédup et reclassement (le pool
+    /// SQL, lui, est volontairement plus large).
+    func testSearchRespectsLimitAfterDeduplication() throws {
+        for index0 in 0..<12 {
+            try ingest([Entry(uuid: "uuid-\(index0)", text: "message numéro \(index0) sur le notch")],
+                       sessionID: "s\(index0)", path: "/transcripts/f\(index0).jsonl",
+                       inode: UInt64(50 + index0))
+        }
+        XCTAssertEqual(try index.search(rawQuery: "notch", limit: 3, projectPrefix: nil).count, 3)
+    }
+
+    // MARK: - Oubli explicite d'un fichier
+
+    /// `forgetFile` : les messages disparaissent de l'index ET du FTS, le
+    /// fichier n'est plus suivi (la curation remplace des notes par d'autres).
+    func testForgetFileRemovesMessagesAndTracking() throws {
+        try ingest([Entry(uuid: "n1", text: "ancienne note à remplacer")],
+                   sessionID: "atoll-note-old", path: "/notes/old.md", inode: 60)
+        try ingest([Entry(uuid: "k1", text: "message à conserver")],
+                   sessionID: "s-keep", path: "/transcripts/keep.jsonl", inode: 61)
+        XCTAssertEqual(try index.stats().messageCount, 2)
+
+        try index.forgetFile(path: "/notes/old.md")
+
+        XCTAssertTrue(try index.search(rawQuery: "ancienne", limit: 5, projectPrefix: nil).isEmpty)
+        XCTAssertEqual(try index.search(rawQuery: "conserver", limit: 5, projectPrefix: nil).count, 1)
+        XCTAssertEqual(try index.stats().messageCount, 1)
+
+        // Fichier ré-ouvert après oubli : reparti de zéro (offset 0), donc
+        // ré-indexable intégralement.
+        let state = try index.openFile(path: "/notes/old.md", inode: 60, size: 100)
+        XCTAssertEqual(state.offset, 0)
+    }
+
+    /// Mode `.any` : indispensable au recall proactif — avec les mots-clés
+    /// d'une phrase entière, le AND implicite ne trouve jamais rien.
+    func testSearchAnyModeMatchesPartialKeywordSets() throws {
+        try ingest([Entry(uuid: "m1", text: "la notarisation exige un certificat Developer ID")],
+                   sessionID: "s1", path: "/transcripts/a.jsonl", inode: 80)
+        try ingest([Entry(uuid: "m2", text: "les xattrs iCloud cassent CodeSign")],
+                   sessionID: "s2", path: "/transcripts/b.jsonl", inode: 81)
+
+        // AND : aucun message ne contient TOUS ces mots → rien.
+        XCTAssertTrue(try index.search(rawQuery: "notarisation codesign icloud certificat",
+                                       limit: 5, projectPrefix: nil).isEmpty)
+
+        // OR : les deux messages remontent, bm25 les classe.
+        let any = try index.search(rawQuery: "notarisation codesign icloud certificat",
+                                   limit: 5, projectPrefix: nil, mode: .any)
+        XCTAssertEqual(Set(any.map(\.sessionID)), ["s1", "s2"])
+
+        // La sanitisation reste intégrale en mode any (opérateurs neutralisés).
+        XCTAssertEqual(MemoryIndex.sanitizedMatchQuery("a b", mode: .any), "\"a\" OR \"b\"")
+        XCTAssertEqual(MemoryIndex.sanitizedMatchQuery("NOT a", mode: .any), "\"NOT\" OR \"a\"")
+    }
+
+    /// Filtre de rôles : le recall proactif n'injecte que de l'intention et
+    /// des conclusions, jamais des sorties d'outils (bruit + vecteur
+    /// d'injection indirecte).
+    func testSearchFiltersByRole() throws {
+        try ingest([
+            Entry(uuid: "r1", text: "où en est le quota exactement", role: .user),
+            Entry(uuid: "r2", text: "le quota vient de la statusline", role: .assistant),
+            Entry(uuid: "r3", text: "quota: 42% (sortie de commande)", role: .toolResult),
+            Entry(uuid: "r4", text: "réflexion interne sur le quota", role: .thinking),
+        ])
+
+        let all = try index.search(rawQuery: "quota", limit: 10, projectPrefix: nil)
+        XCTAssertEqual(all.count, 4)
+
+        let filtered = try index.search(rawQuery: "quota", limit: 10, projectPrefix: nil,
+                                        roles: [.user, .assistant, .summary, .note])
+        XCTAssertEqual(Set(filtered.map(\.role)), ["user", "assistant"])
+
+        // Un filtre vide est traité comme « aucun filtre » (jamais 0 résultat
+        // par accident d'appel).
+        XCTAssertEqual(try index.search(rawQuery: "quota", limit: 10, projectPrefix: nil,
+                                        roles: []).count, 4)
+    }
+
+    /// Exclusion de la session courante : le recall proactif cherche à partir
+    /// du prompt qui vient d'être écrit dans le transcript de CETTE session —
+    /// sans l'exclure, le « souvenir » n° 1 est le message qu'on tape (vu en
+    /// vrai lors du premier essai de bout en bout).
+    func testSearchExcludesGivenSession() throws {
+        try ingest([Entry(uuid: "cur", text: "réglage du socket unix en cours")],
+                   sessionID: "session-courante", path: "/transcripts/now.jsonl", inode: 70)
+        try ingest([Entry(uuid: "old", text: "le socket unix était réglé ainsi")],
+                   sessionID: "session-passee", path: "/transcripts/before.jsonl", inode: 71)
+
+        let all = try index.search(rawQuery: "socket unix", limit: 10, projectPrefix: nil)
+        XCTAssertEqual(all.count, 2)
+
+        let filtered = try index.search(rawQuery: "socket unix", limit: 10, projectPrefix: nil,
+                                        excludingSessionID: "session-courante")
+        XCTAssertEqual(filtered.map(\.sessionID), ["session-passee"])
+
+        // Une chaîne vide ne doit rien exclure (payload sans session_id).
+        XCTAssertEqual(try index.search(rawQuery: "socket unix", limit: 10, projectPrefix: nil,
+                                        excludingSessionID: "").count, 2)
+    }
+
+    /// Chemin inconnu : no-op silencieux, rien d'autre n'est touché.
+    func testForgetFileIsNoOpForUnknownPath() throws {
+        try ingest([Entry(uuid: "k2", text: "toujours là")])
+        try index.forgetFile(path: "/nulle/part.jsonl")
+        XCTAssertEqual(try index.stats().messageCount, 1)
+    }
 }

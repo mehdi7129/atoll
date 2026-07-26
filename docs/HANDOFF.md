@@ -2,24 +2,25 @@
 
 > Document de continuité pour reprendre le dev après un compactage de conversation.
 > **À lire en premier** avec `CLAUDE.md` (règles) et `PLAN.md` (plan produit).
-> Dernière mise à jour : **2026-07-25**, app **v0.10.0** (Liquid Glass + transparence
-> réglable + ondulation + passe d'hygiène).
+> Dernière mise à jour : **2026-07-26**, app **v0.11.0** (Milestone B : curation des
+> notes, recall proactif, qualité du recall).
 
 ---
 
 ## 0. TL;DR — REPRISE APRÈS COMPACTAGE (lire ceci d'abord)
 
 Atoll est une « Dynamic Island » ASCII pour Claude Code sur macOS (Swift/SwiftUI, GPL-3.0,
-repo PUBLIC `github.com/mehdi7129/atoll`). **Phases 1 à 10 livrées et publiées** (v0.10.0,
-GitHub Releases, DMG notarisé + appcast Sparkle). L'app tourne, 291 tests AtollCore verts,
+repo PUBLIC `github.com/mehdi7129/atoll`). **Phases 1 à 11 livrées et publiées** (v0.11.0,
+GitHub Releases, DMG notarisé + appcast Sparkle). L'app tourne, 370 tests AtollCore verts,
 `main` synchronisé. Publier = `Scripts/release.sh` puis `gh release create` + `git push`
 (voir §1).
 
 **Feuille de route « Atoll 2 »** (`~/.claude/plans/indexed-snacking-dahl.md`, validée par
-Mehdi) — la boussole du moment. Séquence choisie : A robustesse ✅ · B mémoire approfondie
-(À FAIRE) · C cockpit ✅ (fait avant B car la fondation flotte le rendait bon marché).
-Fondations : migration sur interfaces SUPPORTÉES ; autonomie = lancer sur demande
-EXPLICITE (jamais d'objectif auto) ; perso d'abord.
+Mehdi) — **les trois milestones sont livrés** : A robustesse ✅ (Phase 8) · B mémoire
+approfondie ✅ (Phase 11) · C cockpit ✅ (Phase 9, fait avant B car la fondation flotte le
+rendait bon marché). Fondations : migration sur interfaces SUPPORTÉES ; autonomie =
+lancer sur demande EXPLICITE (jamais d'objectif auto) ; perso d'abord.
+**La feuille de route est donc à REDÉFINIR avec Mehdi avant d'entamer quoi que ce soit.**
 
 **Ce qui vient d'être livré (cette session) :**
 - **Phase 7 « Atoll apprend » (v0.5→0.7)** : mémoire FTS5 + `atoll-recall` ; rétrospective
@@ -43,19 +44,29 @@ EXPLICITE (jamais d'objectif auto) ; perso d'abord.
   **AgentGlance** (verre en API PUBLIQUE, PAS leur hack d'API privée CAFilter). Voir
   CLAUDE.md « Phase 10 ». PIÈGE BUILD : Metal Toolchain à télécharger sous Xcode 26.
 
-**PROCHAINE ÉTAPE (quand Mehdi le dira) : Milestone B — Mémoire approfondie.**
-- Brancher la **curation périodique des notes** : `NotesCuration` (planner + garde-fous
-  rétrécissement) EXISTE en AtollCore mais N'EST PAS branchée à un service App → écrire
-  `App/NotesCurationService.swift` qui la déclenche (hebdo opt-in / bouton) via le
-  `RetrospectiveRunner` généralisé, archive vérifiée AVANT remplacement.
-- **Recall proactif** (opt-in) : suggérer la mémoire pertinente via un hook
-  UserPromptSubmit (`additionalContext`) ou une carte notch, sans polluer le contexte.
-- **Partage de skills entre projets** ; **dédup inter-fichiers** de l'index (aujourd'hui
-  intra-fichier seulement).
-- Détail dans le plan « Atoll 2 » § Milestone B.
+- **Phase 11 « Mémoire vive » (v0.11.0)** = Milestone B, les quatre volets :
+  curation périodique des notes (`App/NotesCurationService.swift`), recall proactif
+  opt-in (`Bridge/ProactiveRecallHook.swift` + hook UserPromptSubmit rendu BLOQUANT
+  quand il est activé), qualité du recall (dédup inter-fichiers + récence,
+  `AtollCore/MemoryRanking.swift`), tableau de bord des notes
+  (`AtollCore/LearningInventory.swift`). Voir CLAUDE.md « Phase 11 » pour les faits
+  vérifiés et les pièges — dont le format `hook_additional_context` et la clé de dédup.
 
-**Idées non tranchées / backlog** : recall proactif (cadrage produit à faire avec Mehdi) ;
-notification quand une tâche bg finit ; vue flotte par état (à examiner/en cours/finies).
+**PROCHAINE ÉTAPE : à décider avec Mehdi** (la feuille de route « Atoll 2 » est
+épuisée). Pistes restées sur la table, aucune tranchée :
+- **Sceller les notes** comme les skills (manifeste + SHA256) : aujourd'hui n'importe
+  quel processus local peut déposer un `.md` dans `~/.atoll/learning/notes/`, qui sera
+  indexé puis curé. `~/.atoll` est passé en 0700 (autres comptes exclus), mais la
+  chaîne transcript → rétrospective → note → curation → recall n'a pas de scellé.
+- **Rendre l'injection visible** : le bloc du recall proactif part avec
+  `suppressOutput: true` (choix assumé : 1 800 caractères à chaque prompt seraient
+  illisibles au terminal) — il n'apparaît donc que dans le transcript. Une ligne
+  récapitulative dans l'îlot serait le bon endroit.
+- **Multi-provider** (Codex/OpenCode…) à la AgentGlance ; jump-back Ghostty/tmux ;
+  notification quand une tâche bg finit ; vue flotte par état.
+- **Limite connue** : `ProactiveRecall.keywords` découpe sur les frontières de mots —
+  un prompt en japonais ou chinois (sans espaces) donne un seul token, donc pas de
+  recall proactif. Le russe, l'arabe et les langues à espaces fonctionnent.
 
 ### Méthode de travail (rappel — la même qui a marché toute cette session)
 
@@ -152,8 +163,6 @@ docs/appcast.xml — servi par GitHub Pages : main//docs).
 - **Jump-back pane-level pour VS Code/Cursor** (extension `.vsix` compagnon) : v1 fait
   du focus fenêtre via `cursor -r <racine>`, suffisant. L'extension est un gros chantier
   optionnel (voir `docs/research/research-followup-terminal-jump-back.md`).
-- **Résumé de raisonnement (thinking) dans le chat** : parsé (`StreamEvent.thinkingDelta`)
-  mais non affiché en v1.
 - **API privées CGS/SkyLight** (affichage sur écran verrouillé) : non implémenté, pas un besoin.
 
 ---
@@ -198,7 +207,7 @@ xcodebuild -project Atoll.xcodeproj -scheme Atoll -configuration Debug -derivedD
 ditto "$DD/Build/Products/Debug/Atoll.app" ~/Applications/Atoll.app   # lancer LA COPIE
 pkill -x Atoll; sleep 1; open ~/Applications/Atoll.app                # relancer
 
-cd AtollCore && swift test              # 131 tests
+cd AtollCore && swift test              # 370 tests
 
 # Debug runtime
 /usr/bin/log stream --predicate 'subsystem == "dev.mehdiguiard.atoll"' --level debug
@@ -210,11 +219,14 @@ cat ~/Library/"Application Support"/Atoll/state.json                  # sessions
 - `.select` — sélectionne la 1re session (vue détail)
 - `.allow` / `.deny` — résout la 1re carte en attente
 - `.jump` — jump-back de la 1re session à ancre résolvable
-- `.chat` — démarre un chat de test dans /tmp + envoie un message
+- `.retro` / `.curation` — rétrospective sur la dernière session terminée / curation
+  des notes (les deux consomment du quota : `#if DEBUG` uniquement)
+- `.launcher` / `.seedSkill` / `.skillReview` / `.approveSkill` / `.rejectSkill`
 
 ### Piloter le vrai helper
 ```sh
-~/.atoll/bin/atoll-bridge status        # {hooksInstalled, wrapperPresent, socketPresent}
+~/.atoll/bin/atoll-bridge status        # JSON : hooks, wrapper, socket, deny parqués,
+                                        # skill, index mémoire, skills appris, recall proactif
 ~/.atoll/bin/atoll-bridge install       # (ré)installe hooks + statusline (idempotent)
 ~/.atoll/bin/atoll-bridge uninstall     # restaure l'existant
 # simuler un événement (bloque jusqu'à décision pour PermissionRequest) :
@@ -243,7 +255,9 @@ printf '%s' '{"hook_event_name":"PermissionRequest","session_id":"t","tool_name"
   bloquant gèle la queue série).
 - `log show` ne voit PAS les niveaux info/debug (non persistés) → utiliser `log stream`.
 
-### Chat / sous-processus (Phase 6, le plus douloureux)
+### Sous-processus `claude` (leçons du chat RETIRÉ, toujours valables)
+Le chat intégré n'existe plus (retiré le 2026-07-19), mais `RetrospectiveRunner` et
+`NotesCurationService` spawnent des `claude -p` : ces pièges restent d'actualité.
 - **`readabilityHandler` ne se déclenche PAS** sur un pipe dans une app LSUIElement (la run
   loop ne le pompe pas) → lire avec `read(2)` sur un thread dédié.
 - **Les `Pipe`/`FileHandle` Foundation croisent les fds** sous concurrence (vérifié à l'lsof :
@@ -313,7 +327,9 @@ printf '%s' '{"hook_event_name":"PermissionRequest","session_id":"t","tool_name"
 - `Quota` (`StatusLinePayload`, `QuotaSnapshot`) — parse le payload statusline.
 - `TerminalTarget` (`TerminalResolver`, `WorkspaceRoot`, `IDECommandLine`) /
   `TerminalScripts` — résolution du terminal + AppleScript (jump-back).
-- `StreamEvent` / `ChatProtocol` — parse le flux `claude -p` + messages user NDJSON.
+- `MemoryIndex` (+ `MemoryRanking`) — index FTS5, dédup inter-fichiers, récence.
+- `ProactiveRecall` / `NotesCurationPrompt` / `LearningInventory` — recall proactif,
+  curation des notes, inventaire du tableau de bord (Phase 11).
 
 ### `App/` (fenêtre, IPC, vues — @MainActor)
 - `AtollApp` / `AppDelegate` — @main, MenuBarExtra, démarrage (bridge server, store,
@@ -321,15 +337,16 @@ printf '%s' '{"hook_event_name":"PermissionRequest","session_id":"t","tool_name"
 - `NotchPanel` / `NotchWindowController` / `NotchViewModel` / `NotchRootView` /
   `NotchShape` / `NSScreen+Notch` — la coquille notch (NSPanel par écran, focus, géométrie).
 - `CompactView` / `ExpandedView` / `SessionDetailView` / `InteractionCardView` /
-  `ChatView` — les vues ASCII (priorité d'affichage étendu : carte > chat > détail > liste).
+  — les vues ASCII (priorité d'affichage étendu : carte > détail > liste).
 - `BridgeServer` — socket Unix BSD, reçoit les enveloppes du helper (events + statusline),
   garde les fd des PermissionRequest ouverts (`reply`/`cancelPending`).
 - `SessionStore` (singleton @Observable) — source de vérité des sessions : reducer, kqueue
   NOTE_EXIT, réconciliation `ps`, tail transcript, quota réel, ancres terminal, snapshot.
 - `InteractionCenter` (singleton) — cartes en attente + décisions + auto-approbation.
-- `ChatCenter` (singleton) + `ChatDriver` — chat `claude -p` persistant.
+- `RetrospectiveRunner` / `NotesCurationService` — les deux `claude -p` internes
+  (rétrospective de fin de session, curation périodique des notes).
 - `TerminalJumpService` + `AutomationPermission` — jump-back (hors main + timeout).
-- `HookInstaller` / `ClaudeLocator` — façade install, résolution du binaire claude.
+- `HookInstaller` — façade d'installation (tout passe par le helper `atoll-bridge`).
 - `ThemeManager` / `ThemeColors` — application du thème (NSApp.appearance).
 
 ### `Bridge/main.swift` — helper `atoll-bridge` (CLI embarqué dans le bundle)
@@ -376,14 +393,14 @@ claude CLI (n'importe quel terminal) ──hook──▶ ~/.atoll/bin/atoll-brid
 
 ## 7. PROCHAINE ACTION CONCRÈTE
 
-Quand Mehdi dit « go Phase 7 » :
-1. Demander/confirmer le Team ID Apple Developer et créer le certificat Developer ID.
-2. Écrire l'onboarding (première ouverture → proposer d'installer les hooks + expliquer).
-3. Scripter signature + notarisation + DMG (tester sur un build local d'abord).
-4. Intégrer Sparkle 2.8, générer les clés, poser l'appcast.
-5. **Lancer la revue adversariale de la Phase 7** (distribution : sécurité de la mise à
-   jour, intégrité de la signature, robustesse de l'onboarding/désinstallation).
-6. Vérification visuelle de l'onboarding + du DMG.
+La feuille de route « Atoll 2 » (milestones A, B, C) est **entièrement livrée** —
+il n'y a plus de prochaine étape écrite d'avance. **Demander à Mehdi la direction**
+avant d'ouvrir un chantier ; les pistes non tranchées sont listées au §0.
 
-Ne pas oublier : mettre à jour `PLAN.md` §5, le tableau du `README.md`, ce fichier, et la
-mémoire projet à chaque phase.
+Quel que soit le chantier, la routine de fin ne change pas :
+1. AtollCore + tests d'abord, coutures App/Bridge ensuite.
+2. **Vérifier en vrai** (app lancée, sessions réelles, screenshots LUS).
+3. **Revue adversariale multi-agents** par dimension, ne corriger que les constats
+   confirmés par la lecture du code.
+4. Release notarisée (`Scripts/release.sh`) + `gh release create` + deltas + push.
+5. Mettre à jour `README.md`, `CLAUDE.md`, ce fichier, `PLAN.md` §5 et la mémoire projet.

@@ -52,9 +52,15 @@ func sendToSocket(_ data: Data, path: String, awaitReply: Bool = false) -> Data?
     }
     guard connected == 0 else { return nil }
 
+    // DEADLINE GLOBALE (revue) : `SO_SNDTIMEO` borne chaque `write`, pas la
+    // boucle — un lecteur lent qui accepte quelques octets à chaque tour la
+    // faisait durer indéfiniment. Depuis que UserPromptSubmit peut être
+    // BLOQUANT, ce temps se paie sur chaque message de l'utilisateur.
+    let deadline = Date().addingTimeInterval(2.0)
     var offset = 0
     let total = data.count
     while offset < total {
+        guard Date() < deadline else { return nil }
         let written: Int = data.withUnsafeBytes { raw in
             write(fd, raw.baseAddress!.advanced(by: offset), min(total - offset, 65_536))
         }
@@ -131,7 +137,19 @@ func forwardHookEvent() {
     let envelope: [String: Any] = ["v": 1, "enrich": enrich, "payload": payload]
     guard let data = try? JSONSerialization.data(withJSONObject: envelope) else { return }
 
-    let isPermissionRequest = (payload["hook_event_name"] as? String) == "PermissionRequest"
+    let eventName = payload["hook_event_name"] as? String
+    let isPermissionRequest = eventName == "PermissionRequest"
+
+    // Recall proactif (opt-in) AVANT l'envoi à l'îlot (revue) : c'est LUI que
+    // le CLI attend sur un hook bloquant, et il ne dépend pas de l'app (il lit
+    // l'index en direct — il marche même Atoll fermé). L'affichage de l'îlot,
+    // lui, tolère parfaitement 20 ms de retard. Fail-open : nil = rien n'est
+    // écrit, le CLI poursuit comme si de rien n'était.
+    if eventName == "UserPromptSubmit",
+       let context = ProactiveRecallHook.contextJSON(payload: payload) {
+        _ = replyToStdout(context)
+    }
+
     let reply = sendToSocket(data, path: BridgePaths.socketPath, awaitReply: isPermissionRequest)
     _ = replyToStdout(reply)
 }
@@ -338,6 +356,14 @@ enum BridgeCLI {
         let backupPath = BridgePaths.settingsBackupURL.path
         if fileManager.fileExists(atPath: backupPath) {
             guard !HookSettingsEditor.isInstalled(in: currentData) else { return }
+            // Fichier courant ILLISIBLE (JSONC, corrompu) : `isInstalled` rend
+            // false, et sans cette garde on remplaçait le backup sain par la
+            // version corrompue (revue) — juste avant que l'installation
+            // échoue de toute façon. Le backup ne se rafraîchit que depuis un
+            // JSON valide.
+            guard let currentData,
+                  (try? JSONSerialization.jsonObject(with: currentData)) is [String: Any]
+            else { return }
             try fileManager.removeItem(atPath: backupPath)
         }
         try fileManager.copyItem(at: settingsURL, to: BridgePaths.settingsBackupURL)
@@ -349,10 +375,18 @@ enum BridgeCLI {
             var current = try readSettings()
 
             // Hooks : écriture seulement si pas déjà installés (évite de réécrire
-            // à chaque lancement de l'app, fenêtre de course minimale avec le CLI).
-            if !HookSettingsEditor.isInstalled(in: current) {
+            // à chaque lancement de l'app, fenêtre de course minimale avec le CLI)
+            // OU si le mode de recall proactif du fichier installé ne correspond
+            // plus au réglage (UserPromptSubmit bloquant ⟷ async).
+            let wantsProactiveRecall = ProactiveRecallHook.loadConfig()?.enabled ?? false
+            if !HookSettingsEditor.isInstalled(in: current)
+                || HookSettingsEditor.installedProactiveRecall(in: current) != wantsProactiveRecall {
                 try refreshBackup(currentData: current)
-                let updated = try HookSettingsEditor.install(into: current, command: BridgePaths.hookCommand)
+                let updated = try HookSettingsEditor.install(
+                    into: current,
+                    command: BridgePaths.hookCommand,
+                    proactiveRecall: wantsProactiveRecall
+                )
                 try updated.write(to: settingsURL, options: .atomic)
                 current = try readSettings()
             }
@@ -498,6 +532,10 @@ enum BridgeCLI {
             "denyParked": FileManager.default.fileExists(atPath: BridgePaths.rockstarParkedDenyURL.path),
             "skillInstalled": FileManager.default.fileExists(atPath: BridgePaths.recallSkillURL.path),
             "memoryIndexPresent": FileManager.default.fileExists(atPath: BridgePaths.memoryDatabaseURL.path),
+            // Réglage demandé vs mode réellement installé : un écart signale
+            // des hooks à réécrire (`atoll-bridge install` le fait).
+            "proactiveRecallEnabled": ProactiveRecallHook.loadConfig()?.enabled ?? false,
+            "proactiveRecallHookBlocking": HookSettingsEditor.installedProactiveRecall(in: settings),
             "learnedSkills": LearnedSkillStore().installedSkills().count,
         ]
         if let data = try? JSONSerialization.data(withJSONObject: state, options: [.sortedKeys]) {

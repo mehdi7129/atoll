@@ -241,10 +241,14 @@ public enum NotesCurationPlanner {
 
         // (3) Rendu des notes ; les contradictions deviennent des
         // avertissements, dans l'ordre de la sortie, et rien d'autre.
+        // Les métadonnées des notes SOURCES (projet, catégorie, date de
+        // naissance) sont relues pour être reportées : une consolidation ne
+        // doit pas amnésier d'où vient la connaissance (revue).
+        let heritage = Heritage(existing: existing)
         let rendered = output.notes.enumerated().map { index, note in
             RenderedNote(
                 fileName: fileName(index: index, title: note.title),
-                content: renderedContents(of: note, now: now)
+                content: renderedContents(of: note, now: now, heritage: heritage)
             )
         }
         let warnings = output.contradictions.map { "⚠ contradiction : \($0.summary)" }
@@ -288,13 +292,74 @@ public enum NotesCurationPlanner {
         return joined
     }
 
-    /// Front-matter minimal (title, curated_at, sources si non vide) puis le
-    /// contenu, terminé par exactement un saut de ligne — style LearningNoteFile.
-    private static func renderedContents(of note: NotesCurationOutput.Note, now: Date) -> String {
+    /// Métadonnées des notes d'origine, indexées par nom de fichier : ce que la
+    /// consolidation doit HÉRITER de ses sources.
+    ///
+    /// Sans cet héritage, une note curée ne portait plus que `title`,
+    /// `curated_at` et `sources` : `project` et `category` disparaissaient, et
+    /// avec eux le regroupement par projet du tableau de bord — au premier
+    /// cycle de curation, définitivement (revue).
+    struct Heritage {
+        /// name → (project, category, created_at brut)
+        private let fields: [String: (project: String?, category: String?, created: String?)]
+
+        init(existing: [(name: String, content: String)]) {
+            var fields: [String: (String?, String?, String?)] = [:]
+            for note in existing {
+                let parsed = LearningInventory.splitFrontMatter(note.content).fields
+                fields[note.name] = (parsed["project"], parsed["category"],
+                                     parsed["created_at"] ?? parsed["curated_at"])
+            }
+            self.fields = fields
+        }
+
+        /// Valeur la plus fréquente parmi les sources citées (départage
+        /// alphabétique pour rester déterministe), nil si aucune n'en porte.
+        private func majority(_ sources: [String],
+                              _ pick: ((project: String?, category: String?, created: String?)) -> String?)
+            -> String? {
+            var counts: [String: Int] = [:]
+            for source in sources {
+                guard let entry = fields[source], let value = pick(entry), !value.isEmpty else {
+                    continue
+                }
+                counts[value, default: 0] += 1
+            }
+            return counts.max { ($0.value, $1.key) < ($1.value, $0.key) }?.key
+        }
+
+        func project(for sources: [String]) -> String? { majority(sources) { $0.project } }
+        func category(for sources: [String]) -> String? { majority(sources) { $0.category } }
+
+        /// Date de naissance la plus ANCIENNE parmi les sources (comparaison
+        /// lexicographique : l'ISO-8601 UTC s'y prête). C'est l'âge de la
+        /// connaissance, pas celui de sa dernière réécriture.
+        func createdAt(for sources: [String]) -> String? {
+            sources.compactMap { fields[$0]?.created }.filter { !$0.isEmpty }.min()
+        }
+    }
+
+    /// Front-matter (title, project/category/created_at hérités des sources,
+    /// curated_at, sources si non vide) puis le contenu, terminé par exactement
+    /// un saut de ligne — même forme que `LearningNoteFile`, pour que
+    /// `LearningInventory` relise indifféremment une note écrite par une
+    /// rétrospective ou par une curation.
+    private static func renderedContents(of note: NotesCurationOutput.Note,
+                                         now: Date,
+                                         heritage: Heritage) -> String {
         var frontMatter = [
             "title: \(CurationRender.yamlScalar(note.title))",
-            "curated_at: \(CurationRender.iso8601(now))",
         ]
+        if let category = heritage.category(for: note.sources) {
+            frontMatter.append("category: \(CurationRender.yamlScalar(category))")
+        }
+        if let project = heritage.project(for: note.sources) {
+            frontMatter.append("project: \(CurationRender.yamlScalar(project))")
+        }
+        if let created = heritage.createdAt(for: note.sources) {
+            frontMatter.append("created_at: \(CurationRender.yamlScalar(created))")
+        }
+        frontMatter.append("curated_at: \(CurationRender.iso8601(now))")
         if !note.sources.isEmpty {
             frontMatter.append("sources:")
             frontMatter.append(contentsOf: note.sources.map {

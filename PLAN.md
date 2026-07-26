@@ -1,10 +1,13 @@
 # ATOLL — Plan détaillé
 
 > ⚠️ **Document HISTORIQUE (plan initial du 2026-07-18).** L'app est livrée et publiée
-> (**v0.4.4**, 2026-07-20). Deux écarts avec ce plan, décidés en cours de route :
-> le **chat intégré (ex-Phase 6) et la dictée vocale ont été RETIRÉS** (Mehdi préfère
-> Cursor) ; la **distribution est la Phase 6 finale**. Pour l'état À JOUR, voir
-> `docs/HANDOFF.md`, `CLAUDE.md` et le README. Ce fichier reste la trace du plan produit.
+> (**v0.11.0**, 2026-07-26) : les phases 1 à 11 sont faites — voir §5, tenu à jour.
+> Deux écarts avec le plan d'origine, décidés en cours de route : le **chat intégré
+> (ex-Phase 6) et la dictée vocale ont été RETIRÉS** (Mehdi préfère Cursor), d'où le
+> décalage de numérotation ; les phases 7 à 11 ont été ajoutées après coup (mémoire,
+> robustesse, cockpit, verre, mémoire vive). Les sections 1 à 4 décrivent l'intention
+> initiale et n'ont PAS été réécrites : pour l'état à jour du code, voir
+> `docs/HANDOFF.md`, `CLAUDE.md` et le README.
 
 > Une « Dynamic Island » pour Claude Code sur macOS, avec une esthétique ASCII/terminal soignée
 > (dark / light / auto), pour suivre et piloter tes sessions Claude sans jamais quitter ton flow —
@@ -317,14 +320,37 @@ Tee-wrapper statusline (chaînage respectueux + désinstallation propre), cache 
 d'âge, jauge compacte 5 h/7 j + comptes à rebours ; polling OAuth opt-in. **Livrable : le quota
 exact, en un coup d'œil.**
 
-### Phase 6 — Chat intégré
-ChatDriver stream-json persistant, composer dans l'îlot étendu (nouvelle session dans un dossier
-choisi, ou reprise/fork d'une session existante), rendu streaming ASCII. **Livrable : on lance
-et pilote Claude depuis le notch.**
+### ~~Phase 6 — Chat intégré~~ — ABANDONNÉE (2026-07-19)
+ChatDriver stream-json persistant, composer dans l'îlot étendu… **Retirée à la demande de
+Mehdi** : il chatte et dicte dans Cursor. Le détail de session ouvre désormais le terminal
+de la session (jump-back). Ne pas ré-ajouter sans demande explicite. La numérotation qui
+suit a glissé d'un cran : la distribution est devenue la Phase 6.
 
-### Phase 7 — Polish + distribution
-Onboarding (installation hooks guidée, permissions), réglages complets, sons (packs 8-bit
-optionnels), Sparkle + appcast, signature Developer ID + notarisation + DMG, site/README.
+### Phase 6 — Polish + distribution — ✅ livrée 2026-07-19 (v0.4.0)
+Onboarding (installation hooks guidée, permissions), réglages complets, Sparkle + appcast,
+signature Developer ID + notarisation + DMG, README.
+
+### Phase 7 — « Atoll apprend » — ✅ livrée (v0.5.0 → v0.7.0)
+7a mémoire (index FTS5 de tous les transcripts + skill `atoll-recall`), 7b rétrospective
+de fin de session (notes + skills proposés en quarantaine), 7c curation (revue humaine
+des skills, stats d'usage, désinstallation chirurgicale).
+
+### Phase 8 — « Sur rails supportés » — ✅ livrée (v0.8.0)
+Découverte des sessions par `claude agents --json` (autorité) + hooks (temps réel), scan
+de processus en repli. Milestone A de la feuille de route « Atoll 2 ».
+
+### Phase 9 — « Cockpit ambiant » — ✅ livrée (v0.9.0 / v0.9.1)
+Lancer une tâche en arrière-plan depuis le notch, arrêter une session, regroupement des
+sessions par projet. Milestone C.
+
+### Phase 10 — « Verre & ondulation » — ✅ livrée (v0.10.0)
+Liquid Glass (API publique, macOS 26) + transparence réglable + onde d'expansion, passe
+d'hygiène.
+
+### Phase 11 — « Mémoire vive » — ✅ livrée (v0.11.0)
+Curation périodique des notes, recall proactif opt-in (hook UserPromptSubmit bloquant),
+dédup inter-fichiers + récence du recall, tableau de bord des notes. Milestone B — et
+donc **fin de la feuille de route « Atoll 2 »** : la suite est à décider.
 
 Chaque phase se termine par un build utilisable — tu peux t'arrêter (ou pivoter) à n'importe
 quelle frontière de phase.

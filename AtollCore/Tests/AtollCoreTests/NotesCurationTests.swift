@@ -211,4 +211,81 @@ final class NotesCurationTests: XCTestCase {
         // Déterminisme : mêmes entrées + même `now` → même plan.
         XCTAssertEqual(plan, try planSuccess(NotesCurationPlanner.plan(existing: [], output: output, now: now)))
     }
+
+    // MARK: - Héritage des métadonnées
+
+    /// Une note consolidée HÉRITE du projet, de la catégorie et de la date de
+    /// naissance de ses sources. Sans cela, la première curation effaçait
+    /// `project`/`category` et le regroupement par projet du tableau de bord
+    /// disparaissait pour toujours (revue).
+    func testCuratedNoteInheritsSourceMetadata() throws {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let existing = [
+            (name: "a.md", content: """
+            ---
+            slug: piege-un
+            category: pitfall
+            project: /Users/x/Dynamic_Island
+            created_at: 2026-07-18T08:00:00Z
+            ---
+
+            Premier piège.
+            """),
+            (name: "b.md", content: """
+            ---
+            slug: piege-deux
+            category: pitfall
+            project: /Users/x/Dynamic_Island
+            created_at: 2026-07-20T08:00:00Z
+            ---
+
+            Second piège.
+            """),
+        ]
+        // Contenu consolidé assez fourni pour passer le garde-fou de volume
+        // (le refus pour rétrécissement a ses propres tests).
+        let output = NotesCurationOutput(
+            notes: [.init(title: "Pièges de build",
+                          content: String(repeating: "Les deux pièges réunis. ", count: 20),
+                          sources: ["a.md", "b.md"])],
+            contradictions: []
+        )
+        let plan = try planSuccess(NotesCurationPlanner.plan(existing: existing, output: output, now: now))
+        let content = try XCTUnwrap(plan.newNotes.first?.content)
+
+        XCTAssertTrue(content.contains("category: pitfall"), content)
+        XCTAssertTrue(content.contains("project: /Users/x/Dynamic_Island"), content)
+        // La date de naissance la plus ANCIENNE (l'âge de la connaissance),
+        // et la date de curation en plus, jamais à la place. La valeur passe
+        // par l'échappement YAML (elle contient des `:`) — donc entre
+        // guillemets, ce que l'inventaire déquote (vérifié plus bas).
+        XCTAssertTrue(content.contains("created_at: \"2026-07-18T08:00:00Z\""), content)
+        XCTAssertTrue(content.contains("curated_at: "), content)
+
+        // Et l'inventaire relit bien tout ça (contrat verrouillé des deux côtés).
+        let summary = LearningInventory.parse(
+            fileName: plan.newNotes[0].fileName, contents: content)
+        XCTAssertEqual(summary.project, "/Users/x/Dynamic_Island")
+        XCTAssertEqual(summary.category, "pitfall")
+        XCTAssertEqual(summary.title, "Pièges de build")
+    }
+
+    /// Sources sans métadonnées (ou inconnues) : aucune clé inventée.
+    func testCuratedNoteOmitsUnknownMetadata() throws {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let output = NotesCurationOutput(
+            notes: [.init(title: "Sans héritage",
+                          content: String(repeating: "Corps. ", count: 10),
+                          sources: ["absent.md"])],
+            contradictions: []
+        )
+        let plan = try planSuccess(NotesCurationPlanner.plan(
+            existing: [(name: "autre.md", content: "pas de front-matter")],
+            output: output, now: now))
+        let content = try XCTUnwrap(plan.newNotes.first?.content)
+        XCTAssertFalse(content.contains("project:"), content)
+        XCTAssertFalse(content.contains("category:"), content)
+        XCTAssertFalse(content.contains("created_at:"), content)
+        XCTAssertTrue(content.contains("curated_at:"), content)
+    }
 }
