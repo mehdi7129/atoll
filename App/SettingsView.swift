@@ -43,7 +43,7 @@ private struct GeneralPane: View {
     @AppStorage("paletteID") private var paletteID = Palette.monoOrange.id
     @AppStorage("hoverDelay") private var hoverDelay = 0.15
     @AppStorage(VisualEffects.enabledKey) private var visualEffects = true
-    @AppStorage(VisualEffects.glassTransparencyKey) private var glassTransparency = VisualEffects.defaultGlassTransparency
+    @AppStorage(VisualEffects.glassIntensityKey) private var glassIntensity = VisualEffects.defaultGlassIntensity
     @State private var launchAtLogin = false
     /// Recalculé à l'apparition (branchement/débranchement d'écran).
     @State private var screens: [ScreenChoice] = []
@@ -91,20 +91,20 @@ private struct GeneralPane: View {
                 Toggle("Effets visuels", isOn: $visualEffects)
                 if #available(macOS 26.0, *) {
                     VStack(alignment: .leading) {
-                        Slider(value: $glassTransparency, in: 0...1, step: 0.05) {
-                            Text("Transparence du verre")
+                        Slider(value: $glassIntensity, in: 0...1, step: 0.05) {
+                            Text("Intensité du Liquid Glass")
                         }
-                        Text("\(Int(glassTransparency * 100)) %")
+                        Text("\(Int(glassIntensity * 100)) %")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                     .disabled(!visualEffects)
                 }
                 Text("""
-                Fond en verre translucide autour du notch (Liquid Glass, macOS 26 ; \
-                aplat sobre en deçà) et une onde discrète à l'ouverture de l'îlot. \
-                Plus la transparence est haute, plus le verre laisse passer le fond \
-                (au prix du contraste). Désactivé : fond opaque, aucune animation. \
+                Fond en Liquid Glass autour du notch (macOS 26 ; aplat sobre en deçà) \
+                et une onde discrète à l'ouverture de l'îlot. Plus l'intensité monte, \
+                plus le verre réfracte ce qu'il y a derrière (au prix du contraste) ; \
+                à 0 %, fond plein, aucun verre. Désactiver coupe verre et animation. \
                 L'onde respecte toujours « Réduire les animations » du système.
                 """)
                 .font(.caption)
@@ -376,6 +376,8 @@ private struct LearningPane: View {
     @State private var notes: [LearningNoteSummary] = []
     @State private var noteProjects: [(project: String, count: Int)] = []
     @State private var noteVolume = 0
+    /// Journal des évaluations de fin de session (relu à l'apparition).
+    @State private var attempts: [RetrospectiveRunner.AttemptRecord] = []
 
     var body: some View {
         Form {
@@ -388,17 +390,62 @@ private struct LearningPane: View {
                         Text("70 %").tag(0.7)
                         Text("80 %").tag(0.8)
                     }
-                    Picker("Modèle", selection: learningModel) {
-                        Text("Haiku (économe)").tag("haiku")
-                        Text("Sonnet (recommandé)").tag("sonnet")
-                        Text("Fable (gourmand)").tag("fable")
-                    }
                 }
                 Text("""
                 Après chaque session substantielle (si votre fenêtre 5 h a de la marge), \
                 une analyse en LECTURE SEULE extrait les leçons durables — notes mémoire \
                 et skills proposés en QUARANTAINE. Consomme du quota ; désactiver arrête \
                 tout immédiatement.
+                """)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+
+            Section("Modèles d'analyse") {
+                // Un modèle PAR TÂCHE : chercher (comparer un besoin à des
+                // centaines de descriptions) et analyser (extraire un skill
+                // d'une session) n'ont ni la même difficulté ni la même
+                // fréquence — les payer au même prix serait absurde.
+                Picker("Rétrospective", selection: modelBinding(LearningSettings.modelKey, "sonnet")) {
+                    ForEach(LearningSettings.availableModels, id: \.self) { Text(modelLabel($0)).tag($0) }
+                }
+                Picker("Curation", selection: modelBinding(LearningSettings.curationModelKey, "sonnet")) {
+                    ForEach(LearningSettings.availableModels, id: \.self) { Text(modelLabel($0)).tag($0) }
+                }
+                Picker("Recherche", selection: modelBinding(LearningSettings.searchModelKey, "haiku")) {
+                    ForEach(LearningSettings.availableModels, id: \.self) { Text(modelLabel($0)).tag($0) }
+                }
+                Text("""
+                La recherche (« ce skill existe-t-il déjà ? », « quel plugin répond à ce \
+                besoin ? ») est fréquente et facile : Haiku suffit. L'extraction d'un \
+                skill demande du jugement : Sonnet. Opus pour peu de propositions mais \
+                excellentes ; Fable pour la vitesse.
+                """)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+
+            Section("Journal d'apprentissage") {
+                if attempts.isEmpty {
+                    Text("Aucune évaluation enregistrée pour l'instant.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    // Chaque fin de session laisse une trace, même refusée :
+                    // c'est ce qui manquait pour comprendre pourquoi rien ne
+                    // sortait (le gate refusait en silence).
+                    ForEach(attempts) { attempt in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(attemptTitle(attempt))
+                            Text(attemptDetail(attempt))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                Text("""
+                Ce que fait Atoll à chaque fin de session : lancé, ou sauté et pourquoi \
+                (quota inconnu, session trop courte, déjà traitée…).
                 """)
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -525,6 +572,7 @@ private struct LearningPane: View {
             center.refresh()
             indexer.refreshStats()
             refreshNotes()
+            attempts = RetrospectiveRunner.shared.recentAttempts()
         }
         // Une curation qui se termine réécrit les fichiers : on relit.
         .onChange(of: curation.lastRunAt) { _, _ in refreshNotes() }
@@ -602,11 +650,78 @@ private struct LearningPane: View {
         )
     }
 
-    private var learningModel: Binding<String> {
+    private func modelBinding(_ key: String, _ fallback: String) -> Binding<String> {
         Binding(
-            get: { UserDefaults.standard.string(forKey: LearningSettings.modelKey) ?? "sonnet" },
-            set: { UserDefaults.standard.set($0, forKey: LearningSettings.modelKey) }
+            get: { UserDefaults.standard.string(forKey: key) ?? fallback },
+            set: { UserDefaults.standard.set($0, forKey: key) }
         )
+    }
+
+    private func modelLabel(_ model: String) -> String {
+        switch model {
+        case "haiku": return "Haiku · rapide"
+        case "sonnet": return "Sonnet · équilibré"
+        case "opus": return "Opus · le plus fin"
+        case "fable": return "Fable · véloce"
+        default: return model
+        }
+    }
+
+    /// « 14:32 · lancée » ou « 14:32 · sautée : quota inconnu ».
+    private func attemptTitle(_ attempt: RetrospectiveRunner.AttemptRecord) -> String {
+        let time = attempt.decidedAt.formatted(date: .abbreviated, time: .shortened)
+        if attempt.decision == "run" {
+            return "\(time) · analysée"
+        }
+        let reason = attempt.decision
+            .replacingOccurrences(of: "skip(", with: "")
+            .replacingOccurrences(of: ")", with: "")
+        return "\(time) · sautée : \(reasonLabel(reason))"
+    }
+
+    /// Traduction des raisons du gate — l'utilisateur ne lit pas des rawValue.
+    private func reasonLabel(_ raw: String) -> String {
+        switch raw {
+        case "disabled": return "apprentissage désactivé"
+        case "sessionResumed": return "session encore vivante"
+        case "sessionTooShort": return "session trop courte"
+        case "transcriptMissing": return "transcript introuvable"
+        case "transcriptTooSmall": return "session trop légère"
+        case "tooFewUserPrompts": return "trop peu d'échanges"
+        case "alreadyProcessed": return "déjà analysée"
+        case "quotaMissing": return "quota inconnu"
+        case "quotaStale": return "quota périmé"
+        case "quotaAboveThreshold": return "quota trop consommé"
+        case "windowCapReached": return "plafond de la fenêtre 5 h"
+        default: return raw
+        }
+    }
+
+    /// « 2,1 Mo · quota 12 % · 1 note, 1 skill · 0,04 $ ».
+    private func attemptDetail(_ attempt: RetrospectiveRunner.AttemptRecord) -> String {
+        var parts: [String] = []
+        if let bytes = attempt.transcriptBytes {
+            parts.append(ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file))
+        }
+        if let quota = attempt.quotaFraction {
+            parts.append("quota \(Int(quota * 100)) %")
+        }
+        if let outcome = attempt.outcome {
+            parts.append(outcomeLabel(outcome, attempt: attempt))
+        }
+        if let cost = attempt.costUSD {
+            let model = attempt.dominantModel.map { " (\($0.replacingOccurrences(of: "claude-", with: "")))" } ?? ""
+            parts.append(String(format: "%.2f $", cost) + model)
+        }
+        return parts.isEmpty ? attempt.sessionID.prefix(8).description : parts.joined(separator: " · ")
+    }
+
+    private func outcomeLabel(_ outcome: String, attempt: RetrospectiveRunner.AttemptRecord) -> String {
+        if outcome == "nothing_learned" { return "rien de durable" }
+        if outcome.hasPrefix("failed") { return "échec (\(outcome))" }
+        let notes = attempt.notesWritten ?? 0
+        let skills = attempt.skillsProposed ?? 0
+        return "\(notes) note(s), \(skills) skill(s)"
     }
 }
 

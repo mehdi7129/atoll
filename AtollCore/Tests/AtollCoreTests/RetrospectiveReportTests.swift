@@ -3,6 +3,30 @@ import XCTest
 
 final class RetrospectiveReportTests: XCTestCase {
 
+    /// Le préfixe `atoll-` appartient au dossier d'installation : un modèle qui
+    /// analyse une session sur Atoll le colle spontanément à son slug (vu en
+    /// vrai : `atoll-dmg-release-pipeline`), et la proposition devenait
+    /// inapprouvable. Il est retiré, la proposition survit.
+    func testSkillSlugStripsManagedPrefix() throws {
+        let payload = #"""
+        {"session_summary":"s","nothing_learned":false,"notes":[],
+         "skills":[{"slug":"atoll-dmg-release-pipeline","title":"Release",
+                    "description":"d","skill_md":"corps","rationale":"r",
+                    "confidence":"medium"}]}
+        """#
+        let envelope = try JSONSerialization.data(withJSONObject: [
+            "type": "result", "subtype": "success", "is_error": false,
+            "structured_output": try JSONSerialization.jsonObject(with: Data(payload.utf8)),
+        ])
+        guard case .success(let report) = RetrospectiveReport.parse(cliOutput: envelope) else {
+            return XCTFail("le rapport aurait dû être accepté")
+        }
+        XCTAssertEqual(report.skills.first?.slug, "dmg-release-pipeline")
+        XCTAssertEqual(SkillSlug.dirName(for: report.skills[0].slug), "atoll-dmg-release-pipeline",
+                       "le dossier retrouve UN seul préfixe")
+    }
+
+
     // MARK: - Fixtures
 
     /// Payload rétrospective réaliste : 2 notes (dont une avec catégorie et

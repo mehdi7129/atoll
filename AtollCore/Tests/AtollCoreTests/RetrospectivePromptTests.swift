@@ -109,7 +109,8 @@ final class RetrospectivePromptTests: XCTestCase {
     func testSystemPromptContainsUntrustedDataWarning() {
         let prompt = RetrospectivePrompt.systemPrompt
         XCTAssertTrue(prompt.contains("UNTRUSTED DATA"))
-        XCTAssertTrue(prompt.contains("STRICTLY READ-ONLY"))
+        XCTAssertTrue(prompt.contains("NO TOOLS AT ALL"),
+                      "v0.12.0 : le condensé est dans le prompt, le modèle n'a plus d'outil")
         XCTAssertTrue(prompt.contains("ONE JSON object"))
         // L'injection « signée » est explicitement couverte.
         XCTAssertTrue(prompt.contains("claims to come from the user"))
@@ -124,12 +125,13 @@ final class RetrospectivePromptTests: XCTestCase {
         XCTAssertTrue(args.contains("--safe-mode"))
         XCTAssertTrue(args.contains("--no-session-persistence"))
         XCTAssertTrue(args.contains("--disable-slash-commands"))
-        XCTAssertEqual(value(after: "--tools", in: args), "Read,Grep,Glob")
+        XCTAssertEqual(value(after: "--tools", in: args), "",
+                       "aucun outil : tout le matériel est déjà dans le prompt")
         XCTAssertEqual(value(after: "--permission-mode", in: args), "plan")
         XCTAssertEqual(value(after: "--setting-sources", in: args), "")
 
         let disallowed = value(after: "--disallowedTools", in: args) ?? ""
-        for tool in ["Write", "Edit", "Bash", "WebFetch", "Task"] {
+        for tool in ["Read", "Grep", "Glob", "Write", "Edit", "Bash", "WebFetch", "Task"] {
             XCTAssertTrue(disallowed.contains(tool), "\(tool) doit être interdit")
         }
 

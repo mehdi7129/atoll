@@ -246,6 +246,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         debugTokens.append(retroToken)
 
+        // Rétrospective sur le plus gros transcript du projet Atoll : vérifie
+        // le pipeline complet (condensé → analyse → notes/skills) sur une vraie
+        // session riche, sans attendre qu'une session substantielle se termine.
+        var retroBigToken: Int32 = 0
+        notify_register_dispatch("dev.mehdiguiard.atoll.debug.retroBig", &retroBigToken, DispatchQueue.main) { _ in
+            MainActor.assumeIsolated {
+                RetrospectiveRunner.shared.debugRunOnLargestTranscript(
+                    projectDirectory: "-Users-mehdiguiard-Desktop-Dynamic-Island")
+            }
+        }
+        debugTokens.append(retroBigToken)
+
         // Curation des notes (consomme du quota ET réécrit la mémoire :
         // jamais en release). Ignore l'échéance hebdomadaire, PAS les
         // garde-fous (opt-in, budget, archive vérifiée).

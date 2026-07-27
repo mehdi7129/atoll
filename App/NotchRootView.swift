@@ -9,7 +9,7 @@ struct NotchRootView: View {
     @AppStorage("paletteID") private var paletteID = Palette.monoOrange.id
     @AppStorage("hoverDelay") private var hoverDelay = 0.15
     @AppStorage(VisualEffects.enabledKey) private var visualEffects = true
-    @AppStorage(VisualEffects.glassTransparencyKey) private var glassTransparency = VisualEffects.defaultGlassTransparency
+    @AppStorage(VisualEffects.glassIntensityKey) private var glassIntensity = VisualEffects.defaultGlassIntensity
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Rejoue l'onde d'expansion : incrémenté à chaque passage → étendu.
@@ -105,7 +105,7 @@ struct NotchRootView: View {
                 isCompactCap: isCompactCap,
                 isExpanded: viewModel.state == .expanded,
                 effectsEnabled: visualEffects,
-                glassTransparency: glassTransparency
+                glassIntensity: glassIntensity
             )
 
             // Étendu sur écran à encoche : bandeau noir en haut, à hauteur du notch

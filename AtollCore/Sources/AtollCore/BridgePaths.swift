@@ -88,6 +88,12 @@ public enum BridgePaths {
 
     // MARK: - Apprentissage (Phase 7b)
 
+    /// Dernier quota serveur connu, mis en cache pour survivre à un
+    /// redémarrage d'Atoll (le gate d'apprentissage en dépend).
+    public static var quotaCacheURL: URL {
+        homeDirectory.appendingPathComponent(".atoll/quota-cache.json")
+    }
+
     /// Racine des artefacts d'apprentissage. Créée à l'ACTIVATION du réglage
     /// (opt-in, OFF par défaut) — jamais au simple lancement.
     public static var learningDirectory: URL {

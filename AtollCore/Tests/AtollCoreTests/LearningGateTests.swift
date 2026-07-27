@@ -102,22 +102,42 @@ final class LearningGateTests: XCTestCase {
         XCTAssertEqual(decide(session: session(prompts: nil)), .run)
     }
 
-    // MARK: - Critères de quota (fail-safe : pas de donnée = pas de run)
+    // MARK: - Critères de quota
 
-    func testSkipsWithoutQuotaData() {
+    /// Quota INCONNU : depuis la v0.12.0, ce n'est plus un refus sec — c'était
+    /// la cause n° 1 du silence (1 rétrospective en 7 jours). On autorise
+    /// `unknownQuotaMaxPerWindow` run(s) par fenêtre, puis on refuse.
+    func testRunsOnceWithoutQuotaDataThenSkips() {
         let noFraction = LearningGate.QuotaFacts(usedFraction: nil, receivedAt: now, resetsAt: nil)
-        XCTAssertEqual(decide(quota: noFraction), .skip(.quotaMissing))
+        XCTAssertEqual(decide(quota: noFraction), .run)
         let noReception = LearningGate.QuotaFacts(usedFraction: 0.1, receivedAt: nil, resetsAt: nil)
-        XCTAssertEqual(decide(quota: noReception), .skip(.quotaMissing))
+        XCTAssertEqual(decide(quota: noReception), .run)
+
+        // Un run déjà fait dans la fenêtre → on ne dépense plus à l'aveugle.
+        let oneRun = LearningGate.History(runTimestamps: [now.addingTimeInterval(-60)])
+        XCTAssertEqual(decide(quota: noFraction, history: oneRun), .skip(.quotaMissing))
     }
 
-    func testSkipsStaleQuota() {
+    /// Le refus sec reste disponible : `unknownQuotaMaxPerWindow = 0`.
+    func testUnknownQuotaCanBeForbidden() {
+        let strict = LearningGate.Config(enabled: true, unknownQuotaMaxPerWindow: 0)
+        let noQuota = LearningGate.QuotaFacts(usedFraction: nil, receivedAt: nil, resetsAt: nil)
+        XCTAssertEqual(
+            LearningGate.decide(session: session(), quota: noQuota, config: strict,
+                                history: LearningGate.History(), now: now),
+            .skip(.quotaMissing)
+        )
+    }
+
+    func testStaleQuotaFollowsTheUnknownQuotaRule() {
         let stale = LearningGate.QuotaFacts(
             usedFraction: 0.1,
             receivedAt: now.addingTimeInterval(-601),
             resetsAt: now.addingTimeInterval(3_600)
         )
-        XCTAssertEqual(decide(quota: stale), .skip(.quotaStale))
+        XCTAssertEqual(decide(quota: stale), .run, "périmé = inconnu : un run toléré")
+        let oneRun = LearningGate.History(runTimestamps: [now])
+        XCTAssertEqual(decide(quota: stale, history: oneRun), .skip(.quotaStale))
         let atLimit = LearningGate.QuotaFacts(
             usedFraction: 0.1,
             receivedAt: now.addingTimeInterval(-600),
@@ -135,7 +155,11 @@ final class LearningGateTests: XCTestCase {
             receivedAt: now.addingTimeInterval(-60),
             resetsAt: now.addingTimeInterval(-1)
         )
-        XCTAssertEqual(decide(quota: expired), .skip(.quotaStale))
+        XCTAssertEqual(decide(quota: expired), .run, "périmé = inconnu : un run toléré")
+        XCTAssertEqual(
+            decide(quota: expired, history: LearningGate.History(runTimestamps: [now])),
+            .skip(.quotaStale)
+        )
     }
 
     func testSkipsQuotaAtThreshold() {
@@ -217,16 +241,32 @@ final class LearningGateTests: XCTestCase {
         )
         let noQuota = LearningGate.QuotaFacts(usedFraction: nil, receivedAt: nil, resetsAt: nil)
         XCTAssertEqual(decide(quota: noQuota, history: processed), .skip(.alreadyProcessed))
-        // quotaStale avant quotaAboveThreshold.
+        // Quota périmé ET élevé : le mode « quota inconnu » l'emporte tant
+        // qu'aucun run n'a eu lieu dans la fenêtre (on ne peut pas savoir que
+        // 0,99 est encore vrai — c'est justement une valeur périmée).
         let staleAndHigh = LearningGate.QuotaFacts(
             usedFraction: 0.99,
             receivedAt: now.addingTimeInterval(-9_999),
             resetsAt: nil
         )
-        XCTAssertEqual(decide(quota: staleAndHigh), .skip(.quotaStale))
-        // quotaAboveThreshold avant windowCapReached.
+        // Fenêtre 5 h encore en cours : 0,99 est un MINORANT (l'usage ne
+        // redescend pas) → vrai refus, même si la lecture est vieille.
+        let staleHighLiveWindow = LearningGate.QuotaFacts(
+            usedFraction: 0.99,
+            receivedAt: now.addingTimeInterval(-9_999),
+            resetsAt: now.addingTimeInterval(1_800)
+        )
+        XCTAssertEqual(decide(quota: staleHighLiveWindow), .skip(.quotaAboveThreshold))
+        // Sans resets_at connu, on ne peut rien affirmer : règle « inconnu ».
+        XCTAssertEqual(decide(quota: staleAndHigh), .run)
+        XCTAssertEqual(
+            decide(quota: staleAndHigh, history: LearningGate.History(runTimestamps: [now])),
+            .skip(.quotaStale)
+        )
+        // windowCapReached passe désormais AVANT le quota : c'est lui qui borne
+        // la dépense, et le mode « quota inconnu » s'appuie dessus.
         let high = LearningGate.QuotaFacts(usedFraction: 0.99, receivedAt: now, resetsAt: nil)
         let capped = LearningGate.History(runTimestamps: [now, now])
-        XCTAssertEqual(decide(quota: high, history: capped), .skip(.quotaAboveThreshold))
+        XCTAssertEqual(decide(quota: high, history: capped), .skip(.windowCapReached))
     }
 }

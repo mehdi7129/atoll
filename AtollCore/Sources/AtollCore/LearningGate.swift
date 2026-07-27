@@ -87,6 +87,11 @@ public enum LearningGate {
         /// Croissance du transcript (octets) qui justifie de RE-traiter une
         /// session déjà passée à la rétrospective.
         public let reprocessGrowthBytes: Int
+        /// Nombre de runs autorisés par fenêtre de 5 h QUAND LE QUOTA EST
+        /// INCONNU ou périmé (voir `decide`, étape 6). 0 rétablit l'ancien
+        /// comportement (refus sec), 1 = le défaut : on accepte d'apprendre à
+        /// l'aveugle une fois par fenêtre plutôt que jamais.
+        public let unknownQuotaMaxPerWindow: Int
 
         public init(
             enabled: Bool = false,
@@ -96,7 +101,8 @@ public enum LearningGate {
             minTranscriptBytes: Int = 100_000,
             minUserPrompts: Int = 3,
             quotaFreshnessSeconds: TimeInterval = 600,
-            reprocessGrowthBytes: Int = 50_000
+            reprocessGrowthBytes: Int = 50_000,
+            unknownQuotaMaxPerWindow: Int = 1
         ) {
             self.enabled = enabled
             self.quotaThreshold = quotaThreshold
@@ -106,6 +112,7 @@ public enum LearningGate {
             self.minUserPrompts = minUserPrompts
             self.quotaFreshnessSeconds = quotaFreshnessSeconds
             self.reprocessGrowthBytes = reprocessGrowthBytes
+            self.unknownQuotaMaxPerWindow = unknownQuotaMaxPerWindow
         }
     }
 
@@ -195,29 +202,54 @@ public enum LearningGate {
             return .skip(.alreadyProcessed)
         }
 
-        // 5. Quota : présent (une fraction non finie = donnée corrompue, donc
-        //    absente), frais, fenêtre non expirée, sous le seuil (seuil atteint
-        //    exactement ⇒ skip).
-        guard let usedFraction = quota.usedFraction, usedFraction.isFinite,
-              let receivedAt = quota.receivedAt else {
-            return .skip(.quotaMissing)
-        }
-        if now.timeIntervalSince(receivedAt) > config.quotaFreshnessSeconds {
-            return .skip(.quotaStale)
-        }
-        if let resetsAt = quota.resetsAt, resetsAt < now {
-            return .skip(.quotaStale)
-        }
-        if usedFraction >= config.quotaThreshold {
-            return .skip(.quotaAboveThreshold)
-        }
-
-        // 6. Plafond de runs dans la fenêtre glissante de 5 h. Un timestamp
+        // 5. Plafond de runs dans la fenêtre glissante de 5 h. Un timestamp
         //    futur (horloge remontée) compte comme récent — fail-safe.
+        //    ÉVALUÉ AVANT LE QUOTA (v0.12.0) : c'est lui qui borne réellement la
+        //    dépense, et le mode « quota inconnu » ci-dessous s'appuie dessus.
         let recentRuns = history.runTimestamps
             .filter { now.timeIntervalSince($0) < runWindowSeconds }
         if recentRuns.count >= config.maxPerWindow {
             return .skip(.windowCapReached)
+        }
+
+        // 6. Quota : présent (une fraction non finie = donnée corrompue, donc
+        //    absente), frais, fenêtre non expirée, sous le seuil (seuil atteint
+        //    exactement ⇒ skip).
+        //
+        // QUOTA INCONNU OU PÉRIMÉ (v0.12.0) : ce n'était plus un garde-fou, mais
+        // LA cause du silence. Le quota n'arrive que par la statusline, donc
+        // uniquement d'une session à TUI, et il ne vivait qu'en mémoire : après
+        // chaque redémarrage d'Atoll — et pour toute session `claude --bg` —
+        // toutes les fins de session partaient en `quotaMissing`. Mesuré : 1
+        // seule rétrospective lancée en 7 jours, sur ~29 sessions.
+        //
+        // Compromis retenu : sans quota fiable, on autorise QUAND MÊME, mais au
+        // plus `unknownQuotaMaxPerWindow` fois par fenêtre de 5 h (défaut 1).
+        // La dépense reste bornée par ce plafond ET par `--max-budget-usd`.
+        guard let usedFraction = quota.usedFraction, usedFraction.isFinite,
+              let receivedAt = quota.receivedAt else {
+            return recentRuns.count < config.unknownQuotaMaxPerWindow
+                ? .run : .skip(.quotaMissing)
+        }
+        let windowExpired = quota.resetsAt.map { $0 < now } ?? false
+        let isStale = now.timeIntervalSince(receivedAt) > config.quotaFreshnessSeconds
+            || windowExpired
+        if isStale {
+            // Lecture vieille mais fenêtre 5 h EXPLICITEMENT toujours en cours
+            // (`resets_at` connu et futur) : la fraction ne peut qu'avoir
+            // AUGMENTÉ depuis, elle reste donc un minorant valable — si elle
+            // dépasse déjà le seuil, c'est un vrai refus, pas une incertitude.
+            // Sans `resets_at`, on ne sait même pas si c'est la même fenêtre :
+            // on retombe sur la règle « inconnu ».
+            if let resetsAt = quota.resetsAt, resetsAt > now,
+               usedFraction >= config.quotaThreshold {
+                return .skip(.quotaAboveThreshold)
+            }
+            return recentRuns.count < config.unknownQuotaMaxPerWindow
+                ? .run : .skip(.quotaStale)
+        }
+        if usedFraction >= config.quotaThreshold {
+            return .skip(.quotaAboveThreshold)
         }
 
         return .run

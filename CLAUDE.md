@@ -110,6 +110,69 @@ Pièges de build appris à la dure :
 - ✅ Phase 11 — « Mémoire vive » (v0.11.0) : Milestone B — curation périodique des
   notes, recall proactif (opt-in), qualité du recall (dédup inter-fichiers + récence).
 
+**Phase 12a — « Boucle fermée » (en cours, 2026-07-27)** — Atoll ne produisait AUCUN
+skill. Diagnostic chiffré (agents) : **1 seule rétrospective lancée en 7 jours** sur
+~29 sessions, 0 skill, et AUCUNE trace pour savoir pourquoi. Trois causes, corrigées :
+- **CAUSE N° 1 — le quota ne vivait qu'en mémoire.** `LearningGate` refusait
+  (`quotaMissing`) tant qu'aucune statusline n'était arrivée : donc après CHAQUE
+  redémarrage d'Atoll, et pour toute session `claude --bg` (pas de TUI = pas de
+  statusline). FIX : `QuotaSnapshot` est `Codable` et mis en cache dans
+  `~/.atoll/quota-cache.json` (rechargé au `start()`, ignoré si la fenêtre 5 h a
+  tourné) ; et « quota inconnu/périmé » n'est plus un refus sec mais autorise
+  `unknownQuotaMaxPerWindow` run(s) (défaut 1) — le plafond de fenêtre, désormais
+  évalué AVANT le quota, borne la dépense. Une lecture vieille dont `resets_at` est
+  connu ET futur sert de MINORANT (l'usage ne redescend pas) → vrai refus au-delà du seuil.
+- **CAUSE N° 2 — les transcripts sont hors de portée du budget.** Le gate a un plancher
+  (100 Ko) mais aucun plafond : il sélectionnait des fichiers de 9 à 47 Mo que le modèle
+  lisait avec Read sous 1,50 $ (il en voyait ~8 %). FIX : `AtollCore/TranscriptDigest`
+  — Atoll extrait LUI-MÊME, en Swift, prompts utilisateur + conclusions + erreurs +
+  commandes réussies, capé à 150 000 caractères, injecté DANS le prompt ; le modèle n'a
+  plus AUCUN outil (`--tools ""`). MESURÉ : **47 Mo → 148 828 caractères en 2 s**
+  (compression 154× à 589× selon les transcrits, sessions ordinaires passées intégralement).
+- **CAUSE N° 3 — le prompt était dissuasif** (« When in doubt, return ZERO skills »).
+  FIX (choix de Mehdi : *équilibré*) : proposer dès qu'une procédure a été EXÉCUTÉE
+  avec succès et est rejouable, `confidence` honnête — la quarantaine + la revue ⌘⏎/⌘⌫
+  SONT déjà le filtre.
+- **RÉSULTAT VÉRIFIÉ EN VRAI** (sur le transcript de 47 Mo du projet) : **8 notes et
+  2 skills proposés** (`release-pipeline`, `adversarial-review-workflow-recovery`), là
+  où 7 jours d'usage n'avaient rien produit. Le SKILL.md contient la vraie procédure de
+  release avec ses pièges (codesign -dvv, 404 d'appcast, ordre de publication).
+- **JOURNAL D'APPRENTISSAGE** (`AttemptRecord` dans `retrospectives.json`, cap 100,
+  affiché dans Réglages › Apprentissage) : chaque fin de session laisse une trace —
+  décision, raison du refus, taille du transcript, quota au moment de la décision,
+  coût, modèle dominant, notes/skills produits. C'est CE QUI MANQUAIT pour diagnostiquer.
+- **RETRY** : un échec (`failed(...)`) ne marque plus la session « traitée » — elle
+  repassera. Avant, un run avorté la grillait jusqu'à +50 Ko de croissance.
+- **PIÈGE VÉCU AU 1ᵉʳ RUN RÉEL** : le modèle nomme spontanément son skill `atoll-…`
+  (le sujet EST Atoll) — or `SkillSlug.validate` refuse ce préfixe réservé, la
+  proposition était inapprouvable et le SKILL.md sortait en `atoll-atoll-…`.
+  `RetrospectiveReport.validSlug` retire donc le préfixe (testé).
+- **FAIT VÉRIFIÉ (CLI 2.1.220)** : `--safe-mode` fait intervenir **claude-sonnet-5 en
+  plus** du `--model` demandé, et c'est lui qui domine la facture — deux runs, l'un en
+  sonnet l'autre en haiku, ont coûté 0,864 $ et 0,873 $. Les alias `haiku`/`sonnet`/
+  `opus`/`fable` sont bien reconnus (vérifiés un par un). D'où la ventilation
+  `RetrospectiveReport.modelCosts` et l'affichage du modèle dominant dans le journal :
+  sans elle, le réglage de modèle paraît sans effet.
+- **MODÈLES PAR TÂCHE** (Réglages › Apprentissage) : rétrospective / curation /
+  recherche, parmi haiku · sonnet · opus · fable. Défauts choisis par Mehdi :
+  **Haiku pour chercher, Sonnet pour analyser**.
+- **ANTÉRIORITÉ** : `AtollCore/SkillCatalog` inventorie ce que Claude peut DÉJÀ invoquer
+  (18 skills utilisateur + 59 commands `gsd:*` + 40 skills de plugins = 117 entrées chez
+  Mehdi) et le prompt le reçoit : « si ça existe déjà, ne le propose pas ». Pièges :
+  le nom fait autorité par le DOSSIER (collision `apex` vécue), les commands ne sont pas
+  des skills mais occupent le même espace de noms, plusieurs versions d'un plugin
+  coexistent, un plugin désactivé n'est pas invocable.
+- **VERRE** : « Transparence du verre » → **« Intensité du Liquid Glass »** (le nom
+  d'Apple). BUG CORRIGÉ : même avec un scrim opaque à 100 %, `.glassEffect(.regular)`
+  continue de réfracter — le bas de la plage ne rendait jamais un fond plein et le
+  réglage « semblait mort ». Sous `VisualEffects.glassFloor` (6 %), on ne pose PLUS de
+  verre du tout. Vérifié en captures 0 % / 50 % / 100 % sur le 2ᵉ écran.
+- Debug : `notifyutil -p dev.mehdiguiard.atoll.debug.retroBig` lance une rétrospective
+  sur le PLUS GROS transcript du projet (bypass gate) — c'est l'outil qui a permis de
+  prouver la boucle sans attendre qu'une vraie session substantielle se termine.
+- Plan complet et jalons suivants (12b antériorité, 12c plugins, 12d réglages) :
+  `docs/ROADMAP-12-boucle-fermee.md`.
+
 **Phase 11 — « Mémoire vive » (v0.11.0, 2026-07-26)** = Milestone B de la feuille de
 route « Atoll 2 ». Trois volets, tous vérifiés en vrai :
 - **CURATION DES NOTES** (`App/NotesCurationService.swift`, `AtollCore/NotesCurationPrompt`

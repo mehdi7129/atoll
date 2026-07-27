@@ -101,16 +101,40 @@ public struct RetrospectiveReport: Equatable, Sendable {
     public let skills: [SkillProposal]
     /// `total_cost_usd` de l'enveloppe (coût de l'analyse elle-même), si présent.
     public let costUSD: Double?
+    /// Modèles réellement facturés, du plus cher au moins cher : `[(nom, coût)]`.
+    ///
+    /// FAIT VÉRIFIÉ (CLI 2.1.220, 2026-07-27) : `--safe-mode` fait intervenir
+    /// **claude-sonnet-5 en plus** du modèle demandé — un run `--model haiku`
+    /// remonte bel et bien du sonnet, et c'est lui qui domine la facture. Sans
+    /// cette ventilation, choisir « Haiku » dans les Réglages semblait sans
+    /// effet (deux runs, deux modèles, coûts identiques à 1 % près).
+    public let modelCosts: [ModelCost]
+
+    /// Un modèle et ce qu'il a coûté sur ce run. Struct nommée (et non tuple) :
+    /// les tuples ne conforment pas à `Equatable`, ce qui casserait la synthèse
+    /// du rapport entier.
+    public struct ModelCost: Equatable, Sendable {
+        public let model: String
+        public let costUSD: Double
+
+        public init(model: String, costUSD: Double) {
+            self.model = model
+            self.costUSD = costUSD
+        }
+    }
     /// slug de skill CONSERVÉ → raisons de suspicion (voir doc du type).
     public let flags: [String: [String]]
 
     public init(sessionSummary: String, nothingLearned: Bool, notes: [Note],
-                skills: [SkillProposal], costUSD: Double?, flags: [String: [String]]) {
+                skills: [SkillProposal], costUSD: Double?,
+                modelCosts: [ModelCost] = [],
+                flags: [String: [String]]) {
         self.sessionSummary = sessionSummary
         self.nothingLearned = nothingLearned
         self.notes = notes
         self.skills = skills
         self.costUSD = costUSD
+        self.modelCosts = modelCosts
         self.flags = flags
     }
 
@@ -144,6 +168,16 @@ public struct RetrospectiveReport: Equatable, Sendable {
         let notes = validatedNotes(payload["notes"])
         let (skills, flags) = validatedSkills(payload["skills"])
         let costUSD = (root["total_cost_usd"] as? NSNumber)?.doubleValue
+        // `modelUsage` : { "<modèle>": { costUSD, inputTokens, … } }. Décodage
+        // défensif — clé absente, valeur d'un autre type, coût manquant : on
+        // rend simplement moins d'entrées.
+        let modelCosts: [ModelCost] = ((root["modelUsage"] as? [String: Any]) ?? [:])
+            .compactMap { name, value in
+                guard let entry = value as? [String: Any],
+                      let cost = (entry["costUSD"] as? NSNumber)?.doubleValue else { return nil }
+                return ModelCost(model: name, costUSD: cost)
+            }
+            .sorted { $0.costUSD == $1.costUSD ? $0.model < $1.model : $0.costUSD > $1.costUSD }
 
         if summary.isEmpty && notes.isEmpty && skills.isEmpty && !nothingLearned {
             return .failure(.empty)
@@ -155,6 +189,7 @@ public struct RetrospectiveReport: Equatable, Sendable {
             notes: notes,
             skills: skills,
             costUSD: costUSD,
+            modelCosts: modelCosts,
             flags: flags
         ))
     }
@@ -275,11 +310,22 @@ public struct RetrospectiveReport: Equatable, Sendable {
     /// ≤ 60 caractères. Ancres `\A`/`\z` et non `^`/`$` : le `$` ICU accepterait
     /// un saut de ligne final — tout path traversal (`../…`) est exclu.
     private static func validSlug(_ value: Any?) -> String? {
-        guard let slug = value as? String, slug.count <= 60,
-              slug.range(of: "\\A[a-z0-9]+(-[a-z0-9]+)*\\z",
-                         options: .regularExpression) != nil
+        guard let raw = value as? String, raw.count <= 60,
+              raw.range(of: "\\A[a-z0-9]+(-[a-z0-9]+)*\\z",
+                        options: .regularExpression) != nil
         else { return nil }
-        return slug
+        // Le préfixe `atoll-` appartient à ATOLL : c'est lui qui nomme le
+        // dossier d'installation (`atoll-<slug>`) et `SkillSlug.validate` REFUSE
+        // un slug qui l'usurpe. Or un modèle qui analyse une session sur Atoll
+        // nomme naturellement son skill « atoll-… » — vu en vrai au premier run
+        // réel : le skill sortait en `atoll-atoll-dmg-release-pipeline` et
+        // devenait inapprouvable. On le retire ici plutôt que de perdre la
+        // proposition ; un slug réduit à « atoll- » n'a plus de substance.
+        var slug = raw
+        while slug.hasPrefix(SkillSlug.managedPrefix) {
+            slug = String(slug.dropFirst(SkillSlug.managedPrefix.count))
+        }
+        return SkillSlug.validate(slug) == nil ? nil : slug
     }
 
     private static func normalized(_ value: Any?, in allowed: Set<String>,

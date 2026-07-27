@@ -10,18 +10,29 @@ enum VisualEffects {
     /// Interrupteur unique (verre + onde). Défaut : activé.
     static let enabledKey = "visualEffects"
 
-    /// Transparence du verre (0 = opaque, 1 = verre totalement clair).
-    /// Défaut 0,5 → teint = fond à 50 %, l'équilibre lisibilité/réfraction validé.
-    static let glassTransparencyKey = "glassTransparency"
-    static let defaultGlassTransparency = 0.5
+    /// **Intensité du Liquid Glass** (le nom Apple) : 0 = aucun verre, fond
+    /// plein ; 1 = verre pur, le bureau transparaît. Défaut 0,5.
+    ///
+    /// La CLÉ garde son nom historique `glassTransparency` : la renommer
+    /// remettrait tout le monde au défaut. Seule la sémantique affichée change
+    /// — et elle est identique (plus la valeur monte, plus le verre domine).
+    static let glassIntensityKey = "glassTransparency"
+    static let defaultGlassIntensity = 0.5
+
+    /// En dessous de ce seuil, on N'UTILISE PAS `.glassEffect` du tout : le
+    /// verre `.regular` réfracte toujours un peu, si bien qu'un scrim même
+    /// totalement opaque laissait passer une lueur du fond — « le curseur ne
+    /// change plus rien » côté utilisateur (constaté en capture à 0 %).
+    /// En dessous du seuil, aplat pur : la plage est utile de bout en bout.
+    static let glassFloor = 0.06
 
     static var isEnabled: Bool {
         UserDefaults.standard.object(forKey: enabledKey) as? Bool ?? true
     }
 
-    static var glassTransparency: Double {
-        UserDefaults.standard.object(forKey: glassTransparencyKey) as? Double
-            ?? defaultGlassTransparency
+    static var glassIntensity: Double {
+        UserDefaults.standard.object(forKey: glassIntensityKey) as? Double
+            ?? defaultGlassIntensity
     }
 }
 
@@ -38,16 +49,17 @@ struct IslandBackground: View {
     let isCompactCap: Bool
     let isExpanded: Bool
     let effectsEnabled: Bool
-    /// 0 = teint opaque, 1 = verre totalement clair (réglable dans les Réglages).
-    var glassTransparency: Double = VisualEffects.defaultGlassTransparency
+    /// Intensité du Liquid Glass : 0 = aucun verre (fond plein), 1 = verre pur.
+    var glassIntensity: Double = VisualEffects.defaultGlassIntensity
 
     var body: some View {
         if isCompactCap {
             // Le matériel ne change pas de couleur : le capuchon reste noir.
             shape.fill(Color.black)
-        } else if effectsEnabled, isExpanded {
+        } else if effectsEnabled, isExpanded, glassIntensity > VisualEffects.glassFloor {
             glass
         } else {
+            // Effets coupés, îlot compact, OU intensité au plancher : aplat.
             shape.fill(colors.bg)
         }
     }
@@ -56,11 +68,17 @@ struct IslandBackground: View {
     private var glass: some View {
         if #available(macOS 26.0, *) {
             // Le VRAI Liquid Glass (`.regular`) réfracte le fond ; par-dessus, un
-            // scrim `colors.bg` d'opacité (1 − transparence) pilote combien on le
-            // voit. transparence 1 → scrim 0 → verre pur ; transparence 0 → scrim 1
-            // → aplat opaque. Blend alpha DIRECT = effet net et prévisible ; le
-            // teint seul (essai précédent) était quasi imperceptible sur fond sombre.
-            let scrim = min(max(1 - glassTransparency, 0), 1)
+            // scrim `colors.bg` d'opacité (1 − intensité) pilote combien on le
+            // voit. Intensité 1 → scrim 0 → verre pur. Blend alpha DIRECT = effet
+            // net et prévisible ; le teint seul (essai précédent) était quasi
+            // imperceptible sur fond sombre.
+            //
+            // PIÈGE VÉRIFIÉ EN CAPTURE : même avec un scrim opaque à 100 %, le
+            // verre `.regular` continue de réfracter — le bas de la plage ne
+            // rendait donc jamais un fond franchement plein, et le réglage
+            // « semblait ne plus rien faire ». D'où le plancher au-dessus :
+            // sous `glassFloor`, on ne pose PAS de verre du tout.
+            let scrim = min(max(1 - glassIntensity, 0), 1)
             ZStack {
                 Color.clear.glassEffect(.regular, in: shape)
                 shape.fill(colors.bg).opacity(scrim)

@@ -193,7 +193,7 @@ final class NotesCurationService {
         }
 
         let arguments = NotesCurationPrompt.cliArguments(
-            model: LearningSettings.shared.model,
+            model: LearningSettings.shared.curationModel,
             budgetUSD: LearningSettings.budgetUSD
         ) + [NotesCurationPrompt.userPrompt(notes: notes)]
 

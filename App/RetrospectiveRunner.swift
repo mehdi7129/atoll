@@ -31,6 +31,8 @@ final class RetrospectiveRunner {
     @ObservationIgnored private var process: Process?
     @ObservationIgnored private var timeoutTask: Task<Void, Never>?
     @ObservationIgnored private var lastEndedSnapshot: SessionStore.Tracked?
+    /// Entrée de journal du run en cours, complétée par `finish`.
+    @ObservationIgnored private var pendingAttempt: AttemptRecord?
 
     struct Job { let snapshot: SessionStore.Tracked; let endedAt: Date }
 
@@ -100,6 +102,56 @@ final class RetrospectiveRunner {
     }
 
     #if DEBUG
+    /// Trigger debug : rétrospective sur le PLUS GROS transcript du projet
+    /// courant, sans gate. Sert à vérifier le pipeline complet (condensé →
+    /// analyse → notes/skills) sur une session réellement riche, sans attendre
+    /// qu'une vraie session substantielle se termine. Jamais en release.
+    func debugRunOnLargestTranscript(projectDirectory: String) {
+        guard process == nil, pendingDelay == nil else {
+            log.error("debug retro : un run ou une attente est déjà en cours")
+            return
+        }
+        let root = BridgePaths.claudeProjectsURL.appendingPathComponent(projectDirectory)
+        let files = (try? FileManager.default.contentsOfDirectory(
+            at: root, includingPropertiesForKeys: [.fileSizeKey])) ?? []
+        let largest = files
+            .filter { $0.pathExtension == "jsonl" }
+            .max { lhs, rhs in
+                let l = (try? lhs.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+                let r = (try? rhs.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+                return l < r
+            }
+        guard let largest else {
+            log.error("debug retro : aucun transcript dans \(root.path, privacy: .public)")
+            return
+        }
+        let size = (try? largest.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+        log.info("debug retro sur \(largest.lastPathComponent, privacy: .public) (\(size) octets)")
+        // Le chemin debug journalise lui aussi : c'est souvent celui qu'on
+        // regarde en premier quand on doute du pipeline.
+        pendingAttempt = AttemptRecord(
+            sessionID: largest.deletingPathExtension().lastPathComponent,
+            decidedAt: Date(),
+            decision: "run(debug)",
+            outcome: nil,
+            transcriptBytes: size,
+            quotaFraction: SessionStore.shared.realQuota?.fiveHour.usedFraction,
+            quotaAgeSeconds: SessionStore.shared.realQuota
+                .map { Date().timeIntervalSince($0.receivedAt) }
+        )
+        let snapshot = SessionStore.Tracked(
+            id: largest.deletingPathExtension().lastPathComponent,
+            cwd: FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent("Desktop/Dynamic_Island").path,
+            transcriptPath: largest.path,
+            phase: .ended,
+            isSynthetic: false,
+            firstSeenAt: Date().addingTimeInterval(-3_600),
+            lastEventAt: Date()
+        )
+        Task { await run(Job(snapshot: snapshot, endedAt: Date())) }
+    }
+
     /// Trigger debug : rétrospective sur la dernière session terminée, SANS
     /// gate (mais avec le verrou un-à-la-fois ET sans course avec un délai
     /// en attente). Jamais en release.
@@ -146,15 +198,46 @@ final class RetrospectiveRunner {
 
     private func evaluateAndRun(_ job: Job) async {
         let decision = gateDecision(for: job)
+        let quota = SessionStore.shared.realQuota
+        let transcriptBytes = job.snapshot.transcriptPath
+            .flatMap { try? FileManager.default.attributesOfItem(atPath: $0)[.size] as? Int64 }
+            .map(Int.init)
+
         switch decision {
         case .skip(let reason):
             log.info("rétrospective sautée pour \(job.snapshot.id, privacy: .public) : \(reason.rawValue, privacy: .public)")
             lastOutcome = "skip(\(reason.rawValue))"
+            journal(AttemptRecord(
+                sessionID: job.snapshot.id,
+                decidedAt: Date(),
+                decision: "skip(\(reason.rawValue))",
+                outcome: nil,
+                transcriptBytes: transcriptBytes,
+                quotaFraction: quota?.fiveHour.usedFraction,
+                quotaAgeSeconds: quota.map { Date().timeIntervalSince($0.receivedAt) }
+            ))
             phase = .idle
             scheduleNext()
         case .run:
+            pendingAttempt = AttemptRecord(
+                sessionID: job.snapshot.id,
+                decidedAt: Date(),
+                decision: "run",
+                outcome: nil,
+                transcriptBytes: transcriptBytes,
+                quotaFraction: quota?.fiveHour.usedFraction,
+                quotaAgeSeconds: quota.map { Date().timeIntervalSince($0.receivedAt) }
+            )
             await run(job)
         }
+    }
+
+    /// Ajoute une entrée au journal (cap 100, les plus anciennes tombent).
+    private func journal(_ record: AttemptRecord) {
+        var state = loadState()
+        state.attempts.append(record)
+        state.attempts = Array(state.attempts.suffix(100))
+        saveState(state)
     }
 
     private func gateDecision(for job: Job) -> LearningGate.Decision {
@@ -194,12 +277,27 @@ final class RetrospectiveRunner {
         recordAttempt()
         phase = .running(job.snapshot.id)
 
+        // CONDENSÉ (v0.12.0) : Atoll lit le transcript lui-même, hors MainActor,
+        // et n'envoie au modèle que la substance. Les transcripts réels font 9 à
+        // 47 Mo — en les faisant lire par le modèle sous 1,50 $, il n'en voyait
+        // que ~8 %. Ici, il reçoit tout ce qui compte, borné et gratuit.
+        let digest = await Task.detached(priority: .utility) {
+            Self.digest(ofTranscriptAt: transcriptPath)
+        }.value
+        guard let digest, !digest.text.isEmpty else {
+            log.error("condensé vide pour \(transcriptPath, privacy: .public) — rien à analyser")
+            finish(job, outcome: "failed(digest)", transcriptBytes: 0)
+            return
+        }
+        log.info("condensé : \(digest.entriesKept) entrées, \(digest.characterCount) caractères (tronqué : \(digest.truncated))")
+
         let userPrompt = RetrospectivePrompt.userPrompt(
-            transcriptPath: transcriptPath,
+            digest: digest.text,
             projectPath: job.snapshot.cwd,
             gitBranch: job.snapshot.gitBranch,
             model: job.snapshot.model,
-            existingNoteSlugs: existingNoteSlugs()
+            existingNoteSlugs: existingNoteSlugs(),
+            existingCapabilities: SkillCatalog().summaryForPrompt()
         )
         let arguments = RetrospectivePrompt.cliArguments(
             model: LearningSettings.shared.model,
@@ -306,6 +404,14 @@ final class RetrospectiveRunner {
             if let cost = report.costUSD {
                 log.info("rétrospective terminée : \(outcome, privacy: .public), coût \(cost) $")
             }
+            pendingAttempt?.costUSD = report.costUSD
+            // Le modèle qui a réellement coûté le plus : `--safe-mode` en
+            // convoque un second (sonnet) quel que soit `--model`, et c'est
+            // souvent LUI la facture. L'afficher évite de croire que le
+            // réglage de modèle est sans effet.
+            pendingAttempt?.dominantModel = report.modelCosts.first?.model
+            pendingAttempt?.notesWritten = report.notes.count
+            pendingAttempt?.skillsProposed = report.skills.count
             finish(job, outcome: outcome, transcriptBytes: transcriptBytes)
         }
     }
@@ -353,7 +459,20 @@ final class RetrospectiveRunner {
     }
 
     private func finish(_ job: Job, outcome: String, transcriptBytes: Int) {
-        recordProcessed(sessionID: job.snapshot.id, transcriptBytes: transcriptBytes)
+        // Un ÉCHEC ne marque plus la session « traitée » (v0.12.0) : jusque-là
+        // un run avorté (spawn KO, exit ≠ 0, sortie illisible) grillait la
+        // session pour toujours — il fallait +50 Ko de transcript pour qu'elle
+        // redevienne éligible. Un échec laisse donc une seconde chance, et le
+        // plafond par fenêtre reste le garde-fou anti-boucle.
+        let failed = outcome.hasPrefix("failed(")
+        if !failed {
+            recordProcessed(sessionID: job.snapshot.id, transcriptBytes: transcriptBytes)
+        }
+        if var attempt = pendingAttempt {
+            attempt.outcome = outcome
+            journal(attempt)
+            pendingAttempt = nil
+        }
         lastOutcome = outcome
         phase = .idle
         scheduleNext()
@@ -361,9 +480,44 @@ final class RetrospectiveRunner {
 
     // MARK: - État persistant (dédup + plafond)
 
+    /// Une évaluation de fin de session, telle qu'elle s'est réellement passée.
+    ///
+    /// AJOUTÉ EN v0.12.0 après un diagnostic à l'aveugle : jusque-là, l'issue
+    /// d'une rétrospective ne vivait QUE dans `lastOutcome`, en mémoire. Quand
+    /// Mehdi a constaté « Atoll ne crée jamais de skills », il a fallu croiser
+    /// des tailles de fichiers et des horodatages pour deviner que le gate
+    /// refusait sur « quota inconnu » — l'information n'existait nulle part.
+    /// Désormais CHAQUE décision laisse une trace, y compris les refus.
+    struct AttemptRecord: Codable, Identifiable, Equatable {
+        var id: String { "\(sessionID)-\(decidedAt.timeIntervalSince1970)" }
+        let sessionID: String
+        let decidedAt: Date
+        /// `run` ou `skip(<raison>)` — la rawValue du gate, telle quelle.
+        let decision: String
+        /// Issue du run : `success(2n/1s)`, `nothing_learned`, `failed(parse)`…
+        /// nil pour un skip (il n'y a pas eu de run).
+        var outcome: String?
+        let transcriptBytes: Int?
+        /// Quota au moment de la DÉCISION — le paramètre le plus souvent fautif.
+        let quotaFraction: Double?
+        let quotaAgeSeconds: Double?
+        var costUSD: Double?
+        var notesWritten: Int?
+        var skillsProposed: Int?
+        /// Modèle le plus facturé du run (voir `RetrospectiveReport.modelCosts`).
+        var dominantModel: String?
+    }
+
     private struct PersistedState: Codable {
         var processed: [LearningGate.History.Processed] = []
         var runTimestamps: [Date] = []
+        /// Journal des évaluations (cap 100) — affiché dans les Réglages.
+        var attempts: [AttemptRecord] = []
+    }
+
+    /// Les évaluations récentes, de la plus récente à la plus ancienne.
+    func recentAttempts(limit: Int = 12) -> [AttemptRecord] {
+        Array(loadState().attempts.reversed().prefix(limit))
     }
 
     private func loadState() -> PersistedState {
@@ -408,6 +562,32 @@ final class RetrospectiveRunner {
                                      completedAt: Date()))
         saveState(state)
     }
+
+    /// Lit un transcript JSONL et en tire le condensé analysable.
+    ///
+    /// `nonisolated` : appelée depuis une tâche détachée — lire et parser 47 Mo
+    /// n'a rien à faire sur le MainActor. Bornes : on cesse de lire au-delà de
+    /// `digestByteCap` (au-delà, c'est une session-fleuve dont le début suffit
+    /// à caractériser les procédures) et au-delà de `digestLineCap` lignes.
+    nonisolated private static func digest(ofTranscriptAt path: String) -> TranscriptDigest.Result? {
+        guard let handle = FileHandle(forReadingAtPath: path) else { return nil }
+        defer { try? handle.close() }
+        var splitter = TranscriptLineSplitter(startOffset: 0)
+        var lines: [TranscriptLine] = []
+        var readBytes = 0
+        while readBytes < digestByteCap, lines.count < digestLineCap,
+              let chunk = try? handle.read(upToCount: 4 << 20), !chunk.isEmpty {
+            readBytes += chunk.count
+            for raw in splitter.consume(chunk) {
+                if let parsed = TranscriptLineParser.parse(raw.data) { lines.append(parsed) }
+                if lines.count >= digestLineCap { break }
+            }
+        }
+        return TranscriptDigest.make(lines: lines)
+    }
+
+    nonisolated private static let digestByteCap = 64 * 1024 * 1024
+    nonisolated private static let digestLineCap = 200_000
 
     private func existingNoteSlugs() -> [String] {
         let files = (try? FileManager.default

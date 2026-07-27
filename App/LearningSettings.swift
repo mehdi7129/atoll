@@ -16,6 +16,17 @@ final class LearningSettings {
     static let enabledKey = "learningRetrospectiveEnabled"   // Bool, défaut false
     static let thresholdKey = "learningQuotaThreshold"       // Double, défaut 0.7
     static let modelKey = "learningRetrospectiveModel"       // String, défaut "sonnet"
+    /// Modèle de la CURATION des notes — String, défaut "sonnet" (jugement
+    /// éditorial : fusionner sans perdre d'information).
+    static let curationModelKey = "learningCurationModel"
+    /// Modèle des RECHERCHES (antériorité d'un skill, plugin pertinent) —
+    /// String, défaut "haiku" : comparer un besoin à quelques centaines de
+    /// descriptions courtes est exactement sa taille de tâche, et c'est
+    /// l'analyse la plus fréquente.
+    static let searchModelKey = "learningSearchModel"
+
+    /// Modèles proposés dans les Réglages, du plus économe au plus capable.
+    static let availableModels = ["haiku", "sonnet", "opus", "fable"]
     static let maxPerWindowKey = "learningMaxPerWindow"      // Int, défaut 2
     /// Curation périodique des notes (Milestone B) — Bool, défaut false : elle
     /// consomme du quota ET réécrit la mémoire, donc opt-in comme la rétrospective.
@@ -45,7 +56,25 @@ final class LearningSettings {
     }
 
     var model: String {
-        UserDefaults.standard.string(forKey: Self.modelKey) ?? "sonnet"
+        validModel(UserDefaults.standard.string(forKey: Self.modelKey), fallback: "sonnet")
+    }
+
+    /// Modèle de la curation des notes (défaut : le même que la rétrospective).
+    var curationModel: String {
+        validModel(UserDefaults.standard.string(forKey: Self.curationModelKey), fallback: model)
+    }
+
+    /// Modèle des recherches d'antériorité et de plugins (défaut : haiku).
+    var searchModel: String {
+        validModel(UserDefaults.standard.string(forKey: Self.searchModelKey), fallback: "haiku")
+    }
+
+    /// Un réglage corrompu (ou un alias retiré par une MAJ du CLI) ne doit pas
+    /// faire échouer tous les runs avec « unknown model » : on retombe sur le
+    /// défaut plutôt que de passer une valeur douteuse à `--model`.
+    private func validModel(_ raw: String?, fallback: String) -> String {
+        guard let raw, Self.availableModels.contains(raw) else { return fallback }
+        return raw
     }
 
     var maxPerWindow: Int {

@@ -2,7 +2,7 @@ import Foundation
 
 /// Une fenêtre de quota (5 h ou 7 j) telle que fournie par le serveur Anthropic
 /// via la statusline (données exactes, jamais estimées).
-public struct RateLimit: Equatable, Sendable {
+public struct RateLimit: Equatable, Sendable, Codable {
     /// Fraction utilisée, 0…1.
     public let usedFraction: Double
     /// Instant de réinitialisation, nil si inconnu/expiré.
@@ -17,7 +17,11 @@ public struct RateLimit: Equatable, Sendable {
 /// Instantané de quota complet, avec l'âge de la donnée (le champ rate_limits est
 /// absent d'environ 23 % des appels statusline → on sert le dernier connu avec
 /// un indicateur d'âge plutôt que de clignoter).
-public struct QuotaSnapshot: Equatable, Sendable {
+/// `Codable` (v0.12.0) pour être mis en CACHE sur disque : le quota n'arrive
+/// que par la statusline d'une session à TUI, et il ne vivait qu'en mémoire —
+/// après chaque redémarrage d'Atoll, la rétrospective refusait toutes les
+/// sessions faute de quota connu (mesuré : 1 run en 7 jours).
+public struct QuotaSnapshot: Equatable, Sendable, Codable {
     public let fiveHour: RateLimit
     public let sevenDay: RateLimit
     public let receivedAt: Date

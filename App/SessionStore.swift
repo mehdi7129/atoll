@@ -113,6 +113,13 @@ final class SessionStore {
     // MARK: - Cycle de vie
 
     func start() {
+        // Quota mis en cache au lancement (v0.12.0) : il n'arrive que par la
+        // statusline d'une session à TUI. Sans ce rechargement, toute fin de
+        // session survenant avant la première statusline — donc après chaque
+        // redémarrage d'Atoll, et pour toute session `claude --bg` — était
+        // refusée par le gate d'apprentissage faute de quota connu.
+        realQuota = Self.loadCachedQuota()
+
         tailer.onInterrupt = { [weak self] sessionID in
             self?.transcriptInterrupted(sessionID)
         }
@@ -408,7 +415,10 @@ final class SessionStore {
                 current.fiveHour.resetsAt == quota.fiveHour.resetsAt
                     && quota.fiveHour.usedFraction < current.fiveHour.usedFraction
             } ?? false
-            if !isStaleReplay { realQuota = quota }
+            if !isStaleReplay {
+                realQuota = quota
+                Self.cacheQuota(quota)
+            }
         }
 
         if let sessionID = payload.sessionID,
@@ -829,6 +839,32 @@ final class SessionStore {
             guard !Task.isCancelled else { return }
             self?.writeSnapshot()
         }
+    }
+
+    // MARK: - Cache du quota
+
+    /// Écrit le dernier quota connu dans `~/.atoll/quota-cache.json`.
+    /// Best-effort : un échec n'a aucune conséquence (on retombe simplement
+    /// sur « quota inconnu » au prochain lancement).
+    private static func cacheQuota(_ quota: QuotaSnapshot) {
+        guard let data = try? JSONEncoder().encode(quota) else { return }
+        try? FileManager.default.createDirectory(
+            at: BridgePaths.quotaCacheURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true)
+        try? data.write(to: BridgePaths.quotaCacheURL, options: .atomic)
+    }
+
+    /// Relit le cache. `receivedAt` est CONSERVÉ tel quel : le gate a besoin de
+    /// savoir que la donnée est vieille — il traite alors la valeur comme un
+    /// minorant tant que la fenêtre 5 h n'a pas tourné, et retombe sinon sur sa
+    /// règle « quota inconnu ». Un cache dont la fenêtre 5 h est expirée n'a
+    /// plus aucune valeur : on ne le charge même pas.
+    private static func loadCachedQuota() -> QuotaSnapshot? {
+        guard let data = try? Data(contentsOf: BridgePaths.quotaCacheURL),
+              let quota = try? JSONDecoder().decode(QuotaSnapshot.self, from: data)
+        else { return nil }
+        if let resetsAt = quota.fiveHour.resetsAt, resetsAt < Date() { return nil }
+        return quota
     }
 
     private func writeSnapshot() {
