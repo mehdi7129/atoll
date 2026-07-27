@@ -2,10 +2,16 @@ import SwiftUI
 import ServiceManagement
 import AtollCore
 
-/// Réglages en ONGLETS (standard macOS) : chaque volet reste compact — la
-/// fenêtre s'adapte à l'onglet au lieu d'empiler 7 sections plus hautes que
-/// l'écran (vécu). La sélection est persistée (et pilotable en debug pour les
-/// captures d'écran).
+/// Réglages en ONGLETS (standard macOS) : sept volets plutôt qu'une seule
+/// colonne plus haute que l'écran (vécu).
+///
+/// La fenêtre garde une taille STABLE d'un onglet à l'autre et se
+/// redimensionne librement — chaque volet remplit la fenêtre et son Form
+/// défile. C'est l'inverse du réglage d'origine, où chaque volet imposait sa
+/// hauteur : « À propos » rétrécissait la fenêtre, « Claude Code » ne pouvait
+/// pas grandir, et rien ne s'étirait.
+///
+/// La sélection est persistée (et pilotable en debug pour les captures).
 struct SettingsView: View {
     let updaterModel: UpdaterModel
 
@@ -35,10 +41,43 @@ struct SettingsView: View {
                 .tabItem { Label("À propos", systemImage: "info.circle") }
                 .tag("apropos")
         }
-        // 640 et non 480 : à 7 onglets, la barre débordait et macOS repliait
-        // « Mises à jour » et « À propos » derrière un chevron « » » (vu en
-        // capture) — des réglages invisibles sont des réglages morts.
-        .frame(width: 640)
+        // Fenêtre REDIMENSIONNABLE, et une taille qui ne saute plus d'un
+        // onglet à l'autre.
+        //
+        // Avant : `.frame(width: 640)` figeait la largeur (impossible
+        // d'étirer), et chaque volet imposait sa propre hauteur — les uns par
+        // `fixedSize` (fenêtre riquiqui sur « À propos »), les autres par un
+        // plafond à 620 (impossible d'agrandir « Claude Code »). Le plancher
+        // de 640 reste : en deçà, la barre à 7 onglets déborde et macOS en
+        // replie derrière un chevron.
+        .frame(minWidth: 640, idealWidth: 700, maxWidth: .infinity,
+               minHeight: 520, idealHeight: 640, maxHeight: .infinity)
+        .background(ResizableWindow())
+    }
+}
+
+/// Rend la fenêtre des Réglages étirable.
+///
+/// Une scène `Settings` produit une fenêtre NON redimensionnable, et
+/// `.windowResizability(.contentMinSize)` n'y change rien : vérifié en capture,
+/// le bouton zoom restait désactivé et la fenêtre refusait toute autre taille
+/// que celle de son contenu. On ajoute donc le style à la fenêtre elle-même,
+/// dès qu'elle existe. Les bornes de taille restent celles déclarées par la
+/// vue (plancher 640 × 520).
+private struct ResizableWindow: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        // La fenêtre n'est pas encore attachée pendant `makeNSView`.
+        DispatchQueue.main.async {
+            view.window?.styleMask.insert(.resizable)
+        }
+        return view
+    }
+
+    func updateNSView(_ view: NSView, context: Context) {
+        // Le volet est reconstruit à chaque changement d'onglet : on réaffirme
+        // le style, au cas où la scène le réinitialiserait.
+        view.window?.styleMask.insert(.resizable)
     }
 }
 
@@ -134,7 +173,7 @@ private struct GeneralPane: View {
             }
         }
         .formStyle(.grouped)
-        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
             launchAtLogin = SMAppService.mainApp.status == .enabled
             refreshScreens()
@@ -363,7 +402,7 @@ private struct ClaudeCodePane: View {
                 .foregroundStyle(.secondary)
             }
 
-            Section("Souvenirs proposés d'office") {
+            Section("Souvenirs joints à tes messages") {
                 Toggle("Rappeler les sessions liées à chaque message", isOn: proactiveRecall)
                     .disabled(!memoryIndexing.wrappedValue)
                 if proactiveRecall.wrappedValue {
@@ -393,9 +432,10 @@ private struct ClaudeCodePane: View {
 
         }
         .formStyle(.grouped)
-        // Même raison que le volet Apprentissage : avec la section Plugins et
-        // sa liste, la hauteur intrinsèque dépassait l'écran.
-        .frame(minHeight: 420, idealHeight: 560, maxHeight: 620)
+        // Le volet REMPLIT la fenêtre et son Form défile : c'est la fenêtre
+        // qui décide de la taille, plus le contenu. (Avant, un plafond à 620
+        // empêchait d'agrandir ce volet même en étirant la fenêtre.)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .alert("Installer ce plugin ?", isPresented: Binding(
             get: { confirmingInstall != nil },
             set: { if !$0 { confirmingInstall = nil } }
@@ -551,7 +591,7 @@ private struct LearningPane: View {
 
     var body: some View {
         Form {
-            Section("Rétrospective") {
+            Section("Bilan de fin de session") {
                 Toggle("Apprendre des sessions terminées", isOn: learningEnabled)
                 if learningEnabled.wrappedValue {
                     Picker("Seuil de quota 5 h", selection: learningThreshold) {
@@ -576,10 +616,10 @@ private struct LearningPane: View {
                 // centaines de descriptions) et analyser (extraire un skill
                 // d'une session) n'ont ni la même difficulté ni la même
                 // fréquence — les payer au même prix serait absurde.
-                Picker("Rétrospective", selection: modelBinding(LearningSettings.modelKey, "sonnet")) {
+                Picker("Bilan de session", selection: modelBinding(LearningSettings.modelKey, "sonnet")) {
                     ForEach(LearningSettings.availableModels, id: \.self) { Text(modelLabel($0)).tag($0) }
                 }
-                Picker("Curation", selection: modelBinding(LearningSettings.curationModelKey, "sonnet")) {
+                Picker("Rangement des notes", selection: modelBinding(LearningSettings.curationModelKey, "sonnet")) {
                     ForEach(LearningSettings.availableModels, id: \.self) { Text(modelLabel($0)).tag($0) }
                 }
                 Picker("Recherche", selection: modelBinding(LearningSettings.searchModelKey, "haiku")) {
@@ -621,10 +661,10 @@ private struct LearningPane: View {
                 .foregroundStyle(.secondary)
             }
 
-            Section("Curation des notes") {
-                Toggle("Consolider les notes chaque semaine", isOn: curationScheduled)
+            Section("Ranger les notes") {
+                Toggle("Ranger les notes chaque semaine", isOn: curationScheduled)
                 HStack {
-                    Button(curation.phase == .running ? "Curation en cours…" : "Curer maintenant") {
+                    Button(curation.phase == .running ? "Rangement en cours…" : "Ranger maintenant") {
                         curation.curateNow()
                     }
                     .disabled(curation.phase == .running || notes.count < 2)
@@ -733,11 +773,8 @@ private struct LearningPane: View {
             }
         }
         .formStyle(.grouped)
-        // Seul volet à ne PAS prendre sa hauteur intrinsèque : avec ses six
-        // sections (rétrospective, curation, skills proposés, skills appris,
-        // notes), `fixedSize` faisait déborder la fenêtre sous le bas de
-        // l'écran (vérifié en capture). Hauteur bornée → le Form défile.
-        .frame(minHeight: 420, idealHeight: 560, maxHeight: 620)
+        // Volet le plus long (six sections) : il remplit la fenêtre et défile.
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
             center.refresh()
             indexer.refreshStats()
@@ -755,11 +792,11 @@ private struct LearningPane: View {
         noteVolume = inventory.totalCharacterCount()
     }
 
-    /// « 12 400 caractères · 15 % du budget de curation » — le budget est ce
+    /// « 12 400 caractères · 15 % du budget de rangement » — le budget est ce
     /// qui décide si une curation est possible, autant le montrer.
     private var volumeSummary: String {
         let percent = Int(Double(noteVolume) / Double(NotesCurationPrompt.maxCorpusCharacters) * 100)
-        return "\(noteVolume) caractères · \(percent) % du budget de curation"
+        return "\(noteVolume) caractères · \(percent) % du budget de rangement"
     }
 
     /// « pitfall · Dynamic_Island · 20 juil. » — les champs absents disparaissent.
@@ -966,7 +1003,7 @@ private struct AutonomyPane: View {
             }
         }
         .formStyle(.grouped)
-        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
             // Auto-réparation : si un état incohérent subsiste (règles parquées
             // hors Rockstar après un échec), on retente en ouvrant les Réglages.
@@ -1013,7 +1050,7 @@ private struct UpdatesPane: View {
             }
         }
         .formStyle(.grouped)
-        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     /// Persisté par Sparkle dans les user defaults (prime sur l'Info.plist).
@@ -1039,7 +1076,7 @@ private struct AboutPane: View {
             }
         }
         .formStyle(.grouped)
-        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var appVersion: String {

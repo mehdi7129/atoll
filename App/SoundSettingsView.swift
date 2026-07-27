@@ -92,6 +92,7 @@ struct AlertsPane: View {
             }
         }
         .formStyle(.grouped)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
             center.refreshLibraries()
             notifier.refreshAuthorization()

@@ -117,6 +117,26 @@ Pièges de build appris à la dure :
   deux sons personnalisables (avec reprise réversible des hooks `afplay`),
   vue de la flotte par état.
 
+**VOCABULAIRE DE L'INTERFACE (v0.13.2)** — les identifiants de code restent
+anglais et INCHANGÉS (`NotesCuration`, `RetrospectiveRunner`…), mais les
+libellés affichés ont été dé-jargonnés à la demande de Mehdi :
+« Curation des notes » → **« Ranger les notes »** · « Rétrospective » →
+**« Bilan de fin de session »** (le picker : « Bilan de session ») ·
+« Souvenirs proposés d'office » → **« Souvenirs joints à tes messages »**.
+Gardés tels quels : « skill », « quarantaine », « quota », « plugins »
+(vocabulaire de Claude Code ou déjà clair).
+
+**FENÊTRE DES RÉGLAGES (v0.13.2)** — elle sautait de taille d'un onglet à
+l'autre et refusait de s'étirer. Trois causes cumulées, toutes corrigées :
+`.frame(width: 640)` figeait la largeur ; quatre volets forçaient leur hauteur
+intrinsèque (`fixedSize`) pendant que deux autres étaient plafonnés à 620 ; et
+surtout **une scène `Settings` produit une fenêtre NON redimensionnable, sans
+que `.windowResizability(.contentMinSize)` y change quoi que ce soit** (vérifié
+en capture : le bouton zoom restait éteint). Le style est donc ajouté à la
+fenêtre elle-même via un `NSViewRepresentable` (`ResizableWindow`). Preuve
+visuelle : la pastille verte s'allume. Tous les volets remplissent désormais la
+fenêtre (`maxWidth/maxHeight: .infinity`) et leur Form défile.
+
 **Phase 13 — « Rendre la main » (v0.13.0, 2026-07-27)** — Atoll savait démarrer et
 surveiller ; il apprend à rendre la main. Plan : `docs/ROADMAP-13-rendre-la-main.md`.
 - **FIN DE TÂCHE ANNONCÉE** (`AtollCore/LaunchedTask`, `TaskCompletion`,

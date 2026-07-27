@@ -33,6 +33,12 @@ struct AtollApp: App {
         Settings {
             SettingsView(updaterModel: updaterModel)
         }
+        // Une scène `Settings` est en `.contentSize` par défaut : macOS colle
+        // la fenêtre à la taille du contenu et REFUSE tout redimensionnement,
+        // quelles que soient les contraintes posées dans la vue (vérifié : une
+        // taille imposée à 1200×800 revenait à 900×608). `.contentMinSize` ne
+        // garde que le PLANCHER — on peut agrandir la fenêtre à volonté.
+        .windowResizability(.contentMinSize)
     }
 }
 

@@ -29,11 +29,11 @@ y compris pour les sessions lancées depuis le terminal de Cursor.
 | 8 · Sur rails supportés (`claude agents --json` = autorité de découverte) | ✅ |
 | 9 · Cockpit ambiant (lancer une tâche en arrière-plan depuis le notch) | ✅ |
 | 10 · Verre & ondulation (Liquid Glass macOS 26 · transparence réglable) | ✅ |
-| 11 · Mémoire vive (curation des notes · souvenirs proposés d'office · recall trié) | ✅ |
+| 11 · Mémoire vive (rangement des notes · souvenirs joints aux messages · recall trié) | ✅ |
 | 12 · Boucle fermée (Atoll apprend vraiment · antériorité · plugins) | ✅ |
 | 13 · Rendre la main (fin de tâche annoncée · sons personnalisables · flotte par état) | ✅ |
 
-**Version courante : v0.13.1** (voir les [Releases](https://github.com/mehdi7129/atoll/releases)).
+**Version courante : v0.13.2** (voir les [Releases](https://github.com/mehdi7129/atoll/releases)).
 
 Voir le [plan détaillé](PLAN.md), la [recherche](docs/research/) et [CLAUDE.md](CLAUDE.md)
 pour contribuer.
@@ -54,13 +54,13 @@ pour contribuer.
   Les résultats sont dédoublonnés entre fichiers (un `--resume` recopie
   l'historique — mesuré : 1 155 messages en double sur 28 000) et classés
   pertinence **+ récence**.
-- **Souvenirs proposés d'office (opt-in)** : sans attendre que Claude pense au
+- **Souvenirs joints à tes messages (opt-in)** : sans attendre que Claude pense au
   skill, Atoll joint à chaque message les extraits de vos sessions passées liés à
   ce que vous écrivez (3 par défaut, limités au projet courant, marqués comme
   DONNÉES — jamais des instructions, et jamais des sorties d'outils). Recherche
   100 % locale en quelques millisecondes ; fail-open : à la moindre anicroche,
   rien n'est injecté et le CLI continue.
-- **Curation des notes (opt-in)** : les notes accumulées par les rétrospectives
+- **Ranger les notes (opt-in)** : les notes accumulées par les bilans de session
   finissent par se répéter et se contredire. Une analyse en LECTURE SEULE (sans
   aucun outil) les relit toutes et propose une version fusionnée ; les
   contradictions sont SIGNALÉES, jamais tranchées. L'ancienne version part dans
@@ -85,7 +85,7 @@ pour contribuer.
 - **Modèle au choix par tâche** : Haiku pour chercher, Sonnet pour analyser, Opus ou
   Fable si vous préférez — réglable indépendamment pour la rétrospective, la curation
   et la recherche.
-- **Rétrospective (opt-in, expérimental)** : après chaque session substantielle —
+- **Bilan de fin de session (opt-in, expérimental)** : après chaque session substantielle —
   et seulement si votre fenêtre de quota 5 h a de la marge — une analyse en
   LECTURE SEULE extrait les leçons durables : notes mémoire (indexées, citées par
   recall) et éventuels skills proposés, placés en QUARANTAINE, jamais actifs sans
