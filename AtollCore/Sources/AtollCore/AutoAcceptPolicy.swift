@@ -71,14 +71,57 @@ public enum AutoAcceptPolicy {
     /// "require('fs').rmSync(…)"` efface un dossier sans qu'aucun mot de la
     /// commande ne paraisse dangereux (revue : la garde `-c` ne couvrait que
     /// les noms de shells, pas ces interpréteurs).
+    /// `ts-node`/`tsx` acceptent `-e` et sont dans `safeCommands` (revue des
+    /// corrections). `perl`/`php` n'y sont PAS — ils restent listés ici pour que
+    /// la garde suive si on les y ajoutait un jour ; c'est sans effet aujourd'hui.
     static let inlineCodeInterpreters: Set<String> = [
         "python", "python3", "node", "deno", "bun", "ruby", "perl", "php",
+        "ts-node", "tsx",
     ]
 
     /// Drapeaux d'exécution en ligne de ces interpréteurs.
     static let inlineCodeFlags: Set<String> = [
         "-c", "-e", "-E", "--eval", "-p", "--print", "--call", "-r",
     ]
+
+    /// Lettres courtes d'exécution en ligne, pour les formes COLLÉES et les
+    /// grappes (`-c'code'`, `-uc'code'`).
+    private static let inlineCodeLetters: Set<Character> = ["c", "e", "E", "p", "r"]
+
+    /// Lanceurs d'environnement : `uv run python -c …` cache l'interpréteur
+    /// derrière `run`. La vraie commande est ce qui suit.
+    static let environmentRunners: Set<String> = ["uv", "poetry", "pipenv", "rye", "hatch"]
+
+    /// Ces arguments contiennent-ils un drapeau d'exécution en ligne ?
+    ///
+    /// DEUX pièges, tous deux trouvés par la revue des corrections :
+    /// - la forme COLLÉE (`python3 -c'print(1)'`, `python3 -uc'…'`) produit un
+    ///   token unique qui n'égale aucun drapeau connu — le garde-fou se
+    ///   contournait donc en retirant une espace. Vérifié : ces formes
+    ///   s'exécutent réellement ;
+    /// - chercher dans TOUS les arguments renvoyait en manuel des commandes
+    ///   ordinaires (`python3 -m pip install -e .`, où le `-e` appartient à
+    ///   pip). On s'arrête donc au PREMIER argument qui n'est pas une option :
+    ///   c'est le script, le module ou la sous-commande, et tout ce qui suit ne
+    ///   concerne plus l'interpréteur.
+    static func hasInlineCodeFlag(_ args: [String]) -> Bool {
+        for arg in args {
+            guard arg.hasPrefix("-"), arg.count > 1 else { return false } // fin des options
+            if inlineCodeFlags.contains(arg) { return true }
+            if arg.hasPrefix("--") {
+                let head = String(arg.split(separator: "=", maxSplits: 1).first ?? "")
+                if inlineCodeFlags.contains(head) { return true }
+                continue
+            }
+            // Grappe courte : `-uc'code'`, `-c'code'`. On s'arrête à la première
+            // lettre d'exécution rencontrée.
+            for character in arg.dropFirst() {
+                if inlineCodeLetters.contains(character) { return true }
+                if !character.isLetter { break }   // début de la charge utile collée
+            }
+        }
+        return false
+    }
 
     /// Commandes dont le PROGRAMME est un argument nu, sans drapeau à repérer :
     /// `awk 'BEGIN{system("rm -rf ~/projet")}'`. Aucune analyse fiable n'est
@@ -131,30 +174,14 @@ public enum AutoAcceptPolicy {
         return false
     }
 
-    private static func splitOnOperators(_ segment: String) -> [String] {
-        // ATTENTION à l'ORDRE. `&&` d'abord (sinon on le couperait en deux `&`),
-        // puis on MET À L'ABRI les redirections qui contiennent un `&` littéral
-        // (`2>&1`, `&>fichier`) — sans quoi couper dessus fabriquerait un
-        // segment bidon (« 1 ») et renverrait tout en manuel.
-        //
-        // Le `&` isolé DOIT couper : il sépare deux commandes exactement comme
-        // `;` (revue : « ls & rm -rf ~/x » était auto-approuvé parce que seul
-        // `ls` était examiné — un caractère suffisait à contourner l'allowlist).
-        segment.replacingOccurrences(of: "&&", with: "\u{1}")
-            .replacingOccurrences(of: "&>", with: "\u{2}")
-            .replacingOccurrences(of: ">&", with: "\u{3}")
-            .replacingOccurrences(of: "&", with: "\u{1}")
-            .replacingOccurrences(of: "||", with: "\u{1}")
-            .replacingOccurrences(of: "|", with: "\u{1}")
-            .replacingOccurrences(of: ";", with: "\u{1}")
-            .components(separatedBy: "\u{1}")
-            .map {
-                $0.replacingOccurrences(of: "\u{2}", with: "&>")
-                    .replacingOccurrences(of: "\u{3}", with: ">&")
-            }
+    /// Découpage délégué à `ShellSplitter` — une seule implémentation, testée,
+    /// partagée avec la détection des hooks sonores (les deux avaient la leur,
+    /// et aucune ne voyait les guillemets).
+    static func splitOnOperators(_ segment: String) -> [String] {
+        ShellSplitter.segments(segment, splitOnNewlines: false)
     }
 
-    private static func isSafeSegment(_ segment: String) -> Bool {
+    private static func isSafeSegment(_ segment: String, depth: Int = 0) -> Bool {
         var tokens = segment.split(whereSeparator: { $0 == " " || $0 == "\t" }).map(String.init)
         // Préfixes d'affectation d'environnement : VAR=value cmd…
         while let first = tokens.first, first.range(of: #"^\w+=[^\s]*$"#, options: [.regularExpression]) != nil {
@@ -176,13 +203,17 @@ public enum AutoAcceptPolicy {
 
         let args = Array(tokens.dropFirst())
 
+        // Lanceur d'environnement : la vraie commande est APRÈS `run`.
+        // `uv run python -c '…'` présentait `uv` en tête, et le garde-fou des
+        // interpréteurs ne voyait donc rien (revue des corrections).
+        if environmentRunners.contains(name), args.first == "run", depth < 2 {
+            return isSafeSegment(args.dropFirst().joined(separator: " "), depth: depth + 1)
+        }
+
         // Interpréteur + code en ligne = exécution arbitraire déguisée. On juge
         // ici, sur le segment, plutôt que par une regex sur la commande entière :
         // `grep -e node` ne doit pas être pris pour du `node -e`.
-        if inlineCodeInterpreters.contains(name),
-           args.contains(where: { inlineCodeFlags.contains($0) }) {
-            return false
-        }
+        if inlineCodeInterpreters.contains(name), hasInlineCodeFlag(args) { return false }
         // `deno eval "…"` passe par une sous-commande, pas par un drapeau.
         if name == "deno", args.first == "eval" { return false }
 

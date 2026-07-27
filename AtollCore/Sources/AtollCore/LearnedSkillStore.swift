@@ -189,6 +189,13 @@ public struct LearnedSkillStore {
                 // Hors manifeste MAIS contenu identique à ce qu'on s'apprête à
                 // poser : c'est une approbation interrompue (crash) qu'on REPREND
                 // — on ne re-throw pas collision, on finit d'écrire le manifeste.
+                //
+                // Le dossier est quand même archivé : le `removeItem` plus bas le
+                // détruit ENTIER, et le staging ne contient que `SKILL.md`. Des
+                // ressources jointes entre les deux tentatives disparaissaient
+                // sans copie — quatrième chemin destructeur, oublié par la
+                // correction initiale (revue des corrections).
+                _ = try? archiveDirectory(target, category: "uninstalled", slug: slug, stamp: stamp)
             } else {
                 // Contenu différent = vrai dossier étranger : on n'y touche pas.
                 throw LearnedSkillError.collisionWithUnmanagedDirectory(dirName)
@@ -284,7 +291,7 @@ public struct LearnedSkillStore {
 
         // Double verrou avant toute suppression : préfixe géré ET manifeste.
         if entry.dirName.hasPrefix(SkillSlug.managedPrefix), fm.fileExists(atPath: target.path) {
-            try archiveDirectory(target, category: "uninstalled", slug: slug, stamp: timestamp())
+            _ = try? archiveDirectory(target, category: "uninstalled", slug: slug, stamp: timestamp())
             try fm.removeItem(at: target)
         }
         manifest.skills.remove(at: index)
@@ -465,7 +472,13 @@ public struct LearnedSkillStore {
             // Archive INCONDITIONNELLE : un SKILL.md conforme au manifeste ne
             // dit rien des ressources jointes, qui, elles, n'existent nulle part
             // ailleurs. `archived` continue de ne signaler que les MODIFICATIONS.
-            try archiveDirectory(dir, category: "uninstalled", slug: entry.slug, stamp: stamp)
+            //
+            // `try?` : une copie qui échoue (fichier illisible, volume plein) ne
+            // doit PAS empêcher la désinstallation ni interrompre la boucle —
+            // sinon un seul skill abîmé rendait tous les autres irretirables, en
+            // silence (revue des corrections). Le retrait est ce que
+            // l'utilisateur a demandé ; l'archive est un filet.
+            _ = try? archiveDirectory(dir, category: "uninstalled", slug: entry.slug, stamp: stamp)
             if let diskMD, InstalledSkillsManifest.sha256(diskMD) != entry.skillSHA256 {
                 archived.append(entry.slug)
             }

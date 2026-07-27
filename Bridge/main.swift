@@ -532,9 +532,6 @@ enum BridgeCLI {
         }
     }
 
-    /// Rockstar terminé : réinsère les règles parquées (union avec celles
-    /// ajoutées entre-temps). Le fichier de parking ne disparaît QU'APRÈS
-    /// l'écriture réussie de settings.json.
     /// Rend à `settings.json` les hooks sonores parqués. Même schéma que
     /// `rockstarRestore` : le fichier de parking n'est supprimé qu'APRÈS une
     /// écriture réussie, et un parking illisible est laissé en place (avec un
@@ -562,6 +559,9 @@ enum BridgeCLI {
         }
     }
 
+    /// Rockstar terminé : réinsère les règles parquées (union avec celles
+    /// ajoutées entre-temps). Le fichier de parking ne disparaît QU'APRÈS
+    /// l'écriture réussie de settings.json.
     static func rockstarRestore() -> Int32 {
         do {
             guard FileManager.default.fileExists(atPath: BridgePaths.rockstarParkedDenyURL.path) else {

@@ -237,15 +237,24 @@ struct AlertsPane: View {
     // MARK: - Actions
 
     private func adoptHooks() {
-        let adopted = center.adoptDetectedSounds()
+        let (adopted, fallbacks) = center.adoptDetectedSounds()
         do {
             try center.parkUserSoundHooks()
             soundsEnabled = true
             revision += 1
             isError = false
-            message = adopted > 0
-                ? "\(adopted) son\(adopted > 1 ? "s" : "") repris. Tes hooks sont mis de côté."
-                : "Hooks mis de côté (aucun fichier audio lisible à reprendre)."
+            // Un repli n'est PAS une reprise : annoncer « 2 sons repris » quand
+            // les deux hooks étaient des `say`/`beep` était faux, et le message
+            // honnête devenait inatteignable (revue des corrections).
+            var phrases: [String] = []
+            if adopted > 0 { phrases.append("\(adopted) son\(adopted > 1 ? "s" : "") repris") }
+            if fallbacks > 0 {
+                phrases.append("\(fallbacks) son\(fallbacks > 1 ? "s" : "") système mis à la place "
+                               + "(rien à reprendre pour \(fallbacks > 1 ? "ces événements" : "cet événement"))")
+            }
+            message = phrases.isEmpty
+                ? "Hooks mis de côté (tes événements avaient déjà un son)."
+                : phrases.joined(separator: ", ") + ". Tes hooks sont mis de côté."
         } catch {
             isError = true
             message = "Échec : \(error.localizedDescription) — ton settings.json n'a pas été modifié."

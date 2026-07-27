@@ -48,7 +48,8 @@ public struct LaunchedTask: Equatable, Sendable, Codable, Identifiable {
     /// session interactive, dont la fin était ensuite annoncée comme celle de
     /// la tâche (audit du 2026-07-27).
     public var adoptable: Bool
-    /// Absences consécutives dans l'instantané de flotte. Voir `reconcile`.
+    /// Absences consécutives dans l'instantané de flotte — état de SESSION,
+    /// jamais relu du disque (voir `init(from:)`). Voir `reconcile`.
     public var missedFleetPolls: Int
 
     public init(id: UUID = UUID(), task: String, cwd: String, launchedAt: Date,
@@ -93,7 +94,12 @@ public struct LaunchedTask: Equatable, Sendable, Codable, Identifiable {
         // reste sur le comportement d'avant (adoptable) plutôt que de rendre
         // muettes des tâches déjà en cours.
         adoptable = try container.decodeIfPresent(Bool.self, forKey: .adoptable) ?? true
-        missedFleetPolls = try container.decodeIfPresent(Int.self, forKey: .missedFleetPolls) ?? 0
+        // JAMAIS relu du disque : le compteur jumeau de `SessionStore`
+        // (`fleetMissed`) est une propriété d'instance qui repart vide à chaque
+        // lancement. Le persister désalignait la tolérance — une valeur de 1
+        // écrite en routine faisait suffire UNE absence après un redémarrage
+        // (revue des corrections, 2026-07-27).
+        missedFleetPolls = 0
     }
 
     public var isComplete: Bool { completedAt != nil }

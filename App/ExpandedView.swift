@@ -250,7 +250,9 @@ struct ExpandedView: View {
     /// projets suffisaient à pousser le quota hors du cadre, en silence.
     private var projectRowPlan: ProjectRowPlan {
         var rows: [ProjectRow] = []
-        var remaining = rowBudget
+        // La ligne de pied (« clique une session… » / « +N autres ») est
+        // TOUJOURS dessinée : elle fait partie du budget.
+        var remaining = rowBudget - IslandRowBudget.projectFooterCost
         var hidden = 0
         for group in projectGroups {
             guard remaining > 0 else {
@@ -359,6 +361,17 @@ struct ExpandedView: View {
     }
 
     private var footer: some View {
+        // `TimelineView` ENGLOBANT : la fraîcheur de la fenêtre 5 h dépend de
+        // l'heure, pas d'une valeur observée. Sans réévaluation périodique, le
+        // chiffre périmé restait à l'écran jusqu'à un re-render fortuit — et
+        // toutes les sessions étant fermées, il n'en arrivait plus (revue des
+        // corrections, 2026-07-27).
+        TimelineView(.periodic(from: .now, by: 30)) { _ in
+            footerBody
+        }
+    }
+
+    private var footerBody: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(AsciiArt.sectionHeader("QUOTA", width: 72))
                 .lineLimit(1)
@@ -367,7 +380,12 @@ struct ExpandedView: View {
             // Jauges seulement avec de VRAIES données (jamais le mock de dev).
             if viewModel.hasRealQuota {
                 HStack(spacing: 16) {
-                    quotaGauge(label: "5h", fraction: viewModel.usage.fiveHourFraction, resetsAt: viewModel.quotaResets.five)
+                    // La jauge 5 h disparaît quand SA fenêtre a tourné ; le 7 j
+                    // et les jauges par modèle, eux, restent valides et
+                    // s'affichaient à tort « indisponibles » (revue des corrections).
+                    if viewModel.hasFreshFiveHour {
+                        quotaGauge(label: "5h", fraction: viewModel.usage.fiveHourFraction, resetsAt: viewModel.quotaResets.five)
+                    }
                     quotaGauge(label: "7j", fraction: viewModel.usage.sevenDayFraction, resetsAt: viewModel.quotaResets.seven)
                     // Jauges par modèle (« fable ») — opt-in, même ligne. Leur
                     // reset ≈ celui du 7j : omis pour tenir dans la largeur.

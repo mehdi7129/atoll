@@ -169,6 +169,20 @@ final class TaskCompletionTests: XCTestCase {
         XCTAssertTrue(resume.contains("j>0"), "obtenu : \(resume)")
     }
 
+    /// Les balises SANS attribut valué (`<br />`, `<hr />`) doivent partir
+    /// aussi : exiger un `=` les avait rendues invisibles au nettoyage, et
+    /// elles s'affichaient telles quelles dans la notification (revue des
+    /// corrections, 2026-07-27).
+    func testSelfClosingTagsWithoutAttributesAreStripped() {
+        let resume = TaskCompletion.summarize(
+            lastAssistantMessage: "Terminé.<br />Tout est vert.<hr />",
+            fallback: "tâche")
+        XCTAssertFalse(resume.contains("<br"), "obtenu : \(resume)")
+        XCTAssertFalse(resume.contains("<hr"), "obtenu : \(resume)")
+        XCTAssertTrue(resume.contains("Terminé"))
+        XCTAssertTrue(resume.contains("Tout est vert"))
+    }
+
     /// …sans cesser de retirer les VRAIES balises.
     func testRealHtmlTagsAreStillStripped() {
         let resume = TaskCompletion.summarize(

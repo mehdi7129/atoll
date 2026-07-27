@@ -118,15 +118,17 @@ final class SoundCenter {
         }
         // Le sous-ensemble ne suffit pas à distinguer « parking interrompu » de
         // « l'utilisateur a remis SON hook exprès » : dans les deux cas les
-        // hooks présents sont ceux du parking. Le fichier de parking étant
-        // écrit AVANT settings.json, une seule chose les sépare — dans le vrai
-        // cas d'interruption, settings.json n'a PAS été réécrit depuis. Sinon
-        // Atoll re-parquait à chaque lancement un hook remis à la main (ou
-        // restauré par des dotfiles), sans un geste ni un message.
-        let settingsModified = (try? settingsURL.resourceValues(forKeys: [.contentModificationDateKey]))?
-            .contentModificationDate
-        if let settingsModified, settingsModified > file.parkedAt {
-            log.info("settings.json réécrit depuis le parking — aucune action automatique")
+        // hooks présents sont ceux du parking. Le marqueur d'ENGAGEMENT, lui,
+        // tranche : il n'est écrit qu'APRÈS la modification réussie de
+        // settings.json. S'il est là, l'opération est allée à son terme et les
+        // hooks présents ont donc été remis par quelqu'un d'autre.
+        //
+        // (Une première version comparait la date de modification de
+        // settings.json ; Atoll le réécrit lui-même au lancement — réparation
+        // des hooks, parking Rockstar —, ce qui neutralisait la garde et
+        // laissait le parking orphelin pour toujours. Revue des corrections.)
+        guard file.committedAt == nil else {
+            log.info("parking déjà engagé — hooks sonores remis par ailleurs, aucune action automatique")
             return
         }
         log.info("parking interrompu (hooks encore présents) — reprise")
@@ -272,9 +274,13 @@ final class SoundCenter {
     /// Reprend les fichiers audio référencés par les hooks détectés comme sons
     /// Atoll, et les affecte à l'événement correspondant : jour 1 identique à
     /// l'oreille. Renvoie le nombre de sons repris.
+    /// Renvoie (sons REPRIS de la configuration de l'utilisateur, replis posés
+    /// faute de fichier). Les compter ensemble faisait annoncer « 2 sons
+    /// repris » quand rien ne l'avait été (revue des corrections).
     @discardableResult
-    func adoptDetectedSounds() -> Int {
+    func adoptDetectedSounds() -> (adopted: Int, fallbacks: Int) {
         var adopted = 0
+        var fallbacks = 0
         // Deux hooks peuvent viser le MÊME événement Atoll (`Stop` et
         // `SubagentStop` → « tâche terminée »). On applique le moins précis
         // d'abord pour que le principal l'emporte : sinon le son de sous-agent
@@ -294,18 +300,22 @@ final class SoundCenter {
             // l'utilisateur se retrouvait muet sans en être averti.
             if choice(for: event).isSilent {
                 setChoice(.system(Self.fallbackSystemSound(for: event)), for: event)
-                adopted += 1
+                fallbacks += 1
             }
         }
-        return adopted
+        return (adopted, fallbacks)
     }
 
     /// Priorité d'adoption : le hook le plus représentatif d'un événement Atoll
     /// est appliqué EN DERNIER, donc c'est lui qui reste.
+    /// Le gagnant de chaque paire est celui dont Atoll joue RÉELLEMENT le son :
+    /// `taskCompleted` sur le hook `Stop` (pas `SubagentStop`), `decisionNeeded`
+    /// quand une carte de permission apparaît — l'analogue exact de
+    /// `PermissionRequest`, pas de `Notification` (revue des corrections).
     static func adoptionRank(_ hookEvent: String) -> Int {
         switch hookEvent {
-        case "SubagentStop", "PermissionRequest": return 0
-        default: return 1   // Stop, Notification
+        case "SubagentStop", "Notification": return 0   // perdants
+        default: return 1                               // Stop, PermissionRequest
         }
     }
 
@@ -351,6 +361,13 @@ final class SoundCenter {
                                                 attributes: [.posixPermissions: 0o700])
         try SoundHookEditor.encodeParked(file).write(to: BridgePaths.parkedSoundHooksURL, options: .atomic)
         try result.updated.write(to: settingsURL, options: .atomic)
+        // ENGAGEMENT : réécrit APRÈS la modification de settings.json. Tant
+        // qu'il manque, `reconcile()` sait que l'opération a été interrompue —
+        // et c'est le SEUL signal fiable : la date de modification du fichier ne
+        // l'est pas, Atoll le réécrit lui-même au lancement.
+        let engaged = SoundHookEditor.ParkedSoundHooks(hooks: merged, parkedAt: file.parkedAt,
+                                                       committedAt: Date())
+        try? SoundHookEditor.encodeParked(engaged).write(to: BridgePaths.parkedSoundHooksURL, options: .atomic)
         log.info("\(result.parked.count, privacy: .public) hook(s) sonore(s) parqué(s)")
         refreshLibraries()
     }

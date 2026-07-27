@@ -218,4 +218,69 @@ final class AutoAcceptPolicyTests: XCTestCase {
         XCTAssertEqual(AutoAcceptPolicy.normalizePackage("@org/rimraf"), "rimraf")
         XCTAssertEqual(AutoAcceptPolicy.normalizePackage("@org/rimraf@5.0.1"), "rimraf")
     }
+
+    // MARK: - Revue des corrections (2026-07-27) : contournements restants
+
+    /// Le trou trouvé par la revue : coller le code au drapeau produit un token
+    /// unique qui n'égalait aucun drapeau connu. Ces formes s'exécutent bel et
+    /// bien — une espace en moins suffisait à repasser en AUTO.
+    func testAttachedInlineCodeIsManual() {
+        let effacement = "__import__(\"shutil\").rmtree(\"/Users/me/projet\")"
+        for command in [
+            "python3 -c'\(effacement)'",
+            "python3 -uc'print(1)'",
+            "python -c'print(1)'",
+            "ruby -e'File.delete(\"x\")'",
+            "bun -e'console.log(1)'",
+            "node --eval=1",
+            "ts-node -e 'process.exit(1)'",
+        ] {
+            XCTAssertFalse(AutoAcceptPolicy.isSafeBashCommand(command), "devrait être MANUEL : \(command)")
+        }
+    }
+
+    /// Un lanceur d'environnement cachait l'interpréteur derrière `run`.
+    func testEnvironmentRunnersAreUnwrapped() {
+        XCTAssertFalse(AutoAcceptPolicy.isSafeBashCommand("uv run python -c 'import os'"))
+        XCTAssertFalse(AutoAcceptPolicy.isSafeBashCommand("poetry run python -c'x'"))
+        XCTAssertFalse(AutoAcceptPolicy.isSafeBashCommand("uv run trash-cli ~/x"))
+        // …sans casser l'usage normal.
+        XCTAssertTrue(AutoAcceptPolicy.isSafeBashCommand("uv run pytest"))
+        XCTAssertTrue(AutoAcceptPolicy.isSafeBashCommand("poetry run python script.py"))
+    }
+
+    /// Les drapeaux ne se cherchent QUE parmi les options de l'interpréteur :
+    /// après le script ou le module, ils appartiennent à autre chose.
+    func testFlagsAfterTheScriptBelongToTheScript() {
+        for command in [
+            "python3 -m pip install -e .",
+            "node serve.js -p 8080",
+            "python3 script.py -e production",
+            "bun run build -e production",
+            // (`--eval` en argument de script reste manuel : le mot `eval` est
+            // dans la blocklist opaque depuis l'origine — comportement voulu.)
+        ] {
+            XCTAssertTrue(AutoAcceptPolicy.isSafeBashCommand(command), "devrait rester sûr : \(command)")
+        }
+    }
+
+    /// Un opérateur ENTRE GUILLEMETS n'en est pas un : couper dessus renvoyait
+    /// en manuel des commandes parfaitement ordinaires.
+    func testOperatorsInsideQuotesDoNotSplit() {
+        for command in [
+            "git commit -m \"corrige a & b\"",
+            "curl \"https://example.com/x?a=1&b=2\"",
+            "echo 'a | b ; c'",
+            "git commit -m 'feat: A && B'",
+        ] {
+            XCTAssertTrue(AutoAcceptPolicy.isSafeBashCommand(command), "devrait rester sûr : \(command)")
+        }
+    }
+
+    /// …et l'inverse : un `&` cité n'est qu'un argument, pas un enchaînement.
+    func testQuotedAmpersandIsJustAnArgument() {
+        XCTAssertTrue(AutoAcceptPolicy.isSafeBashCommand("echo \"&\""))
+        // Non cité, il coupe toujours.
+        XCTAssertFalse(AutoAcceptPolicy.isSafeBashCommand("echo hi & chmod -R 777 /"))
+    }
 }

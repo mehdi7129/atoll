@@ -514,6 +514,13 @@ final class RetrospectiveRunner {
     }
 
     private func finish(_ job: Job, outcome: String, transcriptBytes: Int) {
+        // Le run est TERMINÉ : on relâche le verrou de préparation ICI, avant le
+        // `scheduleNext()` de la fin de cette fonction. Le `defer` de `run()` ne
+        // joue qu'au retour de `run`, donc APRÈS — et l'enchaînement de la file
+        // mourait : un second job attendait la fin d'une TROISIÈME session, ou
+        // n'était jamais analysé (revue des corrections, 2026-07-27). Le `defer`
+        // reste, en filet pour les chemins qui ne passent pas par `finish`.
+        preparing = false
         // Un ÉCHEC ne marque plus la session « traitée » (v0.12.0) : jusque-là
         // un run avorté (spawn KO, exit ≠ 0, sortie illisible) grillait la
         // session pour toujours — il fallait +50 Ko de transcript pour qu'elle

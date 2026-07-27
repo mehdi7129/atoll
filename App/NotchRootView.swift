@@ -10,6 +10,8 @@ struct NotchRootView: View {
     @AppStorage("hoverDelay") private var hoverDelay = 0.15
     @AppStorage(VisualEffects.enabledKey) private var visualEffects = true
     @AppStorage(VisualEffects.glassIntensityKey) private var glassIntensity = VisualEffects.defaultGlassIntensity
+    /// Rockstar élargit l'îlot même sans session : voir `islandSize(rockstar:)`.
+    @AppStorage(InteractionCenter.autonomyKey) private var autonomyRaw = AutonomyLevel.manual.rawValue
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Rejoue l'onde d'expansion : incrémenté à chaque passage → étendu.
@@ -28,6 +30,8 @@ struct NotchRootView: View {
     private var capColors: ThemeColors {
         viewModel.hasNotch ? ThemeColors(variant: Palette.named(paletteID).dark) : colors
     }
+
+    private var rockstar: Bool { AutonomyLevel(rawValue: autonomyRaw) == .rockstar }
 
     private var isCompactCap: Bool {
         viewModel.hasNotch && viewModel.state == .compact
@@ -95,7 +99,7 @@ struct NotchRootView: View {
 
     @ViewBuilder
     private var island: some View {
-        let size = viewModel.islandSize
+        let size = viewModel.islandSize(rockstar: rockstar)
         let shape = NotchShape(topRadius: topRadius, bottomRadius: bottomRadius)
 
         ZStack(alignment: .top) {

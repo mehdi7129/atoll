@@ -567,6 +567,22 @@ final class MemoryIndexTests: XCTestCase {
                        "la note doit passer le filtre de projet, la session d'un AUTRE projet non")
     }
 
+    /// Une VRAIE session dont aucune ligne ne portait de cwd (fichier trop
+    /// court) a elle aussi `project_path` nul : elle ne doit PAS franchir la
+    /// frontière de projet. Le discriminant est le RÔLE, pas l'absence de projet
+    /// (revue des corrections, 2026-07-27).
+    func testProjectScopeExcludesProjectlessRealSessions() throws {
+        try ingest([Entry(uuid: "note", text: "codesign piege", role: .note, cwd: nil)],
+                   sessionID: "atoll-note-x", path: "/notes/x.md", inode: 400)
+        try ingest([Entry(uuid: "u", text: "codesign piege", role: .user, cwd: nil)],
+                   sessionID: "session-sans-cwd", path: "/transcripts/court.jsonl", inode: 401)
+
+        let scoped = try index.search(rawQuery: "codesign", limit: 10,
+                                      projectPrefix: "/Users/x/monprojet")
+        XCTAssertEqual(scoped.map(\.role), ["note"],
+                       "seule la note traverse la frontière de projet")
+    }
+
     /// …sans pour autant rendre le filtre inopérant sur les vraies sessions.
     func testProjectScopeStillExcludesOtherProjects() throws {
         try ingest([Entry(uuid: "ici", text: "quota exact", cwd: "/Users/x/monprojet")],

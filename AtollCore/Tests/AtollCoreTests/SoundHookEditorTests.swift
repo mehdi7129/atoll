@@ -186,9 +186,20 @@ final class SoundHookEditorTests: XCTestCase {
         }
     }
 
-    /// …mais le cas légitime « joue le son en tâche de fond » reste reconnu.
-    func testTrailingAmpersandIsStillASoundCommand() {
-        XCTAssertTrue(SoundHookEditor.isSoundCommand("afplay -v 0.1 ~/done.wav &"))
+    /// …mais les cas légitimes restent reconnus. Un `&` FINAL met le son en
+    /// tâche de fond, et une REDIRECTION en contient un sans rien enchaîner :
+    /// la première version de la garde rejetait `2>&1 &`, idiome courant, et
+    /// l'utilisateur ne pouvait plus confier ce hook (revue des corrections).
+    func testBackgroundAndRedirectionsAreStillSoundCommands() {
+        for command in [
+            "afplay -v 0.1 ~/done.wav &",
+            "afplay -v 0.1 $HOME/.claude/song/finish.mp3 >/dev/null 2>&1 &",
+            "afplay ~/done.wav &>/dev/null",
+            "afplay ~/done.wav\n",
+            "afplay '~/mon son & co.wav'",
+        ] {
+            XCTAssertTrue(SoundHookEditor.isSoundCommand(command), "devrait être reconnu : \(command)")
+        }
     }
 
     // MARK: - Fichier de parking
@@ -318,5 +329,30 @@ final class SoundHookEditorTests: XCTestCase {
         let groups = (after["hooks"] as! [String: Any])["Stop"] as! [[String: Any]]
         XCTAssertEqual(groups.count, 1)
         XCTAssertEqual(groups[0]["matcher"] as? String, "garde-place")
+    }
+
+    /// Le marqueur d'engagement doit distinguer TROIS états, sinon la reprise
+    /// après crash ne se fait jamais (revue des corrections, 2026-07-27) :
+    /// clé absente = version antérieure (engagée), `null` = parking interrompu,
+    /// date = parking terminé.
+    func testCommittedAtDistinguishesInterruptedFromLegacy() throws {
+        let hook = SoundHookEditor.ParkedHook(event: "Stop", matcher: "", index: 0,
+                                              command: "afplay a.mp3",
+                                              hookJSON: #"{"command":"afplay a.mp3","type":"command"}"#)
+        let stamp = Date(timeIntervalSince1970: 1_800_000_000)
+
+        // 1. Parking EN COURS : `committedAt` nil doit survivre à l'aller-retour.
+        let encours = SoundHookEditor.ParkedSoundHooks(hooks: [hook], parkedAt: stamp)
+        let relu = SoundHookEditor.decodeParked(try SoundHookEditor.encodeParked(encours))
+        XCTAssertNil(relu?.committedAt, "un parking interrompu doit se relire interrompu")
+
+        // 2. Parking TERMINÉ.
+        let fini = SoundHookEditor.ParkedSoundHooks(hooks: [hook], parkedAt: stamp, committedAt: stamp)
+        XCTAssertNotNil(SoundHookEditor.decodeParked(try SoundHookEditor.encodeParked(fini))?.committedAt)
+
+        // 3. Fichier d'une version ANTÉRIEURE (aucune clé) : considéré engagé,
+        //    sinon Atoll re-parquerait au prochain lancement.
+        let ancien = Data(#"{"hooks":[],"parkedAt":"2026-07-27T12:09:27Z"}"#.utf8)
+        XCTAssertNotNil(SoundHookEditor.decodeParked(ancien)?.committedAt)
     }
 }

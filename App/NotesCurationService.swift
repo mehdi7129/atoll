@@ -46,6 +46,16 @@ final class NotesCurationService {
     /// notes indexées). Injecté par l'AppDelegate, comme `noteSink`.
     @ObservationIgnored var onNotesReplaced: (([String], [URL]) -> Void)?
 
+    /// Dernier `claude -p` RÉELLEMENT lancé par la curation.
+    ///
+    /// `lastRunAt` ne convient pas pour borner la dépense : il est posé au
+    /// simple ARMEMENT de l'option hebdomadaire, et avancé par des cycles qui
+    /// n'ont rien lancé (corpus trop gros, moins de deux notes). Le seul créneau
+    /// de la fenêtre de 5 h était donc consommé par un non-événement, et le clic
+    /// explicite restait mort cinq heures — exactement ce que la tolérance
+    /// devait débloquer (revue des corrections, 2026-07-27). En mémoire à
+    /// dessein : après un redémarrage, on redonne sa chance à l'utilisateur.
+    @ObservationIgnored private var lastSpendAt: Date?
     @ObservationIgnored private var process: Process?
     /// Cause exacte du dernier échec de sous-processus (affichée telle quelle).
     @ObservationIgnored private var spawnFailure: String?
@@ -171,7 +181,7 @@ final class NotesCurationService {
             receivedAt: store.rawQuotaReceivedAt,
             resetsAt: store.realQuota?.fiveHour.resetsAt
         )
-        if let refusal = Self.quotaRefusal(quota, now: Date(), lastRunAt: lastRunAt) {
+        if let refusal = Self.quotaRefusal(quota, now: Date(), lastSpendAt: lastSpendAt) {
             log.info("curation reportée : \(refusal, privacy: .public)")
             phase = .idle
             lastOutcome = "reportée (\(refusal))"
@@ -403,7 +413,7 @@ final class NotesCurationService {
     /// autorise donc UN passage par fenêtre de 5 h, comme
     /// `unknownQuotaMaxPerWindow` (audit du 2026-07-27).
     static func quotaRefusal(_ quota: LearningGate.QuotaFacts, now: Date,
-                             lastRunAt: Date?) -> String? {
+                             lastSpendAt: Date?) -> String? {
         let doubtful: String?
         if quota.usedFraction == nil {
             doubtful = "quota 5 h inconnu"
@@ -419,7 +429,7 @@ final class NotesCurationService {
         guard let doubtful else { return nil }
         // Une seule tentative par fenêtre tant qu'on ne sait pas : le plafond
         // borne la dépense, exactement comme pour la rétrospective.
-        if let lastRunAt, now.timeIntervalSince(lastRunAt) < LearningGate.runWindowSeconds {
+        if let lastSpendAt, now.timeIntervalSince(lastSpendAt) < LearningGate.runWindowSeconds {
             return doubtful
         }
         return nil
@@ -493,6 +503,9 @@ final class NotesCurationService {
         process.standardError = stderr
 
         spawnFailure = nil
+        // La dépense commence ICI, pas au cycle : c'est ce qui borne la
+        // tolérance « quota inconnu ».
+        lastSpendAt = Date()
         do {
             try process.run()
         } catch {

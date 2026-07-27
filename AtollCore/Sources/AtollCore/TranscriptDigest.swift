@@ -250,7 +250,8 @@ public enum TranscriptDigest {
             }
             guard isKept else { continue }
             kept.append(Entry(role: entry.role, text: capped(entry.text),
-                              timestamp: entry.timestamp, isError: entry.isError))
+                              timestamp: entry.timestamp, isError: entry.isError,
+                              toolUseID: entry.toolUseID))
         }
         return kept
     }

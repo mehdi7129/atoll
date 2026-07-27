@@ -143,6 +143,10 @@ public enum SessionGrouping {
 public enum IslandRowBudget {
     /// Sans bannière sous la liste.
     public static let plain = 6
+    /// La vue par PROJET dessine TOUJOURS une ligne de pied (« clique une
+    /// session… » ou « +N autres »), que la vue par état n'a pas. Elle coûte
+    /// donc une rangée de plus (revue des corrections, 2026-07-27).
+    public static let projectFooterCost = 1
     /// Avec une bannière (tâche terminée, ou skill proposé) : elle mange ~66 pt.
     public static let withBanner = 4
 

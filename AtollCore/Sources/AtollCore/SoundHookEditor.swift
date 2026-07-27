@@ -75,10 +75,54 @@ public enum SoundHookEditor {
     public struct ParkedSoundHooks: Codable, Equatable, Sendable {
         public let hooks: [ParkedHook]
         public let parkedAt: Date
+        /// Quand `settings.json` a EFFECTIVEMENT été amputé. nil = le fichier de
+        /// parking a été écrit mais l'opération n'est pas allée à son terme.
+        ///
+        /// C'est le seul signal fiable pour distinguer « parking interrompu par
+        /// un crash » de « l'utilisateur a remis son hook exprès ». Comparer la
+        /// date de modification de settings.json ne marche pas : Atoll le
+        /// réécrit lui-même au lancement (réparation des hooks, parking
+        /// Rockstar), ce qui neutralisait la garde et laissait le parking
+        /// orphelin pour toujours (revue des corrections, 2026-07-27).
+        public let committedAt: Date?
 
-        public init(hooks: [ParkedHook], parkedAt: Date) {
+        public init(hooks: [ParkedHook], parkedAt: Date, committedAt: Date? = nil) {
             self.hooks = hooks
             self.parkedAt = parkedAt
+            self.committedAt = committedAt
+        }
+
+        // Déclarées explicitement : fournir les DEUX côtés du Codable supprime
+        // la synthèse, CodingKeys comprise.
+        enum CodingKeys: String, CodingKey {
+            case hooks, parkedAt, committedAt
+        }
+
+        /// Décodage tolérant : un parking écrit par une version antérieure n'a
+        /// pas de `committedAt`. Il a été écrit AVANT l'introduction du champ,
+        /// donc son opération est terminée depuis longtemps — on le considère
+        /// engagé, plutôt que de re-parquer au prochain lancement.
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            hooks = try container.decode([ParkedHook].self, forKey: .hooks)
+            parkedAt = try container.decode(Date.self, forKey: .parkedAt)
+            // Clé ABSENTE = version antérieure au champ → engagée depuis
+            // longtemps. Clé présente à `null` = parking EN COURS, interrompu.
+            // Les deux doivent se distinguer, d'où l'encodage explicite du nil
+            // ci-dessous : sans lui, une interruption se relisait « engagée » et
+            // la reprise après crash ne se faisait jamais.
+            if container.contains(.committedAt) {
+                committedAt = try container.decodeIfPresent(Date.self, forKey: .committedAt)
+            } else {
+                committedAt = parkedAt
+            }
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(hooks, forKey: .hooks)
+            try container.encode(parkedAt, forKey: .parkedAt)
+            try container.encode(committedAt, forKey: .committedAt)   // `null` si nil
         }
     }
 
@@ -100,16 +144,14 @@ public enum SoundHookEditor {
         // `./on-stop.sh && afplay done.wav` arrêterait aussi `on-stop.sh`, et
         // l'utilisateur n'aurait aucune idée de pourquoi son script ne tourne
         // plus. Mieux vaut un son en trop qu'un traitement supprimé.
-        for separator in ["&&", "||", ";", "|", "\n", "\r"] where command.contains(separator) {
-            return false
-        }
-        // Le `&` isolé enchaîne lui aussi : `afplay done.wav & node notify.js`
-        // faisait sauter le `node`. On tolère le seul cas légitime — un `&`
-        // final qui met le son en tâche de fond.
-        if let ampersand = command.range(of: "&"),
-           !command[ampersand.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return false
-        }
+        // Découpage PARTAGÉ avec l'auto-accept (`ShellSplitter`), qui respecte
+        // les guillemets et les redirections. La version précédente refusait
+        // tout `&` non final : elle rejetait donc `afplay son.wav >/dev/null
+        // 2>&1 &` — un hook purement sonore, idiome courant — que l'utilisateur
+        // ne pouvait plus confier à Atoll, et qui lui faisait entendre deux sons
+        // (revue des corrections, 2026-07-27). Un `&` FINAL, un retour à la
+        // ligne final, une redirection : autant de segments vides ou uniques.
+        guard ShellSplitter.meaningfulSegments(command).count == 1 else { return false }
 
         // Le lecteur de son doit être LA COMMANDE, pas un mot qui traîne dans
         // un argument. Sans ça : `curl .../beep-api`, `node say-hello.js` ou

@@ -61,7 +61,7 @@ public enum TaskCompletion {
         //    condition disparaissait et la phrase disait le contraire du vrai,
         //    en notification macOS (audit du 2026-07-27).
         text = text.replacingOccurrences(
-            of: "</?[a-z][a-z0-9-]{0,30}(?:\\s[^<>]{0,200}=[^<>]{0,200})?/?>",
+            of: "</?[a-z][a-z0-9-]{0,30}(?:\\s[^<>]{0,200}=[^<>]{0,200}|\\s*)/?>",
             with: " ", options: .regularExpression)
         // 3. Liens Markdown : garder le libellé, jeter l'URL.
         //    Quantificateurs BORNÉS : `[^\]]*` repartait de chaque `[` et

@@ -82,6 +82,7 @@ final class NotchViewModel {
     var usage: UsageSnapshot { store.displayQuota }
     var quotaResets: (five: Date?, seven: Date?) { store.quotaResets }
     var hasRealQuota: Bool { store.hasRealQuota }
+    var hasFreshFiveHour: Bool { store.hasFreshFiveHour }
     var quotaReceivedAt: Date? { store.quotaReceivedAt }
 
     var selectedSession: AgentSession? {
@@ -97,17 +98,36 @@ final class NotchViewModel {
         selectedSessionID = nil
     }
 
+    /// Y a-t-il quelque chose à MONTRER dans les ailes ? Sessions uniquement.
     var hasActivity: Bool { !sessions.isEmpty }
     var workingCount: Int { sessions.filter(\.isActive).count }
     var attentionCount: Int { sessions.filter(\.needsAttention).count }
 
-    var islandSize: CGSize {
+    /// `rockstar` élargit l'îlot MÊME AU REPOS.
+    ///
+    /// Arbitrage rendu le 2026-07-27 entre deux intentions du projet qui
+    /// s'opposaient : « au repos, l'îlot épouse l'encoche et reste invisible »
+    /// (`IslandGeometry.compactSize`) contre « le losange rouge est un
+    /// indicateur persistant » (`CompactView`). La première l'emporte pour tout
+    /// ce qui est simplement EN ATTENTE — un skill proposé sait attendre, et il
+    /// reste visible dans le menu et dès qu'une session tourne.
+    ///
+    /// Elle CÈDE pour Rockstar, et pour lui seul : ce mode ne se contente pas
+    /// d'auto-approuver, il SUSPEND les règles `permissions.deny` que
+    /// l'utilisateur a écrites dans son `settings.json`. Une garantie qu'il a
+    /// posée lui-même est levée ; ne rien afficher, c'est le laisser l'oublier.
+    /// Le silence est alors un défaut, pas une qualité.
+    ///
+    /// Le drapeau vient de la VUE (`@AppStorage`) et non d'ici : `autonomyLevel`
+    /// est calculé depuis UserDefaults, donc invisible à `@Observable` — l'îlot
+    /// ne se redessinerait pas à la bascule.
+    func islandSize(rockstar: Bool) -> CGSize {
         switch state {
         case .compact:
             return IslandGeometry.compactSize(
                 notch: notchSize,
                 menuBarHeight: menuBarHeight,
-                hasActivity: hasActivity,
+                hasActivity: hasActivity || rockstar,
                 width: compactWidth
             )
         case .expanded:

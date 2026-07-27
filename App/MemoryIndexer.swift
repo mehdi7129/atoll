@@ -414,28 +414,29 @@ private actor MemoryIndexWorker {
 
     private func destroyFiles() {
         let base = BridgePaths.memoryDatabaseURL.path
-        for suffix in ["", "-wal", "-shm"] {
+        // La copie mise de côté part AUSSI : « Reconstruire l'index » et la
+        // désactivation doivent vraiment tout rendre (revue des corrections).
+        for suffix in ["", "-wal", "-shm", ".illisible", ".illisible-wal", ".illisible-shm"] {
             try? FileManager.default.removeItem(atPath: base + suffix)
         }
     }
 
-    /// Renomme la base au lieu de la supprimer : `memory.db.illisible-<stamp>`.
-    /// Un seul exemplaire est gardé (le précédent est écrasé) — il s'agit d'un
-    /// filet, pas d'un historique.
+    /// Renomme la base au lieu de la supprimer : `memory.db.illisible`.
+    ///
+    /// Nom FIXE, sans horodatage : c'est un filet, pas un historique. Un nom
+    /// daté empilait une copie de ~24 Mo par corruption — et, sur un échec
+    /// d'ouverture PERSISTANT (disque plein), une nouvelle toutes les 30 s
+    /// (revue des corrections, 2026-07-27).
     nonisolated static func setAsideDatabase() {
         let fm = FileManager.default
         let base = BridgePaths.memoryDatabaseURL.path
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyyMMdd-HHmmss"
-        formatter.timeZone = TimeZone(identifier: "UTC")
-        let stamp = formatter.string(from: Date())
         for suffix in ["", "-wal", "-shm"] {
             let source = base + suffix
             guard fm.fileExists(atPath: source) else { continue }
-            let destination = "\(base).illisible-\(stamp)\(suffix)"
-            try? fm.removeItem(atPath: destination)
+            let destination = "\(base).illisible\(suffix)"
+            try? fm.removeItem(atPath: destination)   // ne garder QUE la dernière
             if (try? fm.moveItem(atPath: source, toPath: destination)) == nil {
-                try? fm.removeItem(atPath: source) // déplacement impossible : on nettoie
+                try? fm.removeItem(atPath: source)    // déplacement impossible : on nettoie
             }
         }
     }

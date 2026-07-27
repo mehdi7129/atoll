@@ -112,6 +112,11 @@ final class SessionStore {
     /// pour ne pas clignoter pendant un outil silencieux, assez court pour ne
     /// pas mentir (le bug : une session inactive depuis 16 min affichée « busy »).
     private static let syntheticIdleSeconds: TimeInterval = 15
+    /// Absences de flotte tolérées pour une session dont une carte de permission
+    /// attend encore. Large (≈ 1 à 5 min selon la cadence du poll) : une vraie
+    /// décision a le temps d'être prise, mais une carte fantôme finit par être
+    /// rendue au terminal plutôt que de rester à l'écran indéfiniment.
+    private static let pendingCardFleetTolerance = 50
 
     // MARK: - Cycle de vie
 
@@ -195,22 +200,31 @@ final class SessionStore {
     /// Quota affiché : vrai serveur uniquement — jamais de données factices
     /// (les vues masquent les jauges tant que hasRealQuota est faux).
     var displayQuota: UsageSnapshot {
-        guard let quota = freshQuota else {
+        guard let quota = realQuota else {
             return UsageSnapshot(fiveHourFraction: 0, sevenDayFraction: 0)
         }
         return UsageSnapshot(
-            fiveHourFraction: quota.fiveHour.usedFraction,
+            // La fraction 5 h d'une fenêtre expirée ne veut plus rien dire ; la
+            // vue ne dessine cette jauge que si `hasFreshFiveHour`.
+            fiveHourFraction: freshQuota?.fiveHour.usedFraction ?? 0,
             sevenDayFraction: quota.sevenDay.usedFraction
         )
     }
 
     var quotaResets: (five: Date?, seven: Date?) {
-        (freshQuota?.fiveHour.resetsAt, freshQuota?.sevenDay.resetsAt)
+        (freshQuota?.fiveHour.resetsAt, realQuota?.sevenDay.resetsAt)
     }
 
-    var hasRealQuota: Bool { freshQuota != nil }
+    /// Un vrai quota serveur est-il connu ? Ne dépend PAS de la fraîcheur de la
+    /// fenêtre 5 h : la jauge 7 JOURS reste exacte bien après le reset des 5 h,
+    /// et les jauges par modèle viennent d'une source indépendante. Les masquer
+    /// toutes parce que le chiffre 5 h a vieilli faisait disparaître le bloc
+    /// entier (revue des corrections, 2026-07-27).
+    var hasRealQuota: Bool { realQuota != nil }
+    /// La fenêtre 5 h est-elle encore en cours ? Seule la jauge 5 h en dépend.
+    var hasFreshFiveHour: Bool { freshQuota != nil }
     /// Quand le dernier vrai quota a été reçu (pour l'indicateur d'âge).
-    var quotaReceivedAt: Date? { freshQuota?.receivedAt }
+    var quotaReceivedAt: Date? { realQuota?.receivedAt }
     /// Idem, mais SANS le filtre de fraîcheur : les gates d'apprentissage ont
     /// leur propre traitement du périmé (une lecture vieille sert de MINORANT),
     /// et doivent voir la donnée telle qu'elle est.
@@ -780,8 +794,17 @@ final class SessionStore {
             // ANNONCÉ ici et implémenté dans le chemin jumeau (`reconcile`),
             // mais absent de cette boucle : la carte était retirée de l'îlot et
             // la main rendue au terminal pendant que le helper attendait encore.
-            if InteractionCenter.shared.pending.contains(where: { $0.sessionID == id }) {
-                fleetMissed[id] = 0
+            // …mais PAS indéfiniment. Rien d'autre ne nettoie une carte dont le
+            // helper est mort : `BridgeServer` ne détecte pas l'EOF sur le fd
+            // gardé ouvert, et son timeout de 86 400 s ferme le fd sans prévenir
+            // l'îlot. `markEnded` → `cancelForSession` était le SEUL chemin, et
+            // le couper laissait une carte fantôme pour toujours après un
+            // `claude stop` (revue des corrections, 2026-07-27). On tolère donc
+            // largement — le temps qu'une vraie décision se prenne — puis on
+            // clôt et la carte est rendue au terminal.
+            if InteractionCenter.shared.pending.contains(where: { $0.sessionID == id }),
+               (fleetMissed[id] ?? 0) < Self.pendingCardFleetTolerance {
+                fleetMissed[id] = (fleetMissed[id] ?? 0) + 1
                 continue
             }
             //

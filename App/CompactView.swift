@@ -13,7 +13,11 @@ struct CompactView: View {
         if let notch = viewModel.notchSize {
             // Écran à encoche : contenu dans les ailes, le centre reste vide
             // (il est physiquement masqué par le notch).
-            if viewModel.hasActivity {
+            // `|| rockstar` : au repos l'îlot reste invisible, SAUF quand
+            // Rockstar suspend les règles `permissions.deny` de l'utilisateur —
+            // le seul état qui mérite de rompre le silence (arbitrage du
+            // 2026-07-27, cf. `NotchViewModel.islandSize(rockstar:)`).
+            if viewModel.hasActivity || rockstar {
                 HStack(spacing: 0) {
                     leftWing
                         .frame(width: viewModel.compactWidth.wingWidth)
@@ -58,7 +62,7 @@ struct CompactView: View {
         IslandGeometry.compactSize(
             notch: nil,
             menuBarHeight: viewModel.menuBarHeight,
-            hasActivity: viewModel.hasActivity
+            hasActivity: viewModel.hasActivity || rockstar
         ).height
     }
 
@@ -100,10 +104,18 @@ struct CompactView: View {
     }
 
     private var rightWing: some View {
+        // Même raison que le pied du panneau étendu : la péremption de la
+        // fenêtre 5 h est une affaire d'HEURE, pas de valeur observée.
+        TimelineView(.periodic(from: .now, by: 30)) { _ in
+            rightWingBody
+        }
+    }
+
+    private var rightWingBody: some View {
         HStack(spacing: 4) {
             Spacer(minLength: 0)
             // Jamais de jauge factice : rien tant que le vrai quota n'est pas là.
-            if viewModel.hasRealQuota {
+            if viewModel.hasFreshFiveHour {
                 Text("5h")
                     .foregroundStyle(colors.dim)
                 Text(AsciiArt.progressBar(fraction: viewModel.usage.fiveHourFraction, cells: 4))

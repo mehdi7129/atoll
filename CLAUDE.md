@@ -109,6 +109,18 @@ Les quatre qui comptent :
   les payloads et répondre `{"behavior":"allow"}` — décision que le CLI honore.
   Contrôle `LOCAL_PEERCRED` côté helper (vérifié : les hooks passent toujours).
 
+**ARBITRAGE RENDU — l'îlot au repos.** Deux intentions écrites s'opposaient :
+« au repos, l'îlot épouse l'encoche et reste invisible » (`IslandGeometry`) contre
+« le losange rouge est un indicateur persistant » (`CompactView`). Elles sont
+RANGÉES, pas fusionnées : l'invisibilité l'emporte pour tout ce qui est seulement
+EN ATTENTE (un skill proposé sait attendre — il reste au menu et dès qu'une
+session tourne), et cède pour **Rockstar SEUL**, parce que ce mode suspend les
+règles `permissions.deny` que l'utilisateur a écrites lui-même. Mise en œuvre :
+`hasActivity || rockstar` dans `NotchViewModel.islandSize(rockstar:)` et le HStack
+de `CompactView`. Le drapeau vient de la VUE (`@AppStorage`) : `autonomyLevel` est
+calculé depuis UserDefaults, donc invisible à `@Observable` — sans cela l'îlot ne
+se redessine pas à la bascule.
+
 **PIÈGE DE RELEASE (vécu en publiant v0.14.0)** : bouger `MARKETING_VERSION`
 NE SUFFIT PAS. Sparkle identifie une mise à jour par `CFBundleVersion`
 (= `CURRENT_PROJECT_VERSION`), et `generate_appcast` échoue à la toute fin —
