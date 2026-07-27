@@ -173,6 +173,8 @@ private struct ClaudeCodePane: View {
     @State private var hookError: String?
     @State private var denyParkingError: String?
     @State private var proactiveRecallError: String?
+    @State private var plugins = PluginInventory.shared
+    @State private var pluginError: String?
 
     private var store: SessionStore { .shared }
 
@@ -240,6 +242,74 @@ private struct ClaudeCodePane: View {
                 .foregroundStyle(.secondary)
             }
 
+            Section("Plugins") {
+                if let snapshot = plugins.snapshot {
+                    LabeledContent("Installés", value: pluginSummary(snapshot))
+                    // Les anomalies AVANT la liste : c'est ce pour quoi on
+                    // ouvre ce panneau.
+                    if !snapshot.broken.isEmpty {
+                        Text("⚠ cassé(s) : \(snapshot.broken.map(\.name).joined(separator: ", ")) — activé(s) mais des fichiers déclarés manquent")
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
+                    if !snapshot.duplicateNames.isEmpty {
+                        Text("⚠ présents dans deux marketplaces : \(snapshot.duplicateNames.joined(separator: ", "))")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
+                    ForEach(snapshot.installed.filter(\.isEnabled)) { plugin in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(plugin.name)
+                                Text(pluginDetail(plugin))
+                                    .font(.caption)
+                                    .foregroundStyle(plugin.hasLoadError ? .red : .secondary)
+                            }
+                            Spacer()
+                            Button("Désactiver") {
+                                Task { pluginError = await plugins.setEnabled(false, pluginID: plugin.id) }
+                            }
+                            .buttonStyle(.borderless)
+                            .disabled(plugins.busyPluginID != nil)
+                        }
+                    }
+                    if !snapshot.installedButDisabled.isEmpty {
+                        LabeledContent("Installés mais inactifs",
+                                       value: "\(snapshot.installedButDisabled.count) — aucun coût en contexte")
+                            .font(.caption)
+                    }
+                } else if plugins.isRefreshing {
+                    HStack { ProgressView().controlSize(.small); Text("Lecture…").font(.caption) }
+                } else {
+                    Text("Aucun inventaire — cliquez pour interroger `claude plugin list`.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                HStack {
+                    Button("Actualiser") { plugins.refresh() }
+                        .disabled(plugins.isRefreshing)
+                    Button("Coût en tokens") {
+                        // À la demande : `claude plugin details` par plugin activé.
+                        for plugin in plugins.snapshot?.installed.filter(\.isEnabled) ?? [] {
+                            plugins.loadTokenCost(for: plugin.name)
+                        }
+                    }
+                    .disabled(plugins.snapshot == nil)
+                }
+                if let error = pluginError ?? plugins.lastError {
+                    Text(error).font(.caption).foregroundStyle(.red)
+                }
+                Text("""
+                Ce que vos plugins coûtent à chaque session et ce qui ne tourne pas. \
+                Atoll passe TOUJOURS par la commande `claude plugin` — il ne touche \
+                jamais lui-même à votre settings.json. Installer un plugin exécute du \
+                code tiers (hooks au démarrage, serveurs MCP) : ça ne se fait que sur \
+                votre geste explicite.
+                """)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+
             Section("Souvenirs proposés d'office") {
                 Toggle("Rappeler les sessions liées à chaque message", isOn: proactiveRecall)
                     .disabled(!memoryIndexing.wrappedValue)
@@ -270,11 +340,35 @@ private struct ClaudeCodePane: View {
 
         }
         .formStyle(.grouped)
-        .fixedSize(horizontal: false, vertical: true)
+        // Même raison que le volet Apprentissage : avec la section Plugins et
+        // sa liste, la hauteur intrinsèque dépassait l'écran.
+        .frame(minHeight: 420, idealHeight: 560, maxHeight: 620)
         .onAppear {
             hooksInstalled = HookInstaller.isInstalled
             MemoryIndexer.shared.refreshStats()
         }
+    }
+
+    /// « 31 installés · 4 activés · 1 cassé ».
+    private func pluginSummary(_ snapshot: PluginSnapshot) -> String {
+        var parts = ["\(snapshot.installed.count) installés",
+                     "\(snapshot.enabledCount) activés"]
+        if !snapshot.broken.isEmpty { parts.append("\(snapshot.broken.count) cassé(s)") }
+        return parts.joined(separator: " · ")
+    }
+
+    /// « v6.2.0 · ~688 tok/session · 2 serveurs MCP ».
+    private func pluginDetail(_ plugin: InstalledPlugin) -> String {
+        var parts: [String] = []
+        if let version = plugin.version, version != "unknown" { parts.append("v\(version)") }
+        if let tokens = plugins.tokenCosts[plugin.name] {
+            parts.append("~\(tokens) tok/session")
+        }
+        if !plugin.mcpServerNames.isEmpty {
+            parts.append("\(plugin.mcpServerNames.count) serveur(s) MCP")
+        }
+        if plugin.hasLoadError { parts.append("chargement en échec") }
+        return parts.isEmpty ? (plugin.marketplace ?? "") : parts.joined(separator: " · ")
     }
 
     private var proactiveRecall: Binding<Bool> {

@@ -525,4 +525,54 @@ final class SkillCatalogTests: XCTestCase {
         let after = try fm.subpathsOfDirectory(atPath: root.path).sorted()
         XCTAssertEqual(before, after)
     }
+
+
+    // MARK: - Détection locale d'antériorité (jalon 12b)
+
+    /// Un skill proposé qui refait un skill existant doit être repéré SANS
+    /// modèle : la garantie « aucune proposition ne duplique l'existant » ne
+    /// peut pas dépendre du bon vouloir d'une analyse.
+    func testClosestMatchFindsAnObviousDuplicate() throws {
+        try seedUserSkill(directory: "commit",
+                          description: "Quick commit and push with minimal, clean messages")
+        let catalog = makeCatalog()
+
+        let match = catalog.closestMatch(
+            slug: "quick-commit-push",
+            title: "Commit and push quickly",
+            description: "Quick commit and push with clean messages"
+        )
+        XCTAssertEqual(match?.id, "commit")
+    }
+
+    /// Un sujet réellement différent ne doit RIEN signaler : un avertissement
+    /// systématique s'apprend à ignorer.
+    func testClosestMatchStaysSilentOnUnrelatedSkill() throws {
+        try seedUserSkill(directory: "commit",
+                          description: "Quick commit and push with minimal, clean messages")
+        let catalog = makeCatalog()
+
+        XCTAssertNil(catalog.closestMatch(
+            slug: "notarisation-dmg",
+            title: "Notariser un DMG signé Developer ID",
+            description: "Build Release, notarytool, staple et vérification Gatekeeper"
+        ))
+    }
+
+    /// Trop peu de matière pour juger → nil (pas de faux positif sur un titre
+    /// réduit à des mots vides).
+    func testClosestMatchNeedsEnoughSignal() throws {
+        try seedUserSkill(directory: "commit", description: "Quick commit and push")
+        let catalog = makeCatalog()
+        XCTAssertNil(catalog.closestMatch(slug: "x", title: "Use", description: ""))
+    }
+
+    /// Les mots trop courants (« skill », « claude », « session »…) ne créent
+    /// pas de ressemblance.
+    func testGenericWordsAreIgnored() {
+        let words = SkillCatalog.significantWords(from: "Un skill Claude pour la session projet")
+        XCTAssertFalse(words.contains("skill"))
+        XCTAssertFalse(words.contains("claude"))
+        XCTAssertFalse(words.contains("session"))
+    }
 }

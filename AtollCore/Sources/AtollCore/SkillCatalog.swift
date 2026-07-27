@@ -207,6 +207,61 @@ public struct SkillCatalog: Sendable {
     /// explicitement — sans elle, le modèle conclurait « rien d'équivalent »
     /// à partir d'une liste partielle, c'est-à-dire exactement l'erreur que ce
     /// jalon cherche à éviter. Sortie strictement déterministe.
+    /// La capacité existante la plus proche d'un skill proposé, ou nil.
+    ///
+    /// DÉTECTION LOCALE ET DÉTERMINISTE, en complément de ce que le modèle
+    /// déclare dans `similar_existing` : la garantie du jalon 12b (« aucune
+    /// proposition ne duplique ce qui existe ») ne peut pas reposer sur le seul
+    /// bon vouloir d'une analyse. Ici, aucun modèle, aucun réseau — juste des
+    /// mots comparés.
+    ///
+    /// Similarité = proportion de mots significatifs partagés entre le texte
+    /// proposé (slug + titre + description) et celui de l'entrée (id + nom +
+    /// description), rapportée au plus petit des deux vocabulaires — un titre
+    /// court ne doit pas être pénalisé face à une description bavarde. Le seuil
+    /// est volontairement HAUT (0,5) : mieux vaut ne rien signaler que crier au
+    /// doublon à chaque proposition, ce qui apprendrait à ignorer l'avertissement.
+    public func closestMatch(slug: String, title: String, description: String,
+                             threshold: Double = 0.5) -> CatalogEntry? {
+        let needle = Self.significantWords(from: "\(slug) \(title) \(description)")
+        guard needle.count >= 2 else { return nil }
+
+        var best: (entry: CatalogEntry, score: Double)?
+        for entry in entries() {
+            let hay = Self.significantWords(
+                from: "\(entry.id) \(entry.name) \(entry.description)")
+            guard !hay.isEmpty else { continue }
+            let shared = needle.intersection(hay).count
+            guard shared > 0 else { continue }
+            let score = Double(shared) / Double(min(needle.count, hay.count))
+            if score >= threshold, score > (best?.score ?? 0) {
+                best = (entry, score)
+            }
+        }
+        return best?.entry
+    }
+
+    /// Mots de ≥ 4 caractères, minuscules, sans diacritiques, hors mots-outils
+    /// techniques trop courants (« skill », « claude », « atoll », « code »…)
+    /// qui feraient se ressembler tout et n'importe quoi.
+    static func significantWords(from text: String) -> Set<String> {
+        let folded = text
+            .folding(options: .diacriticInsensitive, locale: Locale(identifier: "en_US_POSIX"))
+            .lowercased()
+        let tokens = folded.split { !$0.isLetter && !$0.isNumber }
+        return Set(tokens.map(String.init).filter {
+            $0.count >= 4 && !genericWords.contains($0)
+        })
+    }
+
+    /// Mots présents dans presque toutes les descriptions de skills : les
+    /// garder ferait matcher n'importe quoi avec n'importe quoi.
+    static let genericWords: Set<String> = [
+        "skill", "skills", "claude", "atoll", "code", "avec", "pour", "dans",
+        "this", "that", "when", "with", "from", "your", "user", "using", "use",
+        "utiliser", "quand", "faire", "session", "sessions", "projet", "project",
+    ]
+
     public func summaryForPrompt(limit: Int = 400) -> String {
         let all = entries()
         let maximumCount = max(0, limit)

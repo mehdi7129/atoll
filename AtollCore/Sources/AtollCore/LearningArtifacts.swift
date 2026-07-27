@@ -134,6 +134,11 @@ public enum LearningSkillProposalFile {
             "status": "proposed",
             "flags": flags,
         ]
+        // Antériorité repérée par l'analyse : affichée à la revue pour qu'un
+        // doublon se refuse en connaissance de cause (jalon 12b).
+        if let similar = proposal.similarExisting, !similar.isEmpty {
+            object["similar_existing"] = similar
+        }
         if let project, !project.isEmpty {
             object["project"] = project
         }

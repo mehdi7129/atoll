@@ -126,6 +126,19 @@ struct SkillReviewView: View {
             }
         }
 
+        // ANTÉRIORITÉ (jalon 12b) : ce que l'utilisateur peut DÉJÀ invoquer et
+        // qui recoupe cette proposition. Affiché AVANT le SKILL.md, en accent :
+        // c'est l'information qui fait refuser un doublon — elle ne doit pas se
+        // découvrir après avoir approuvé.
+        if let similar = SkillReviewCenter.shared.similarCapability(for: proposal) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(AsciiArt.sectionHeader("DÉJÀ DISPONIBLE", width: 60))
+                    .foregroundStyle(colors.dim)
+                Text("⚠ recoupe « \(similar) » — compare avant d'approuver")
+                    .foregroundStyle(colors.accent)
+            }
+        }
+
         // Contenu exact qui sera installé.
         VStack(alignment: .leading, spacing: 2) {
             Text(AsciiArt.sectionHeader("SKILL.MD (installé tel quel)", width: 60))

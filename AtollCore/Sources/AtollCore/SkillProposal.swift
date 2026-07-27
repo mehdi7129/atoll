@@ -30,6 +30,9 @@ public struct SkillProposal: Identifiable, Equatable, Sendable {
     public let title: String
     public let description: String
     public let rationale: String?
+    /// Capacité DÉJÀ disponible que ce skill recoupe, si l'analyse en a
+    /// repéré une (`gsd:plan-phase`, `commit`…). nil = rien d'approchant.
+    public let similarExisting: String?
     public let sourceSession: String?
     public let sourceProject: String?
     public let createdAt: Date
@@ -48,6 +51,7 @@ public struct SkillProposal: Identifiable, Equatable, Sendable {
         title: String,
         description: String,
         rationale: String?,
+        similarExisting: String? = nil,
         sourceSession: String?,
         sourceProject: String?,
         createdAt: Date,
@@ -59,6 +63,7 @@ public struct SkillProposal: Identifiable, Equatable, Sendable {
         self.title = title
         self.description = description
         self.rationale = rationale
+        self.similarExisting = similarExisting
         self.sourceSession = sourceSession
         self.sourceProject = sourceProject
         self.createdAt = createdAt
@@ -96,6 +101,7 @@ public struct SkillProposal: Identifiable, Equatable, Sendable {
             title: meta.title,
             description: meta.description,
             rationale: meta.rationale,
+            similarExisting: meta.similarExisting,
             sourceSession: meta.sourceSession,
             sourceProject: meta.project,
             createdAt: createdAt,
@@ -113,6 +119,7 @@ public struct SkillProposal: Identifiable, Equatable, Sendable {
         let title: String
         let description: String
         let rationale: String?
+        let similarExisting: String?
         let sourceSession: String?
         let project: String?
         let createdAt: String
@@ -120,6 +127,7 @@ public struct SkillProposal: Identifiable, Equatable, Sendable {
 
         enum CodingKeys: String, CodingKey {
             case slug, title, description, rationale, project, status
+            case similarExisting = "similar_existing"
             case sourceSession = "source_session"
             case createdAt = "created_at"
         }

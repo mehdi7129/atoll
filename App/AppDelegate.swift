@@ -258,6 +258,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         debugTokens.append(retroBigToken)
 
+        // Inventaire des plugins : rafraîchit et journalise ce que la CLI rend
+        // (vérification du chemin complet spawn → décodage → état observable).
+        var pluginsToken: Int32 = 0
+        notify_register_dispatch("dev.mehdiguiard.atoll.debug.plugins", &pluginsToken, DispatchQueue.main) { _ in
+            MainActor.assumeIsolated { PluginInventory.shared.refresh() }
+        }
+        debugTokens.append(pluginsToken)
+
         // Curation des notes (consomme du quota ET réécrit la mémoire :
         // jamais en release). Ignore l'échéance hebdomadaire, PAS les
         // garde-fous (opt-in, budget, archive vérifiée).

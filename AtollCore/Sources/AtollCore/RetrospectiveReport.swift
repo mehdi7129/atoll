@@ -70,15 +70,23 @@ public struct RetrospectiveReport: Equatable, Sendable {
         public let skillMD: String
         public let rationale: String
         public let confidence: String
+        /// Identifiant d'une capacité DÉJÀ disponible que ce skill recoupe
+        /// (`gsd:plan-phase`, `commit`, `superpowers:brainstorming`…), tel que
+        /// le modèle l'a lu dans l'inventaire qu'on lui a fourni. Vide = rien
+        /// d'approchant. Affiché à la revue : c'est ce qui permet de refuser un
+        /// doublon en connaissance de cause.
+        public let similarExisting: String?
 
         public init(slug: String, title: String, description: String,
-                    skillMD: String, rationale: String, confidence: String) {
+                    skillMD: String, rationale: String, confidence: String,
+                    similarExisting: String? = nil) {
             self.slug = slug
             self.title = title
             self.description = description
             self.skillMD = skillMD
             self.rationale = rationale
             self.confidence = confidence
+            self.similarExisting = similarExisting
         }
     }
 
@@ -287,6 +295,12 @@ public struct RetrospectiveReport: Equatable, Sendable {
                   seenSlugs.insert(slug).inserted else { continue }
             let rawDescription = dict["description"] as? String ?? ""
             let rawRationale = dict["rationale"] as? String ?? ""
+            // Antériorité annoncée par le modèle : un id de l'inventaire qu'on
+            // lui a fourni. Non vérifié ici (l'inventaire n'est pas connu de ce
+            // module) — l'UI de revue l'affiche tel quel, à titre indicatif.
+            let similar = (dict["similar_existing"] as? String)
+                .map { truncated($0, to: 120) }
+                .flatMap { $0.isEmpty ? nil : $0 }
             // Skill suspect : CONSERVÉ mais signalé — scan des champs BRUTS,
             // avant troncature, un secret pouvant se trouver après le cap.
             let reasons = suspicionReasons(
@@ -300,7 +314,8 @@ public struct RetrospectiveReport: Equatable, Sendable {
                 skillMD: skillMD,
                 rationale: truncated(rawRationale, to: Limit.rationale),
                 confidence: normalized(dict["confidence"], in: allowedConfidences,
-                                       fallback: "low")
+                                       fallback: "low"),
+                similarExisting: similar
             ))
         }
         return (skills, flags)

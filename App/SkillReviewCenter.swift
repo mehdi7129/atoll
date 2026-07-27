@@ -118,6 +118,20 @@ final class SkillReviewCenter {
         installed.first { $0.skill.slug == proposal.slug }?.userModified ?? false
     }
 
+    /// Ce que l'utilisateur peut DÉJÀ invoquer et qui recoupe cette
+    /// proposition : ce que l'analyse a déclaré, complété par une détection
+    /// LOCALE déterministe (jalon 12b). Le modèle peut oublier de remplir le
+    /// champ — la garantie « on ne propose pas un doublon » ne doit pas
+    /// dépendre de lui.
+    func similarCapability(for proposal: SkillProposal) -> String? {
+        if let declared = proposal.similarExisting, !declared.isEmpty { return declared }
+        return SkillCatalog().closestMatch(
+            slug: proposal.slug,
+            title: proposal.title,
+            description: proposal.description
+        )?.id
+    }
+
     func requestReviewWindow() {
         NotificationCenter.default.post(name: .atollShowSkillReview, object: nil)
     }

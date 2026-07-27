@@ -135,7 +135,11 @@ public enum RetrospectivePrompt {
 
         BEFORE proposing a skill, check this inventory of what the user can \
         ALREADY invoke. If an existing entry already does the job, do NOT \
-        propose a duplicate — mention it in `session_summary` instead:
+        propose a duplicate at all. If one is merely CLOSE (same area, \
+        different angle), you may still propose yours but you MUST name it in \
+        `similar_existing` (its exact id from the list) so the human can \
+        compare before approving. Leave `similar_existing` empty when nothing \
+        comes close. Inventory:
         \(capabilitiesBlock)
 
         skill_md is the markdown BODY only, WITHOUT any front-matter (Atoll \
@@ -216,7 +220,7 @@ public enum RetrospectivePrompt {
     /// `additionalProperties:false` partout ; le pattern kebab des slugs
     /// interdit `/`, `.`, `_` et les majuscules — donc `..` et toute traversée
     /// de chemin. Bornes : 8 notes max, 2 skills max.
-    public static let jsonSchema = #"{"type":"object","additionalProperties":false,"required":["session_summary","nothing_learned","notes","skills"],"properties":{"session_summary":{"type":"string","maxLength":500},"nothing_learned":{"type":"boolean"},"notes":{"type":"array","maxItems":8,"items":{"type":"object","additionalProperties":false,"required":["slug","category","content"],"properties":{"slug":{"type":"string","pattern":"^[a-z0-9]+(-[a-z0-9]+)*$","maxLength":60},"category":{"type":"string","enum":["project-fact","user-preference","pitfall","decision"]},"content":{"type":"string","maxLength":1200},"confidence":{"type":"string","enum":["low","medium","high"]}}}},"skills":{"type":"array","maxItems":2,"items":{"type":"object","additionalProperties":false,"required":["slug","title","description","skill_md","rationale","confidence"],"properties":{"slug":{"type":"string","pattern":"^[a-z0-9]+(-[a-z0-9]+)*$","maxLength":60},"title":{"type":"string","maxLength":80},"description":{"type":"string","maxLength":300},"skill_md":{"type":"string","maxLength":8000},"rationale":{"type":"string","maxLength":500},"confidence":{"type":"string","enum":["low","medium","high"]}}}}}}"#
+    public static let jsonSchema = #"{"type":"object","additionalProperties":false,"required":["session_summary","nothing_learned","notes","skills"],"properties":{"session_summary":{"type":"string","maxLength":500},"nothing_learned":{"type":"boolean"},"notes":{"type":"array","maxItems":8,"items":{"type":"object","additionalProperties":false,"required":["slug","category","content"],"properties":{"slug":{"type":"string","pattern":"^[a-z0-9]+(-[a-z0-9]+)*$","maxLength":60},"category":{"type":"string","enum":["project-fact","user-preference","pitfall","decision"]},"content":{"type":"string","maxLength":1200},"confidence":{"type":"string","enum":["low","medium","high"]}}}},"skills":{"type":"array","maxItems":2,"items":{"type":"object","additionalProperties":false,"required":["slug","title","description","skill_md","rationale","confidence"],"properties":{"slug":{"type":"string","pattern":"^[a-z0-9]+(-[a-z0-9]+)*$","maxLength":60},"title":{"type":"string","maxLength":80},"description":{"type":"string","maxLength":300},"skill_md":{"type":"string","maxLength":8000},"rationale":{"type":"string","maxLength":500},"confidence":{"type":"string","enum":["low","medium","high"]},"similar_existing":{"type":"string","maxLength":120}}}}}}"#
 
     /// Arguments EXACTS du `claude` de rétrospective (le userPrompt est ajouté
     /// par l'appelant en argument positionnel). Ceinture-bretelles délibérée :
