@@ -129,7 +129,15 @@ final class FleetLauncher {
         // L'inverse ne coûte rien : si la session n'apparaît jamais dans la
         // flotte, la réconciliation clôt l'entrée EN SILENCE passé le délai de
         // grâce (`seenAlive == false`) — jamais de fausse annonce.
-        TaskCompletionNotifier.shared.register(task: task, cwd: cwd, sessionID: id)
+        //
+        // En revanche elle ne peut PAS adopter une session inconnue quand tout
+        // a échoué (sortie non nulle ET aucun id lisible) : l'utilisateur qui
+        // relance `claude` à la main dans le même dossier — réflexe normal
+        // quand « rien n'a démarré » — se faisait sinon voler sa session, dont
+        // la fin était annoncée comme celle de la tâche.
+        let launchFailed = !outcome.exitedCleanly && id == nil
+        TaskCompletionNotifier.shared.register(task: task, cwd: cwd, sessionID: id,
+                                               adoptable: !launchFailed)
 
         if outcome.exitedCleanly {
             log.info("tâche lancée dans \(cwd, privacy: .public) — id \(id ?? "?", privacy: .public)")

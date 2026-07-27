@@ -19,7 +19,10 @@ public enum LearningGate {
 
     /// Fenêtre glissante du plafond de runs — alignée sur la fenêtre 5 h du
     /// quota Anthropic (voir `QuotaSnapshot`).
-    private static let runWindowSeconds: TimeInterval = 5 * 3_600
+    /// Fenêtre glissante de facturation d'Anthropic. Publique : la curation
+    /// des notes s'appuie sur la même pour borner sa dépense quand le quota
+    /// est inconnu.
+    public static let runWindowSeconds: TimeInterval = 5 * 3_600
 
     /// Faits observés sur la session candidate. `userPromptCount` nil = session
     /// synthétique découverte par scan, sans hooks → le critère est ignoré

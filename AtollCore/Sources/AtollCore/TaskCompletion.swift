@@ -54,8 +54,14 @@ public enum TaskCompletion {
         //    Swift (`<String>`, `<Int>`), qui a la même forme. En cas de doute
         //    on GARDE le texte — perdre une balise est anodin, réécrire une
         //    phrase ne l'est pas.
+        //    Reste, après cette règle, le cas « i<n et j>0 » : `<n et j>` a
+        //    exactement la forme d'une balise à attributs. On EXIGE donc un
+        //    `=` dans la partie attributs — une vraie balise en porte toujours
+        //    un (`<div class="x">`), une comparaison en prose jamais. Sinon la
+        //    condition disparaissait et la phrase disait le contraire du vrai,
+        //    en notification macOS (audit du 2026-07-27).
         text = text.replacingOccurrences(
-            of: "</?[a-z][a-z0-9-]{0,30}(?:\\s[^<>]{0,200})?/?>",
+            of: "</?[a-z][a-z0-9-]{0,30}(?:\\s[^<>]{0,200}=[^<>]{0,200})?/?>",
             with: " ", options: .regularExpression)
         // 3. Liens Markdown : garder le libellé, jeter l'URL.
         //    Quantificateurs BORNÉS : `[^\]]*` repartait de chaque `[` et

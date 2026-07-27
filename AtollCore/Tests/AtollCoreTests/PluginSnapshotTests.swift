@@ -370,8 +370,23 @@ final class PluginSnapshotTests: XCTestCase {
                             marketplace: "m", version: nil, installCount: 1000 - $0)
         }
         let rendered = PluginSnapshot(installed: [], available: plugins).summaryForPrompt(limit: 5)
-        XCTAssertEqual(rendered.split(separator: "\n").count, 5)
+        let lignes = rendered.split(separator: "\n")
+        // 5 entrées + le marqueur de troncature : une liste coupée en SILENCE
+        // faisait conclure au modèle « aucun plugin ne correspond ».
+        XCTAssertEqual(lignes.count, 6)
         XCTAssertTrue(rendered.hasPrefix("- p0@m"))
+        XCTAssertTrue(lignes.last!.hasPrefix("… (45 autre"), "marqueur attendu : \(lignes.last!)")
+    }
+
+    /// Catalogue entièrement rendu : aucun marqueur parasite.
+    func testSummaryForPromptWithoutTruncationHasNoMarker() {
+        let plugins = (0..<3).map {
+            AvailablePlugin(id: "p\($0)@m", name: "p\($0)", description: "d",
+                            marketplace: "m", version: nil, installCount: 10 - $0)
+        }
+        let rendered = PluginSnapshot(installed: [], available: plugins).summaryForPrompt(limit: 120)
+        XCTAssertEqual(rendered.split(separator: "\n").count, 3)
+        XCTAssertFalse(rendered.contains("…"))
     }
 
     func testSummaryForPromptRespectsCharacterCap() {
@@ -385,11 +400,13 @@ final class PluginSnapshotTests: XCTestCase {
         }
         let rendered = PluginSnapshot(installed: [], available: plugins).summaryForPrompt(limit: 400)
         XCTAssertLessThanOrEqual(rendered.count, PluginSnapshot.promptCharacterCap)
-        XCTAssertGreaterThan(rendered.count, PluginSnapshot.promptCharacterCap - 300)
-        for line in rendered.split(separator: "\n") {
+        XCTAssertGreaterThan(rendered.count, PluginSnapshot.promptCharacterCap - 600)
+        for line in rendered.split(separator: "\n").dropLast() {
             XCTAssertTrue(line.hasPrefix("- plugin-"))
             XCTAssertTrue(line.contains(" installations) : "))
         }
+        XCTAssertTrue(rendered.split(separator: "\n").last!.hasPrefix("… ("),
+                      "la troncature par le PLAFOND doit aussi être annoncée")
     }
 
     func testSummaryForPromptEmptyCatalogue() {

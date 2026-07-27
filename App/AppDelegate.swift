@@ -350,6 +350,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         debugTokens.append(pluginsToken)
 
+        // Inventaire FACTICE : permet de travailler le panneau des plugins
+        // (captures, états d'anomalie) sans réseau ni CLI. Le code existait
+        // mais aucun geste ne l'atteignait — 74 lignes injoignables.
+        var seedPluginsToken: Int32 = 0
+        notify_register_dispatch("dev.mehdiguiard.atoll.debug.seedPlugins", &seedPluginsToken, DispatchQueue.main) { _ in
+            MainActor.assumeIsolated { PluginInventory.shared.debugSeedSnapshot() }
+        }
+        debugTokens.append(seedPluginsToken)
+
         // Recherche de plugin par besoin (consomme du quota : DEBUG only).
         var pluginSearchToken: Int32 = 0
         notify_register_dispatch("dev.mehdiguiard.atoll.debug.pluginSearch", &pluginSearchToken, DispatchQueue.main) { _ in

@@ -100,7 +100,14 @@ public enum SoundHookEditor {
         // `./on-stop.sh && afplay done.wav` arrêterait aussi `on-stop.sh`, et
         // l'utilisateur n'aurait aucune idée de pourquoi son script ne tourne
         // plus. Mieux vaut un son en trop qu'un traitement supprimé.
-        for separator in ["&&", "||", ";", "|"] where command.contains(separator) {
+        for separator in ["&&", "||", ";", "|", "\n", "\r"] where command.contains(separator) {
+            return false
+        }
+        // Le `&` isolé enchaîne lui aussi : `afplay done.wav & node notify.js`
+        // faisait sauter le `node`. On tolère le seul cas légitime — un `&`
+        // final qui met le son en tâche de fond.
+        if let ampersand = command.range(of: "&"),
+           !command[ampersand.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return false
         }
 
@@ -305,10 +312,20 @@ public enum SoundHookEditor {
     }
 
     /// Fusionne un parking précédent avec un nouveau (parking rejoué après un
-    /// crash) : les anciens d'abord, sans doublon de commande.
+    /// crash) : les anciens d'abord, sans doublon.
+    ///
+    /// La clé porte sur l'ENTRÉE, pas sur la seule commande : deux hooks de même
+    /// commande peuvent différer par leur matcher ou leurs options (`timeout`,
+    /// `async`). Dédoublonner sur la commande jetait le second — retiré de
+    /// settings.json, absent du parking, donc perdu définitivement (audit du
+    /// 2026-07-27). L'index est exclu à dessein : un parking rejoué après un
+    /// crash produit des entrées identiques, qui restent bien dédoublonnées.
     public static func mergeParked(previous: [ParkedHook], new: [ParkedHook]) -> [ParkedHook] {
-        let known = Set(previous.map { "\($0.event)\u{1}\($0.command)" })
-        return previous + new.filter { !known.contains("\($0.event)\u{1}\($0.command)") }
+        func key(_ hook: ParkedHook) -> String {
+            "\(hook.event)\u{1}\(hook.matcher ?? "")\u{1}\(hook.hookJSON)"
+        }
+        let known = Set(previous.map(key))
+        return previous + new.filter { !known.contains(key($0)) }
     }
 
     // MARK: - Encodage du fichier de parking

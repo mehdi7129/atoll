@@ -157,4 +157,26 @@ final class TaskCompletionTests: XCTestCase {
                        "Tâche terminée · Atoll")
         XCTAssertEqual(TaskCompletion.notificationTitle(projectName: ""), "Tâche terminée")
     }
+
+    /// Deux comparaisons dans une phrase ont la forme d'une balise à attributs.
+    /// « i<n et j>0 » devenait « i 0 » : le résumé disait le CONTRAIRE du vrai,
+    /// en notification macOS (audit du 2026-07-27).
+    func testProseWithTwoComparisonsSurvives() {
+        let resume = TaskCompletion.summarize(
+            lastAssistantMessage: "Corrigé : la boucle s'arrête quand i<n et j>0, plus de débordement.",
+            fallback: "tâche")
+        XCTAssertTrue(resume.contains("i<n"), "obtenu : \(resume)")
+        XCTAssertTrue(resume.contains("j>0"), "obtenu : \(resume)")
+    }
+
+    /// …sans cesser de retirer les VRAIES balises.
+    func testRealHtmlTagsAreStillStripped() {
+        let resume = TaskCompletion.summarize(
+            lastAssistantMessage: "<p>Terminé</p> et <div class=\"x\">rangé</div>",
+            fallback: "tâche")
+        XCTAssertFalse(resume.contains("<p>"))
+        XCTAssertFalse(resume.contains("class="))
+        XCTAssertTrue(resume.contains("Terminé"))
+        XCTAssertTrue(resume.contains("rangé"))
+    }
 }

@@ -5,7 +5,6 @@ import AtollCore
 struct ExpandedView: View {
     let viewModel: NotchViewModel
     let colors: ThemeColors
-    let capColors: ThemeColors
 
     @AppStorage(InteractionCenter.autonomyKey) private var autonomyRaw = AutonomyLevel.manual.rawValue
     private var level: AutonomyLevel { AutonomyLevel(rawValue: autonomyRaw) ?? .manual }
@@ -53,10 +52,17 @@ struct ExpandedView: View {
                 // elle est datée, l'autre attendra.
                 if let finished = TaskCompletionNotifier.shared.unacknowledged.first {
                     taskDoneBanner(finished)
+                        .layoutPriority(1)
                 } else if SkillReviewCenter.shared.pendingCount > 0 {
                     learningBanner
+                        .layoutPriority(1)
                 }
+                // Ceinture et bretelles du bornage : le panneau a une hauteur
+                // FIXE et il est clippé. Si l'estimation de budget se trompait,
+                // c'est la LISTE qui cède — jamais le quota, qui disparaissait
+                // en silence (audit du 2026-07-27).
                 footer
+                    .layoutPriority(1)
             }
         }
         .font(AtollFont.mono(11))
@@ -112,29 +118,30 @@ struct ExpandedView: View {
             } else if groupByState {
                 stateGroupedList
             } else {
-                ForEach(projectGroups) { group in
-                    if group.sessions.count == 1 {
-                        // Un seul projet = une seule session : ligne directe
-                        // (pas de dossier inutile).
-                        SessionRow(session: group.sessions[0], colors: colors) {
-                            viewModel.selectSession(group.sessions[0].id)
-                        }
-                    } else {
-                        // Plusieurs sessions dans le même projet → dossier pliable.
+                let plan = projectRowPlan
+                ForEach(plan.rows) { row in
+                    switch row {
+                    case .folder(let group):
                         folderHeader(group)
-                        if expandedProjects.contains(group.id) {
-                            ForEach(group.sessions) { session in
-                                SessionRow(session: session, colors: colors) {
-                                    viewModel.selectSession(session.id)
-                                }
-                                .padding(.leading, 16)
-                            }
+                    case .session(let session, let indented):
+                        SessionRow(session: session, colors: colors) {
+                            viewModel.selectSession(session.id)
                         }
+                        .padding(.leading, indented ? 16 : 0)
                     }
                 }
-                Text("· clique une session pour ses détails")
-                    .font(AtollFont.mono(9))
-                    .foregroundStyle(colors.dim)
+                if plan.hiddenCount > 0 {
+                    // Même règle que la vue par état : ce qui ne tient pas est
+                    // ANNONCÉ. Une liste tronquée en silence ferait croire à
+                    // une flotte plus petite qu'elle n'est.
+                    Text("· +\(plan.hiddenCount) autre\(plan.hiddenCount > 1 ? "s" : "") — replie un dossier pour les voir")
+                        .font(AtollFont.mono(9))
+                        .foregroundStyle(colors.dim)
+                } else {
+                    Text("· clique une session pour ses détails")
+                        .font(AtollFont.mono(9))
+                        .foregroundStyle(colors.dim)
+                }
             }
         }
     }
@@ -160,8 +167,7 @@ struct ExpandedView: View {
     /// dernier. Les groupes sont toujours dépliés — l'intérêt est justement de
     /// voir d'un coup ce qui réclame quelque chose.
     private var stateGroupedList: some View {
-        let bounded = SessionGrouping.byState(viewModel.sessions,
-                                              limit: Self.stateRowBudget)
+        let bounded = SessionGrouping.byState(viewModel.sessions, rowBudget: rowBudget)
         return ForEach(bounded.groups) { group in
             HStack(spacing: 6) {
                 Text(group.bucket == .awaitingDecision ? "!" : "·")
@@ -190,10 +196,16 @@ struct ExpandedView: View {
         }
     }
 
-    /// Nombre de lignes de session que le panneau peut afficher déplié sans
-    /// pousser le quota hors du cadre (hauteur fixe : `IslandGeometry
-    /// .expandedSize.height`). Mesuré en capture, pas deviné.
-    private static let stateRowBudget = 4
+    /// Une bannière occupe-t-elle le bas du panneau ? Elle coûte ~66 pt, donc
+    /// autant de rangées en moins pour la liste.
+    private var bannerShown: Bool {
+        !TaskCompletionNotifier.shared.unacknowledged.isEmpty
+            || SkillReviewCenter.shared.pendingCount > 0
+    }
+
+    /// Rangées DESSINABLES sans pousser le quota hors du cadre. Les deux modes
+    /// d'affichage partagent ce budget : la vue par projet n'en avait aucun.
+    private var rowBudget: Int { IslandRowBudget.rows(bannerShown: bannerShown) }
 
     /// Sessions regroupées par PROJET (racine `.git`), ordre de première apparition
     /// préservé.
@@ -205,9 +217,62 @@ struct ExpandedView: View {
             if byRoot[key] == nil { order.append(key) }
             byRoot[key, default: []].append(session)
         }
-        return order.map { key in
-            ProjectGroup(id: key, name: ProjectRoot.name(for: key), sessions: byRoot[key] ?? [])
+        // Le nom vient de la MÊME règle que les lignes de session : sans elle,
+        // le projet de Mehdi s'affichait « claude » ici et
+        // « Blender/claude » deux lignes plus bas (audit du 2026-07-27).
+        let names = ProjectNaming.displayNames(for: order)
+        return zip(order, names).map { key, name in
+            ProjectGroup(id: key, name: name, sessions: byRoot[key] ?? [])
         }
+    }
+
+    /// Une rangée effectivement dessinée par la vue « par projet ».
+    private enum ProjectRow: Identifiable {
+        case folder(ProjectGroup)
+        case session(AgentSession, indented: Bool)
+
+        var id: String {
+            switch self {
+            case .folder(let group): return "f:" + group.id
+            case .session(let session, _): return "s:" + session.id
+            }
+        }
+    }
+
+    private struct ProjectRowPlan {
+        let rows: [ProjectRow]
+        /// Sessions qu'on n'a PAS pu dessiner faute de place (les sessions d'un
+        /// dossier replié ne comptent pas : leur nombre est sur l'en-tête).
+        let hiddenCount: Int
+    }
+
+    /// Aplatit les groupes en rangées et s'arrête au budget. Sans ce plan, six
+    /// projets suffisaient à pousser le quota hors du cadre, en silence.
+    private var projectRowPlan: ProjectRowPlan {
+        var rows: [ProjectRow] = []
+        var remaining = rowBudget
+        var hidden = 0
+        for group in projectGroups {
+            guard remaining > 0 else {
+                hidden += group.sessions.count
+                continue
+            }
+            if group.sessions.count == 1 {
+                // Un seul projet = une seule session : ligne directe (pas de
+                // dossier inutile).
+                rows.append(.session(group.sessions[0], indented: false))
+                remaining -= 1
+            } else {
+                rows.append(.folder(group))
+                remaining -= 1
+                guard expandedProjects.contains(group.id) else { continue }
+                let shown = group.sessions.prefix(remaining)
+                rows.append(contentsOf: shown.map { .session($0, indented: true) })
+                remaining -= shown.count
+                hidden += group.sessions.count - shown.count
+            }
+        }
+        return ProjectRowPlan(rows: rows, hiddenCount: hidden)
     }
 
     /// En-tête d'un dossier de projet : flèche de pliage, nom, nombre, et un
@@ -498,11 +563,6 @@ enum ProjectRoot {
         let root = gitRoot(cwd) ?? cwd
         cache[cwd] = root
         return root
-    }
-
-    static func name(for key: String) -> String {
-        let base = (key as NSString).lastPathComponent
-        return base.isEmpty ? key : base
     }
 
     private static func gitRoot(_ cwd: String) -> String? {

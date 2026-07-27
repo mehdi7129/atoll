@@ -230,7 +230,19 @@ public enum NotesCurationPlanner {
 
         // (2) Rétrécissement massif suspect. `existingVolume == 0` (aucun
         // fichier, ou que des fichiers vides) → ratio indéfini, garde inerte.
-        let existingVolume = existing.reduce(0) { $0 + $1.content.count }
+        //
+        // On compare des CORPS des deux côtés. Le modèle rend un `content` nu ;
+        // les fichiers existants, eux, portent un front-matter écrit par Atoll
+        // (`sources:` peut faire dix lignes). Compter le fichier entier d'un
+        // côté et le corps de l'autre biaisait le ratio vers le refus au point
+        // qu'une SECONDE curation rendant les mêmes notes, mot pour mot, était
+        // rejetée — et la boucle hebdomadaire le restait pour toujours
+        // (audit du 2026-07-27). Le garde-fou est conservé, pas affaibli : il
+        // mesure désormais la bonne grandeur.
+        let existingVolume = existing.reduce(0) {
+            $0 + LearningInventory.splitFrontMatter($1.content).body
+                .trimmingCharacters(in: .whitespacesAndNewlines).count
+        }
         let newVolume = output.notes.reduce(0) { $0 + $1.content.count }
         if existingVolume > 0 {
             let ratio = Double(newVolume) / Double(existingVolume)

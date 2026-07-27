@@ -171,8 +171,12 @@ final class TaskCompletionNotifier {
     /// Enregistre une tâche lancée depuis le notch.
     /// `sessionID` peut être nil (sortie de `--bg` illisible) : la session sera
     /// rattachée plus tard par `adopt(fleetSession:)`.
-    func register(task: String, cwd: String, sessionID: String?) {
-        let entry = LaunchedTask(task: task, cwd: cwd, launchedAt: Date(), sessionID: sessionID)
+    /// `adoptable` = le lancement a-t-il seulement démarré ? Une tâche dont le
+    /// spawn a échoué ne doit PAS pouvoir s'attribuer la session que
+    /// l'utilisateur ouvrira à la main juste après, dans le même dossier.
+    func register(task: String, cwd: String, sessionID: String?, adoptable: Bool = true) {
+        let entry = LaunchedTask(task: task, cwd: cwd, launchedAt: Date(), sessionID: sessionID,
+                                 adoptable: adoptable)
         tasks.register(entry)
         save()
         log.info("tâche suivie — id \(sessionID ?? "inconnu", privacy: .public)")
@@ -204,8 +208,12 @@ final class TaskCompletionNotifier {
     /// n'était JAMAIS annoncée — le journal persisté ne servait à rien dans le
     /// seul cas où il devait servir.
     func reconcileWithFleet(activeSessionIDs: Set<String>) {
+        // Sortir AVANT de muter : `tasks` est observée, et la flotte est
+        // interrogée toutes les 2 à 6 s. Sans ce garde, chaque poll invalidait
+        // la vue étendue et réécrivait le journal sur le disque pour rien —
+        // exactement le brassage que `applyFleetSnapshot` évite par ailleurs.
+        guard !tasks.pending.isEmpty else { return }
         let toAnnounce = tasks.reconcile(activeSessionIDs: activeSessionIDs, now: Date())
-        guard !toAnnounce.isEmpty || tasks.pending.isEmpty == false else { return }
         for index in toAnnounce {
             let summary = TaskCompletion.summarize(lastAssistantMessage: nil,
                                                    fallback: tasks.tasks[index].task)

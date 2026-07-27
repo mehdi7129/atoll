@@ -182,12 +182,9 @@ public struct LearnedSkillStore {
                    !force {
                     throw LearnedSkillError.userModifiedWithoutForce(slug)
                 }
-                // Copie de l'ancien contenu AVANT écrasement — rien n'est perdu.
-                if let diskMD {
-                    let backupDir = uniqueArchiveURL(category: "uninstalled", slug: slug, stamp: stamp)
-                    try fm.createDirectory(at: backupDir, withIntermediateDirectories: true)
-                    try Data(diskMD.utf8).write(to: backupDir.appendingPathComponent("SKILL.md"))
-                }
+                // Copie de l'ancien DOSSIER avant écrasement — rien n'est perdu,
+                // pas même les ressources jointes par l'utilisateur.
+                try archiveDirectory(target, category: "uninstalled", slug: slug, stamp: stamp)
             } else if diskMD.map(InstalledSkillsManifest.sha256) == InstalledSkillsManifest.sha256(proposal.skillMD) {
                 // Hors manifeste MAIS contenu identique à ce qu'on s'apprête à
                 // poser : c'est une approbation interrompue (crash) qu'on REPREND
@@ -287,14 +284,7 @@ public struct LearnedSkillStore {
 
         // Double verrou avant toute suppression : préfixe géré ET manifeste.
         if entry.dirName.hasPrefix(SkillSlug.managedPrefix), fm.fileExists(atPath: target.path) {
-            if let skillMD = try? String(
-                contentsOf: target.appendingPathComponent("SKILL.md"),
-                encoding: .utf8
-            ) {
-                let backupDir = uniqueArchiveURL(category: "uninstalled", slug: slug, stamp: timestamp())
-                try fm.createDirectory(at: backupDir, withIntermediateDirectories: true)
-                try Data(skillMD.utf8).write(to: backupDir.appendingPathComponent("SKILL.md"))
-            }
+            try archiveDirectory(target, category: "uninstalled", slug: slug, stamp: timestamp())
             try fm.removeItem(at: target)
         }
         manifest.skills.remove(at: index)
@@ -472,10 +462,11 @@ public struct LearnedSkillStore {
                 contentsOf: dir.appendingPathComponent("SKILL.md"),
                 encoding: .utf8
             )
+            // Archive INCONDITIONNELLE : un SKILL.md conforme au manifeste ne
+            // dit rien des ressources jointes, qui, elles, n'existent nulle part
+            // ailleurs. `archived` continue de ne signaler que les MODIFICATIONS.
+            try archiveDirectory(dir, category: "uninstalled", slug: entry.slug, stamp: stamp)
             if let diskMD, InstalledSkillsManifest.sha256(diskMD) != entry.skillSHA256 {
-                let backupDir = uniqueArchiveURL(category: "uninstalled", slug: entry.slug, stamp: stamp)
-                try fm.createDirectory(at: backupDir, withIntermediateDirectories: true)
-                try Data(diskMD.utf8).write(to: backupDir.appendingPathComponent("SKILL.md"))
                 archived.append(entry.slug)
             }
             try fm.removeItem(at: dir)
@@ -503,6 +494,24 @@ public struct LearnedSkillStore {
     private func writeManifest(_ manifest: InstalledSkillsManifest) throws {
         try fm.createDirectory(at: learningRoot, withIntermediateDirectories: true)
         try manifest.encoded().write(to: manifestURL, options: .atomic)
+    }
+
+    /// Archive le DOSSIER entier d'un skill avant de le supprimer.
+    ///
+    /// On n'archivait que `SKILL.md`. Or un skill Claude Code est un DOSSIER :
+    /// la plupart de ceux de l'utilisateur portent des `references/`,
+    /// `scripts/`, des gabarits. Approuver une mise à jour, archiver ou
+    /// désinstaller détruisait tout cela sans copie — en contradiction avec
+    /// l'invariant du type (« rien n'est jamais détruit sans copie préalable »).
+    /// Audit du 2026-07-27.
+    @discardableResult
+    private func archiveDirectory(_ directory: URL, category: String,
+                                  slug: String, stamp: String) throws -> URL {
+        let backupDir = uniqueArchiveURL(category: category, slug: slug, stamp: stamp)
+        try fm.createDirectory(at: backupDir.deletingLastPathComponent(),
+                               withIntermediateDirectories: true)
+        try fm.copyItem(at: directory, to: backupDir)
+        return backupDir
     }
 
     /// `archive/<category>/<slug>-<stamp>[-N]` — premier chemin libre, les

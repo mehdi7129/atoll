@@ -34,7 +34,21 @@ final class RetrospectiveRunner {
     /// Entrée de journal du run en cours, complétée par `finish`.
     @ObservationIgnored private var pendingAttempt: AttemptRecord?
 
-    struct Job { let snapshot: SessionStore.Tracked; let endedAt: Date }
+    /// `forced` = déclenché par un trigger de debug : ce job court-circuite le
+    /// gate ET l'interrupteur général (c'est tout son intérêt).
+    struct Job {
+        let snapshot: SessionStore.Tracked
+        let endedAt: Date
+        var forced = false
+    }
+
+    /// Un run est-il engagé ? Pas seulement « un processus tourne » : la
+    /// préparation du condensé (jusqu'à ~2 s sur un transcript de 47 Mo) se
+    /// fait AVANT le spawn, `process` encore nil. Sans ce drapeau, une session
+    /// qui se terminait pendant cette fenêtre déclenchait un SECOND `claude -p`
+    /// payant en parallèle (audit du 2026-07-27).
+    @ObservationIgnored private var preparing = false
+    private var isBusy: Bool { process != nil || preparing }
 
     private static let startDelaySeconds: TimeInterval = 15 // fenêtre résurrection 8 s + dernière statusline
     private static let timeoutSeconds: TimeInterval = 600
@@ -107,7 +121,7 @@ final class RetrospectiveRunner {
     /// analyse → notes/skills) sur une session réellement riche, sans attendre
     /// qu'une vraie session substantielle se termine. Jamais en release.
     func debugRunOnLargestTranscript(projectDirectory: String) {
-        guard process == nil, pendingDelay == nil else {
+        guard !isBusy, pendingDelay == nil else {
             log.error("debug retro : un run ou une attente est déjà en cours")
             return
         }
@@ -149,7 +163,7 @@ final class RetrospectiveRunner {
             firstSeenAt: Date().addingTimeInterval(-3_600),
             lastEventAt: Date()
         )
-        Task { await run(Job(snapshot: snapshot, endedAt: Date())) }
+        Task { await run(Job(snapshot: snapshot, endedAt: Date(), forced: true)) }
     }
 
     /// Trigger debug : rétrospective sur la dernière session terminée, SANS
@@ -160,18 +174,18 @@ final class RetrospectiveRunner {
             log.error("debug retro : aucune session terminée connue")
             return
         }
-        guard process == nil, pendingDelay == nil else {
+        guard !isBusy, pendingDelay == nil else {
             log.error("debug retro : un run ou une attente est déjà en cours")
             return
         }
-        Task { await run(Job(snapshot: snapshot, endedAt: Date())) }
+        Task { await run(Job(snapshot: snapshot, endedAt: Date(), forced: true)) }
     }
     #endif
 
     // MARK: - File
 
     private func scheduleNext() {
-        guard process == nil, pendingDelay == nil, let job = queue.first else { return }
+        guard !isBusy, pendingDelay == nil, let job = queue.first else { return }
         phase = .waiting(job.snapshot.id)
         pendingDelay = Task { [weak self] in
             // Le délai appartient au JOB réellement dépilé, pas à la tête au
@@ -186,10 +200,20 @@ final class RetrospectiveRunner {
                 _ = self // le while relit queue.first : le job a pu changer
             }
             guard let self, !Task.isCancelled else { return }
+            // Une curation tourne (elle aussi paie un `claude -p`, jusqu'à
+            // 1,50 $ et 10 min) : on ATTEND plutôt que de sauter — sauter
+            // grillerait la session. La curation a un timeout dur, l'attente ne
+            // peut donc pas être éternelle. La garde était écrite dans l'autre
+            // sens seulement : la curation vérifiait la rétrospective, jamais
+            // l'inverse (audit du 2026-07-27).
+            while NotesCurationService.shared.phase != .idle {
+                try? await Task.sleep(for: .seconds(30))
+                guard !Task.isCancelled else { return }
+            }
             self.pendingDelay = nil
             // Un run est déjà en vol (trigger debug) : on laisse finish()
             // rappeler scheduleNext — jamais deux rétrospectives en parallèle.
-            guard self.process == nil else { return }
+            guard !self.isBusy else { return }
             guard let job = self.queue.first else { self.phase = .idle; return }
             self.queue.removeFirst()
             await self.evaluateAndRun(job)
@@ -257,7 +281,7 @@ final class RetrospectiveRunner {
         )
         let quota = LearningGate.QuotaFacts(
             usedFraction: SessionStore.shared.realQuota?.fiveHour.usedFraction,
-            receivedAt: SessionStore.shared.quotaReceivedAt,
+            receivedAt: SessionStore.shared.rawQuotaReceivedAt,
             resetsAt: SessionStore.shared.realQuota?.fiveHour.resetsAt
         )
         return LearningGate.decide(session: facts, quota: quota,
@@ -277,6 +301,10 @@ final class RetrospectiveRunner {
         // un claude en panne ne peut pas boucler.
         recordAttempt()
         phase = .running(job.snapshot.id)
+        // Verrou posé AVANT le seul await : pendant la préparation du condensé,
+        // `process` est encore nil et le runner paraissait libre.
+        preparing = true
+        defer { preparing = false }
 
         // CONDENSÉ (v0.12.0) : Atoll lit le transcript lui-même, hors MainActor,
         // et n'envoie au modèle que la substance. Les transcripts réels font 9 à
@@ -288,6 +316,14 @@ final class RetrospectiveRunner {
             (digest: Self.digest(ofTranscriptAt: transcriptPath),
              capabilities: SkillCatalog().summaryForPrompt())
         }.value
+        // L'utilisateur a pu couper l'apprentissage PENDANT la préparation :
+        // `disable()` n'avait alors rien à annuler (ni processus, ni délai) et
+        // le `claude -p` partait quand même, après l'arrêt explicite.
+        guard job.forced || LearningSettings.shared.isEnabled else {
+            log.info("apprentissage coupé pendant la préparation — rien n'est lancé")
+            finish(job, outcome: "failed(disabled)", transcriptBytes: 0)
+            return
+        }
         let digest = prepared.digest
         guard let digest, !digest.text.isEmpty else {
             log.error("condensé vide pour \(transcriptPath, privacy: .public) — rien à analyser")
@@ -396,7 +432,12 @@ final class RetrospectiveRunner {
 
         guard process.terminationStatus == 0 else {
             log.error("rétrospective (pid \(pid)) : exit \(process.terminationStatus) — \(errorTail, privacy: .public)")
-            finish(job, outcome: "failed(exit)", transcriptBytes: transcriptBytes)
+            // Le code de sortie va AU JOURNAL : c'est lui qui distingue un
+            // arrêt d'Atoll (143 = SIGTERM, ex. session reprise) d'un refus du
+            // modèle. Sans lui, le journal — dont c'est la raison d'être —
+            // n'affichait qu'« failed(exit) », muet sur la cause (vu en vrai).
+            finish(job, outcome: "failed(exit \(process.terminationStatus))",
+                   transcriptBytes: transcriptBytes)
             return
         }
 
@@ -487,7 +528,7 @@ final class RetrospectiveRunner {
         // session cassée neutralisait la rétrospective pendant 5 h pour toutes
         // les autres — d'autant plus grave que le mode « quota inconnu »
         // n'accorde qu'UN créneau (revue).
-        if outcome == "failed(digest)" || outcome == "failed(spawn)" {
+        if ["failed(digest)", "failed(spawn)", "failed(disabled)"].contains(outcome) {
             refundAttempt()
         }
         if var attempt = pendingAttempt {
@@ -649,13 +690,14 @@ final class RetrospectiveRunner {
     private func existingNoteSlugs() -> [String] {
         let files = (try? FileManager.default
             .contentsOfDirectory(atPath: BridgePaths.learningNotesDirectory.path)) ?? []
-        // "2026-07-20-mon-slug.md" → "mon-slug" (préfixe date AAAA-MM-JJ- retiré).
+        // "2026-07-20-mon-slug.md" → "mon-slug". On DÉLÈGUE au calcul déjà
+        // corrigé de l'indexeur : le motif large « 11 caractères de chiffres et
+        // de tirets » amputait les notes produites par la curation
+        // (`01-2026-07-20-bilan.md` → « 20-bilan »), et la liste d'antériorité
+        // envoyée au modèle ne désignait alors plus rien.
         return files.compactMap { name in
             guard name.hasSuffix(".md") else { return nil }
-            let stem = String(name.dropLast(3))
-            guard stem.count > 11, stem.prefix(11).allSatisfy({ $0.isNumber || $0 == "-" })
-            else { return stem }
-            return String(stem.dropFirst(11))
+            return MemoryIndexer.noteSlug(for: URL(fileURLWithPath: name))
         }
     }
 }

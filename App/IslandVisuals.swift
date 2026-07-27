@@ -26,14 +26,6 @@ enum VisualEffects {
     /// En dessous du seuil, aplat pur : la plage est utile de bout en bout.
     static let glassFloor = 0.06
 
-    static var isEnabled: Bool {
-        UserDefaults.standard.object(forKey: enabledKey) as? Bool ?? true
-    }
-
-    static var glassIntensity: Double {
-        UserDefaults.standard.object(forKey: glassIntensityKey) as? Double
-            ?? defaultGlassIntensity
-    }
 }
 
 // MARK: - Fond de l'îlot (verre ou aplat)

@@ -39,11 +39,23 @@ public struct LaunchedTask: Equatable, Sendable, Codable, Identifiable {
     /// de « elle n'est jamais apparue » (→ un lancement raté : abandonner en
     /// silence, surtout ne pas claironner qu'une tâche jamais partie est finie).
     public var seenAlive: Bool
+    /// Cette tâche peut-elle ADOPTER une session de la flotte à qui l'on ne
+    /// connaît pas de tâche ?
+    ///
+    /// Faux quand le lancement a visiblement échoué (sortie non nulle ET aucun
+    /// identifiant lisible) : sans cela, l'utilisateur qui rouvre `claude` à la
+    /// main dans le même dossier dans les trois minutes se faisait « voler » sa
+    /// session interactive, dont la fin était ensuite annoncée comme celle de
+    /// la tâche (audit du 2026-07-27).
+    public var adoptable: Bool
+    /// Absences consécutives dans l'instantané de flotte. Voir `reconcile`.
+    public var missedFleetPolls: Int
 
     public init(id: UUID = UUID(), task: String, cwd: String, launchedAt: Date,
                 sessionID: String? = nil, completedAt: Date? = nil,
                 summary: String? = nil, notified: Bool = false,
-                acknowledged: Bool = false, seenAlive: Bool = false) {
+                acknowledged: Bool = false, seenAlive: Bool = false,
+                adoptable: Bool = true, missedFleetPolls: Int = 0) {
         self.id = id
         self.task = task
         self.cwd = cwd
@@ -54,6 +66,8 @@ public struct LaunchedTask: Equatable, Sendable, Codable, Identifiable {
         self.notified = notified
         self.acknowledged = acknowledged
         self.seenAlive = seenAlive
+        self.adoptable = adoptable
+        self.missedFleetPolls = missedFleetPolls
     }
 
     /// Décodage EXPLICITE et tolérant aux champs absents.
@@ -75,6 +89,11 @@ public struct LaunchedTask: Equatable, Sendable, Codable, Identifiable {
         notified = try container.decodeIfPresent(Bool.self, forKey: .notified) ?? false
         acknowledged = try container.decodeIfPresent(Bool.self, forKey: .acknowledged) ?? false
         seenAlive = try container.decodeIfPresent(Bool.self, forKey: .seenAlive) ?? false
+        // Un journal écrit par une version antérieure n'a pas ces clés : on
+        // reste sur le comportement d'avant (adoptable) plutôt que de rendre
+        // muettes des tâches déjà en cours.
+        adoptable = try container.decodeIfPresent(Bool.self, forKey: .adoptable) ?? true
+        missedFleetPolls = try container.decodeIfPresent(Int.self, forKey: .missedFleetPolls) ?? 0
     }
 
     public var isComplete: Bool { completedAt != nil }
@@ -122,6 +141,12 @@ public struct LaunchedTaskLog: Equatable, Sendable, Codable {
     /// lisible : une session de flotte qui apparaît dans le MÊME dossier peu
     /// après le lancement est très probablement la nôtre.
     public static let defaultAdoptionWindow: TimeInterval = 180
+    /// Absences consécutives exigées avant de conclure qu'une tâche est finie.
+    /// Même tolérance que `SessionStore` pour le retrait d'une session : les
+    /// deux consomment le MÊME instantané, ils doivent en tirer les mêmes
+    /// conclusions (sinon l'îlot affiche « en cours » pendant qu'une
+    /// notification annonce « terminée »).
+    public static let fleetMissTolerance = 2
 
     public private(set) var tasks: [LaunchedTask]
 
@@ -191,7 +216,7 @@ public struct LaunchedTaskLog: Equatable, Sendable, Codable {
         let target = Self.normalizePath(cwd)
         let candidates = tasks.indices.filter { index in
             let candidate = tasks[index]
-            guard candidate.sessionID == nil, !candidate.isComplete else { return false }
+            guard candidate.sessionID == nil, !candidate.isComplete, candidate.adoptable else { return false }
             guard Self.normalizePath(candidate.cwd) == target else { return false }
             let delta = startedAt.timeIntervalSince(candidate.launchedAt)
             // Petite tolérance négative : les horloges (ms epoch du CLI vs Date)
@@ -229,9 +254,18 @@ public struct LaunchedTaskLog: Equatable, Sendable, Codable {
             let isActive = activeSessionIDs.contains { LaunchedTask.sessionIDsMatch($0, task.sessionID ?? "") }
             if isActive {
                 tasks[index].seenAlive = true
+                tasks[index].missedFleetPolls = 0
                 continue
             }
             guard now.timeIntervalSince(task.launchedAt) > grace else { continue }
+            // Une SEULE absence ne prouve rien : `claude agents --json` peut
+            // sortir en code 0 avec un tableau vide (daemon qui redémarre,
+            // format inattendu). Le store tolère déjà deux tours avant de
+            // retirer une session ; le journal n'en tolérait aucun et annonçait
+            // « terminée » — définitivement, `notified` étant idempotent — une
+            // tâche qui tournait encore (audit du 2026-07-27).
+            tasks[index].missedFleetPolls += 1
+            guard tasks[index].missedFleetPolls >= Self.fleetMissTolerance else { continue }
             if task.seenAlive {
                 toAnnounce.append(index)
             } else {
@@ -266,12 +300,6 @@ public struct LaunchedTaskLog: Equatable, Sendable, Codable {
     public mutating func acknowledge(id: UUID) {
         guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
         tasks[index].acknowledged = true
-    }
-
-    public mutating func acknowledgeAll() {
-        for index in tasks.indices where tasks[index].isComplete {
-            tasks[index].acknowledged = true
-        }
     }
 
     /// Purge : les tâches terminées passées la rétention, puis le plafond.

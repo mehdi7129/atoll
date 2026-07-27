@@ -132,7 +132,8 @@ public enum TranscriptLineParser {
         // heuristique par mot-clé ne verrait même pas l'erreur d'un build qui
         // échoue après 1 500 caractères de sortie.
         return TranscriptLine.Fragment(role: .toolResult, text: text,
-                                       isError: block["is_error"] as? Bool)
+                                       isError: block["is_error"] as? Bool,
+                                       toolUseID: block["tool_use_id"] as? String)
     }
 
     // MARK: - Lignes assistant
@@ -185,7 +186,8 @@ public enum TranscriptLineParser {
             return String(clean.prefix(toolValueCap))
         }
         let text = values.isEmpty ? name : "\(name) · \(values.joined(separator: " "))"
-        return TranscriptLine.Fragment(role: .tool, text: String(text.prefix(toolFragmentCap)))
+        return TranscriptLine.Fragment(role: .tool, text: String(text.prefix(toolFragmentCap)),
+                                       toolUseID: block["id"] as? String)
     }
 
     // MARK: - Aides communes

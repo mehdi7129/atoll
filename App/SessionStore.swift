@@ -20,7 +20,6 @@ final class SessionStore {
     struct Tracked: Identifiable {
         let id: String
         var pid: pid_t?
-        var pidStartTime: Double?
         var cwd: String?
         var transcriptPath: String?
         var phase: SessionPhase
@@ -46,11 +45,10 @@ final class SessionStore {
         /// Nombre de prompts utilisateur (hooks UserPromptSubmit) — critère de
         /// « session substantielle » pour la rétrospective. 0 pour les synthétiques.
         var userPromptCount = 0
-        /// Souvenirs joints au DERNIER prompt par le recall proactif, et total
-        /// sur la session. Rendus visibles dans le détail : sans ça, l'injection
-        /// est totalement muette pour l'utilisateur.
+        /// Souvenirs joints au DERNIER prompt par le recall proactif. Rendu
+        /// visible dans le détail : sans ça, l'injection est totalement muette
+        /// pour l'utilisateur.
         var lastRecallInjected = 0
-        var totalRecallInjected = 0
 
         var terminalAnchor: TerminalAnchor {
             TerminalAnchor(cwd: cwd, tty: tty, bundleID: bundleID, termProgram: termProgram,
@@ -155,19 +153,13 @@ final class SessionStore {
         }
         // Désambiguïsation des noms : un dossier nommé « claude » (vécu : le
         // projet drones de l'utilisateur) ou deux projets homonymes affichent
-        // leurs deux derniers composants (« Blender/claude »).
-        let baseNames = sorted.map { ($0.cwd as NSString?)?.lastPathComponent ?? "claude" }
-        return zip(sorted, baseNames).map { tracked, base in
-            let isAmbiguous = base == "claude"
-                || baseNames.filter { $0 == base }.count > 1
-            var name = base
-            if isAmbiguous, let cwd = tracked.cwd {
-                let components = (cwd as NSString).pathComponents.suffix(2)
-                if components.count == 2 {
-                    name = components.joined(separator: "/")
-                }
-            }
-            return AgentSession(
+        // leurs deux derniers composants (« Blender/claude »). La règle vit
+        // dans AtollCore : l'îlot l'applique aussi à ses en-têtes de dossier,
+        // qui affichaient sinon un autre nom pour la même session.
+        let paths = sorted.map { $0.cwd ?? "claude" }
+        let names = ProjectNaming.displayNames(for: paths)
+        return zip(sorted, names).map { tracked, name in
+            AgentSession(
                 id: tracked.id,
                 projectName: name,
                 gitBranch: tracked.gitBranch,
@@ -185,25 +177,44 @@ final class SessionStore {
         }
     }
 
+    /// Quota AFFICHABLE : le dernier reçu, sauf si sa fenêtre 5 h a tourné.
+    ///
+    /// La statusline n'existe qu'avec un TUI ouvert : toutes sessions fermées,
+    /// plus rien ne remplace la valeur. Passé `resetsAt`, le serveur est
+    /// reparti de zéro et le chiffre affiché est FAUX — la pilule compacte
+    /// annonçait encore « 5h 60 % » le lendemain matin. La règle est déjà
+    /// écrite pour le cache au démarrage (`loadCachedQuota`) : elle vaut aussi
+    /// à l'écran. `realQuota` lui-même n'est PAS touché — le `LearningGate` s'en
+    /// sert comme minorant, avec sa propre gestion du périmé.
+    private var freshQuota: QuotaSnapshot? {
+        guard let realQuota else { return nil }
+        if let resetsAt = realQuota.fiveHour.resetsAt, resetsAt < Date() { return nil }
+        return realQuota
+    }
+
     /// Quota affiché : vrai serveur uniquement — jamais de données factices
     /// (les vues masquent les jauges tant que hasRealQuota est faux).
     var displayQuota: UsageSnapshot {
-        guard let realQuota else {
+        guard let quota = freshQuota else {
             return UsageSnapshot(fiveHourFraction: 0, sevenDayFraction: 0)
         }
         return UsageSnapshot(
-            fiveHourFraction: realQuota.fiveHour.usedFraction,
-            sevenDayFraction: realQuota.sevenDay.usedFraction
+            fiveHourFraction: quota.fiveHour.usedFraction,
+            sevenDayFraction: quota.sevenDay.usedFraction
         )
     }
 
     var quotaResets: (five: Date?, seven: Date?) {
-        (realQuota?.fiveHour.resetsAt, realQuota?.sevenDay.resetsAt)
+        (freshQuota?.fiveHour.resetsAt, freshQuota?.sevenDay.resetsAt)
     }
 
-    var hasRealQuota: Bool { realQuota != nil }
+    var hasRealQuota: Bool { freshQuota != nil }
     /// Quand le dernier vrai quota a été reçu (pour l'indicateur d'âge).
-    var quotaReceivedAt: Date? { realQuota?.receivedAt }
+    var quotaReceivedAt: Date? { freshQuota?.receivedAt }
+    /// Idem, mais SANS le filtre de fraîcheur : les gates d'apprentissage ont
+    /// leur propre traitement du périmé (une lecture vieille sert de MINORANT),
+    /// et doivent voir la donnée telle qu'elle est.
+    var rawQuotaReceivedAt: Date? { realQuota?.receivedAt }
 
     /// Ancre terminal d'une session (pour le jump-back).
     func terminalAnchor(for id: String) -> TerminalAnchor? {
@@ -298,7 +309,6 @@ final class SessionStore {
             var session = Tracked(
                 id: event.sessionID,
                 pid: nil,
-                pidStartTime: nil,
                 cwd: nil,
                 transcriptPath: nil,
                 phase: SessionReducer.reduce(.starting, event),
@@ -358,7 +368,6 @@ final class SessionStore {
         }
         if let pid = event.claudePid, session.pid != pid {
             session.pid = pid
-            session.pidStartTime = event.claudeStartTime
             armExitWatch(pid: pid)
         }
 
@@ -368,7 +377,6 @@ final class SessionStore {
             session.userPromptCount += 1
             // Recall proactif : ce que le helper a joint à CE prompt.
             session.lastRecallInjected = event.recallInjected ?? 0
-            session.totalRecallInjected += event.recallInjected ?? 0
         case .subagentStart:
             session.subagentCount += 1
         case .subagentStop:
@@ -673,7 +681,6 @@ final class SessionStore {
             var session = Tracked(
                 id: "pid-\(pid)-\(Int(ProcessInspector.startTime(of: pid) ?? 0))",
                 pid: pid,
-                pidStartTime: ProcessInspector.startTime(of: pid),
                 cwd: cwd,
                 transcriptPath: transcript?.path,
                 phase: .waitingInput,
@@ -722,9 +729,21 @@ final class SessionStore {
 
         for info in infos {
             if let pid = info.pid, internalPids.contains(pid) { continue }
-            if let cwd = info.cwd, cwd.contains("/.claude/worktrees/") { continue }
             // Recalculé par itération : appendFleetSession a pu ajouter une session.
             let existing = sessions.map { FleetReconciler.Existing(id: $0.id, pid: $0.pid) }
+            // Sessions de worktree : on ne les CRÉE pas depuis la flotte, mais
+            // il faut quand même créditer leur liveness. Sauter l'entrée avant
+            // la corrélation laissait une session de worktree suivie par les
+            // hooks hors de `seen` : elle était donc clôturée tous les deux
+            // tours, puis recréée à plat par le hook suivant — et chaque
+            // clôture mettait en file une rétrospective payante sur une
+            // session bien vivante (audit du 2026-07-27).
+            if let cwd = info.cwd, cwd.contains("/.claude/worktrees/") {
+                if case .existing(let id) = FleetReconciler.correlate(info, among: existing) {
+                    seen.insert(id)
+                }
+                continue
+            }
             switch FleetReconciler.correlate(info, among: existing) {
             case .existing(let id):
                 seen.insert(id)
@@ -757,7 +776,14 @@ final class SessionStore {
                 continue
             }
             // Carte de permission en attente = session vivante (un helper y est
-            // bloqué) → jamais clôturée sur simple absence.
+            // bloqué) → jamais clôturée sur simple absence. Le garde-fou était
+            // ANNONCÉ ici et implémenté dans le chemin jumeau (`reconcile`),
+            // mais absent de cette boucle : la carte était retirée de l'îlot et
+            // la main rendue au terminal pendant que le helper attendait encore.
+            if InteractionCenter.shared.pending.contains(where: { $0.sessionID == id }) {
+                fleetMissed[id] = 0
+                continue
+            }
             //
             // On NE teste PAS le pid : celui d'une session bg est un processus géré
             // par le daemon qui SURVIT à l'arrêt de la session → il ne dit rien de
@@ -837,7 +863,6 @@ final class SessionStore {
         var session = Tracked(
             id: info.sessionID,
             pid: info.pid,
-            pidStartTime: info.pid.flatMap { ProcessInspector.startTime(of: $0) },
             cwd: info.cwd,
             transcriptPath: info.cwd.flatMap { Self.newestTranscript(forCwd: $0)?.path },
             phase: Self.fleetPhase(for: info.status, current: .waitingInput) ?? .waitingInput,

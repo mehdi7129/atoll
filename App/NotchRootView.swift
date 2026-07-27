@@ -154,7 +154,7 @@ struct NotchRootView: View {
         case .compact:
             CompactView(viewModel: viewModel, colors: capColors)
         case .expanded:
-            ExpandedView(viewModel: viewModel, colors: colors, capColors: capColors)
+            ExpandedView(viewModel: viewModel, colors: colors)
                 .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
         }
     }

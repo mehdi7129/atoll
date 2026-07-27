@@ -33,7 +33,6 @@ final class SoundCenter {
     /// Le fichier de parking existe mais ne se lit pas : état à SIGNALER, jamais
     /// à confondre avec « rien de parqué » (on écraserait les hooks mis de côté).
     private(set) var isParkingUnreadable = false
-    private(set) var lastError: String?
 
     enum SoundCenterError: LocalizedError {
         case parkingUnreadable
@@ -47,6 +46,16 @@ final class SoundCenter {
             }
         }
     }
+
+    /// Chemin d'ÉCRITURE de settings.json, symlinks résolus.
+    ///
+    /// Beaucoup de gens gèrent `~/.claude/settings.json` en dotfiles (stow,
+    /// chezmoi) : c'est alors un lien. Une écriture `.atomic` sur le lien
+    /// lui-même le REMPLACE par un fichier ordinaire — le dépôt dotfiles se
+    /// retrouve débranché en silence. Le reste du projet passe déjà par un
+    /// chemin résolu (`BridgeCLI.settingsURL`), pour cette raison exacte.
+    static var settingsURL: URL { BridgePaths.claudeSettingsURL.resolvingSymlinksInPath() }
+    private var settingsURL: URL { Self.settingsURL }
 
     /// Instants de dernière lecture, par événement — anti-rafale.
     @ObservationIgnored private var lastPlayed: [SoundEvent: Date] = [:]
@@ -105,6 +114,19 @@ final class SoundCenter {
         let presentKeys = Set(detectedHooks.map { "\($0.event)\u{1}\($0.command)" })
         guard presentKeys.isSubset(of: parkedKeys) else {
             log.info("hooks sonores non parqués détectés — aucune action automatique")
+            return
+        }
+        // Le sous-ensemble ne suffit pas à distinguer « parking interrompu » de
+        // « l'utilisateur a remis SON hook exprès » : dans les deux cas les
+        // hooks présents sont ceux du parking. Le fichier de parking étant
+        // écrit AVANT settings.json, une seule chose les sépare — dans le vrai
+        // cas d'interruption, settings.json n'a PAS été réécrit depuis. Sinon
+        // Atoll re-parquait à chaque lancement un hook remis à la main (ou
+        // restauré par des dotfiles), sans un geste ni un message.
+        let settingsModified = (try? settingsURL.resourceValues(forKeys: [.contentModificationDateKey]))?
+            .contentModificationDate
+        if let settingsModified, settingsModified > file.parkedAt {
+            log.info("settings.json réécrit depuis le parking — aucune action automatique")
             return
         }
         log.info("parking interrompu (hooks encore présents) — reprise")
@@ -253,16 +275,46 @@ final class SoundCenter {
     @discardableResult
     func adoptDetectedSounds() -> Int {
         var adopted = 0
-        for hook in detectedHooks {
+        // Deux hooks peuvent viser le MÊME événement Atoll (`Stop` et
+        // `SubagentStop` → « tâche terminée »). On applique le moins précis
+        // d'abord pour que le principal l'emporte : sinon le son de sous-agent
+        // devenait celui de la fin de tour, et le vrai n'était plus jamais joué.
+        for hook in detectedHooks.sorted(by: { Self.adoptionRank($0.event) < Self.adoptionRank($1.event) }) {
             guard let event = Self.event(forHookEvent: hook.event) else { continue }
-            guard let path = SoundHookEditor.audioPaths(in: hook.command).first else { continue }
-            let url = URL(fileURLWithPath: path)
-            guard FileManager.default.fileExists(atPath: url.path) else { continue }
-            guard let name = try? importSound(from: url) else { continue }
-            setChoice(.custom(name), for: event)
-            adopted += 1
+            if let path = SoundHookEditor.audioPaths(in: hook.command).first,
+               FileManager.default.fileExists(atPath: path),
+               let name = try? importSound(from: URL(fileURLWithPath: path)) {
+                setChoice(.custom(name), for: event)
+                adopted += 1
+                continue
+            }
+            // Rien à reprendre (hook `say`, `beep`, ou fichier disparu) : on
+            // pose quand même un son système, sinon l'événement resterait
+            // « Silencieux » alors que son hook, lui, VIENT d'être parqué —
+            // l'utilisateur se retrouvait muet sans en être averti.
+            if choice(for: event).isSilent {
+                setChoice(.system(Self.fallbackSystemSound(for: event)), for: event)
+                adopted += 1
+            }
         }
         return adopted
+    }
+
+    /// Priorité d'adoption : le hook le plus représentatif d'un événement Atoll
+    /// est appliqué EN DERNIER, donc c'est lui qui reste.
+    static func adoptionRank(_ hookEvent: String) -> Int {
+        switch hookEvent {
+        case "SubagentStop", "PermissionRequest": return 0
+        default: return 1   // Stop, Notification
+        }
+    }
+
+    /// Repli audible quand le hook d'origine n'exposait aucun fichier.
+    static func fallbackSystemSound(for event: SoundEvent) -> String {
+        switch event {
+        case .decisionNeeded: return "Submarine"
+        case .taskCompleted: return "Glass"
+        }
     }
 
     /// Correspondance entre un événement de hook Claude Code et un événement
@@ -285,7 +337,7 @@ final class SoundCenter {
         let state = parkingState()
         if case .unreadable = state { throw SoundCenterError.parkingUnreadable }
 
-        let settingsURL = BridgePaths.claudeSettingsURL
+        let settingsURL = Self.settingsURL
         let data = try? Data(contentsOf: settingsURL)
         guard let result = try SoundHookEditor.park(in: data) else { return }
         try ensureSettingsBackup()
@@ -318,7 +370,7 @@ final class SoundCenter {
     }
 
     private func applyRestore(_ parked: SoundHookEditor.ParkedSoundHooks) throws {
-        let settingsURL = BridgePaths.claudeSettingsURL
+        let settingsURL = Self.settingsURL
         let data = try? Data(contentsOf: settingsURL)
         let restored = try SoundHookEditor.restore(into: data, parked: parked.hooks)
         try restored.write(to: settingsURL, options: .atomic)
@@ -355,7 +407,7 @@ final class SoundCenter {
     private func ensureSettingsBackup() throws {
         let backup = BridgePaths.settingsBackupURL
         guard !FileManager.default.fileExists(atPath: backup.path) else { return }
-        let settings = BridgePaths.claudeSettingsURL
+        let settings = Self.settingsURL
         guard FileManager.default.fileExists(atPath: settings.path) else { return }
         try FileManager.default.createDirectory(at: backup.deletingLastPathComponent(),
                                                 withIntermediateDirectories: true)

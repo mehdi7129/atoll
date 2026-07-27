@@ -286,4 +286,50 @@ final class LearnedSkillStoreTests: XCTestCase {
             XCTAssertEqual(error as? LearnedSkillError, .manifestUnreadable)
         }
     }
+
+    // MARK: - Ressources jointes (audit du 2026-07-27)
+
+    /// Un skill Claude Code est un DOSSIER : la plupart portent des
+    /// `references/`, des `scripts/`. On n'archivait que `SKILL.md`, donc
+    /// archiver ou désinstaller détruisait tout le reste sans copie.
+    func testUninstallArchivesAttachedResources() throws {
+        try seedProposal(slug: "avec-ressources")
+        let proposal = try XCTUnwrap(store.discoverProposals().first, "aucune proposition")
+        _ = try store.approve(proposal)
+        let installed = skillsRoot.appendingPathComponent("atoll-avec-ressources", isDirectory: true)
+        try fm.createDirectory(at: installed.appendingPathComponent("scripts"),
+                               withIntermediateDirectories: true)
+        try Data("#!/bin/sh\necho ok".utf8)
+            .write(to: installed.appendingPathComponent("scripts/notarize.sh"))
+        try Data("# notes".utf8).write(to: installed.appendingPathComponent("reference.md"))
+
+        _ = try store.uninstallAll()
+
+        XCTAssertFalse(fm.fileExists(atPath: installed.path), "le skill doit être retiré")
+        let archives = try fm.contentsOfDirectory(
+            at: learningRoot.appendingPathComponent("archive/uninstalled"),
+            includingPropertiesForKeys: nil)
+        let dossier = try XCTUnwrap(archives.first, "aucune archive écrite")
+        XCTAssertTrue(fm.fileExists(atPath: dossier.appendingPathComponent("SKILL.md").path))
+        XCTAssertTrue(fm.fileExists(atPath: dossier.appendingPathComponent("reference.md").path),
+                      "la ressource jointe doit être archivée")
+        XCTAssertTrue(fm.fileExists(atPath: dossier.appendingPathComponent("scripts/notarize.sh").path),
+                      "le script joint doit être archivé")
+    }
+
+    func testArchiveInstalledKeepsAttachedResources() throws {
+        try seedProposal(slug: "avec-ressources")
+        let proposal = try XCTUnwrap(store.discoverProposals().first)
+        _ = try store.approve(proposal)
+        let installed = skillsRoot.appendingPathComponent("atoll-avec-ressources", isDirectory: true)
+        try Data("# notes".utf8).write(to: installed.appendingPathComponent("reference.md"))
+
+        try store.archiveInstalled(slug: "avec-ressources")
+
+        let archives = try fm.contentsOfDirectory(
+            at: learningRoot.appendingPathComponent("archive/uninstalled"),
+            includingPropertiesForKeys: nil)
+        let dossier = try XCTUnwrap(archives.first)
+        XCTAssertTrue(fm.fileExists(atPath: dossier.appendingPathComponent("reference.md").path))
+    }
 }

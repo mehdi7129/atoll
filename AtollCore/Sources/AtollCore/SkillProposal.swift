@@ -35,6 +35,11 @@ public struct SkillProposal: Identifiable, Equatable, Sendable {
     public let similarExisting: String?
     public let sourceSession: String?
     public let sourceProject: String?
+    /// Motifs de suspicion relevés par `RetrospectiveReport.suspicionReasons`
+    /// (« pipe-to-shell », « base64-blob », « secret-pattern »…). Ils étaient
+    /// écrits dans meta.json mais jamais relus : l'humain approuvait un skill
+    /// signalé sans jamais voir l'avertissement (audit du 2026-07-27).
+    public let flags: [String]
     public let createdAt: Date
     public let status: Status
     /// Dossier de la proposition sur disque (source du décodage).
@@ -54,6 +59,7 @@ public struct SkillProposal: Identifiable, Equatable, Sendable {
         similarExisting: String? = nil,
         sourceSession: String?,
         sourceProject: String?,
+        flags: [String] = [],
         createdAt: Date,
         status: Status,
         directoryURL: URL,
@@ -66,6 +72,7 @@ public struct SkillProposal: Identifiable, Equatable, Sendable {
         self.similarExisting = similarExisting
         self.sourceSession = sourceSession
         self.sourceProject = sourceProject
+        self.flags = flags
         self.createdAt = createdAt
         self.status = status
         self.directoryURL = directoryURL
@@ -104,6 +111,7 @@ public struct SkillProposal: Identifiable, Equatable, Sendable {
             similarExisting: meta.similarExisting,
             sourceSession: meta.sourceSession,
             sourceProject: meta.project,
+            flags: meta.flags ?? [],
             createdAt: createdAt,
             status: status,
             directoryURL: directoryURL,
@@ -122,11 +130,12 @@ public struct SkillProposal: Identifiable, Equatable, Sendable {
         let similarExisting: String?
         let sourceSession: String?
         let project: String?
+        let flags: [String]?
         let createdAt: String
         let status: String
 
         enum CodingKeys: String, CodingKey {
-            case slug, title, description, rationale, project, status
+            case slug, title, description, rationale, project, status, flags
             case similarExisting = "similar_existing"
             case sourceSession = "source_session"
             case createdAt = "created_at"

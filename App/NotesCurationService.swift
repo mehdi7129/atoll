@@ -47,6 +47,8 @@ final class NotesCurationService {
     @ObservationIgnored var onNotesReplaced: (([String], [URL]) -> Void)?
 
     @ObservationIgnored private var process: Process?
+    /// Cause exacte du dernier échec de sous-processus (affichée telle quelle).
+    @ObservationIgnored private var spawnFailure: String?
     @ObservationIgnored private var timeoutTask: Task<Void, Never>?
     @ObservationIgnored private var schedulerTask: Task<Void, Never>?
 
@@ -166,10 +168,10 @@ final class NotesCurationService {
         let store = SessionStore.shared
         let quota = LearningGate.QuotaFacts(
             usedFraction: store.realQuota?.fiveHour.usedFraction,
-            receivedAt: store.quotaReceivedAt,
+            receivedAt: store.rawQuotaReceivedAt,
             resetsAt: store.realQuota?.fiveHour.resetsAt
         )
-        if let refusal = Self.quotaRefusal(quota, now: Date()) {
+        if let refusal = Self.quotaRefusal(quota, now: Date(), lastRunAt: lastRunAt) {
             log.info("curation reportée : \(refusal, privacy: .public)")
             phase = .idle
             lastOutcome = "reportée (\(refusal))"
@@ -198,7 +200,7 @@ final class NotesCurationService {
         ) + [NotesCurationPrompt.userPrompt(notes: notes)]
 
         guard let output = await spawnClaude(arguments: arguments) else {
-            finish(outcome: "échec du lancement de l'analyse", touched: false)
+            finish(outcome: spawnFailure ?? "échec du lancement de l'analyse", touched: false)
             return
         }
 
@@ -389,14 +391,37 @@ final class NotesCurationService {
 
     /// Le quota interdit-il de lancer maintenant ? nil = feu vert.
     ///
-    /// Trois refus, calqués sur `LearningGate` : quota INCONNU (on ne dépense
-    /// pas à l'aveugle), lecture PÉRIMÉE (plus de 30 min : la fenêtre a pu
-    /// tourner), fenêtre 5 h déjà EXPIRÉE (le chiffre ne veut plus rien dire).
-    private static func quotaRefusal(_ quota: LearningGate.QuotaFacts, now: Date) -> String? {
-        guard quota.usedFraction != nil else { return "quota 5 h inconnu" }
-        guard let receivedAt = quota.receivedAt,
-              now.timeIntervalSince(receivedAt) < 1_800 else { return "quota périmé" }
-        if let resetsAt = quota.resetsAt, resetsAt < now { return "fenêtre 5 h expirée" }
+    /// Trois cas douteux, calqués sur `LearningGate` : quota INCONNU, lecture
+    /// PÉRIMÉE (plus de 30 min : la fenêtre a pu tourner), fenêtre 5 h déjà
+    /// EXPIRÉE (le chiffre ne veut plus rien dire).
+    ///
+    /// Ils ne sont PAS un refus sec. C'était exactement le défaut que la Phase
+    /// 12 a diagnostiqué comme « LA cause du silence » côté rétrospective : la
+    /// statusline n'existe qu'avec un TUI ouvert, donc après chaque
+    /// redémarrage d'Atoll — ou une demi-heure sans session — la fonction
+    /// était morte, y compris sur un clic explicite de l'utilisateur. On
+    /// autorise donc UN passage par fenêtre de 5 h, comme
+    /// `unknownQuotaMaxPerWindow` (audit du 2026-07-27).
+    static func quotaRefusal(_ quota: LearningGate.QuotaFacts, now: Date,
+                             lastRunAt: Date?) -> String? {
+        let doubtful: String?
+        if quota.usedFraction == nil {
+            doubtful = "quota 5 h inconnu"
+        } else if let receivedAt = quota.receivedAt, now.timeIntervalSince(receivedAt) >= 1_800 {
+            doubtful = "quota périmé"
+        } else if quota.receivedAt == nil {
+            doubtful = "quota sans horodatage"
+        } else if let resetsAt = quota.resetsAt, resetsAt < now {
+            doubtful = "fenêtre 5 h expirée"
+        } else {
+            doubtful = nil
+        }
+        guard let doubtful else { return nil }
+        // Une seule tentative par fenêtre tant qu'on ne sait pas : le plafond
+        // borne la dépense, exactement comme pour la rétrospective.
+        if let lastRunAt, now.timeIntervalSince(lastRunAt) < LearningGate.runWindowSeconds {
+            return doubtful
+        }
         return nil
     }
 
@@ -467,10 +492,12 @@ final class NotesCurationService {
         process.standardOutput = stdout
         process.standardError = stderr
 
+        spawnFailure = nil
         do {
             try process.run()
         } catch {
             log.error("spawn curation impossible : \(error.localizedDescription)")
+            spawnFailure = "claude n'a pas pu être lancé (\(error.localizedDescription))"
             return nil
         }
         self.process = process
@@ -522,6 +549,11 @@ final class NotesCurationService {
 
         guard process.terminationStatus == 0 else {
             log.error("curation (pid \(pid)) : exit \(process.terminationStatus) — \(errorTail, privacy: .public)")
+            // La CAUSE au lieu d'un « échec du lancement » générique : dépassement
+            // de budget, timeout (SIGTERM = 143) et binaire introuvable
+            // envoyaient exactement le même message, qui désignait le PATH.
+            spawnFailure = "l'analyse a échoué (exit \(process.terminationStatus))"
+                + (errorTail.isEmpty ? "" : " — \(errorTail.prefix(120))")
             return nil
         }
         return output

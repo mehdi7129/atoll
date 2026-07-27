@@ -102,7 +102,7 @@ final class TranscriptLineParserTests: XCTestCase {
         // Format « nom · valeurs » ; timeout (nombre) et run_in_background (bool)
         // ne sont pas des String → écartés.
         XCTAssertEqual(line.fragments, [
-            TranscriptLine.Fragment(role: .tool, text: "Bash · git status"),
+            TranscriptLine.Fragment(role: .tool, text: "Bash · git status", toolUseID: "tu-1"),
         ])
     }
 
@@ -129,7 +129,7 @@ final class TranscriptLineParserTests: XCTestCase {
 
         // content en String directe : même rôle, même traitement.
         XCTAssertEqual(line.fragments.last,
-                       TranscriptLine.Fragment(role: .toolResult, text: "sortie simple"))
+                       TranscriptLine.Fragment(role: .toolResult, text: "sortie simple", toolUseID: "tu-2"))
     }
 
     // MARK: - Bruit écarté

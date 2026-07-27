@@ -842,7 +842,14 @@ public final class MemoryIndex {
         JOIN messages m ON m.id = messages_fts.rowid
         JOIN sessions s ON s.id = m.session_id
         WHERE messages_fts MATCH ?1
-          AND (?2 IS NULL OR s.project_path LIKE ?2 ESCAPE '\\' OR s.project_path = ?5)
+          -- `s.project_path IS NULL` : les NOTES d'apprentissage d'Atoll sont
+          -- indexées sans cwd (elles ne viennent d'aucun projet — elles valent
+          -- pour TOUS). Sans cette clause, la comparaison rendait NULL et le
+          -- filtre de projet les excluait toutes : le réglage « limiter au
+          -- projet courant » étant ON par défaut, la mémoire longue durée que
+          -- produit Atoll n'était JAMAIS injectée (audit du 2026-07-27).
+          AND (?2 IS NULL OR s.project_path IS NULL
+               OR s.project_path LIKE ?2 ESCAPE '\\' OR s.project_path = ?5)
           AND (?3 IS NULL OR s.session_id <> ?3)
         \(roleClause)ORDER BY bm25(messages_fts)
         LIMIT ?4

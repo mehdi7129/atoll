@@ -280,18 +280,46 @@ public struct PluginSnapshot: Equatable, Sendable {
     /// DOUBLE plafond : `limit` entrées ET `promptCharacterCap` caractères. La
     /// coupe se fait toujours sur une frontière de ligne — jamais une entrée
     /// tronquée en plein milieu, qui donnerait un id incomplet au modèle.
+    /// La troncature est ANNONCÉE au modèle. Sans marqueur, il concluait
+    /// « aucun plugin ne correspond » — réponse que le prompt lui présente
+    /// explicitement comme correcte — à partir d'un catalogue amputé de plus de
+    /// la moitié (120 lignes sur 268 mesurées), pendant que l'interface promet
+    /// à l'utilisateur une comparaison au catalogue entier. Le jumeau
+    /// `SkillCatalog.summaryForPrompt` pose déjà ce marqueur (audit du
+    /// 2026-07-27).
     public func summaryForPrompt(limit: Int = 120) -> String {
+        // Deux passes : on rend d'abord tel quel ; s'il manque des entrées, on
+        // recommence en RÉSERVANT la place du marqueur. Il compte donc DANS le
+        // plafond, il ne s'y ajoute pas — sinon le rendu dépasserait le budget
+        // qu'il est justement censé faire respecter.
+        let entries = render(limit: limit, reserve: 0)
+        guard available.count > entries.count else { return entries.joined(separator: "\n") }
+        let bounded = render(limit: limit, reserve: Self.truncationMarkerReserve)
+        let hidden = available.count - bounded.count
+        return (bounded + [Self.truncationMarker(hidden: hidden)]).joined(separator: "\n")
+    }
+
+    private func render(limit: Int, reserve: Int) -> [String] {
         var lines: [String] = []
         var total = 0
         for plugin in availableRanked(limit: limit) {
             let line = Self.promptLine(for: plugin)
             let cost = line.count + (lines.isEmpty ? 0 : 1) // le "\n" de jointure
-            if total + cost > Self.promptCharacterCap { break }
+            if total + cost > Self.promptCharacterCap - reserve { break }
             total += cost
             lines.append(line)
         }
-        return lines.joined(separator: "\n")
+        return lines
     }
+
+    /// Marqueur de troncature, en français comme le reste des consignes.
+    static func truncationMarker(hidden: Int) -> String {
+        "… (\(hidden) autre(s) entrée(s) du catalogue non listée(s) ici : "
+        + "si rien ci-dessus ne convient, dis-le sans affirmer qu'aucun plugin n'existe)"
+    }
+
+    /// Majorant de la longueur du marqueur (le nombre masqué tient largement).
+    static let truncationMarkerReserve = 160
 
     /// Plafond dur du rendu de `summaryForPrompt` (caractères).
     public static let promptCharacterCap = 30_000

@@ -216,6 +216,8 @@ private struct GeneralPane: View {
 private struct ClaudeCodePane: View {
     @State private var hooksInstalled = false
     @State private var hookError: String?
+    @State private var confirmingUninstall = false
+    @State private var confirmingRebuild = false
     @State private var denyParkingError: String?
     @State private var proactiveRecallError: String?
     @State private var plugins = PluginInventory.shared
@@ -236,7 +238,14 @@ private struct ClaudeCodePane: View {
                         : "inactive"
                 )
                 Button(hooksInstalled ? "Désinstaller les hooks" : "Installer les hooks") {
-                    toggleHooks()
+                    // Désinstaller retire AUSSI les skills appris (le helper
+                    // pilote `uninstallAll`) et réinstaller ne les remet pas.
+                    // Ce n'était écrit nulle part et rien ne le demandait.
+                    if hooksInstalled, !SkillReviewCenter.shared.installed.isEmpty {
+                        confirmingUninstall = true
+                    } else {
+                        toggleHooks()
+                    }
                 }
                 if let hookError {
                     Text(hookError)
@@ -276,14 +285,18 @@ private struct ClaudeCodePane: View {
                     LabeledContent("Index", value: indexSummary(stats))
                 }
                 Button("Reconstruire l'index") {
-                    MemoryIndexer.shared.rebuild()
+                    confirmingRebuild = true
                 }
                 .disabled(MemoryIndexer.shared.isIndexing || !memoryIndexing.wrappedValue)
                 Text("""
                 Index local (~/.atoll/memory.db) de tous vos transcripts, interrogeable \
                 par vos sessions Claude via le skill « atoll-recall » — « retrouve quand \
                 on a parlé de… ». Rien ne quitte votre machine. Désactiver stoppe \
-                l'indexation ; supprimer ~/.atoll efface tout.
+                l'indexation ; supprimer ~/.atoll efface l'index et les notes. \
+                Les skills appris, eux, vivent dans ~/.claude/skills : passez par \
+                « Désinstaller les hooks » pour les retirer proprement (supprimer \
+                ~/.atoll d'abord emporterait le manifeste, et Atoll refuserait \
+                alors d'y toucher).
                 """)
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -292,10 +305,22 @@ private struct ClaudeCodePane: View {
             Section("Plugins") {
                 if let snapshot = plugins.snapshot {
                     LabeledContent("Installés", value: pluginSummary(snapshot))
+                    // ÂGE de la lecture : `PluginInventory` est un singleton et
+                    // le panneau ne relit rien tout seul — il pouvait afficher
+                    // « 4 activés » et proposer « Désactiver » sur un plugin
+                    // désactivé depuis le terminal, sans le moindre signal.
+                    if let readAt = plugins.lastRefreshedAt {
+                        Text("lu \(readAt.formatted(date: .omitted, time: .shortened)) — « Actualiser » pour relire")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                     // Les anomalies AVANT la liste : c'est ce pour quoi on
                     // ouvre ce panneau.
                     if !snapshot.broken.isEmpty {
-                        Text("⚠ cassé(s) : \(snapshot.broken.map(\.name).joined(separator: ", ")) — activé(s) mais des fichiers déclarés manquent")
+                        // La liste `broken` contient AUSSI des plugins
+                        // désactivés (donc chargés dans aucune session) :
+                        // affirmer « activé(s) » était faux et alarmant.
+                        Text("⚠ cassé(s) : \(snapshot.broken.map { $0.isEnabled ? "\($0.name) (activé)" : "\($0.name) (désactivé)" }.joined(separator: ", ")) — des fichiers déclarés manquent")
                             .font(.caption)
                             .foregroundStyle(.red)
                     }
@@ -452,6 +477,33 @@ private struct ClaudeCodePane: View {
             peut enregistrer des hooks exécutés au démarrage de CHAQUE session et \
             lancer des serveurs MCP : c'est du code tiers qui s'exécutera avec vos \
             droits. Il restera désactivable à tout moment.
+            """)
+        }
+        .alert("Reconstruire l'index mémoire ?", isPresented: $confirmingRebuild) {
+            Button("Annuler", role: .cancel) { }
+            Button("Reconstruire", role: .destructive) { MemoryIndexer.shared.rebuild() }
+        } message: {
+            // Presque tout se reconstruit depuis les JSONL — SAUF les messages
+            // des transcripts que Claude Code a purgés à 30 jours, qu'Atoll
+            // conserve exprès (`markMissing`). Ceux-là ne reviendront pas.
+            Text("""
+            L'index est reconstruit depuis tes transcripts. Les messages des \
+            sessions que Claude Code a déjà purgées (au-delà de 30 jours) \
+            n'existent plus que dans cet index : ils seront perdus.
+            """)
+        }
+        .alert("Désinstaller les hooks ?", isPresented: $confirmingUninstall) {
+            Button("Annuler", role: .cancel) { }
+            Button("Désinstaller", role: .destructive) { toggleHooks() }
+        } message: {
+            let noms = SkillReviewCenter.shared.installed
+                .map { SkillSlug.dirName(for: $0.skill.slug) }
+                .joined(separator: ", ")
+            Text("""
+            Cela retire aussi tes skills appris de ~/.claude/skills (\(noms)). \
+            Ils sont copiés dans ~/.atoll/learning/archive/uninstalled/, mais \
+            réinstaller les hooks ne les remettra PAS en place : il faudra les \
+            recopier à la main. Tes hooks sonores mis de côté, eux, reviennent.
             """)
         }
         .onAppear {
@@ -619,7 +671,14 @@ private struct LearningPane: View {
                 Picker("Bilan de session", selection: modelBinding(LearningSettings.modelKey, "sonnet")) {
                     ForEach(LearningSettings.availableModels, id: \.self) { Text(modelLabel($0)).tag($0) }
                 }
-                Picker("Rangement des notes", selection: modelBinding(LearningSettings.curationModelKey, "sonnet")) {
+                // Le repli DOIT être le même que celui du modèle métier
+                // (`LearningSettings.curationModel` retombe sur le modèle du
+                // bilan) : sinon le picker affichait « Sonnet » pendant que la
+                // curation tournait en Opus, et re-sélectionner « Sonnet »
+                // n'écrivait rien puisque c'était déjà la valeur montrée.
+                Picker("Rangement des notes",
+                       selection: modelBinding(LearningSettings.curationModelKey,
+                                               LearningSettings.shared.model)) {
                     ForEach(LearningSettings.availableModels, id: \.self) { Text(modelLabel($0)).tag($0) }
                 }
                 Picker("Recherche", selection: modelBinding(LearningSettings.searchModelKey, "haiku")) {
@@ -734,6 +793,13 @@ private struct LearningPane: View {
                 ForEach(center.reconcileNotes, id: \.self) { note in
                     Text(note).font(.caption).foregroundStyle(.secondary)
                 }
+                // « Archiver » pouvait échouer (manifeste illisible, volume en
+                // lecture seule) sans le moindre message : le skill restait
+                // dans la liste et le bouton semblait sans effet. La fenêtre de
+                // revue affichait déjà cette erreur — pas ce volet.
+                if let error = center.lastError {
+                    Text(error).font(.caption).foregroundStyle(.red)
+                }
                 Text("""
                 Un skill appris est actif dans TOUS vos projets (il vit dans \
                 ~/.claude/skills) : ce qu'Atoll apprend d'un dépôt sert aux autres.
@@ -789,7 +855,13 @@ private struct LearningPane: View {
         let inventory = LearningInventory()
         notes = inventory.notes()
         noteProjects = inventory.projects()
-        noteVolume = inventory.totalCharacterCount()
+        // MÊME mesure que le garde-fou (`NotesCurationPrompt.fitsBudget`) :
+        // l'inventaire ne compte que les CORPS, sans front-matter ni noms de
+        // fichiers. Le panneau annonçait « 95 % du budget » là où la curation
+        // refusait pour dépassement — deux chiffres contradictoires pour la
+        // même grandeur (audit du 2026-07-27).
+        noteVolume = NotesCurationPrompt.corpusCharacterCount(
+            notes: NotesCurationService.readNotes())
     }
 
     /// « 12 400 caractères · 15 % du budget de rangement » — le budget est ce

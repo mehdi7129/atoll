@@ -35,11 +35,23 @@ public struct TranscriptLine: Equatable, Sendable {
         /// classe en échec la lecture réussie d'un fichier contenant ce mot
         /// (mesuré : 5× trop de faux positifs). nil = information absente.
         public let isError: Bool?
+        /// Identifiant d'invocation d'outil : `id` pour un `.tool`,
+        /// `tool_use_id` pour le `.toolResult` correspondant.
+        ///
+        /// C'est LUI qui relie une commande à son résultat. Sans lui, le
+        /// condensé appariait par POSITION : dès qu'un message assistant émet
+        /// deux outils en parallèle — courant dans Claude Code —, les
+        /// invocations 2..N héritaient du verdict de la première, et avec
+        /// quatre outils la première était purement écartée. Le condensé
+        /// affirme pourtant au modèle que tout `tool` présent a RÉUSSI
+        /// (audit du 2026-07-27). nil = information absente du transcript.
+        public let toolUseID: String?
 
-        public init(role: Role, text: String, isError: Bool? = nil) {
+        public init(role: Role, text: String, isError: Bool? = nil, toolUseID: String? = nil) {
             self.role = role
             self.text = text
             self.isError = isError
+            self.toolUseID = toolUseID
         }
     }
 

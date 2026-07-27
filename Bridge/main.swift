@@ -52,6 +52,21 @@ func sendToSocket(_ data: Data, path: String, awaitReply: Bool = false) -> Data?
     }
     guard connected == 0 else { return nil }
 
+    // À QUI parle-t-on ? `/private/tmp` est world-writable (sticky bit) : tant
+    // qu'Atoll n'écoute pas, n'importe quel autre compte local peut créer
+    // `/tmp/atoll-<uid>.sock`, recevoir tous les payloads de hooks ET répondre
+    // `{"behavior":"allow"}` — réponse que le CLI honore telle quelle. On exige
+    // donc que le pair soit NOUS. `LOCAL_PEERCRED` porte sur la connexion déjà
+    // établie : aucune fenêtre de course, contrairement à un `stat` du chemin.
+    // Le helper vérifie déjà le propriétaire de `proactive-recall.json` et de
+    // `memory.db` ; c'est le même principe, sur le canal qui décide.
+    var credentials = xucred()
+    var credentialsSize = socklen_t(MemoryLayout<xucred>.size)
+    guard getsockopt(fd, 0 /* SOL_LOCAL */, LOCAL_PEERCRED, &credentials, &credentialsSize) == 0,
+          credentials.cr_version == XUCRED_VERSION,
+          credentials.cr_uid == getuid()
+    else { return nil }
+
     // DEADLINE GLOBALE (revue) : `SO_SNDTIMEO` borne chaque `write`, pas la
     // boucle — un lecteur lent qui accepte quelques octets à chaque tour la
     // faisait durer indéfiniment. Depuis que UserPromptSubmit peut être
@@ -360,6 +375,17 @@ enum BridgeCLI {
         let backupPath = BridgePaths.settingsBackupURL.path
         if fileManager.fileExists(atPath: backupPath) {
             guard !HookSettingsEditor.isInstalled(in: currentData) else { return }
+            // `isInstalled` exige TOUS les événements gérés : retirer un seul
+            // hook à la main le fait passer à false alors que le fichier
+            // contient encore la statusline d'Atoll. On rafraîchissait alors le
+            // backup « pré-Atoll » AVEC notre propre wrapper dedans, et la
+            // statusline d'origine de l'utilisateur n'existait plus nulle part
+            // (audit du 2026-07-27). Même test qu'à la désinstallation : AUCUNE
+            // trace d'Atoll dans le fichier, ou on ne touche pas au backup.
+            if let currentData,
+               String(decoding: currentData, as: UTF8.self).contains("atoll-") {
+                return
+            }
             // Fichier courant ILLISIBLE (JSONC, corrompu) : `isInstalled` rend
             // false, et sans cette garde on remplaçait le backup sain par la
             // version corrompue (revue) — juste avant que l'installation
@@ -424,6 +450,12 @@ enum BridgeCLI {
         if FileManager.default.fileExists(atPath: BridgePaths.rockstarParkedDenyURL.path) {
             denyRestoreFailed = rockstarRestore() != 0
         }
+        // Hooks SONORES parqués : même régime, et pour la même raison. La
+        // restitution n'existait que dans la façade app ; désinstaller depuis
+        // le terminal — le seul chemin possible si l'app a été supprimée —
+        // laissait les `afplay` de l'utilisateur dans le fichier de parking.
+        // Silence total, puis perte définitive au premier `rm -rf ~/.atoll`.
+        let soundRestoreFailed = restoreParkedSoundHooks()
         // Skill « atoll-recall » : suppression de NOTRE dossier uniquement —
         // ~/.claude/skills contient des skills tiers, ne JAMAIS énumérer ni
         // toucher le parent. Avant les sorties anticipées : le skill doit
@@ -438,13 +470,13 @@ enum BridgeCLI {
         do {
             guard let current = try readSettings() else {
                 print("aucun settings.json — rien à désinstaller")
-                return denyRestoreFailed ? 1 : 0
+                return (denyRestoreFailed || soundRestoreFailed) ? 1 : 0
             }
             guard HookSettingsEditor.isInstalled(in: current) ||
                   StatusLineEditor.isInstalled(in: current) ||
                   String(decoding: current, as: UTF8.self).contains("/.atoll/bin/") else {
                 print("hooks non installés — rien à faire")
-                return denyRestoreFailed ? 1 : 0
+                return (denyRestoreFailed || soundRestoreFailed) ? 1 : 0
             }
             // Restaurer la statusline d'origine AVANT de retirer les hooks : la
             // désinstallation doit rendre le settings.json tel qu'il était.
@@ -455,7 +487,7 @@ enum BridgeCLI {
             // Les wrappers restent en place : les sessions Claude déjà ouvertes les
             // référencent encore, et ils sont fail-open (exit 0 sans binaire).
             print("hooks + statusline désinstallés")
-            return denyRestoreFailed ? 1 : 0
+            return (denyRestoreFailed || soundRestoreFailed) ? 1 : 0
         } catch {
             FileHandle.standardError.write(Data("échec de la désinstallation : \(error)\n".utf8))
             return 1
@@ -503,6 +535,33 @@ enum BridgeCLI {
     /// Rockstar terminé : réinsère les règles parquées (union avec celles
     /// ajoutées entre-temps). Le fichier de parking ne disparaît QU'APRÈS
     /// l'écriture réussie de settings.json.
+    /// Rend à `settings.json` les hooks sonores parqués. Même schéma que
+    /// `rockstarRestore` : le fichier de parking n'est supprimé qu'APRÈS une
+    /// écriture réussie, et un parking illisible est laissé en place (avec un
+    /// message) plutôt que perdu. Renvoie `true` en cas d'échec.
+    static func restoreParkedSoundHooks() -> Bool {
+        let parkedURL = BridgePaths.parkedSoundHooksURL
+        guard FileManager.default.fileExists(atPath: parkedURL.path) else { return false }
+        do {
+            let data = try Data(contentsOf: parkedURL)
+            guard let parked = SoundHookEditor.decodeParked(data) else {
+                FileHandle.standardError.write(Data(
+                    "parking sonore illisible : \(parkedURL.path) — hooks NON restitués\n".utf8))
+                return true
+            }
+            let current = try readSettings()
+            let updated = try SoundHookEditor.restore(into: current, parked: parked.hooks)
+            try updated.write(to: settingsURL, options: .atomic)
+            try FileManager.default.removeItem(at: parkedURL)
+            print("hooks sonores restitués (\(parked.hooks.count))")
+            return false
+        } catch {
+            FileHandle.standardError.write(Data(
+                "échec de la restitution des hooks sonores : \(error)\n".utf8))
+            return true
+        }
+    }
+
     static func rockstarRestore() -> Int32 {
         do {
             guard FileManager.default.fileExists(atPath: BridgePaths.rockstarParkedDenyURL.path) else {

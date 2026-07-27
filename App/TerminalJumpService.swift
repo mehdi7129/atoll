@@ -105,6 +105,12 @@ enum TerminalJumpService {
         // Préflight TCC (hors main thread ici) : peut afficher le prompt système.
         switch AutomationPermission.check(bundleID: bundleID) {
         case .denied:
+            // Le repli `activate` ne demande AUCUNE permission : la fenêtre
+            // doit remonter même sans autorisation d'automatisation. On le
+            // faisait pour toutes les autres erreurs, pas pour celle-ci — le
+            // bouton principal du détail de session ne produisait donc rien
+            // d'autre qu'un avertissement (audit du 2026-07-27).
+            activateBundle(bundleID)
             return .needsAutomationPermission(appName: appName)
         case .granted, .undetermined:
             break
@@ -114,11 +120,19 @@ enum TerminalJumpService {
         }
 
         var errorInfo: NSDictionary?
-        NSAppleScript(source: script)?.executeAndReturnError(&errorInfo)
+        let answer = NSAppleScript(source: script)?.executeAndReturnError(&errorInfo)
         if let errorInfo {
             let code = (errorInfo[NSAppleScript.errorNumber] as? Int) ?? 0
             log.warning("AppleScript \(appName, privacy: .public) erreur \(code)")
             if code == -1743 { return .needsAutomationPermission(appName: appName) }
+            return activateApp(bundleID: bundleID, kind: kind)
+        }
+        // Aucun onglet ne portait ce tty (onglet fermé, tty recyclé, pane
+        // tmux) : le script se termine SANS erreur. Annoncer « focus (onglet) »
+        // dans ce cas est un mensonge — seule l'app a été activée, sur un
+        // onglet qui peut être une autre session.
+        guard answer?.stringValue == TerminalScripts.hitMarker else {
+            log.info("\(appName, privacy: .public) : tty introuvable — activation simple")
             return activateApp(bundleID: bundleID, kind: kind)
         }
         return .focused(kind.displayName, granularity: granularity)

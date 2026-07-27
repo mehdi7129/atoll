@@ -335,4 +335,47 @@ final class TranscriptDigestTests: XCTestCase {
         XCTAssertTrue(first.truncated)
         XCTAssertLessThanOrEqual(first.characterCount, 20_000)
     }
+
+    // MARK: - Outils PARALLÈLES (audit du 2026-07-27)
+
+    /// Un message assistant qui émet quatre outils d'un coup : les résultats
+    /// arrivent groupés ensuite. L'appariement par POSITION jugeait t1..t3 sur
+    /// le résultat de t0 — et écartait t0 lui-même. Résultat concret : une
+    /// commande qui a ÉCHOUÉ était présentée au modèle comme ayant réussi.
+    func testParallelToolCallsArePairedByIdentifier() {
+        func tool(_ id: String, _ name: String) -> TranscriptLine.Fragment {
+            TranscriptLine.Fragment(role: .tool, text: name, toolUseID: id)
+        }
+        func result(_ id: String, failed: Bool) -> TranscriptLine.Fragment {
+            TranscriptLine.Fragment(role: .toolResult, text: failed ? "boom" : "ok",
+                                    isError: failed, toolUseID: id)
+        }
+        let lines = [
+            TranscriptLine(uuid: "a", sessionID: "s", timestamp: nil, cwd: nil, gitBranch: nil,
+                           fragments: [tool("t0", "swift build"), tool("t1", "xcodebuild"),
+                                       tool("t2", "git status"), tool("t3", "ls")]),
+            TranscriptLine(uuid: "b", sessionID: "s", timestamp: nil, cwd: nil, gitBranch: nil,
+                           fragments: [result("t0", failed: false), result("t1", failed: true),
+                                       result("t2", failed: false), result("t3", failed: false)]),
+        ]
+        let outils = TranscriptDigest.entries(from: lines)
+            .filter { $0.role == .tool }
+            .map(\.text)
+        XCTAssertEqual(outils, ["swift build", "git status", "ls"],
+                       "le seul outil ÉCHOUÉ (xcodebuild) doit être écarté, les trois autres gardés")
+    }
+
+    /// Un transcript sans identifiant (format ancien ou inattendu) doit
+    /// continuer de fonctionner par position — parsing défensif.
+    func testToolsWithoutIdentifierFallBackToPosition() {
+        let lines = [
+            TranscriptLine(uuid: "a", sessionID: "s", timestamp: nil, cwd: nil, gitBranch: nil,
+                           fragments: [TranscriptLine.Fragment(role: .tool, text: "swift build")]),
+            TranscriptLine(uuid: "b", sessionID: "s", timestamp: nil, cwd: nil, gitBranch: nil,
+                           fragments: [TranscriptLine.Fragment(role: .toolResult, text: "ok",
+                                                               isError: false)]),
+        ]
+        let outils = TranscriptDigest.entries(from: lines).filter { $0.role == .tool }
+        XCTAssertEqual(outils.map(\.text), ["swift build"])
+    }
 }

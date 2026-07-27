@@ -331,7 +331,16 @@ final class PluginInventory {
         defer { isSearching = false }
 
         if snapshot?.available.isEmpty ?? true {
-            await refreshNow(includeAvailable: true)
+            // Un « Actualiser » déjà en vol fait sortir `refreshNow` sur sa
+            // garde de ré-entrance, SANS charger le catalogue : la recherche
+            // échouait alors sur « catalogue indisponible » alors qu'il était
+            // parfaitement joignable — il suffisait de recliquer 5 s plus tard.
+            while isRefreshing {
+                try? await Task.sleep(for: .milliseconds(300))
+            }
+            if snapshot?.available.isEmpty ?? true {
+                await refreshNow(includeAvailable: true)
+            }
         }
         guard let snapshot, !snapshot.available.isEmpty else {
             return "Catalogue des plugins indisponible."
@@ -350,7 +359,11 @@ final class PluginInventory {
             return "Recherche impossible : \(outcome.diagnostic)"
         }
         let known = Set(snapshot.available.map(\.id))
-        guard let result = PluginSearchResult.parse(cliOutput: outcome.output, knownIDs: known) else {
+        // Même repli que les trois autres chemins qui spawnent `claude` : un
+        // `.zprofile` bavard précède le JSON sur stdout du shell de login, et
+        // faisait échouer TOUTE recherche en permanence — après avoir dépensé
+        // le budget (audit du 2026-07-27).
+        guard let result = Self.parseSearchTolerant(outcome.output, knownIDs: known) else {
             return "Réponse inexploitable."
         }
         searchMatches = result.matches
@@ -474,6 +487,17 @@ final class PluginInventory {
         guard let start = data.firstIndex(where: { openers.contains($0) }) else { return nil }
         guard start != data.startIndex else { return nil } // déjà tenté tel quel
         return PluginSnapshot.decode(Data(data[start...]))
+    }
+
+    /// Idem pour la sortie de la RECHERCHE (`claude -p`), qui subit le même
+    /// bruit de shell de login.
+    private static func parseSearchTolerant(_ data: Data,
+                                            knownIDs: Set<String>) -> PluginSearchResult? {
+        if let result = PluginSearchResult.parse(cliOutput: data, knownIDs: knownIDs) { return result }
+        guard let start = data.firstIndex(of: UInt8(ascii: "{")), start != data.startIndex else {
+            return nil
+        }
+        return PluginSearchResult.parse(cliOutput: Data(data[start...]), knownIDs: knownIDs)
     }
 
     /// `<nom>@<marketplace>` → ses deux moitiés, découpe sur le DERNIER `@`.

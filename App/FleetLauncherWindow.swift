@@ -145,8 +145,12 @@ struct FleetLauncherView: View {
         // Garde de ré-entrance côté vue (ceinture + bretelles avec FleetLauncher).
         guard !launcher.isLaunching, FleetLaunch.isValidTask(task) else { return }
         Task {
-            let id = await launcher.launch(task: task, cwd: cwd)
-            if id != nil || launcher.lastError == nil { onClose() }
+            _ = await launcher.launch(task: task, cwd: cwd)
+            // On ne ferme QUE sans erreur : cette fenêtre est le seul endroit
+            // qui affiche `lastError`, et elle se fermait dessus dès qu'un
+            // identifiant avait été extrait — l'avertissement « claude a
+            // signalé une erreur » n'était jamais lu (audit du 2026-07-27).
+            if launcher.lastError == nil { onClose() }
         }
     }
 

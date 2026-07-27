@@ -150,11 +150,45 @@ final class SoundHookEditorTests: XCTestCase {
 
     func testMergeParkedAvoidsDuplicates() {
         let a = SoundHookEditor.ParkedHook(event: "Stop", matcher: "", index: 0,
-                                           command: "afplay a.mp3", hookJSON: "{}")
+                                           command: "afplay a.mp3",
+                                           hookJSON: #"{"command":"afplay a.mp3","type":"command"}"#)
         let b = SoundHookEditor.ParkedHook(event: "Stop", matcher: "", index: 1,
-                                           command: "afplay b.mp3", hookJSON: "{}")
+                                           command: "afplay b.mp3",
+                                           hookJSON: #"{"command":"afplay b.mp3","type":"command"}"#)
         XCTAssertEqual(SoundHookEditor.mergeParked(previous: [a], new: [a, b]).count, 2)
         XCTAssertEqual(SoundHookEditor.mergeParked(previous: [a], new: [a]).count, 1)
+    }
+
+    /// Le défaut (audit du 2026-07-27) : la clé de fusion ne portait que sur la
+    /// COMMANDE. Une entrée re-posée avec un autre matcher ou d'autres options
+    /// était donc retirée de settings.json ET jetée du parking — perdue.
+    func testMergeParkedKeepsSameCommandWithDifferentMatcher() {
+        let ancien = SoundHookEditor.ParkedHook(event: "Stop", matcher: "", index: 0,
+                                                command: "afplay done.wav",
+                                                hookJSON: #"{"command":"afplay done.wav","type":"command"}"#)
+        let nouveau = SoundHookEditor.ParkedHook(event: "Stop", matcher: "*", index: 0,
+                                                 command: "afplay done.wav",
+                                                 hookJSON: #"{"command":"afplay done.wav","timeout":3,"type":"command"}"#)
+        let fusion = SoundHookEditor.mergeParked(previous: [ancien], new: [nouveau])
+        XCTAssertEqual(fusion.count, 2, "les deux entrées doivent rester restituables")
+    }
+
+    /// Un hook qui joue un son ET fait autre chose ne doit JAMAIS être parqué :
+    /// la granularité du parking est l'entrée entière, on supprimerait le reste.
+    func testCompoundCommandsAreNeverParked() {
+        for command in [
+            "afplay -v 0.1 ~/done.wav\ngit -C ~/notes commit -am autosave",  // saut de ligne
+            "afplay ~/done.wav & node ~/notify.js",                          // & isolé
+            "afplay ~/done.wav && ./deploy.sh",
+            "./on-stop.sh; afplay ~/done.wav",
+        ] {
+            XCTAssertFalse(SoundHookEditor.isSoundCommand(command), "ne doit pas être parqué : \(command)")
+        }
+    }
+
+    /// …mais le cas légitime « joue le son en tâche de fond » reste reconnu.
+    func testTrailingAmpersandIsStillASoundCommand() {
+        XCTAssertTrue(SoundHookEditor.isSoundCommand("afplay -v 0.1 ~/done.wav &"))
     }
 
     // MARK: - Fichier de parking

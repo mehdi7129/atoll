@@ -221,9 +221,14 @@ public struct SkillCatalog: Sendable {
     /// court ne doit pas être pénalisé face à une description bavarde. Le seuil
     /// est volontairement HAUT (0,5) : mieux vaut ne rien signaler que crier au
     /// doublon à chaque proposition, ce qui apprendrait à ignorer l'avertissement.
+    /// `catalog` évite de RESCANNER le disque à chaque appel : `entries()`
+    /// ouvre ~260 fichiers (75-145 ms mesurés), et l'appelant en boucle sur
+    /// plusieurs propositions payait ce prix N+1 fois sur le MainActor, au
+    /// démarrage de l'app (audit du 2026-07-27). nil = on scanne.
     public func closestMatch(slug: String, title: String, description: String,
                              threshold: Double = 0.5,
-                             excluding excluded: Set<String> = []) -> CatalogEntry? {
+                             excluding excluded: Set<String> = [],
+                             catalog: [CatalogEntry]? = nil) -> CatalogEntry? {
         // DEUX comparaisons, on garde la meilleure (revue) :
         // 1. le texte complet (slug + titre + description) — marche quand les
         //    deux côtés parlent la même langue ;
@@ -239,7 +244,7 @@ public struct SkillCatalog: Sendable {
         guard fullNeedle.count >= 2 || idNeedle.count >= 1 else { return nil }
 
         var best: (entry: CatalogEntry, score: Double)?
-        for entry in entries() where !excluded.contains(entry.id) {
+        for entry in (catalog ?? entries()) where !excluded.contains(entry.id) {
             var score = 0.0
             let hay = Self.significantWords(
                 from: "\(entry.id) \(entry.name) \(entry.description)")

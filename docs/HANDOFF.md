@@ -54,6 +54,20 @@ le **prompt disait « en cas de doute, zéro skill »**. Résultat après répar
 
 ---
 
+## 0bis. AUDIT DU 2026-07-27 — LIRE `docs/AUDIT-2026-07-27.md`
+
+Un audit multi-agents (234 agents, 18 dimensions, double vérification
+adversariale) a trouvé **59 défauts distincts**, tous corrigés : 4 de sécurité
+(dont deux contournements de l'auto-accept), 8 de perte de données, 12 de
+logique, 15 d'affichage, 5 symboles morts. 628 tests verts, build sans warning.
+Le détail, les scénarios et les pièges de méthode sont dans ce document — ne pas
+refaire l'audit sans l'avoir lu.
+
+**Une question reste ouverte pour Mehdi** (voir la fin du document) : au repos et
+sans session, l'îlot n'affiche NI le losange Rockstar NI le « + » d'un skill
+proposé. Or Rockstar suspend ses règles `permissions.deny`. Deux intentions
+documentées s'opposent ; c'est son arbitrage.
+
 ## 1. CE QU'IL RESTE À FAIRE
 
 **Aucun chantier n'est en cours.** Les phases 1 à 13 sont livrées et la feuille de

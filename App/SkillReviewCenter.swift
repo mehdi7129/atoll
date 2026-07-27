@@ -119,6 +119,14 @@ final class SkillReviewCenter {
         installed.first { $0.skill.slug == proposal.slug }?.userModified ?? false
     }
 
+    /// Ce slug est-il DÉJÀ installé ? Approuver le remplacera — et l'étiquette
+    /// de la revue doit le dire même si l'utilisateur n'a pas édité le skill à
+    /// la main (audit : elle affichait « (nouveau) », alors que le calcul
+    /// d'antériorité exclut justement le jumeau en comptant sur cette mention).
+    func isUpdateOfInstalledSkill(_ proposal: SkillProposal) -> Bool {
+        installed.contains { $0.skill.slug == proposal.slug }
+    }
+
     /// Antériorités calculées UNE fois par `refresh()` (jamais dans le corps
     /// d'une vue : `SkillCatalog.entries()` ouvre ~260 fichiers, 75-145 ms —
     /// mesuré en revue —, et SwiftUI rappelle le corps à chaque flèche, chaque
@@ -156,10 +164,13 @@ final class SkillReviewCenter {
                 result[proposal.id] = label(for: entry)
                 continue
             }
+            // `entries` est passé explicitement : sans lui, chaque proposition
+            // relançait un scan complet du disque sur le MainActor.
             if let match = catalog.closestMatch(slug: proposal.slug,
                                                 title: proposal.title,
                                                 description: proposal.description,
-                                                excluding: [twin]) {
+                                                excluding: [twin],
+                                                catalog: entries) {
                 result[proposal.id] = label(for: match)
             }
         }

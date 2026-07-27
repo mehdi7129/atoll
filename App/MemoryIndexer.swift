@@ -161,7 +161,9 @@ final class MemoryIndexer {
         if let stats {
             log.debug("stats: \(stats.sessionCount) sessions, \(stats.messageCount) messages, \(stats.databaseBytes) octets")
         } else {
-            log.error("stats indisponibles (currentStats a renvoyé nil)")
+            // Cas NORMAL quand l'indexation est coupée (aucune base) : ce n'est
+            // pas une erreur, et le panneau affiche « — » plutôt que des zéros.
+            log.debug("stats indisponibles (index absent ou fermé)")
         }
     }
 }
@@ -188,7 +190,16 @@ private actor MemoryIndexWorker {
         destroyFiles()
     }
 
+    /// Statistiques — SANS jamais créer la base, pour la même raison que
+    /// `forgetFilesIfDatabaseExists` : ouvrir l'index revient à fabriquer un
+    /// fichier que l'utilisateur ne veut pas. Ouvrir les Réglages recréait
+    /// `~/.atoll/memory.db` (schéma FTS5 complet) alors que l'indexation était
+    /// coupée et la base supprimée à la main — ce que le texte du réglage
+    /// invite pourtant à faire (audit du 2026-07-27).
     func currentStats() -> MemoryIndex.Stats? {
+        guard FileManager.default.fileExists(atPath: BridgePaths.memoryDatabaseURL.path) else {
+            return nil
+        }
         guard let index = openIndexIfNeeded() else { return nil }
         return try? index.stats()
     }
@@ -388,9 +399,14 @@ private actor MemoryIndexWorker {
         do {
             index = try MemoryIndex(url: BridgePaths.memoryDatabaseURL, mode: .readWrite)
         } catch {
-            // Base illisible/corrompue : donnée dérivée → on repart de zéro.
-            log.error("index mémoire illisible (\(error.localizedDescription)) — reconstruction")
-            destroyFiles()
+            // Base illisible/corrompue : donnée MAJORITAIREMENT dérivée → on
+            // repart de zéro. Mais pas tout à fait : les messages des
+            // transcripts que Claude Code a purgés à 30 jours ne se
+            // reconstruisent PLUS (c'est même la raison d'être de `markMissing`).
+            // On met donc l'ancienne base DE CÔTÉ au lieu de la supprimer :
+            // elle reste ouvrable à la main, et rien n'est perdu en silence.
+            log.error("index mémoire illisible (\(error.localizedDescription)) — mise de côté et reconstruction")
+            Self.setAsideDatabase()
             index = try? MemoryIndex(url: BridgePaths.memoryDatabaseURL, mode: .readWrite)
         }
         return index
@@ -400,6 +416,27 @@ private actor MemoryIndexWorker {
         let base = BridgePaths.memoryDatabaseURL.path
         for suffix in ["", "-wal", "-shm"] {
             try? FileManager.default.removeItem(atPath: base + suffix)
+        }
+    }
+
+    /// Renomme la base au lieu de la supprimer : `memory.db.illisible-<stamp>`.
+    /// Un seul exemplaire est gardé (le précédent est écrasé) — il s'agit d'un
+    /// filet, pas d'un historique.
+    nonisolated static func setAsideDatabase() {
+        let fm = FileManager.default
+        let base = BridgePaths.memoryDatabaseURL.path
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd-HHmmss"
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        let stamp = formatter.string(from: Date())
+        for suffix in ["", "-wal", "-shm"] {
+            let source = base + suffix
+            guard fm.fileExists(atPath: source) else { continue }
+            let destination = "\(base).illisible-\(stamp)\(suffix)"
+            try? fm.removeItem(atPath: destination)
+            if (try? fm.moveItem(atPath: source, toPath: destination)) == nil {
+                try? fm.removeItem(atPath: source) // déplacement impossible : on nettoie
+            }
         }
     }
 }

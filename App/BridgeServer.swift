@@ -14,6 +14,8 @@ private let log = Logger(subsystem: "dev.mehdiguiard.atoll", category: "bridge-s
 final class BridgeServer: @unchecked Sendable {
     private let queue = DispatchQueue(label: "dev.mehdiguiard.atoll.bridge-server")
     private var listenFD: Int32 = -1
+    /// (device, inode) du socket créé par CETTE instance — voir `stop()`.
+    private var boundNode: (dev_t, ino_t)?
     private var acceptSource: DispatchSourceRead?
     private var readers: [Int32: (source: DispatchSourceRead, buffer: Data)] = [:]
     /// Connexions PermissionRequest gardées ouvertes en attendant la décision
@@ -112,6 +114,14 @@ final class BridgeServer: @unchecked Sendable {
         }
         // Le socket ne doit être accessible qu'à l'utilisateur courant.
         chmod(path, 0o600)
+        // Identité du nœud qu'on VIENT de créer. `stop()` ne supprimera le
+        // chemin que s'il désigne toujours CE nœud : deux instances d'Atoll
+        // (le produit de build et la copie ~/Applications — la boucle de dev
+        // documentée) se volaient le socket, puis la première à quitter
+        // supprimait celui de la seconde, qui n'en savait rien et n'a plus
+        // jamais reçu un hook (audit du 2026-07-27).
+        var info = stat()
+        if stat(path, &info) == 0 { boundNode = (info.st_dev, info.st_ino) }
         guard listen(fd, 16) == 0 else {
             close(fd)
             throw ServerError.listenFailed(errno)
@@ -148,7 +158,15 @@ final class BridgeServer: @unchecked Sendable {
             acceptSource = nil
             listenFD = -1
         }
-        unlink(BridgePaths.socketPath)
+        // Ne retirer le chemin QUE s'il désigne encore notre propre nœud : une
+        // autre instance a pu le remplacer entre-temps, et le lui supprimer la
+        // rendrait sourde définitivement, sans qu'elle puisse le détecter.
+        var info = stat()
+        if let boundNode, stat(BridgePaths.socketPath, &info) == 0,
+           info.st_dev == boundNode.0, info.st_ino == boundNode.1 {
+            unlink(BridgePaths.socketPath)
+        }
+        boundNode = nil
         DispatchQueue.main.async { self.onStateChange(false) }
     }
 

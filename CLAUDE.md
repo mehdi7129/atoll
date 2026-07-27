@@ -83,6 +83,47 @@ Pièges de build appris à la dure :
    livrées au handler (constaté macOS 26). BSD sockets + DispatchSource, fd non-bloquants
    partout (un accept bloquant gèle la queue série).
 
+**AUDIT COMPLET DU 2026-07-27** — `docs/AUDIT-2026-07-27.md` (à lire avant tout
+travail sur les zones citées). Workflow de 234 agents, 18 dimensions, chaque
+défaut vérifié par 2 lentilles adversariales : 108 allégués → 71 confirmés, 30
+contestés, 7 réfutés (59 distincts). **Tous corrigés**, 628 tests verts.
+Les quatre qui comptent :
+- **`&` n'était pas un séparateur de segment dans `AutoAcceptPolicy`** : une
+  commande destructrice placée après un `&` était AUTO-APPROUVÉE (seul le
+  premier mot était examiné), y compris `git status & git push --force` qui
+  contournait ainsi la garde anti-force-push. Idem les interpréteurs à code en
+  ligne (`node -e`, `python3 -c`, `awk 'BEGIN{system(…)}'`) — la garde `-c` ne
+  connaissait que les noms de shells. Le jugement se fait désormais par
+  SEGMENT, plus par regex globale (donc `grep -e node` n'est pas pris pour
+  `node -e`).
+- **Un seul instantané de flotte vide annonçait toutes les tâches `--bg`
+  terminées**, définitivement (`notified` idempotent), pendant que l'îlot les
+  affichait « en cours ». Le store tolérait 2 absences, le journal aucune :
+  deux politiques opposées sur le MÊME instantané (`fleetMissTolerance`).
+- **Archiver/désinstaller un skill détruisait ses ressources jointes**
+  (`references/`, `scripts/`) : seul `SKILL.md` était copié, puis le DOSSIER
+  entier supprimé. On archive maintenant le dossier complet.
+- **Le socket `/tmp` n'était pas authentifié** : `/private/tmp` est
+  world-writable, un autre compte local pouvait préempter le chemin, lire tous
+  les payloads et répondre `{"behavior":"allow"}` — décision que le CLI honore.
+  Contrôle `LOCAL_PEERCRED` côté helper (vérifié : les hooks passent toujours).
+
+PIÈGES DE MÉTHODE appris pendant cet audit :
+- **`claude agents --json` ne liste QUE les sessions vivantes** ; le champ
+  `state` (`done`/`stopped`) n'apparaît qu'avec `--all`, et ces entrées-là
+  n'ont PAS de `status`. Vérifié sur le CLI 2.1.220 — c'est ce qui a réfuté le
+  défaut « critique » n° 1 de l'audit. `AgentsSnapshot` lit désormais `state`
+  en repli : blindage si le CLI change, aucun changement de comportement.
+- **Un moniteur de clic GLOBAL referme l'îlot à n'importe quel clic**
+  (`NotchWindowController`), y compris ceux de l'utilisateur pendant qu'on
+  travaille. Une capture prise 3 s après `debug.expand` montre donc l'îlot
+  REPLIÉ et fait croire que le trigger est cassé : capturer SOUS LA SECONDE
+  (le ressort se stabilise en ~0,42 s).
+- Quand le 2e écran est débranché, ne PAS se rabattre sur l'écran 1 : capturer
+  la fenêtre SEULE (`CGWindowListCopyWindowInfo` → `screencapture -x -o -l <id>`).
+- Nouveau trigger debug : `seedPlugins` (inventaire de plugins factice, sans
+  réseau — le code existait mais aucun geste ne l'atteignait).
+
 ## État des phases (voir PLAN.md §5)
 
 - ✅ Phase 1 — coquille notch + thème ASCII (sessions factices)
@@ -557,6 +598,7 @@ tenue à jour avec `App/AppDelegate.swift` :
   `settings`, `onboarding`, `retro` (rétrospective sur la dernière session terminée),
   `curation` (curation des notes), `launcher` (fenêtre de lancement),
   `seedSkill` / `skillReview` / `approveSkill` / `rejectSkill` (curation des skills),
+  `seedPlugins` (inventaire de plugins factice, pour travailler l'UI sans réseau),
   `adoptSounds` / `restoreSounds` (reprise et restitution des hooks sonores —
   ÉCRIVENT dans settings.json), `playSounds` (écoute des deux sons),
   `taskDone` (fin de tâche simulée : bannière + notification).

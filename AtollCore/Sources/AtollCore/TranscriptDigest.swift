@@ -46,13 +46,18 @@ public enum TranscriptDigest {
         /// `is_error` du transcript pour un `.toolResult` (nil = absent) —
         /// propagé depuis le fragment, c'est l'autorité sur l'échec.
         public let isError: Bool?
+        /// Identifiant d'invocation (`toolUseID` du fragment) : relie une
+        /// commande à SON résultat, même quand plusieurs outils partent en
+        /// parallèle. nil = absent du transcript, on retombe sur la position.
+        public let toolUseID: String?
 
         public init(role: TranscriptLine.Role, text: String, timestamp: Date?,
-                    isError: Bool? = nil) {
+                    isError: Bool? = nil, toolUseID: String? = nil) {
             self.role = role
             self.text = text
             self.timestamp = timestamp
             self.isError = isError
+            self.toolUseID = toolUseID
         }
     }
 
@@ -172,7 +177,6 @@ public enum TranscriptDigest {
         for (role, share) in reservedShares {
             protectedBudget[role] = Int(Double(budget) * share)
         }
-        var spentByRole: [TranscriptLine.Role: Int] = [:]
 
         // `sacrificeOrder` couvre TOUTES les entrées : la boucle se termine toujours,
         // au pire sur un condensé vide. Deux passes : d'abord en épargnant les
@@ -187,7 +191,6 @@ public enum TranscriptDigest {
                     let kept = selected.indices
                         .filter { keep[$0] && selected[$0].role == role }
                         .reduce(0) { $0 + blocks[$1].count }
-                    spentByRole[role] = kept
                     if kept <= reserve { continue } // dans sa part : épargné
                 }
                 keep[index] = false
@@ -211,17 +214,23 @@ public enum TranscriptDigest {
     /// de valeur et borne chaque entrée. Sans budget ni rendu — exposé pour les tests et
     /// pour un appelant qui voudrait rendre autrement (affichage, autre prompt).
     public static func entries(from lines: [TranscriptLine]) -> [Entry] {
-        // 1. Aplatissement : le rang d'un fragment dans CETTE suite est ce sur quoi
-        //    porte la fenêtre `toolLookahead` (le format ne relie pas un tool_use à son
-        //    tool_result autrement que par la position, l'id n'est pas conservé par
-        //    `TranscriptLine.Fragment`).
+        // 1. Aplatissement. L'appariement outil ↔ résultat se fait par
+        //    IDENTIFIANT (`tool_use_id`) quand le transcript le porte, et
+        //    seulement à défaut par la position — cette dernière se trompe dès
+        //    que deux outils partent en parallèle.
         var flat: [Entry] = []
         flat.reserveCapacity(lines.reduce(0) { $0 + $1.fragments.count })
         for line in lines {
             for fragment in line.fragments where !fragment.text.isEmpty {
                 flat.append(Entry(role: fragment.role, text: fragment.text,
-                                  timestamp: line.timestamp, isError: fragment.isError))
+                                  timestamp: line.timestamp, isError: fragment.isError,
+                                  toolUseID: fragment.toolUseID))
             }
+        }
+        // Index des résultats par identifiant d'invocation.
+        var resultsByID: [String: Entry] = [:]
+        for entry in flat where entry.role == .toolResult {
+            if let id = entry.toolUseID, resultsByID[id] == nil { resultsByID[id] = entry }
         }
 
         // 2. Sélection.
@@ -235,7 +244,7 @@ public enum TranscriptDigest {
             case .toolResult:
                 isKept = isFailure(entry)
             case .tool:
-                isKept = succeeded(toolAt: index, in: flat)
+                isKept = succeeded(toolAt: index, in: flat, resultsByID: resultsByID)
             case .thinking, .title, .note:
                 isKept = false
             }
@@ -284,7 +293,16 @@ public enum TranscriptDigest {
     /// passer le premier outil pour réussi alors qu'il a échoué. Aucun résultat dans la
     /// fenêtre (session coupée, appel jamais résolu) → on ne garde pas : on ne peut rien
     /// affirmer, et une commande dont on ignore l'issue n'est pas une procédure.
-    static func succeeded(toolAt index: Int, in flat: [Entry]) -> Bool {
+    static func succeeded(toolAt index: Int, in flat: [Entry],
+                          resultsByID: [String: Entry] = [:]) -> Bool {
+        // Appariement par IDENTITÉ dès que le transcript le permet. Le repli
+        // positionnel ci-dessous jugeait les invocations 2..N d'un lot parallèle
+        // sur le résultat de la PREMIÈRE, et écartait la première elle-même
+        // quand quatre outils partaient ensemble (audit du 2026-07-27).
+        if let id = flat[index].toolUseID {
+            guard let result = resultsByID[id] else { return false }
+            return !isFailure(result)
+        }
         let upperBound = min(index + toolLookahead, flat.count - 1)
         guard upperBound > index else { return false }
         for next in (index + 1)...upperBound where flat[next].role == .toolResult {

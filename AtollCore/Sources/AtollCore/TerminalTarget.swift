@@ -103,7 +103,11 @@ public enum TerminalResolver {
         case "ghostty": return .ghostty
         case "WezTerm": return .wezterm
         case "vscode":
-            // TERM_PROGRAM=vscode sans bundle id → on ne sait pas lequel : cursor par défaut.
+            // TERM_PROGRAM=vscode sans bundle id : VS Code et Cursor le posent
+            // tous les deux. On retombe sur la CLI `code` — le cas de Cursor
+            // est reconnu bien avant, par son bundle id, qui est présent dès
+            // que l'ancre a pu être capturée. (Le commentaire disait « cursor
+            // par défaut » alors que le code rend `code` : audit du 2026-07-27.)
             return .vscodeFamily(cli: "code")
         default:
             return .unknown(bundleID: anchor.bundleID)

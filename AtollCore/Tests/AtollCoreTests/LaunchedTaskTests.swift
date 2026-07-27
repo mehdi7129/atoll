@@ -231,7 +231,9 @@ final class LaunchedTaskTests: XCTestCase {
                   cwd: "/Users/m/Projet", startedAt: now.addingTimeInterval(2))
         XCTAssertTrue(log.tasks[0].seenAlive)
 
-        let announce = log.reconcile(activeSessionIDs: [], now: now.addingTimeInterval(600))
+        // Une seule absence ne suffit pas (creux transitoire de la flotte).
+        XCTAssertTrue(log.reconcile(activeSessionIDs: [], now: now.addingTimeInterval(600)).isEmpty)
+        let announce = log.reconcile(activeSessionIDs: [], now: now.addingTimeInterval(606))
         XCTAssertEqual(announce, [0])
     }
 
@@ -240,10 +242,59 @@ final class LaunchedTaskTests: XCTestCase {
     func testReconcileClosesNeverSeenTaskSilently() {
         var log = LaunchedTaskLog()
         log.register(task(sessionID: "aaaaaaaa"))
-        let announce = log.reconcile(activeSessionIDs: [], now: now.addingTimeInterval(600))
+        XCTAssertTrue(log.reconcile(activeSessionIDs: [], now: now.addingTimeInterval(600)).isEmpty)
+        let announce = log.reconcile(activeSessionIDs: [], now: now.addingTimeInterval(606))
         XCTAssertTrue(announce.isEmpty)
         XCTAssertTrue(log.tasks[0].isComplete, "la tâche ne doit pas rester zombie")
         XCTAssertTrue(log.tasks[0].acknowledged)
+    }
+
+    // MARK: - Tolérance aux creux de la flotte (audit du 2026-07-27)
+
+    /// LE défaut : `agents --json` peut sortir en code 0 avec un tableau vide
+    /// (daemon qui redémarre). Le store tolère deux tours, le journal n'en
+    /// tolérait aucun : il annonçait « terminée » — DÉFINITIVEMENT, `notified`
+    /// étant idempotent — une tâche qui tournait encore.
+    func testTransientEmptySnapshotDoesNotAnnounce() {
+        var log = LaunchedTaskLog()
+        log.register(task(sessionID: "aaaaaaaa"))
+        let uuid = "aaaaaaaa-1e2f-4c00-9a00-2b7c9d1e5f60"
+        _ = log.reconcile(activeSessionIDs: [uuid], now: now.addingTimeInterval(300))
+        XCTAssertTrue(log.tasks[0].seenAlive)
+
+        // Un creux, puis la session revient : rien n'a été annoncé.
+        XCTAssertTrue(log.reconcile(activeSessionIDs: [], now: now.addingTimeInterval(306)).isEmpty)
+        XCTAssertTrue(log.reconcile(activeSessionIDs: [uuid], now: now.addingTimeInterval(312)).isEmpty)
+        XCTAssertFalse(log.tasks[0].isComplete)
+        XCTAssertEqual(log.tasks[0].missedFleetPolls, 0, "le compteur doit repartir de zéro")
+
+        // Puis une vraie disparition : deux tours, et on annonce.
+        XCTAssertTrue(log.reconcile(activeSessionIDs: [], now: now.addingTimeInterval(318)).isEmpty)
+        XCTAssertEqual(log.reconcile(activeSessionIDs: [], now: now.addingTimeInterval(324)), [0])
+    }
+
+    // MARK: - Adoption (ne pas voler la session de l'utilisateur)
+
+    /// Un lancement qui a échoué ne doit pas s'attribuer la session que
+    /// l'utilisateur ouvre à la main juste après, dans le même dossier.
+    func testFailedLaunchNeverAdoptsAnotherSession() {
+        var log = LaunchedTaskLog()
+        var failed = task(cwd: "/Users/m/Projet")
+        failed.adoptable = false
+        log.register(failed)
+        let adopted = log.adopt(sessionID: "bbbbbbbb-1e2f-4c00-9a00-2b7c9d1e5f60",
+                                cwd: "/Users/m/Projet", startedAt: now.addingTimeInterval(30))
+        XCTAssertNil(adopted)
+        XCTAssertNil(log.tasks[0].sessionID)
+        XCTAssertFalse(log.tasks[0].seenAlive)
+    }
+
+    /// …mais un lancement normal sans id lisible doit toujours rattraper.
+    func testNormalLaunchStillAdopts() {
+        var log = LaunchedTaskLog()
+        log.register(task(cwd: "/Users/m/Projet"))
+        XCTAssertEqual(log.adopt(sessionID: "bbbbbbbb-1e2f-4c00-9a00-2b7c9d1e5f60",
+                                 cwd: "/Users/m/Projet", startedAt: now.addingTimeInterval(30)), 0)
     }
 
     /// Délai de grâce : la flotte doit avoir le temps de faire apparaître une

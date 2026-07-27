@@ -107,4 +107,21 @@ final class AgentsSnapshotTests: XCTestCase {
         let existing = [FleetReconciler.Existing(id: "s1", pid: nil)]
         XCTAssertEqual(FleetReconciler.correlate(info, among: existing), .new)
     }
+
+    /// `agents --json --all` porte l'état dans `state`, sans `status` (vérifié
+    /// sur le CLI 2.1.220). Si une version future les listait par défaut,
+    /// ignorer ce champ ressusciterait des sessions mortes.
+    func testFallsBackToStateFieldWhenStatusIsAbsent() {
+        let json = Data("""
+        [{"sessionId":"a","state":"done"},
+         {"sessionId":"b","state":"stopped"},
+         {"sessionId":"c","status":"idle","state":"done"}]
+        """.utf8)
+        let sessions = AgentsSnapshot.decode(json)
+        XCTAssertEqual(sessions.count, 3)
+        XCTAssertTrue(sessions[0].status.isTerminal)
+        XCTAssertTrue(sessions[1].status.isTerminal)
+        // `status` explicite fait AUTORITÉ : le repli ne s'applique qu'à défaut.
+        XCTAssertEqual(sessions[2].status, .idle)
+    }
 }

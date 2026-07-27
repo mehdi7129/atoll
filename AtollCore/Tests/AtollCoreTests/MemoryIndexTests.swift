@@ -548,4 +548,34 @@ final class MemoryIndexTests: XCTestCase {
         try index.forgetFile(path: "/nulle/part.jsonl")
         XCTAssertEqual(try index.stats().messageCount, 1)
     }
+
+    // MARK: - Portée projet et notes (audit du 2026-07-27)
+
+    /// Les notes d'apprentissage d'Atoll sont indexées SANS cwd : elles ne
+    /// viennent d'aucun projet et valent pour tous. Le filtre de portée les
+    /// excluait toutes — or « limiter au projet courant » est ON par défaut,
+    /// donc la mémoire longue durée n'était jamais injectée.
+    func testProjectScopeStillFindsProjectlessNotes() throws {
+        try ingest([Entry(uuid: "note", text: "piege de build codesign", role: .note, cwd: nil)],
+                   sessionID: "atoll-note-pieges", path: "/notes/pieges.md", inode: 200)
+        try ingest([Entry(uuid: "u1", text: "codesign casse", cwd: "/Users/x/autre")],
+                   sessionID: "session-autre", path: "/transcripts/autre.jsonl", inode: 201)
+
+        let scoped = try index.search(rawQuery: "codesign", limit: 10,
+                                      projectPrefix: "/Users/x/monprojet")
+        XCTAssertEqual(scoped.map(\.role), ["note"],
+                       "la note doit passer le filtre de projet, la session d'un AUTRE projet non")
+    }
+
+    /// …sans pour autant rendre le filtre inopérant sur les vraies sessions.
+    func testProjectScopeStillExcludesOtherProjects() throws {
+        try ingest([Entry(uuid: "ici", text: "quota exact", cwd: "/Users/x/monprojet")],
+                   sessionID: "s-ici", path: "/transcripts/ici.jsonl", inode: 300)
+        try ingest([Entry(uuid: "ailleurs", text: "quota exact", cwd: "/Users/x/ailleurs")],
+                   sessionID: "s-ailleurs", path: "/transcripts/ailleurs.jsonl", inode: 301)
+
+        let scoped = try index.search(rawQuery: "quota", limit: 10,
+                                      projectPrefix: "/Users/x/monprojet")
+        XCTAssertEqual(scoped.map(\.sessionID), ["s-ici"])
+    }
 }

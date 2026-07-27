@@ -104,4 +104,15 @@ final class TerminalTargetTests: XCTestCase {
         let root = WorkspaceRoot.resolve(cwd: "/repo") { path in path == "/repo/.git" }
         XCTAssertEqual(root, "/repo")
     }
+
+    /// Le script doit DIRE s'il a trouvé l'onglet : sans réponse, un tty
+    /// introuvable se terminait sans erreur et l'îlot annonçait « focus
+    /// (onglet) » alors que seule l'app avait été activée.
+    func testFocusScriptsReportHitAndMiss() {
+        for script in [TerminalScripts.terminalApp(tty: "ttys004"),
+                       TerminalScripts.iterm2(tty: "ttys004")] {
+            XCTAssertTrue(script.contains("return \"\(TerminalScripts.hitMarker)\""))
+            XCTAssertTrue(script.contains("return \"\(TerminalScripts.missMarker)\""))
+        }
+    }
 }

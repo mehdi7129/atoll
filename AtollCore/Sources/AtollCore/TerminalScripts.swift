@@ -16,6 +16,15 @@ public enum TerminalScripts {
         tty.hasPrefix("/dev/") ? tty : "/dev/\(tty)"
     }
 
+    /// Réponse d'un script de focus : l'onglet cherché a-t-il été TROUVÉ ?
+    ///
+    /// Sans elle, un tty introuvable (onglet fermé, tty recyclé, pane tmux)
+    /// terminait les boucles sans erreur — et l'îlot annonçait « focus (onglet) »
+    /// alors que seul l'`activate` global avait eu lieu, sur un onglet qui
+    /// pouvait être une AUTRE session (audit du 2026-07-27).
+    public static let hitMarker = "atoll-hit"
+    public static let missMarker = "atoll-miss"
+
     /// Terminal.app : sélectionne l'onglet dont le tty correspond, au premier plan.
     /// `with timeout` borne l'Apple Event : un terminal figé dégrade au lieu de
     /// bloquer l'appelant indéfiniment.
@@ -30,10 +39,11 @@ public enum TerminalScripts {
                 if (tty of t as text) is "\(target)" then
                   set selected of t to true
                   set frontmost of w to true
-                  return
+                  return "\(hitMarker)"
                 end if
               end repeat
             end repeat
+            return "\(missMarker)"
           end tell
         end timeout
         """
@@ -53,11 +63,12 @@ public enum TerminalScripts {
                     select aWindow
                     select aTab
                     select aSession
-                    return
+                    return "\(hitMarker)"
                   end if
                 end repeat
               end repeat
             end repeat
+            return "\(missMarker)"
           end tell
         end timeout
         """

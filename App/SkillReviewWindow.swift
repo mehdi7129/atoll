@@ -107,8 +107,17 @@ struct SkillReviewView: View {
                     .fontWeight(.bold)
                     .foregroundStyle(colors.fg)
                 Spacer()
-                Text(center.isUpdateOfModifiedSkill(proposal) ? "(màj — modifié par vous)" : "(nouveau)")
-                    .foregroundStyle(center.isUpdateOfModifiedSkill(proposal) ? colors.warn : colors.dim)
+                // Trois cas, pas deux : un skill déjà installé mais non édité
+                // à la main s'annonçait « (nouveau) » alors qu'approuver
+                // l'ÉCRASE — et le calcul d'antériorité exclut le jumeau en
+                // comptant précisément sur cette mention.
+                if center.isUpdateOfModifiedSkill(proposal) {
+                    Text("(màj — modifié par vous)").foregroundStyle(colors.warn)
+                } else if center.isUpdateOfInstalledSkill(proposal) {
+                    Text("(màj — remplace l'installé)").foregroundStyle(colors.accent)
+                } else {
+                    Text("(nouveau)").foregroundStyle(colors.dim)
+                }
             }
             Text(proposal.description)
                 .foregroundStyle(colors.fg)
@@ -136,6 +145,19 @@ struct SkillReviewView: View {
                     .foregroundStyle(colors.dim)
                 Text("⚠ recoupe « \(similar) » — compare avant d'approuver")
                     .foregroundStyle(colors.accent)
+            }
+        }
+
+        // CONTENU SIGNALÉ : la rétrospective a repéré des motifs suspects dans
+        // ce SKILL.md (pipe-to-shell, base64, secret…). Ces motifs étaient
+        // calculés et écrits dans meta.json, mais jamais relus — on approuvait
+        // sans jamais voir l'alerte. En `warn`, et AVANT le contenu.
+        if !proposal.flags.isEmpty {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(AsciiArt.sectionHeader("CONTENU SIGNALÉ", width: 60))
+                    .foregroundStyle(colors.dim)
+                Text("⚠ \(proposal.flags.joined(separator: ", ")) — relis le SKILL.md avant d'approuver")
+                    .foregroundStyle(colors.warn)
             }
         }
 

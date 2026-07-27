@@ -65,6 +65,26 @@ public enum AutoAcceptPolicy {
         "curl", "wget", "http", "aria2c",
     ]
 
+    /// Interpréteurs présents dans `safeCommands` parce qu'exécuter un FICHIER
+    /// de projet est banal (`python3 build.py`), mais qui savent aussi exécuter
+    /// du code passé en argument. Ce code-là est arbitraire : `node -e
+    /// "require('fs').rmSync(…)"` efface un dossier sans qu'aucun mot de la
+    /// commande ne paraisse dangereux (revue : la garde `-c` ne couvrait que
+    /// les noms de shells, pas ces interpréteurs).
+    static let inlineCodeInterpreters: Set<String> = [
+        "python", "python3", "node", "deno", "bun", "ruby", "perl", "php",
+    ]
+
+    /// Drapeaux d'exécution en ligne de ces interpréteurs.
+    static let inlineCodeFlags: Set<String> = [
+        "-c", "-e", "-E", "--eval", "-p", "--print", "--call", "-r",
+    ]
+
+    /// Commandes dont le PROGRAMME est un argument nu, sans drapeau à repérer :
+    /// `awk 'BEGIN{system("rm -rf ~/projet")}'`. Aucune analyse fiable n'est
+    /// possible sans écrire un interpréteur awk — donc jamais en automatique.
+    static let programAsArgumentCommands: Set<String> = ["awk", "gawk", "mawk", "nawk"]
+
     /// Sous-commandes git destructrices → toujours manuel.
     static let safeGitSubcommands: Set<String> = [
         "status", "diff", "log", "show", "add", "commit", "branch", "fetch", "pull",
@@ -83,7 +103,7 @@ public enum AutoAcceptPolicy {
         // 1. Rejet structurel : tout ce qui rend la commande opaque à l'analyse.
         if containsOpaqueConstruct(command) { return false }
 
-        // 2. Chaque segment (séparé par && || | ; retour-ligne) doit être sûr.
+        // 2. Chaque segment (séparé par && || | ; & retour-ligne) doit être sûr.
         let segments = command
             .components(separatedBy: CharacterSet(charactersIn: "\n"))
             .flatMap { splitOnOperators($0) }
@@ -112,11 +132,26 @@ public enum AutoAcceptPolicy {
     }
 
     private static func splitOnOperators(_ segment: String) -> [String] {
+        // ATTENTION à l'ORDRE. `&&` d'abord (sinon on le couperait en deux `&`),
+        // puis on MET À L'ABRI les redirections qui contiennent un `&` littéral
+        // (`2>&1`, `&>fichier`) — sans quoi couper dessus fabriquerait un
+        // segment bidon (« 1 ») et renverrait tout en manuel.
+        //
+        // Le `&` isolé DOIT couper : il sépare deux commandes exactement comme
+        // `;` (revue : « ls & rm -rf ~/x » était auto-approuvé parce que seul
+        // `ls` était examiné — un caractère suffisait à contourner l'allowlist).
         segment.replacingOccurrences(of: "&&", with: "\u{1}")
+            .replacingOccurrences(of: "&>", with: "\u{2}")
+            .replacingOccurrences(of: ">&", with: "\u{3}")
+            .replacingOccurrences(of: "&", with: "\u{1}")
             .replacingOccurrences(of: "||", with: "\u{1}")
             .replacingOccurrences(of: "|", with: "\u{1}")
             .replacingOccurrences(of: ";", with: "\u{1}")
             .components(separatedBy: "\u{1}")
+            .map {
+                $0.replacingOccurrences(of: "\u{2}", with: "&>")
+                    .replacingOccurrences(of: "\u{3}", with: ">&")
+            }
     }
 
     private static func isSafeSegment(_ segment: String) -> Bool {
@@ -134,9 +169,22 @@ public enum AutoAcceptPolicy {
         if name == "git" {
             return isSafeGit(Array(tokens.dropFirst()))
         }
+        // `awk` & co : le programme EST l'argument, aucun drapeau ne le trahit.
+        if programAsArgumentCommands.contains(name) { return false }
+
         guard safeCommands.contains(name) else { return false }
 
         let args = Array(tokens.dropFirst())
+
+        // Interpréteur + code en ligne = exécution arbitraire déguisée. On juge
+        // ici, sur le segment, plutôt que par une regex sur la commande entière :
+        // `grep -e node` ne doit pas être pris pour du `node -e`.
+        if inlineCodeInterpreters.contains(name),
+           args.contains(where: { inlineCodeFlags.contains($0) }) {
+            return false
+        }
+        // `deno eval "…"` passe par une sous-commande, pas par un drapeau.
+        if name == "deno", args.first == "eval" { return false }
 
         // Lanceurs npx/bunx/dlx/exec : la commande réelle est le PAQUET, pas le
         // lanceur. `npx rimraf dist` est destructeur même si `npx` est sûr.

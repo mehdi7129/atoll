@@ -97,7 +97,21 @@ public enum AgentsSnapshot {
             let pid: Int32? = (entry["pid"] as? NSNumber).map { $0.int32Value }
             let cwd = entry["cwd"] as? String
             let name = (entry["name"] ?? entry["displayName"]) as? String
-            let status = AgentSessionInfo.Status.parse(entry["status"] as? String)
+            // `status` d'abord, `state` en REPLI.
+            //
+            // Vérifié sur le CLI 2.1.220 : `agents --json` (ce qu'Atoll lance)
+            // ne liste que les sessions vivantes — un état terminal n'y figure
+            // pas, et le retrait se fait bien par absence. Mais `--all` prouve
+            // que le daemon connaît un second champ, `state`, avec des valeurs
+            // terminales (`done`, `stopped`), et que les entrées qui le portent
+            // n'ont PAS de `status`. Si une version du CLI se met à les inclure
+            // par défaut, les ignorer ressusciterait des sessions mortes.
+            // Deux lignes de blindage, aucun changement de comportement
+            // aujourd'hui (audit du 2026-07-27).
+            var status = AgentSessionInfo.Status.parse(entry["status"] as? String)
+            if status == .unknown {
+                status = AgentSessionInfo.Status.parse(entry["state"] as? String)
+            }
             let kind = AgentSessionInfo.Kind.parse(entry["kind"] as? String)
             // startedAt en millisecondes epoch (heuristique : > an 2001 en ms).
             let startedAt: Date? = (entry["startedAt"] as? NSNumber).map {

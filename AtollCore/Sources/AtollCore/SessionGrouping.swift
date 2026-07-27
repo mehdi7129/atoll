@@ -103,4 +103,50 @@ public enum SessionGrouping {
         let shown = kept.reduce(0) { $0 + $1.sessions.count }
         return BoundedStateGrouping(groups: kept, hiddenCount: max(0, sessions.count - shown))
     }
+
+    /// Même regroupement, borné en RANGÉES DESSINÉES — en-têtes de groupe
+    /// compris.
+    ///
+    /// Pourquoi pas `limit:` : ce dernier compte des sessions, or chaque groupe
+    /// ajoute une ligne d'en-tête que le panneau doit dessiner. Quatre sessions
+    /// réparties sur quatre états, c'est huit rangées, soit le double du budget
+    /// — et le quota sortait du cadre (audit du 2026-07-27). Un groupe dont il
+    /// ne resterait que l'en-tête n'est pas ouvert du tout.
+    public static func byState(_ sessions: [AgentSession], rowBudget: Int) -> BoundedStateGrouping {
+        let full = byState(sessions)
+        guard rowBudget > 0 else {
+            return BoundedStateGrouping(groups: [], hiddenCount: sessions.count)
+        }
+        var remaining = rowBudget
+        var kept: [SessionStateGroup] = []
+        for group in full {
+            // 1 rangée d'en-tête + au moins 1 session, sinon on n'ouvre pas.
+            guard remaining >= 2 else { break }
+            remaining -= 1
+            let slice = Array(group.sessions.prefix(remaining))
+            remaining -= slice.count
+            kept.append(SessionStateGroup(bucket: group.bucket, sessions: slice))
+        }
+        let shown = kept.reduce(0) { $0 + $1.sessions.count }
+        return BoundedStateGrouping(groups: kept, hiddenCount: max(0, sessions.count - shown))
+    }
+}
+
+/// Combien de rangées le panneau étendu peut DESSINER sans pousser le quota
+/// hors du cadre.
+///
+/// Le panneau a une hauteur FIXE (`IslandGeometry.expandedSize.height`) et il
+/// est `.clipShape`é : tout ce qui dépasse disparaît SANS le dire. Les valeurs
+/// ci-dessous sont mesurées en capture, pas devinées — environ 209 pt utiles
+/// entre l'en-tête et le quota, une rangée de session en coûtant ~33 (deux
+/// lignes : titre + détail) et un en-tête de groupe ~19.
+public enum IslandRowBudget {
+    /// Sans bannière sous la liste.
+    public static let plain = 6
+    /// Avec une bannière (tâche terminée, ou skill proposé) : elle mange ~66 pt.
+    public static let withBanner = 4
+
+    public static func rows(bannerShown: Bool) -> Int {
+        bannerShown ? withBanner : plain
+    }
 }

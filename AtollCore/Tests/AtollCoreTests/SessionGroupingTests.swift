@@ -111,6 +111,55 @@ final class SessionGroupingTests: XCTestCase {
         }
     }
 
+    // MARK: - Budget en RANGÉES DESSINÉES (audit du 2026-07-27)
+
+    /// Le bug : `limit:` compte des sessions, mais chaque groupe dessine EN PLUS
+    /// une ligne d'en-tête. Quatre sessions sur quatre états = huit rangées,
+    /// pour un budget calibré sur quatre — le quota sortait du cadre.
+    func testRowBudgetCountsGroupHeaders() {
+        let sessions = [
+            session("a", .awaitingPermission(tool: "Bash")),
+            session("b", .awaitingInput),
+            session("c", .working(tool: nil)),
+            session("d", .done),
+        ]
+        let bounded = SessionGrouping.byState(sessions, rowBudget: 4)
+        let rows = bounded.groups.count + bounded.groups.reduce(0) { $0 + $1.sessions.count }
+        XCTAssertLessThanOrEqual(rows, 4)
+        XCTAssertEqual(bounded.hiddenCount, sessions.count - bounded.groups.reduce(0) { $0 + $1.sessions.count })
+    }
+
+    /// Quel que soit le budget et la répartition, on ne dessine JAMAIS plus de
+    /// rangées que le budget, et rien n'est perdu du décompte.
+    func testRowBudgetNeverExceededAndNothingLost() {
+        let sessions = (0..<12).map { i -> AgentSession in
+            let statuses: [AgentSession.Status] = [.awaitingPermission(tool: "t"), .awaitingInput, .working(tool: nil), .done]
+            return session("s\(i)", statuses[i % 4])
+        }
+        for budget in 0...16 {
+            let bounded = SessionGrouping.byState(sessions, rowBudget: budget)
+            let shown = bounded.groups.reduce(0) { $0 + $1.sessions.count }
+            let rows = bounded.groups.count + shown
+            XCTAssertLessThanOrEqual(rows, budget, "budget=\(budget)")
+            XCTAssertEqual(shown + bounded.hiddenCount, 12, "budget=\(budget)")
+        }
+    }
+
+    /// Un groupe ne s'ouvre pas pour n'afficher que son en-tête.
+    func testRowBudgetNeverOpensAnEmptyGroup() {
+        let sessions = [session("a", .awaitingPermission(tool: "t")), session("b", .done)]
+        let bounded = SessionGrouping.byState(sessions, rowBudget: 3)
+        XCTAssertTrue(bounded.groups.allSatisfy { !$0.sessions.isEmpty })
+        // 3 rangées = 1 en-tête + 1 session, puis plus la place d'ouvrir le 2e.
+        XCTAssertEqual(bounded.groups.count, 1)
+        XCTAssertEqual(bounded.hiddenCount, 1)
+    }
+
+    func testBannerShrinksTheBudget() {
+        XCTAssertLessThan(IslandRowBudget.rows(bannerShown: true),
+                          IslandRowBudget.rows(bannerShown: false))
+    }
+
     func testBucketTitlesAreDistinct() {
         XCTAssertEqual(Set(SessionStateBucket.allCases.map(\.title)).count,
                        SessionStateBucket.allCases.count)

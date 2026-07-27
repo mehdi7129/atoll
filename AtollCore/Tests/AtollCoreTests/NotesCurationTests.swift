@@ -288,4 +288,48 @@ final class NotesCurationTests: XCTestCase {
         XCTAssertFalse(content.contains("created_at:"), content)
         XCTAssertTrue(content.contains("curated_at:"), content)
     }
+
+    /// Une SECONDE curation qui rend les notes à l'identique doit passer.
+    ///
+    /// Comparer « fichier entier » (front-matter compris) à « corps nu » la
+    /// faisait refuser en boucle : la curation hebdomadaire ne repassait plus
+    /// jamais (audit du 2026-07-27). Une consolidation fusionne beaucoup de
+    /// notes, donc son `sources:` est long — le front-matter pèse alors autant
+    /// que le corps.
+    func testIdenticalRecurationIsNotSeenAsShrink() throws {
+        let corps = String(repeating: "contenu consolidé. ", count: 20)   // 380 car.
+        let sources = (0..<12).map { "  - 2026-07-\(10 + $0)-note-source-longue.md" }
+            .joined(separator: "\n")
+        let fichier = """
+        ---
+        title: Pièges de build
+        category: gotcha
+        project: /Users/m/Desktop/Dynamic_Island
+        created_at: 2026-07-20T10:00:00Z
+        curated_at: 2026-07-26T00:22:12Z
+        sources:
+        \(sources)
+        ---
+
+        \(corps)
+        """
+        let existing = (0..<3).map { (name: "0\($0)-note.md", content: fichier) }
+        let output = NotesCurationOutput(
+            notes: (0..<3).map { NotesCurationOutput.Note(title: "Pièges de build \($0)",
+                                                          content: corps, sources: []) },
+            contradictions: [])
+
+        // L'ANCIENNE mesure (fichier entier vs corps nu) aurait refusé : on le
+        // vérifie pour que ce test ne devienne pas vert par accident.
+        let volumeFichiers = existing.reduce(0) { $0 + $1.content.count }
+        let volumeCorps = output.notes.reduce(0) { $0 + $1.content.count }
+        XCTAssertLessThan(Double(volumeCorps) / Double(volumeFichiers), 0.5,
+                          "le jeu de test doit bien piéger l'ancienne mesure")
+
+        let plan = NotesCurationPlanner.plan(existing: existing, output: output,
+                                             now: try fixedNow())
+        guard case .success = plan else {
+            return XCTFail("re-curation à l'identique refusée : \(plan)")
+        }
+    }
 }

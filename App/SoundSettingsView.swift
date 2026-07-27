@@ -56,8 +56,8 @@ struct AlertsPane: View {
                 Text("""
                 Une notification macOS avec un résumé d'une ligne — clique dessus \
                 pour ouvrir la session. Ne concerne QUE les tâches lancées depuis \
-                l'îlot : jamais tes sessions interactives. L'îlot garde de toute \
-                façon une trace visible jusqu'à ce que tu l'écartes.
+                l'îlot : jamais tes sessions interactives. Déplie l'îlot et la \
+                trace y reste jusqu'à ce que tu l'écartes.
                 """)
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -104,8 +104,22 @@ struct AlertsPane: View {
 
     @ViewBuilder
     private func eventControls(_ event: SoundEvent) -> some View {
+        let current = center.choice(for: event)
+        // Fichier importé puis disparu (~/.atoll effacé, ménage manuel) : sans
+        // cette entrée, le Picker n'a AUCUN tag correspondant — il s'affiche
+        // vide, « Écouter » reste actif et ne produit rien, et les sons sont
+        // silencieux sans que rien ne le dise.
+        let missingCustom: String? = {
+            guard case .custom(let file) = current, !center.customSounds.contains(file) else { return nil }
+            return file
+        }()
+
         Picker("Son", selection: choiceBinding(for: event)) {
             Text("Silencieux").tag(SoundChoice.silent)
+            if let missingCustom {
+                Divider()
+                Text("\(missingCustom) — fichier introuvable").tag(SoundChoice.custom(missingCustom))
+            }
             if !center.customSounds.isEmpty {
                 Divider()
                 ForEach(center.customSounds, id: \.self) { file in
@@ -118,6 +132,13 @@ struct AlertsPane: View {
             }
         }
         .id(revision)
+
+        if let missingCustom {
+            Text("« \(missingCustom) » n'est plus dans ~/.atoll/sounds : cet événement est muet. "
+                 + "Réimporte le fichier ou choisis un autre son.")
+                .font(.caption)
+                .foregroundStyle(.orange)
+        }
 
         HStack {
             Slider(value: volumeBinding(for: event), in: 0...1, step: 0.05) {
@@ -154,6 +175,22 @@ struct AlertsPane: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             }
+        } else if center.isParked {
+            // AVANT le test « hooks installés » : si les hooks Atoll ont
+            // disparu autrement que par le bouton (backup restauré, dotfiles,
+            // édition à la main), l'utilisateur se retrouvait sans aucun moyen
+            // de récupérer SES hooks depuis l'app — alors qu'ils sont chez nous.
+            Section("Tes sons Claude Code") {
+                Label("Tes hooks sonores sont mis de côté par Atoll.", systemImage: "archivebox")
+                Text("""
+                Ils sont conservés intacts dans ~/.atoll/parked-sound-hooks.json et \
+                seront remis à l'identique — automatiquement si tu désinstalles les \
+                hooks d'Atoll, ou tout de suite avec ce bouton.
+                """)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                Button("Rendre mes hooks sonores") { restoreHooks() }
+            }
         } else if !hooksInstalled {
             // Parquer sans les hooks Atoll = silence total pour zéro bénéfice
             // (Atoll ne reçoit aucun événement, donc ne joue rien).
@@ -166,25 +203,18 @@ struct AlertsPane: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             }
-        } else if center.isParked {
-            Section("Tes sons Claude Code") {
-                Label("Tes hooks sonores sont mis de côté par Atoll.", systemImage: "archivebox")
-                Text("""
-                Ils sont conservés intacts dans ~/.atoll/parked-sound-hooks.json et \
-                seront remis à l'identique — automatiquement si tu désinstalles les \
-                hooks d'Atoll, ou tout de suite avec ce bouton.
-                """)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                Button("Rendre mes hooks sonores") { restoreHooks() }
-            }
         } else if !center.detectedHooks.isEmpty {
             Section("Tes sons Claude Code") {
                 Text("""
                 \(center.detectedHooks.count) hook\(center.detectedHooks.count > 1 ? "s" : "") \
                 de ton settings.json joue\(center.detectedHooks.count > 1 ? "nt" : "") déjà un son :
                 """)
-                ForEach(center.detectedHooks, id: \.hookJSON) { hook in
+                // Identité par POSITION : `hookJSON` ne porte pas l'événement,
+                // donc le même son posé sur deux événements produisait deux
+                // identifiants égaux — et SwiftUI ne garantit alors plus le
+                // rendu de la liste que l'utilisateur doit justement valider
+                // avant qu'Atoll touche à son settings.json.
+                ForEach(Array(center.detectedHooks.enumerated()), id: \.offset) { _, hook in
                     Text("· \(hook.event) — \(hook.command)")
                         .font(.system(.caption, design: .monospaced))
                         .foregroundStyle(.secondary)
