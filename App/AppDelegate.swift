@@ -32,6 +32,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         launcherController?.show()
     }
 
+    /// Ouvre l'îlot (épinglé) sur la session d'une tâche terminée. La session
+    /// peut avoir disparu entre la notification et le clic : on ouvre alors
+    /// l'îlot sans sélection, la bannière y rappelle le résultat.
+    func revealTask(sessionID: String?) {
+        // Comparaison par PRÉFIXE, comme partout ailleurs dans la chaîne :
+        // `claude --bg` peut n'avoir imprimé que les 8 premiers hex, et une
+        // égalité stricte ne retrouverait jamais la session — pire, elle
+        // effacerait la sélection en cours de l'utilisateur.
+        let known = sessionID.flatMap { id in
+            SessionStore.shared.sessions.first { LaunchedTask.sessionIDsMatch($0.id, id) }?.id
+        }
+        controllers.forEach { controller in
+            controller.viewModel.isPinned = true
+            controller.viewModel.open()
+            controller.viewModel.selectedSessionID = known
+        }
+    }
+
     /// Affiche la fenêtre de bienvenue — appelée par le menu et au 1er lancement.
     /// Recréée à NEUF à chaque fois : évite tout état résiduel après fermeture
     /// (une fenêtre réutilisée pouvait rester invisible → « rien ne se passe »).
@@ -76,6 +94,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.showLauncher() }
         }
+        // Clic sur la notification « tâche terminée » : ouvrir l'îlot sur la
+        // session concernée (elle peut avoir déjà été purgée — on ouvre alors
+        // simplement l'îlot, où la bannière rappelle le résultat).
+        NotificationCenter.default.addObserver(
+            forName: .atollRevealTask, object: nil, queue: .main
+        ) { [weak self] note in
+            let sessionID = note.userInfo?["sessionID"] as? String
+            MainActor.assumeIsolated { self?.revealTask(sessionID: sessionID) }
+        }
 
         // Premier lancement : fenêtre de bienvenue (hooks, fail-open, autonomie).
         if OnboardingWindowController.shouldShowAtLaunch {
@@ -84,6 +111,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Jauges par modèle (opt-in) : démarre le poller si le réglage est actif.
         ModelQuotaPoller.shared.syncWithSettings()
+
+        // Annonce de fin des tâches lancées depuis le notch : recharge le
+        // journal (une tâche de fond survit à un redémarrage d'Atoll) et pose
+        // le délégué de notifications (qui reçoit les clics).
+        TaskCompletionNotifier.shared.start()
+
+        // Sons (OFF par défaut) : charge les bibliothèques et rend à
+        // l'utilisateur ses hooks `afplay` si un parking traîne alors que les
+        // sons d'Atoll sont coupés.
+        SoundCenter.shared.start()
 
         // Démarre la réception des événements de hooks puis le suivi des sessions.
         let store = SessionStore.shared
@@ -236,6 +273,53 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // local pourrait approuver silencieusement des permissions via une simple
         // notification Darwin. Réservés aux builds Debug pour les tests scriptés.
         #if DEBUG
+        // Sons : reprendre les hooks `afplay` de l'utilisateur (copie des
+        // fichiers + parking) et les lui rendre. ÉCRIT dans settings.json →
+        // jamais en release.
+        var adoptSoundsToken: Int32 = 0
+        notify_register_dispatch("dev.mehdiguiard.atoll.debug.adoptSounds", &adoptSoundsToken, DispatchQueue.main) { _ in
+            MainActor.assumeIsolated {
+                let adopted = SoundCenter.shared.adoptDetectedSounds()
+                do {
+                    try SoundCenter.shared.parkUserSoundHooks()
+                    SoundCenter.shared.soundsEnabled = true
+                    NSLog("[atoll] sons repris : \(adopted) — hooks parqués")
+                } catch {
+                    NSLog("[atoll] échec du parking : \(error)")
+                }
+            }
+        }
+        var restoreSoundsToken: Int32 = 0
+        notify_register_dispatch("dev.mehdiguiard.atoll.debug.restoreSounds", &restoreSoundsToken, DispatchQueue.main) { _ in
+            MainActor.assumeIsolated {
+                do {
+                    try SoundCenter.shared.restoreUserSoundHooks()
+                    NSLog("[atoll] hooks sonores restitués")
+                } catch {
+                    NSLog("[atoll] échec de la restitution : \(error)")
+                }
+            }
+        }
+        // Écoute des deux sons, sans passer par l'interface.
+        var playSoundsToken: Int32 = 0
+        notify_register_dispatch("dev.mehdiguiard.atoll.debug.playSounds", &playSoundsToken, DispatchQueue.main) { _ in
+            MainActor.assumeIsolated {
+                SoundCenter.shared.preview(.decisionNeeded)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                    MainActor.assumeIsolated { SoundCenter.shared.preview(.taskCompleted) }
+                }
+            }
+        }
+        // Fin de tâche simulée : bannière de l'îlot + notification macOS.
+        var taskDoneToken: Int32 = 0
+        notify_register_dispatch("dev.mehdiguiard.atoll.debug.taskDone", &taskDoneToken, DispatchQueue.main) { _ in
+            MainActor.assumeIsolated {
+                TaskCompletionNotifier.shared.debugSimulateCompletion()
+            }
+        }
+        debugTokens.append(contentsOf: [adoptSoundsToken, restoreSoundsToken,
+                                        playSoundsToken, taskDoneToken])
+
         // Rétrospective sur la dernière session terminée (bypass le gate —
         // consomme du quota : jamais en release).
         var retroToken: Int32 = 0
@@ -429,6 +513,9 @@ extension Notification.Name {
     static let atollShowSkillReview = Notification.Name("dev.mehdiguiard.atoll.showSkillReview")
     /// Ouvre la fenêtre de lancement d'une tâche en arrière-plan (cockpit).
     static let atollShowLauncher = Notification.Name("dev.mehdiguiard.atoll.showLauncher")
+    /// Clic sur la notification de fin de tâche : ouvrir l'îlot sur la session
+    /// (`userInfo["sessionID"]`, éventuellement absent si elle a été purgée).
+    static let atollRevealTask = Notification.Name("dev.mehdiguiard.atoll.revealTask")
     #if DEBUG
     /// Relaie le trigger Darwin debug.settings vers la vue SwiftUI qui détient
     /// l'action openSettings (fiable, contrairement à showSettingsWindow:).

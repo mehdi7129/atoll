@@ -86,6 +86,26 @@ public enum BridgePaths {
         homeDirectory.appendingPathComponent(".atoll/proactive-recall.json")
     }
 
+    /// Journal des tâches lancées depuis le notch (`claude --bg`). Persisté :
+    /// une tâche de fond survit à un redémarrage d'Atoll, et sans ce fichier on
+    /// perdrait le lien avec elle — donc l'annonce de sa fin.
+    public static var launchedTasksURL: URL {
+        homeDirectory.appendingPathComponent(".atoll/launched-tasks.json")
+    }
+
+    /// Sons personnalisés importés par l'utilisateur. Les fichiers sont COPIÉS
+    /// ici : déplacer ou supprimer l'original ne doit pas rendre Atoll muet.
+    public static var soundsDirectory: URL {
+        homeDirectory.appendingPathComponent(".atoll/sounds", isDirectory: true)
+    }
+
+    /// Hooks sonores de l'utilisateur mis de côté pendant qu'Atoll joue les
+    /// sons. Écrit AVANT toute modification de settings.json (crash-safe),
+    /// exactement comme le parking Rockstar.
+    public static var parkedSoundHooksURL: URL {
+        homeDirectory.appendingPathComponent(".atoll/parked-sound-hooks.json")
+    }
+
     // MARK: - Apprentissage (Phase 7b)
 
     /// Dernier quota serveur connu, mis en cache pour survivre à un

@@ -22,6 +22,9 @@ struct SettingsView: View {
             AutonomyPane()
                 .tabItem { Label("Autonomie", systemImage: "bolt") }
                 .tag("autonomie")
+            AlertsPane()
+                .tabItem { Label("Alertes", systemImage: "bell") }
+                .tag("alertes")
             LearningPane()
                 .tabItem { Label("Apprentissage", systemImage: "graduationcap") }
                 .tag("apprentissage")
@@ -32,7 +35,10 @@ struct SettingsView: View {
                 .tabItem { Label("À propos", systemImage: "info.circle") }
                 .tag("apropos")
         }
-        .frame(width: 480)
+        // 640 et non 480 : à 7 onglets, la barre débordait et macOS repliait
+        // « Mises à jour » et « À propos » derrière un chevron « » » (vu en
+        // capture) — des réglages invisibles sont des réglages morts.
+        .frame(width: 640)
     }
 }
 

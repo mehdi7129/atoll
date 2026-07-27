@@ -31,8 +31,9 @@ y compris pour les sessions lancées depuis le terminal de Cursor.
 | 10 · Verre & ondulation (Liquid Glass macOS 26 · transparence réglable) | ✅ |
 | 11 · Mémoire vive (curation des notes · souvenirs proposés d'office · recall trié) | ✅ |
 | 12 · Boucle fermée (Atoll apprend vraiment · antériorité · plugins) | ✅ |
+| 13 · Rendre la main (fin de tâche annoncée · sons personnalisables · flotte par état) | ✅ |
 
-**Version courante : v0.12.0** (voir les [Releases](https://github.com/mehdi7129/atoll/releases)).
+**Version courante : v0.13.0** (voir les [Releases](https://github.com/mehdi7129/atoll/releases)).
 
 Voir le [plan détaillé](PLAN.md), la [recherche](docs/research/) et [CLAUDE.md](CLAUDE.md)
 pour contribuer.
@@ -105,6 +106,21 @@ pour contribuer.
   — une fenêtre dédiée (tâche + dossier), la session tourne détachée et apparaît dans
   l'îlot ; arrêtez-la d'un clic (avec confirmation). Répondez à ses permissions depuis
   le notch, sans ouvrir de terminal.
+- **La tâche finit, Atoll rend la main** : une tâche lancée depuis le notch vous
+  prévient quand elle a terminé — notification macOS avec un **résumé d'une ligne**
+  tiré du dernier message de Claude (clic = l'îlot s'ouvre sur la session), et une
+  trace dans l'îlot qui attend d'être vue. Uniquement les tâches que vous avez
+  lancées depuis l'îlot : jamais vos sessions interactives, donc zéro fausse alerte.
+- **Deux sons, les vôtres** : un quand une décision vous attend, un autre quand une
+  session a fini. Au choix parmi les 14 sons macOS ou **votre propre fichier**
+  (aiff, wav, mp3, m4a, caf), avec un volume par événement et une écoute immédiate.
+  Si vous jouiez déjà des sons via des hooks `afplay` dans votre `settings.json`,
+  Atoll vous propose de **reprendre vos fichiers** et met vos hooks de côté pour que
+  vous n'entendiez pas tout en double — réversible d'un clic, et restitué
+  automatiquement à la désinstallation.
+- **La flotte par état** : à partir de quelques sessions, la question n'est plus
+  « quel projet » mais « laquelle m'attend ». Une bascule dans l'îlot regroupe par
+  **à examiner / en attente de toi / en cours / terminées**, le plus urgent en tête.
 - **Personnalisable** : thème clair/sombre/auto, 4 palettes, et **taille de la barre
   compacte réglable par écran** (petit / moyen / large — ex. large sur un moniteur externe,
   moyen sur le MacBook).
@@ -174,7 +190,7 @@ cd AtollCore && swift test
 ```
 App/         cible app (fenêtre notch, thème, vues SwiftUI, services)
 AtollCore/   package SPM : logique pure testée (palettes, ASCII, géométrie, modèles,
-             index mémoire, prompts, garde-fous) — 370 tests
+             index mémoire, prompts, sons, garde-fous) — 592 tests
 Bridge/      helper CLI `atoll-bridge` embarqué dans le bundle : appelé par les
              hooks Claude Code, parle à l'app par socket Unix, fail-open absolu
 Shared/      code partagé app ↔ helper (inspection de processus)

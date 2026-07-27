@@ -15,6 +15,9 @@ struct ExpandedView: View {
     /// les sessions — clarifie « 3 sessions pour 2 projets » (une nichée dans
     /// notre projet de dev).
     @State private var expandedProjects: Set<String> = []
+    /// Mode de regroupement des sessions. Persisté (et partagé par tous les
+    /// écrans) : c'est une préférence de lecture, pas un état d'écran.
+    @AppStorage("sessionsGroupByState") private var groupByState = false
 
     /// Hauteur de la zone « cap » en haut de l'îlot : le notch physique sur un
     /// écran à encoche, la hauteur de la pilule sinon.
@@ -45,7 +48,12 @@ struct ExpandedView: View {
                 Spacer(minLength: 0)
                 // Bannière passive : jamais par-dessus une carte de permission
                 // (branche else uniquement), aucune ouverture forcée.
-                if SkillReviewCenter.shared.pendingCount > 0 {
+                //
+                // Une tâche qui vient de finir passe AVANT un skill proposé :
+                // elle est datée, l'autre attendra.
+                if let finished = TaskCompletionNotifier.shared.unacknowledged.first {
+                    taskDoneBanner(finished)
+                } else if SkillReviewCenter.shared.pendingCount > 0 {
                     learningBanner
                 }
                 footer
@@ -88,13 +96,21 @@ struct ExpandedView: View {
 
     private var sessionList: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(AsciiArt.sectionHeader("SESSIONS", width: 72))
-                .lineLimit(1)
-                .foregroundStyle(colors.dim)
+            // En-tête + bascule de mode. Le titre rétrécit pour laisser la
+            // place au sélecteur (la grille ASCII reste sur une ligne).
+            HStack(spacing: 6) {
+                Text(AsciiArt.sectionHeader("SESSIONS", width: 52))
+                    .lineLimit(1)
+                    .foregroundStyle(colors.dim)
+                Spacer(minLength: 4)
+                groupingToggle
+            }
 
             if viewModel.sessions.isEmpty {
                 Text("· aucune session — lance `claude` dans un terminal")
                     .foregroundStyle(colors.dim)
+            } else if groupByState {
+                stateGroupedList
             } else {
                 ForEach(projectGroups) { group in
                     if group.sessions.count == 1 {
@@ -122,6 +138,62 @@ struct ExpandedView: View {
             }
         }
     }
+
+    /// Bascule « par projet / par état ». Deux questions différentes : où ça se
+    /// passe, versus qu'est-ce qui m'attend.
+    private var groupingToggle: some View {
+        Button {
+            groupByState.toggle()
+            // Les dossiers repliés d'un mode n'ont pas de sens dans l'autre.
+            expandedProjects.removeAll()
+        } label: {
+            Text(groupByState ? "[ ÉTAT ]" : "[ PROJET ]")
+                .font(AtollFont.mono(9))
+                .foregroundStyle(colors.accent)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Basculer entre regroupement par projet et par état")
+    }
+
+    /// Vue par ÉTAT : ce qui attend une décision d'abord, ce qui dort en
+    /// dernier. Les groupes sont toujours dépliés — l'intérêt est justement de
+    /// voir d'un coup ce qui réclame quelque chose.
+    private var stateGroupedList: some View {
+        let bounded = SessionGrouping.byState(viewModel.sessions,
+                                              limit: Self.stateRowBudget)
+        return ForEach(bounded.groups) { group in
+            HStack(spacing: 6) {
+                Text(group.bucket == .awaitingDecision ? "!" : "·")
+                    .foregroundStyle(group.bucket == .awaitingDecision ? colors.warn : colors.dim)
+                Text(group.bucket.title)
+                    .fontWeight(.bold)
+                    .foregroundStyle(group.bucket == .awaitingDecision ? colors.warn : colors.dim)
+                Text("· \(group.sessions.count)")
+                    .foregroundStyle(colors.dim)
+                Spacer()
+            }
+            .font(AtollFont.mono(10))
+            ForEach(group.sessions) { session in
+                SessionRow(session: session, colors: colors) {
+                    viewModel.selectSession(session.id)
+                }
+                .padding(.leading, 16)
+            }
+            if group.id == bounded.groups.last?.id, bounded.hiddenCount > 0 {
+                // Une liste tronquée en silence ferait croire à une flotte plus
+                // petite qu'elle n'est. On le dit.
+                Text("· +\(bounded.hiddenCount) autre\(bounded.hiddenCount > 1 ? "s" : "") — voir par projet")
+                    .font(AtollFont.mono(9))
+                    .foregroundStyle(colors.dim)
+            }
+        }
+    }
+
+    /// Nombre de lignes de session que le panneau peut afficher déplié sans
+    /// pousser le quota hors du cadre (hauteur fixe : `IslandGeometry
+    /// .expandedSize.height`). Mesuré en capture, pas deviné.
+    private static let stateRowBudget = 4
 
     /// Sessions regroupées par PROJET (racine `.git`), ordre de première apparition
     /// préservé.
@@ -177,6 +249,37 @@ struct ExpandedView: View {
                 AsciiButton(label: "REVOIR ⏎", color: colors.accent,
                             shortcut: .return, modifiers: []) {
                     SkillReviewCenter.shared.requestReviewWindow()
+                }
+            }
+        }
+    }
+
+    /// Une tâche lancée depuis le notch vient de se terminer : c'est ICI que le
+    /// cockpit rend la main. La notification macOS peut avoir été manquée (Ne pas
+    /// déranger, bannière évanouie) — cette trace-là, elle, attend d'être vue.
+    private func taskDoneBanner(_ task: LaunchedTask) -> some View {
+        let others = TaskCompletionNotifier.shared.unacknowledged.count - 1
+        return VStack(alignment: .leading, spacing: 6) {
+            Text(AsciiArt.sectionHeader("TÂCHE TERMINÉE", width: 72))
+                .lineLimit(1)
+                .foregroundStyle(colors.dim)
+            HStack(spacing: 8) {
+                Text("◇")
+                    .foregroundStyle(colors.accent)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(others > 0 ? "\(task.projectName) · +\(others) autre\(others > 1 ? "s" : "")"
+                                    : task.projectName)
+                        .lineLimit(1)
+                        .foregroundStyle(colors.accent)
+                    Text(task.summary ?? task.task)
+                        .lineLimit(2)
+                        .foregroundStyle(colors.fg)
+                }
+                Spacer(minLength: 6)
+                // Sans raccourci clavier : ⏎ appartient déjà à la bannière
+                // d'apprentissage et ⌘⏎/⌘⌫ aux cartes de permission.
+                AsciiButton(label: "VU", color: colors.dim, shortcut: nil) {
+                    TaskCompletionNotifier.shared.acknowledge(task)
                 }
             }
         }

@@ -1,9 +1,9 @@
 # CLAUDE.md — instructions projet Atoll
 
 > 📌 **REPRISE DE DEV : lire `docs/HANDOFF.md` en premier** — état exact, méthode de
-> travail, et TOUS les pièges appris à la dure. (v0.12.0 publiée : Phase 12
-> « Boucle fermée » — Atoll produit enfin des skills, cherche l'antériorité,
-> diagnostique les plugins.)
+> travail, et TOUS les pièges appris à la dure. (v0.13.0 publiée : Phase 13
+> « Rendre la main » — la fin d'une tâche vient te chercher, deux sons à toi,
+> la flotte lisible par état.)
 
 Atoll est une app macOS native (Swift/SwiftUI) : une « Dynamic Island » autour du notch,
 esthétique ASCII, pour suivre et piloter les sessions Claude Code. Gratuit, open source,
@@ -113,6 +113,65 @@ Pièges de build appris à la dure :
 - ✅ Phase 12 — « Boucle fermée » (v0.12.0) : la rétrospective produit VRAIMENT des
   skills (condensé Swift, quota persistant, journal), antériorité (`SkillCatalog`),
   inventaire des plugins, modèles par tâche.
+- ✅ Phase 13 — « Rendre la main » (v0.13.0) : annonce de fin de tâche `--bg`,
+  deux sons personnalisables (avec reprise réversible des hooks `afplay`),
+  vue de la flotte par état.
+
+**Phase 13 — « Rendre la main » (v0.13.0, 2026-07-27)** — Atoll savait démarrer et
+surveiller ; il apprend à rendre la main. Plan : `docs/ROADMAP-13-rendre-la-main.md`.
+- **FIN DE TÂCHE ANNONCÉE** (`AtollCore/LaunchedTask`, `TaskCompletion`,
+  `App/TaskCompletionNotifier`) : le cockpit (Phase 9) lançait une tâche `--bg` et ne
+  prévenait jamais à la fin. PORTÉE VOLONTAIREMENT ÉTROITE (choix de Mehdi) : SEULES
+  les tâches lancées depuis le notch — la seule catégorie qu'Atoll connaît de première
+  main. On n'utilise PAS `AgentSessionInfo.Kind.background` pour deviner (le code
+  documente qu'il n'est pas fiable : une session interactive a déjà été rapportée
+  `background`). Signal préféré = hook `Stop`, qui porte `last_assistant_message`
+  (désormais décodé dans `ParsedHookEvent`, tronqué à 20 000 caractères) ; filet de
+  sûreté = disparition de la session (`markEnded`). `complete` est IDEMPOTENT : les
+  deux signaux ne produisent qu'une annonce.
+  PIÈGES : `claude --bg` peut n'imprimer qu'un PRÉFIXE d'identifiant (8 hex) alors que
+  les hooks portent l'UUID complet → comparaison par préfixe, jamais par égalité
+  (sinon aucune notification n'arrive jamais) ; rattrapage `adopt` par dossier +
+  horodatage (fenêtre 180 s, jamais une session démarrée AVANT le lancement) ;
+  `UNUserNotificationCenter.delegate` est une référence FAIBLE → le délégué doit être
+  retenu, sinon les clics ne font rien ; journal persisté
+  (`~/.atoll/launched-tasks.json`) pour survivre à un redémarrage d'Atoll.
+- **FAIT VÉRIFIÉ (macOS 26)** : `UNUserNotificationCenter` REFUSE l'enregistrement
+  d'un build signé « adhoc » (« Notifications are not allowed for this application ») —
+  donc AUCUNE notification depuis la boucle de dev Debug. C'est l'appel à
+  `requestAuthorization` qui INSCRIT l'app (sans lui, Atoll n'apparaît même pas dans
+  Réglages système › Notifications et le statut lu est `denied`). D'où la demande au
+  démarrage quand la fonction est active, et l'état affiché dans Réglages › Alertes
+  avec la raison exacte. AUTRE PIÈGE VÉCU : `ditto` FUSIONNE — recopier un build
+  Release par-dessus un Debug laisse `Atoll.debug.dylib` dans le bundle et casse le
+  sceau (`spctl` : « a sealed resource is missing or invalid »). Déplacer l'ancien
+  bundle AVANT de ditto.
+- **SONS** (`AtollCore/SoundPreferences`, `SoundHookEditor`, `App/SoundCenter`,
+  `App/SoundSettingsView`) : deux événements — `decisionNeeded` (une carte apparaît,
+  après les chemins d'auto-approbation : en Auto/Rockstar, ce qui est tranché sans toi
+  ne sonne pas) et `taskCompleted` (hook `Stop`). Choix par événement : silencieux ·
+  14 sons macOS · fichier importé (COPIÉ dans `~/.atoll/sounds`, donc insensible au
+  déplacement de l'original), volume séparé (défaut 0,10 = le `afplay -v 0.1` de
+  Mehdi), anti-rafale 2 s. Réglage général OFF par défaut.
+  MIGRATION = EXCEPTION ENCADRÉE à la règle n° 2 (même régime que le parking
+  Rockstar) : les hooks sonores de l'utilisateur sont MONTRÉS avant toute action,
+  leurs fichiers audio repris, puis les entrées parquées dans
+  `~/.atoll/parked-sound-hooks.json` (écrit AVANT settings.json, crash-safe) et
+  restituées à la désactivation, à la désinstallation (`HookInstaller.uninstall`) et
+  par réconciliation au lancement. Détection VOLONTAIREMENT conservatrice (`afplay`,
+  `/System/Library/Sounds`, `say`, `beep`, extensions audio ; jamais un hook Atoll) —
+  un faux positif retirerait un hook qui fait autre chose. VÉRIFIÉ EN VRAI sur la
+  config de Mehdi : 2 hooks retirés (21 → 19), statusLine et 15 événements préservés,
+  puis restitution **JSON-identique** à la sauvegarde.
+- **FLOTTE PAR ÉTAT** (`AtollCore/SessionGrouping`) : bascule `[ PROJET ] / [ ÉTAT ]`
+  dans l'îlot, ordre imposé à examiner → en attente de toi → en cours → terminées.
+  BORNÉ à 4 lignes (`ExpandedView.stateRowBudget`) : le panneau a une hauteur FIXE et
+  la vue dépliée poussait le quota hors du cadre (vu en capture) ; le surplus est
+  ANNONCÉ (« +N autres »), jamais tronqué en silence.
+- Nouveaux triggers debug (`#if DEBUG`, ils écrivent) : `adoptSounds`, `restoreSounds`,
+  `playSounds`, `taskDone`.
+- PIÈGE UI : la barre d'onglets des Réglages débordait à 7 onglets (macOS repliait
+  « Mises à jour » et « À propos » derrière un chevron) → largeur portée à 640.
 
 **Phase 12 — « Boucle fermée » (v0.12.0, 2026-07-27)** — Atoll ne produisait AUCUN
 skill. Diagnostic chiffré (agents) : **1 seule rétrospective lancée en 7 jours** sur
@@ -477,7 +536,10 @@ tenue à jour avec `App/AppDelegate.swift` :
   `allow` / `deny` (1re carte), `select` (1re session), `jump` (jump-back),
   `settings`, `onboarding`, `retro` (rétrospective sur la dernière session terminée),
   `curation` (curation des notes), `launcher` (fenêtre de lancement),
-  `seedSkill` / `skillReview` / `approveSkill` / `rejectSkill` (curation des skills).
+  `seedSkill` / `skillReview` / `approveSkill` / `rejectSkill` (curation des skills),
+  `adoptSounds` / `restoreSounds` (reprise et restitution des hooks sonores —
+  ÉCRIVENT dans settings.json), `playSounds` (écoute des deux sons),
+  `taskDone` (fin de tâche simulée : bannière + notification).
 
 Debug des interactions (Phase 3) : `notifyutil -p dev.mehdiguiard.atoll.debug.allow`
 (ou `.deny`) résout la première carte en attente via les mêmes chemins que les boutons ;

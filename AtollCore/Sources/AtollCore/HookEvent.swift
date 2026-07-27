@@ -55,6 +55,12 @@ public struct ParsedHookEvent: Equatable, Sendable {
     public let notificationType: String?
     public let promptText: String?
     public let sessionEndReason: String?
+    /// Dernier message de l'assistant, porté par `Stop` et `SubagentStop`
+    /// (vérifié : `docs/research/research-claude-integration.md`). C'est la
+    /// matière du résumé « ta tâche est finie ». Tronqué au décodage : un
+    /// message peut peser des dizaines de milliers de caractères et cette
+    /// valeur traverse le socket puis vit dans la session suivie.
+    public let lastAssistantMessage: String?
     // Spécifique PermissionRequest — conservé en Data (re-sérialisé) pour rester
     // Equatable/Sendable tout en permettant le passthrough exact vers la décision.
     public let toolInputData: Data?
@@ -104,6 +110,8 @@ public struct ParsedHookEvent: Equatable, Sendable {
         notificationType = (payload["notification_type"] as? String) ?? (payload["type"] as? String)
         promptText = payload["prompt"] as? String
         sessionEndReason = payload["reason"] as? String
+        lastAssistantMessage = (payload["last_assistant_message"] as? String)
+            .map { String($0.prefix(TaskCompletion.inputCap)) }
 
         let toolInput = payload["tool_input"] as? [String: Any]
         if kind == .permissionRequest {

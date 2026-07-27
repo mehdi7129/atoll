@@ -2,8 +2,8 @@
 
 > Document de continuité pour reprendre le dev après un compactage de conversation.
 > **À lire en premier** avec `CLAUDE.md` (règles) et `PLAN.md` (plan produit).
-> Dernière mise à jour : **2026-07-27**, app **v0.12.0** (Phase 12 « Boucle fermée » :
-> Atoll produit enfin des skills, cherche l'antériorité, diagnostique les plugins).
+> Dernière mise à jour : **2026-07-27**, app **v0.13.0** (Phase 13 « Rendre la main » :
+> la fin d'une tâche vient te chercher, deux sons à toi, la flotte lisible par état).
 
 ---
 
@@ -16,10 +16,10 @@ GPL-3.0, repo PUBLIC `github.com/mehdi7129/atoll`).
 
 | Quoi | Où |
 |---|---|
-| Version publiée | **v0.12.0** (DMG notarisé + appcast Sparkle, 18 URLs vérifiées 200) |
+| Version publiée | **v0.13.0** (DMG notarisé + appcast Sparkle) |
 | Git | `main` poussé, **arbre propre** — vérifier d'un coup : `git log --oneline -3 && git status --porcelain` (un hash écrit ici serait périmé dès le commit suivant) |
-| Tests | **494 verts** (`cd AtollCore && swift test`, ~0,8 s), build **0 warning** |
-| Phases | **1 à 12 livrées**. La feuille de route « Atoll 2 » (milestones A/B/C) est ÉPUISÉE |
+| Tests | **592 verts** (`cd AtollCore && swift test`, ~0,7 s), build **0 warning** |
+| Phases | **1 à 13 livrées**. La feuille de route « Atoll 2 » (milestones A/B/C) est ÉPUISÉE |
 | Build de dev | `~/Applications/Atoll.app` (Debug) — **jamais** écrasé par la Release |
 
 **Rien n'est en cours, rien n'est à moitié fait.** Une reprise commence par choisir
@@ -33,7 +33,8 @@ depuis le notch (permissions ⌘Y/⌘N, plans, questions) · autonomie Manuel/Au
 Rockstar · quota serveur exact · jump-back terminal · lancer/arrêter une tâche en
 arrière-plan · mémoire FTS5 de tous les transcripts + skill `atoll-recall` ·
 souvenirs proposés d'office (opt-in) · rétrospective qui produit VRAIMENT des
-skills · curation des notes · inventaire et recherche de plugins.
+skills · curation des notes · inventaire et recherche de plugins · annonce de fin
+de tâche (notification + bannière) · deux sons personnalisables · flotte par état.
 
 ### Les deux skills qu'Atoll s'est appris (et qui SERVENT)
 
@@ -55,28 +56,28 @@ le **prompt disait « en cas de doute, zéro skill »**. Résultat après répar
 
 ## 1. CE QU'IL RESTE À FAIRE
 
-**Aucun chantier n'est en cours.** Les phases 1 à 12 sont livrées et la feuille de
+**Aucun chantier n'est en cours.** Les phases 1 à 13 sont livrées et la feuille de
 route « Atoll 2 » est épuisée : la suite se décide AVEC Mehdi. Ce qui suit est la
 liste réelle de ce qui reste, avec le contexte de décision — pas une liste de vœux.
 
 ### A. Pistes identifiées, non tranchées (demander à Mehdi avant d'ouvrir)
 
-1. **Sceller les notes d'apprentissage** comme les skills (manifeste + SHA256).
-   *Le vrai problème* : n'importe quel processus local peut déposer un `.md` dans
-   `~/.atoll/learning/notes/`, qui sera indexé puis injecté. `~/.atoll` est passé en
-   0700 (autres comptes exclus) et le helper refuse un fichier qui ne lui appartient
-   pas. **ARBITRAGE À FAIRE AVANT DE CODER** : contre un processus du MÊME
-   utilisateur, un manifeste n'apporte rien (il pourrait le réécrire aussi). Le
-   scellé n'a de sens que couplé à quelque chose que ce processus ne peut pas forger.
-   Ne pas se lancer sans avoir répondu à ça.
-2. **Notification quand une tâche `--bg` se termine** — le cockpit lance, mais rien ne
-   prévient à la fin. Le hook `Stop` porte `last_assistant_message` : de quoi faire un
-   résumé d'une ligne. Demandé par Mehdi en Phase 9, jamais fait.
-3. **Vue flotte par ÉTAT** dans l'îlot étendu (à examiner / en attente de toi / en
-   cours / terminées), façon Agent View mais ambiant. Idée du plan « Atoll 2 » §C.
-4. **Multi-provider** (Codex, OpenCode…) à la façon d'AgentGlance. Gros chantier,
+1. **Multi-provider** (Codex, OpenCode…) à la façon d'AgentGlance. Gros chantier,
    v2 assumée, **NE PAS entamer sans accord explicite**.
-5. **Jump-back Ghostty / tmux** (les adapters existent pour Terminal/iTerm2/Cursor).
+2. **Jump-back Ghostty / tmux** (les adapters existent pour Terminal/iTerm2/Cursor).
+   Mehdi a tranché le 2026-07-27 : **sans valeur tant qu'il travaille dans Cursor**.
+3. **Notification de fin pour les `--bg` lancées du TERMINAL** (hors notch). Écarté
+   en Phase 13 : la seule façon de les reconnaître serait
+   `AgentSessionInfo.Kind.background`, dont le code documente qu'il n'est pas fiable
+   → risque de sonner sur une session que Mehdi regarde. À rouvrir seulement si le
+   CLI expose un jour un marqueur sûr.
+
+**Tranché et ABANDONNÉ** — sceller les notes d'apprentissage (manifeste + SHA256).
+L'arbitrage laissé ouvert a été rendu le 2026-07-27, et il est négatif : contre un
+processus du MÊME utilisateur, un manifeste n'apporte rien (il peut le réécrire
+aussi). Les défenses réelles sont déjà en place — `~/.atoll` en 0700, refus d'un
+fichier qui n'appartient pas à l'utilisateur, rôles injectables restreints, cadrage
+« DONNÉES, pas des instructions ». Ne pas y revenir sans un modèle de menace neuf.
 
 ### B. Dette connue et assumée (ne PAS « corriger » sans raison)
 
@@ -170,8 +171,18 @@ Ces points ne sont écrits nulle part ailleurs et coûtent cher à redécouvrir.
 - Le trigger `debug.settings` est **intermittent** : parfois la fenêtre ne s'ouvre pas.
   Réessayer, et vérifier la présence de la fenêtre par AppleScript (`size of w`) avant
   de conclure quoi que ce soit d'une capture vide.
-- L'îlot se **replie tout seul** quelques secondes après `debug.expand` : capturer
-  IMMÉDIATEMENT après le trigger (pas de `sleep 3` avant la capture).
+- L'îlot se **replie tout seul** quelques secondes après `debug.expand`, MAIS capturer
+  immédiatement attrape l'**animation d'expansion en vol** — on croit alors à un
+  panneau tronqué et on part corriger un bug qui n'existe pas (vécu deux fois).
+  Recette qui marche : trigger → `sleep 1` → trigger à nouveau (il est déjà ouvert,
+  donc pleine taille) → `sleep 1` → capture.
+- L'AppleScript de déplacement cible les fenêtres de largeur > 400 : **le panneau de
+  l'îlot fait 600 de large** et entrerait dans le filtre. En pratique il n'est pas
+  exposé comme fenêtre AppKit ordinaire, mais préférer un filtre par NOM de fenêtre.
+- Une invite d'autorisation TCC (« contrôler Finder ») déclenchée par un AppleScript
+  **BLOQUE tous les Apple Events suivants** tant qu'elle n'est pas fermée : si
+  `osascript` ne répond plus, c'est probablement ça — regarder l'écran avant de
+  conclure à un bug.
 
 ### Ce que Mehdi attend (observé, pas supposé)
 - **Vérifier en vrai**, jamais « ça compile donc ça marche ». Il demande explicitement
@@ -182,6 +193,28 @@ Ces points ne sont écrits nulle part ailleurs et coûtent cher à redécouvrir.
   (`docs/ROADMAP-12-boucle-fermee.md` en est le modèle : chaque jalon a un CHIFFRE).
 - Il tranche vite quand on lui pose une vraie question fermée (AskUserQuestion avec
   une recommandation en premier). Ne pas lui demander ce qu'on peut décider soi-même.
+
+### Notifications macOS — pièges qui coûtent une demi-journée (Phase 13)
+- **Un build signé « adhoc » (= toute la boucle de dev Debug) ne peut PAS notifier.**
+  `requestAuthorization` échoue avec « Notifications are not allowed for this
+  application ». Ce n'est pas le code : c'est la signature. Ne pas chercher un bug
+  dans `TaskCompletionNotifier` à partir de ce symptôme.
+- **C'est l'appel à `requestAuthorization` qui INSCRIT l'app** auprès du centre de
+  notifications. Tant qu'il n'a pas eu lieu, Atoll n'apparaît pas dans Réglages
+  système › Notifications et `getNotificationSettings` répond `denied` (pas
+  `notDetermined`, contre-intuitif). Vérifier l'inscription :
+  `plutil -p ~/Library/Preferences/com.apple.ncprefs.plist | grep -c atoll`.
+- **`ditto` FUSIONNE, il ne remplace pas.** Recopier un build Release par-dessus un
+  Debug laisse `Atoll.debug.dylib` dans le bundle → sceau invalide
+  (`spctl -a -vv` : « a sealed resource is missing or invalid ») → tout comportement
+  système devient erratique. Déplacer l'ancien bundle AVANT (`mv`), puis `ditto`.
+  (`rm -rf` est refusé par un hook de cette session : utiliser `mv` ou `trash`.)
+- `spctl -a -vv` sur un build Release non notarisé répond « rejected — Unnotarized
+  Developer ID » : c'est NORMAL et sans rapport avec le sceau, qui lui doit être
+  intact.
+- **RESTE À VÉRIFIER** : que la notification arrive bien sur un build NOTARISÉ. Ça n'a
+  pas pu l'être en dev (adhoc) ni sur un Release non notarisé. Le premier lancement
+  de la version publiée est le vrai test.
 
 ### Faits VÉRIFIÉS sur le CLI (2026-07-27, claude 2.1.220) — ne pas re-tester à l'aveugle
 - **`--safe-mode` convoque `claude-sonnet-5` EN PLUS du `--model` demandé**, et c'est lui

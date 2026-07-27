@@ -103,6 +103,11 @@ final class FleetLauncher {
         }
         let id = FleetLaunch.parseSessionID(output)
         log.info("tâche lancée dans \(cwd, privacy: .public) — id \(id ?? "?", privacy: .public)")
+        // Suivi jusqu'à la fin : c'est la SEULE catégorie de sessions qu'Atoll
+        // connaît de première main (il vient de la lancer), donc la seule qu'il
+        // peut annoncer sans risque de fausse alerte. `id` peut être nil ou
+        // tronqué — le journal sait rattraper (dossier + horodatage).
+        TaskCompletionNotifier.shared.register(task: task, cwd: cwd, sessionID: id)
         return id
     }
 

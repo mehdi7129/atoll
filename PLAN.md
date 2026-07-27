@@ -358,6 +358,15 @@ Curation périodique des notes, recall proactif opt-in (hook UserPromptSubmit bl
 dédup inter-fichiers + récence du recall, tableau de bord des notes. Milestone B — et
 donc **fin de la feuille de route « Atoll 2 »** : la suite est à décider.
 
+### Phase 13 — « Rendre la main » — ✅ livrée (v0.13.0)
+Atoll savait démarrer et surveiller ; il apprend à rendre la main. Une tâche lancée
+depuis le notch prévient quand elle a fini (notification macOS + résumé d'une ligne
+tiré du hook `Stop`, et une trace dans l'îlot). Deux sons personnalisables — décision
+attendue / tâche terminée — au choix parmi les sons macOS ou les fichiers de
+l'utilisateur, avec reprise RÉVERSIBLE de ses hooks `afplay`. Et une lecture de la
+flotte par ÉTAT (à examiner d'abord), bornée à la hauteur du panneau.
+Plan détaillé : `docs/ROADMAP-13-rendre-la-main.md`.
+
 Chaque phase se termine par un build utilisable — tu peux t'arrêter (ou pivoter) à n'importe
 quelle frontière de phase.
 

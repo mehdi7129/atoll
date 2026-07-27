@@ -32,6 +32,15 @@ enum HookInstaller {
     }
 
     static func uninstall() throws {
+        // Rendre d'abord ses hooks sonores à l'utilisateur : une fois les hooks
+        // Atoll retirés, l'app ne verrait plus passer les événements et plus
+        // rien ne jouerait de son — ses `afplay` doivent reprendre du service.
+        //
+        // L'échec REMONTE (pas de `try?`) : c'est le dernier chemin de
+        // restitution automatique. L'avaler laisserait l'utilisateur lire
+        // « désinstallé » alors que ses hooks ne vivent plus que dans
+        // `~/.atoll`, dossier qu'il supprimera naturellement ensuite.
+        try SoundCenter.shared.restoreUserSoundHooks()
         try runHelper("uninstall")
     }
 

@@ -127,6 +127,9 @@ final class InteractionCenter {
             toolSummary: event.toolSummary,
             receivedAt: Date()
         ))
+        // Une décision t'attend. Placé APRÈS les chemins d'auto-approbation :
+        // en Auto ou en Rockstar, une demande tranchée sans toi ne sonne pas.
+        SoundCenter.shared.play(.decisionNeeded)
     }
 
     /// À l'activation de Rockstar : résout immédiatement les cartes DÉJÀ en
