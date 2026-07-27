@@ -17,7 +17,7 @@ GPL-3.0, repo PUBLIC `github.com/mehdi7129/atoll`).
 | Quoi | Où |
 |---|---|
 | Version publiée | **v0.12.0** (DMG notarisé + appcast Sparkle, 18 URLs vérifiées 200) |
-| Dernier commit | `4d48b52` « HANDOFF : point de reprise » — `main` poussé, **arbre propre** |
+| Git | `main` poussé, **arbre propre** — vérifier d'un coup : `git log --oneline -3 && git status --porcelain` (un hash écrit ici serait périmé dès le commit suivant) |
 | Tests | **494 verts** (`cd AtollCore && swift test`, ~0,8 s), build **0 warning** |
 | Phases | **1 à 12 livrées**. La feuille de route « Atoll 2 » (milestones A/B/C) est ÉPUISÉE |
 | Build de dev | `~/Applications/Atoll.app` (Debug) — **jamais** écrasé par la Release |
