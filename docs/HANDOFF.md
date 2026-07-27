@@ -212,17 +212,21 @@ Ces points ne sont écrits nulle part ailleurs et coûtent cher à redécouvrir.
 - `spctl -a -vv` sur un build Release non notarisé répond « rejected — Unnotarized
   Developer ID » : c'est NORMAL et sans rapport avec le sceau, qui lui doit être
   intact.
-- **CE QUI A ÉTÉ TESTÉ, ET CE QUI RESTE OUVERT** (v0.13.0, build notarisé installé
-  depuis le DMG) : Gatekeeper l'accepte (`spctl` : *accepted — Notarized Developer
-  ID*), et `requestAuthorization` ne remonte **plus aucune erreur** — contrairement
-  aux builds adhoc et Release-non-notarisé qui échouaient tous les deux avec
-  « Notifications are not allowed for this application ». Mais Atoll n'apparaît
-  toujours pas dans `com.apple.ncprefs.plist`, et aucune invite n'était visible sur
-  l'écran 2. **Hypothèse la plus probable : l'invite système attend sur l'écran
-  PRINCIPAL** (celui de Mehdi, non capturable). À confirmer d'un coup d'œil, ou en
-  cliquant « Autoriser les notifications » dans Réglages › Alertes — le bouton est
-  là pour ça. La bannière de l'îlot, elle, fonctionne quoi qu'il arrive (vérifiée
-  en capture).
+- **VÉRIFIÉ DE BOUT EN BOUT le 2026-07-27** sur le build NOTARISÉ (`spctl` :
+  *accepted — Notarized Developer ID*), après que Mehdi a accordé l'autorisation :
+  `getNotificationSettings` répond **`granted`**, et une vraie fin de tâche a été
+  livrée sans erreur (bannière capturée, notification reçue). Le chemin exercé est
+  la **réconciliation avec la flotte**, pas un raccourci de debug.
+- **`com.apple.ncprefs.plist` N'EST PAS la source de vérité** de l'autorisation :
+  il est resté SANS entrée `atoll` alors que le statut était `granted`. J'ai perdu
+  du temps à le fouiller — la seule autorité est `getNotificationSettings`. Pour
+  lire le statut sans DEBUG : mettre `notifyOnTaskCompletion` à `false`, relancer,
+  et lire la ligne « autorisation de notification : … » en `log stream` (la voie
+  « demande » ne journalise QUE les échecs, donc son silence signifie succès).
+- **Recette pour éprouver la chaîne sans lancer de vraie tâche** : app arrêtée,
+  écrire dans `~/.atoll/launched-tasks.json` une tâche avec `seenAlive: true`, un
+  `sessionID` inexistant et un `launchedAt` au-delà du délai de grâce — au premier
+  poll de flotte, la réconciliation la clôt et notifie. Vider le fichier après.
 
 ### Faits VÉRIFIÉS sur le CLI (2026-07-27, claude 2.1.220) — ne pas re-tester à l'aveugle
 - **`--safe-mode` convoque `claude-sonnet-5` EN PLUS du `--model` demandé**, et c'est lui
