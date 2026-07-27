@@ -20,7 +20,7 @@ GPL-3.0, repo PUBLIC `github.com/mehdi7129/atoll`).
 | Git | `main` poussé, **arbre propre** — vérifier d'un coup : `git log --oneline -3 && git status --porcelain` (un hash écrit ici serait périmé dès le commit suivant) |
 | Tests | **592 verts** (`cd AtollCore && swift test`, ~0,7 s), build **0 warning** |
 | Phases | **1 à 13 livrées**. La feuille de route « Atoll 2 » (milestones A/B/C) est ÉPUISÉE |
-| Build de dev | `~/Applications/Atoll.app` (Debug) — **jamais** écrasé par la Release |
+| Build installé | ⚠️ `~/Applications/Atoll.app` contient la **Release NOTARISÉE v0.13.0** (installée depuis le DMG en fin de session, pour que Mehdi ait le produit fini). Pour reprendre la boucle de dev : **DÉPLACER ce bundle** (`mv`) puis `ditto` le Debug — `ditto` fusionne et casserait le sceau |
 
 **Rien n'est en cours, rien n'est à moitié fait.** Une reprise commence par choisir
 un chantier au §1.
@@ -212,9 +212,17 @@ Ces points ne sont écrits nulle part ailleurs et coûtent cher à redécouvrir.
 - `spctl -a -vv` sur un build Release non notarisé répond « rejected — Unnotarized
   Developer ID » : c'est NORMAL et sans rapport avec le sceau, qui lui doit être
   intact.
-- **RESTE À VÉRIFIER** : que la notification arrive bien sur un build NOTARISÉ. Ça n'a
-  pas pu l'être en dev (adhoc) ni sur un Release non notarisé. Le premier lancement
-  de la version publiée est le vrai test.
+- **CE QUI A ÉTÉ TESTÉ, ET CE QUI RESTE OUVERT** (v0.13.0, build notarisé installé
+  depuis le DMG) : Gatekeeper l'accepte (`spctl` : *accepted — Notarized Developer
+  ID*), et `requestAuthorization` ne remonte **plus aucune erreur** — contrairement
+  aux builds adhoc et Release-non-notarisé qui échouaient tous les deux avec
+  « Notifications are not allowed for this application ». Mais Atoll n'apparaît
+  toujours pas dans `com.apple.ncprefs.plist`, et aucune invite n'était visible sur
+  l'écran 2. **Hypothèse la plus probable : l'invite système attend sur l'écran
+  PRINCIPAL** (celui de Mehdi, non capturable). À confirmer d'un coup d'œil, ou en
+  cliquant « Autoriser les notifications » dans Réglages › Alertes — le bouton est
+  là pour ça. La bannière de l'îlot, elle, fonctionne quoi qu'il arrive (vérifiée
+  en capture).
 
 ### Faits VÉRIFIÉS sur le CLI (2026-07-27, claude 2.1.220) — ne pas re-tester à l'aveugle
 - **`--safe-mode` convoque `claude-sonnet-5` EN PLUS du `--model` demandé**, et c'est lui
