@@ -127,7 +127,12 @@ public enum TranscriptLineParser {
         let parts = rawParts.compactMap(sanitize)
         guard !parts.isEmpty else { return nil }
         let text = String(parts.joined(separator: "\n").prefix(toolResultCap))
-        return TranscriptLine.Fragment(role: .toolResult, text: text)
+        // `is_error` est conservé (il ne l'était pas) : c'est le seul signal
+        // FIABLE d'échec d'outil. Le texte, lui, est déjà tronqué ici — une
+        // heuristique par mot-clé ne verrait même pas l'erreur d'un build qui
+        // échoue après 1 500 caractères de sortie.
+        return TranscriptLine.Fragment(role: .toolResult, text: text,
+                                       isError: block["is_error"] as? Bool)
     }
 
     // MARK: - Lignes assistant

@@ -863,7 +863,12 @@ final class SessionStore {
         guard let data = try? Data(contentsOf: BridgePaths.quotaCacheURL),
               let quota = try? JSONDecoder().decode(QuotaSnapshot.self, from: data)
         else { return nil }
-        if let resetsAt = quota.fiveHour.resetsAt, resetsAt < Date() { return nil }
+        let now = Date()
+        if let resetsAt = quota.fiveHour.resetsAt, resetsAt < now { return nil }
+        // Horloge qui a reculé (NTP, RTC, réglage manuel) : une lecture datée
+        // du FUTUR resterait éternellement « fraîche » et ferait croire au gate
+        // qu'il connaît le quota (revue).
+        if quota.receivedAt > now { return nil }
         return quota
     }
 

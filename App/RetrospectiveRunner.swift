@@ -233,8 +233,9 @@ final class RetrospectiveRunner {
     }
 
     /// Ajoute une entrée au journal (cap 100, les plus anciennes tombent).
-    private func journal(_ record: AttemptRecord) {
+    private func journal(_ record: AttemptRecord, replacingSameID: Bool = false) {
         var state = loadState()
+        if replacingSameID { state.attempts.removeAll { $0.id == record.id } }
         state.attempts.append(record)
         state.attempts = Array(state.attempts.suffix(100))
         saveState(state)
@@ -281,15 +282,28 @@ final class RetrospectiveRunner {
         // et n'envoie au modèle que la substance. Les transcripts réels font 9 à
         // 47 Mo — en les faisant lire par le modèle sous 1,50 $, il n'en voyait
         // que ~8 %. Ici, il reçoit tout ce qui compte, borné et gratuit.
-        let digest = await Task.detached(priority: .utility) {
-            Self.digest(ofTranscriptAt: transcriptPath)
+        // Condensé ET inventaire hors MainActor : l'inventaire parcourt le
+        // cache des plugins (~70 ms à chaud, bien plus à froid).
+        let prepared = await Task.detached(priority: .utility) {
+            (digest: Self.digest(ofTranscriptAt: transcriptPath),
+             capabilities: SkillCatalog().summaryForPrompt())
         }.value
+        let digest = prepared.digest
         guard let digest, !digest.text.isEmpty else {
             log.error("condensé vide pour \(transcriptPath, privacy: .public) — rien à analyser")
             finish(job, outcome: "failed(digest)", transcriptBytes: 0)
             return
         }
         log.info("condensé : \(digest.entriesKept) entrées, \(digest.characterCount) caractères (tronqué : \(digest.truncated))")
+        // Chiffres du condensé au journal : c'est ce qui permet de voir, depuis
+        // les Réglages, que le modèle n'a reçu qu'une partie de la session.
+        pendingAttempt?.digestEntries = digest.entriesKept
+        pendingAttempt?.digestCharacters = digest.characterCount
+        pendingAttempt?.digestTruncated = digest.truncated
+        // Journalisée MAINTENANT (complétée à la fin) : si l'app se termine
+        // pendant le run, la tentative apparaît quand même — l'objectif est
+        // « 100 % des fins de session laissent une trace ».
+        if let attempt = pendingAttempt { journal(attempt) }
 
         let userPrompt = RetrospectivePrompt.userPrompt(
             digest: digest.text,
@@ -297,7 +311,7 @@ final class RetrospectiveRunner {
             gitBranch: job.snapshot.gitBranch,
             model: job.snapshot.model,
             existingNoteSlugs: existingNoteSlugs(),
-            existingCapabilities: SkillCatalog().summaryForPrompt()
+            existingCapabilities: prepared.capabilities
         )
         let arguments = RetrospectivePrompt.cliArguments(
             model: LearningSettings.shared.model,
@@ -468,9 +482,19 @@ final class RetrospectiveRunner {
         if !failed {
             recordProcessed(sessionID: job.snapshot.id, transcriptBytes: transcriptBytes)
         }
+        // Échec AVANT toute dépense (condensé vide, spawn impossible) : la
+        // tentative est retirée du plafond de la fenêtre. Sinon une seule
+        // session cassée neutralisait la rétrospective pendant 5 h pour toutes
+        // les autres — d'autant plus grave que le mode « quota inconnu »
+        // n'accorde qu'UN créneau (revue).
+        if outcome == "failed(digest)" || outcome == "failed(spawn)" {
+            refundAttempt()
+        }
         if var attempt = pendingAttempt {
             attempt.outcome = outcome
-            journal(attempt)
+            // L'entrée a pu être journalisée au départ : on la remplace au lieu
+            // de la dupliquer (même sessionID + même `decidedAt` = même id).
+            journal(attempt, replacingSameID: true)
             pendingAttempt = nil
         }
         lastOutcome = outcome
@@ -506,6 +530,11 @@ final class RetrospectiveRunner {
         var skillsProposed: Int?
         /// Modèle le plus facturé du run (voir `RetrospectiveReport.modelCosts`).
         var dominantModel: String?
+        /// Ce que le modèle a réellement reçu (condensé) — répond à « pourquoi
+        /// n'a-t-il rien trouvé ? » sans relire les logs.
+        var digestEntries: Int?
+        var digestCharacters: Int?
+        var digestTruncated: Bool?
     }
 
     private struct PersistedState: Codable {
@@ -513,6 +542,27 @@ final class RetrospectiveRunner {
         var runTimestamps: [Date] = []
         /// Journal des évaluations (cap 100) — affiché dans les Réglages.
         var attempts: [AttemptRecord] = []
+
+        init() {}
+
+        /// Décodage TOLÉRANT AUX CHAMPS ABSENTS — écrit à la main exprès.
+        ///
+        /// PIÈGE VÉCU (revue) : la synthèse `Decodable` de Swift n'utilise PAS
+        /// les valeurs par défaut d'une propriété pour une clé absente, elle
+        /// lève `keyNotFound`. Un `retrospectives.json` d'une version
+        /// précédente (sans `attempts`) faisait donc échouer tout le décodage,
+        /// le `try?` de `loadState` rendait un état VIDE, et la première
+        /// écriture effaçait définitivement `processed` (sessions déjà
+        /// analysées → ré-analysées, notes en double) ET `runTimestamps` (le
+        /// plafond de la fenêtre 5 h repartait de zéro, juste après qu'on ait
+        /// assoupli le quota). C'est arrivé en vrai sur cette machine.
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            processed = try container.decodeIfPresent(
+                [LearningGate.History.Processed].self, forKey: .processed) ?? []
+            runTimestamps = try container.decodeIfPresent([Date].self, forKey: .runTimestamps) ?? []
+            attempts = try container.decodeIfPresent([AttemptRecord].self, forKey: .attempts) ?? []
+        }
     }
 
     /// Les évaluations récentes, de la plus récente à la plus ancienne.
@@ -551,6 +601,13 @@ final class RetrospectiveRunner {
     private func recordAttempt() {
         var state = loadState()
         state.runTimestamps.append(Date())
+        saveState(state)
+    }
+
+    /// Retire la dernière tentative du plafond : elle n'a rien coûté.
+    private func refundAttempt() {
+        var state = loadState()
+        if !state.runTimestamps.isEmpty { state.runTimestamps.removeLast() }
         saveState(state)
     }
 

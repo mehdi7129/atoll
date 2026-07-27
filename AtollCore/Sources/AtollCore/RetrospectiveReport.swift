@@ -278,7 +278,7 @@ public struct RetrospectiveReport: Equatable, Sendable {
         for entry in (value as? [Any]) ?? [] {
             guard skills.count < Limit.skills else { break }
             guard let dict = entry as? [String: Any],
-                  let slug = validSlug(dict["slug"]),
+                  let slug = validSkillSlug(dict["slug"]),
                   let rawTitle = dict["title"] as? String,
                   let rawSkillMD = dict["skill_md"] as? String else { continue }
             let title = truncated(rawTitle, to: Limit.title)
@@ -314,17 +314,27 @@ public struct RetrospectiveReport: Equatable, Sendable {
               raw.range(of: "\\A[a-z0-9]+(-[a-z0-9]+)*\\z",
                         options: .regularExpression) != nil
         else { return nil }
-        // Le préfixe `atoll-` appartient à ATOLL : c'est lui qui nomme le
+        return raw
+    }
+
+    /// Slug de SKILL : `validSlug` + retrait du préfixe réservé.
+    ///
+    /// Le préfixe `atoll-` appartient à ATOLL : c'est lui qui nomme le
         // dossier d'installation (`atoll-<slug>`) et `SkillSlug.validate` REFUSE
         // un slug qui l'usurpe. Or un modèle qui analyse une session sur Atoll
         // nomme naturellement son skill « atoll-… » — vu en vrai au premier run
         // réel : le skill sortait en `atoll-atoll-dmg-release-pipeline` et
         // devenait inapprouvable. On le retire ici plutôt que de perdre la
         // proposition ; un slug réduit à « atoll- » n'a plus de substance.
-        var slug = raw
+    private static func validSkillSlug(_ value: Any?) -> String? {
+        guard var slug = validSlug(value) else { return nil }
         while slug.hasPrefix(SkillSlug.managedPrefix) {
             slug = String(slug.dropFirst(SkillSlug.managedPrefix.count))
         }
+        // `SkillSlug.validate` est la règle du DOSSIER d'installation (longueur
+        // 2…40, noms réservés) : elle ne s'applique qu'aux skills. L'appliquer
+        // aux notes aurait droppé en silence toute note au slug descriptif un
+        // peu long — exactement le savoir qu'on cherche à capturer (revue).
         return SkillSlug.validate(slug) == nil ? nil : slug
     }
 

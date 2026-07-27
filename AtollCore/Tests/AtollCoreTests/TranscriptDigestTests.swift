@@ -3,6 +3,39 @@ import XCTest
 
 final class TranscriptDigestTests: XCTestCase {
 
+    /// RÉGRESSION MESURÉE EN VRAI : sur un transcript de 45 Mo, les fragments
+    /// `.assistant` mangeaient tout le budget et il ne restait **zéro**
+    /// commande réussie — alors que le prompt promet au modèle « commands that
+    /// succeeded » et que c'est la matière d'une procédure rejouable.
+    func testToolInvocationsSurviveAFloodOfAssistantText() {
+        var lines: [TranscriptLine] = []
+        // 200 conclusions bavardes (2 000 caractères chacune après cap).
+        for index in 0..<200 {
+            lines.append(TranscriptLine(
+                uuid: "a\(index)", sessionID: nil, timestamp: nil, cwd: nil, gitBranch: nil,
+                fragments: [.init(role: .assistant, text: String(repeating: "bla ", count: 800))]
+            ))
+        }
+        // 40 commandes qui ont MARCHÉ (invocation + résultat sans erreur).
+        for index in 0..<40 {
+            lines.append(TranscriptLine(
+                uuid: "t\(index)", sessionID: nil, timestamp: nil, cwd: nil, gitBranch: nil,
+                fragments: [.init(role: .tool, text: "Bash · commande-utile-\(index)")]
+            ))
+            lines.append(TranscriptLine(
+                uuid: "r\(index)", sessionID: nil, timestamp: nil, cwd: nil, gitBranch: nil,
+                fragments: [.init(role: .toolResult, text: "sortie normale \(index)")]
+            ))
+        }
+        let result = TranscriptDigest.make(lines: lines)
+
+        XCTAssertLessThanOrEqual(result.characterCount, TranscriptDigest.defaultCharacterBudget)
+        let toolLines = result.text.components(separatedBy: "commande-utile-").count - 1
+        XCTAssertGreaterThan(toolLines, 5,
+                             "les commandes réussies doivent survivre au déluge de texte")
+    }
+
+
     // MARK: - Fabriques
 
     /// Une ligne de transcript porteuse des fragments donnés. Le condensé travaille sur

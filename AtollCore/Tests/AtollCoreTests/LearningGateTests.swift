@@ -257,10 +257,19 @@ final class LearningGateTests: XCTestCase {
             resetsAt: now.addingTimeInterval(1_800)
         )
         XCTAssertEqual(decide(quota: staleHighLiveWindow), .skip(.quotaAboveThreshold))
-        // Sans resets_at connu, on ne peut rien affirmer : règle « inconnu ».
-        XCTAssertEqual(decide(quota: staleAndHigh), .run)
+        // Sans resets_at, une lecture de MOINS de 5 h décrit forcément une
+        // fenêtre dont l'usage n'a pu que croître : minorant, donc vrai refus
+        // (revue : sinon 99 % vieux de 2 h autorisait un run).
+        XCTAssertEqual(decide(quota: staleAndHigh), .skip(.quotaAboveThreshold))
+        // Au-delà de 5 h, la fenêtre a forcément tourné : on ne sait plus rien.
+        let ancientAndHigh = LearningGate.QuotaFacts(
+            usedFraction: 0.99,
+            receivedAt: now.addingTimeInterval(-6 * 3_600),
+            resetsAt: nil
+        )
+        XCTAssertEqual(decide(quota: ancientAndHigh), .run)
         XCTAssertEqual(
-            decide(quota: staleAndHigh, history: LearningGate.History(runTimestamps: [now])),
+            decide(quota: ancientAndHigh, history: LearningGate.History(runTimestamps: [now])),
             .skip(.quotaStale)
         )
         // windowCapReached passe désormais AVANT le quota : c'est lui qui borne

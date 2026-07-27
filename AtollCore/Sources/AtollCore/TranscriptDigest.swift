@@ -43,11 +43,16 @@ public enum TranscriptDigest {
         public let role: TranscriptLine.Role
         public let text: String
         public let timestamp: Date?
+        /// `is_error` du transcript pour un `.toolResult` (nil = absent) —
+        /// propagé depuis le fragment, c'est l'autorité sur l'échec.
+        public let isError: Bool?
 
-        public init(role: TranscriptLine.Role, text: String, timestamp: Date?) {
+        public init(role: TranscriptLine.Role, text: String, timestamp: Date?,
+                    isError: Bool? = nil) {
             self.role = role
             self.text = text
             self.timestamp = timestamp
+            self.isError = isError
         }
     }
 
@@ -152,14 +157,45 @@ public enum TranscriptDigest {
             keptCount > 0 ? sum + blockSeparator.count * (keptCount - 1) : 0
         }
 
+        // PARTS RÉSERVÉES PAR RÔLE (revue) — sans elles, la promesse faite au
+        // modèle (« commands that succeeded ») était FAUSSE sur les sessions
+        // qui comptent : mesuré sur un transcript de 45 Mo, 1 382 invocations
+        // d'outils réussies étaient sélectionnées et **zéro** survivait, les
+        // fragments `.assistant` (2 000 caractères chacun) ayant mangé tout le
+        // budget avant que l'ordre de sacrifice ne s'applique. Or une commande
+        // qui a marché EST la matière d'une procédure rejouable.
+        //
+        // On protège donc une part du budget pour les rôles qui portent le
+        // savoir procédural, avant l'élagage global : tant qu'un rôle n'a pas
+        // dépassé sa part, ses entrées ne sont pas sacrifiables.
+        var protectedBudget: [TranscriptLine.Role: Int] = [:]
+        for (role, share) in reservedShares {
+            protectedBudget[role] = Int(Double(budget) * share)
+        }
+        var spentByRole: [TranscriptLine.Role: Int] = [:]
+
         // `sacrificeOrder` couvre TOUTES les entrées : la boucle se termine toujours,
-        // au pire sur un condensé vide.
-        for index in sacrificeOrder(for: selected) {
-            guard estimatedTotal() > budget else { break }
-            keep[index] = false
-            keptCount -= 1
-            sum -= blocks[index].count
-            pruned = true
+        // au pire sur un condensé vide. Deux passes : d'abord en épargnant les
+        // parts réservées, puis — s'il le faut encore — sans épargne.
+        for pass in 0..<2 {
+            for index in sacrificeOrder(for: selected) {
+                guard estimatedTotal() > budget else { break }
+                guard keep[index] else { continue }
+                let role = selected[index].role
+                if pass == 0, let reserve = protectedBudget[role] {
+                    // Ce qui est GARDÉ pour ce rôle, recalculé à la volée.
+                    let kept = selected.indices
+                        .filter { keep[$0] && selected[$0].role == role }
+                        .reduce(0) { $0 + blocks[$1].count }
+                    spentByRole[role] = kept
+                    if kept <= reserve { continue } // dans sa part : épargné
+                }
+                keep[index] = false
+                keptCount -= 1
+                sum -= blocks[index].count
+                pruned = true
+            }
+            if estimatedTotal() <= budget { break }
         }
 
         let text = blocks.indices
@@ -184,7 +220,7 @@ public enum TranscriptDigest {
         for line in lines {
             for fragment in line.fragments where !fragment.text.isEmpty {
                 flat.append(Entry(role: fragment.role, text: fragment.text,
-                                  timestamp: line.timestamp))
+                                  timestamp: line.timestamp, isError: fragment.isError))
             }
         }
 
@@ -197,7 +233,7 @@ public enum TranscriptDigest {
             case .user, .summary, .assistant:
                 isKept = true
             case .toolResult:
-                isKept = hasErrorMarker(entry.text)
+                isKept = isFailure(entry)
             case .tool:
                 isKept = succeeded(toolAt: index, in: flat)
             case .thinking, .title, .note:
@@ -205,15 +241,37 @@ public enum TranscriptDigest {
             }
             guard isKept else { continue }
             kept.append(Entry(role: entry.role, text: capped(entry.text),
-                              timestamp: entry.timestamp))
+                              timestamp: entry.timestamp, isError: entry.isError))
         }
         return kept
     }
 
     // MARK: - Règles de sélection
 
-    /// Un `.toolResult` n'est gardé que s'il porte une trace d'échec. Insensible à la
-    /// casse ; `lowercased()` gère aussi « Échec » → « échec ».
+    /// Un `.toolResult` a-t-il ÉCHOUÉ ? `is_error` du transcript fait autorité ;
+    /// l'heuristique par mot-clé n'est qu'un REPLI quand le champ est absent.
+    ///
+    /// POURQUOI (mesuré en revue) : chercher « error » dans la sortie classait
+    /// en échec la lecture RÉUSSIE de tout fichier source contenant ce mot —
+    /// 73 « erreurs » détectées sur un transcript qui n'en portait que 13
+    /// selon `is_error`, soit 5× trop. Double dégât : ces succès étaient
+    /// présentés au modèle comme des pièges, ET l'invocation correspondante
+    /// disparaissait des « commandes qui ont marché ». À l'inverse, le texte
+    /// arrive déjà tronqué à 1 500 caractères : un build qui échoue après une
+    /// longue sortie passait pour un succès.
+    static func isFailure(_ fragment: TranscriptLine.Fragment) -> Bool {
+        if let isError = fragment.isError { return isError }
+        return hasErrorMarker(fragment.text)
+    }
+
+    /// Même règle pour une entrée déjà sélectionnée.
+    static func isFailure(_ entry: Entry) -> Bool {
+        if let isError = entry.isError { return isError }
+        return hasErrorMarker(entry.text)
+    }
+
+    /// Repli historique : trace d'échec dans le texte. Insensible à la casse ;
+    /// `lowercased()` gère aussi « Échec » → « échec ».
     static func hasErrorMarker(_ text: String) -> Bool {
         let lowered = text.lowercased()
         return errorMarkers.contains { lowered.contains($0) }
@@ -230,7 +288,7 @@ public enum TranscriptDigest {
         let upperBound = min(index + toolLookahead, flat.count - 1)
         guard upperBound > index else { return false }
         for next in (index + 1)...upperBound where flat[next].role == .toolResult {
-            return !hasErrorMarker(flat[next].text)
+            return !isFailure(flat[next])
         }
         return false
     }
@@ -265,6 +323,21 @@ public enum TranscriptDigest {
         case .thinking, .title, .note: return 0
         }
     }
+
+    /// Part du budget garantie à chaque rôle porteur de savoir PROCÉDURAL,
+    /// à l'abri de l'élagage tant qu'elle n'est pas dépassée.
+    ///
+    /// Calibré sur les mesures réelles : un transcript de 45 Mo produit ~1 380
+    /// invocations d'outils et ~500 conclusions d'assistant ; sans réserve, les
+    /// secondes évincent intégralement les premières. 25 % du budget suffisent
+    /// à faire entrer plusieurs dizaines de commandes réussies, et 15 % pour
+    /// les erreurs — l'autre moitié du savoir (« ce qui a raté et comment on
+    /// s'en est sorti »). Les `.user` n'ont pas besoin de réserve : ils sont
+    /// déjà les derniers sacrifiés.
+    static let reservedShares: [TranscriptLine.Role: Double] = [
+        .tool: 0.25,
+        .toolResult: 0.15,
+    ]
 
     /// Indices de `entries` dans l'ordre où il faut les sacrifier.
     static func sacrificeOrder(for entries: [Entry]) -> [Int] {

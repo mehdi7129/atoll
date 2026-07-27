@@ -241,8 +241,15 @@ public enum LearningGate {
             // dépasse déjà le seuil, c'est un vrai refus, pas une incertitude.
             // Sans `resets_at`, on ne sait même pas si c'est la même fenêtre :
             // on retombe sur la règle « inconnu ».
-            if let resetsAt = quota.resetsAt, resetsAt > now,
-               usedFraction >= config.quotaThreshold {
+            // La fenêtre 5 h EST la borne : une lecture plus jeune que cela
+            // décrit forcément la fenêtre en cours (ou une plus ancienne, donc
+            // un usage encore plus élevé). Dans les deux cas la fraction est un
+            // MINORANT — un `resets_at` connu et futur le confirme, mais son
+            // absence n'y change rien (revue : sans cette branche, une lecture
+            // à 99 % vieille de 2 h autorisait un run).
+            let readingIsWithinWindow = quota.resetsAt.map { $0 > now }
+                ?? (now.timeIntervalSince(receivedAt) < runWindowSeconds)
+            if readingIsWithinWindow, usedFraction >= config.quotaThreshold {
                 return .skip(.quotaAboveThreshold)
             }
             return recentRuns.count < config.unknownQuotaMaxPerWindow

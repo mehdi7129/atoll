@@ -29,10 +29,17 @@ public struct TranscriptLine: Equatable, Sendable {
     public struct Fragment: Equatable, Sendable {
         public let role: Role
         public let text: String
+        /// Pour un `.toolResult` : le champ `is_error` du transcript, quand il
+        /// est présent. C'est l'AUTORITÉ pour savoir si un outil a échoué —
+        /// bien plus fiable que de chercher « error » dans la sortie, qui
+        /// classe en échec la lecture réussie d'un fichier contenant ce mot
+        /// (mesuré : 5× trop de faux positifs). nil = information absente.
+        public let isError: Bool?
 
-        public init(role: Role, text: String) {
+        public init(role: Role, text: String, isError: Bool? = nil) {
             self.role = role
             self.text = text
+            self.isError = isError
         }
     }
 
