@@ -1,9 +1,9 @@
 # CLAUDE.md — instructions projet Atoll
 
 > 📌 **REPRISE DE DEV : lire `docs/HANDOFF.md` en premier** — état exact, méthode de
-> travail, et TOUS les pièges appris à la dure. (v0.13.0 publiée : Phase 13
+> travail, et TOUS les pièges appris à la dure. (v0.13.2 publiée : Phase 13
 > « Rendre la main » — la fin d'une tâche vient te chercher, deux sons à toi,
-> la flotte lisible par état.)
+> la flotte lisible par état ; puis réglages étirables et vocabulaire dé-jargonné.)
 
 Atoll est une app macOS native (Swift/SwiftUI) : une « Dynamic Island » autour du notch,
 esthétique ASCII, pour suivre et piloter les sessions Claude Code. Gratuit, open source,

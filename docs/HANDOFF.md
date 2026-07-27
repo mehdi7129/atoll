@@ -273,6 +273,16 @@ Ces points ne sont écrits nulle part ailleurs et coûtent cher à redécouvrir.
 - **Le cache d'un `NSSound` doit être indexé par USAGE, pas par fichier.** Deux
   événements qui pointent le même son partageaient une instance : le premier son était
   coupé net par le second et rejoué à son volume.
+- **Une scène `Settings` produit une fenêtre NON redimensionnable**, et
+  `.windowResizability(.contentMinSize)` n'y change rien. Symptôme à reconnaître : le
+  bouton zoom (pastille verte) reste ÉTEINT. Le seul remède est d'insérer
+  `.resizable` dans le `styleMask` de la fenêtre elle-même (`ResizableWindow`,
+  un `NSViewRepresentable` posé en `.background`). Corollaire de méthode : la
+  couleur des pastilles est un test visuel fiable, et écrire le cadre de fenêtre
+  dans `defaults` n'en est PAS un — SwiftUI l'ignore.
+- **`fixedSize(vertical: true)` sur un volet d'onglets fait rétrécir la FENÊTRE** à
+  la hauteur du volet le plus court. Pour une taille stable d'un onglet à l'autre :
+  bornes sur le conteneur, `maxWidth/maxHeight: .infinity` sur chaque volet.
 - **Une revue adversariale multi-agents sur du code qui touche la config utilisateur en
   vaut la peine** : 3 agents ont trouvé 6 + 7 + 10 défauts réels sur du code qui
   compilait, passait ses tests et « marchait » en démonstration. Les plus graves
