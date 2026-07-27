@@ -266,6 +266,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         debugTokens.append(pluginsToken)
 
+        // Recherche de plugin par besoin (consomme du quota : DEBUG only).
+        var pluginSearchToken: Int32 = 0
+        notify_register_dispatch("dev.mehdiguiard.atoll.debug.pluginSearch", &pluginSearchToken, DispatchQueue.main) { _ in
+            MainActor.assumeIsolated {
+                let task: Task<Void, Never> = Task { @MainActor in
+                    let outcome = await PluginInventory.shared.search(
+                        need: "relire et commenter mes pull requests GitHub")
+                    let message = outcome ?? "candidats trouvés"
+                    Logger(subsystem: "dev.mehdiguiard.atoll", category: "plugins")
+                        .info("recherche debug : \(message, privacy: .public)")
+                }
+                _ = task
+            }
+        }
+        debugTokens.append(pluginSearchToken)
+
         // Curation des notes (consomme du quota ET réécrit la mémoire :
         // jamais en release). Ignore l'échéance hebdomadaire, PAS les
         // garde-fous (opt-in, budget, archive vérifiée).

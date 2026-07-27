@@ -134,9 +134,6 @@ func forwardHookEvent() {
     }
     if !subset.isEmpty { enrich["env"] = subset }
 
-    let envelope: [String: Any] = ["v": 1, "enrich": enrich, "payload": payload]
-    guard let data = try? JSONSerialization.data(withJSONObject: envelope) else { return }
-
     let eventName = payload["hook_event_name"] as? String
     let isPermissionRequest = eventName == "PermissionRequest"
 
@@ -146,9 +143,16 @@ func forwardHookEvent() {
     // lui, tolère parfaitement 20 ms de retard. Fail-open : nil = rien n'est
     // écrit, le CLI poursuit comme si de rien n'était.
     if eventName == "UserPromptSubmit",
-       let context = ProactiveRecallHook.contextJSON(payload: payload) {
-        _ = replyToStdout(context)
+       let injection = ProactiveRecallHook.contextJSON(payload: payload) {
+        _ = replyToStdout(injection.json)
+        // L'îlot doit pouvoir DIRE qu'il a injecté quelque chose : sans ça,
+        // l'injection est invisible pour l'utilisateur (le bloc part avec
+        // `suppressOutput`, il n'apparaît que dans le transcript).
+        enrich["recallInjected"] = injection.count
     }
+
+    let envelope: [String: Any] = ["v": 1, "enrich": enrich, "payload": payload]
+    guard let data = try? JSONSerialization.data(withJSONObject: envelope) else { return }
 
     let reply = sendToSocket(data, path: BridgePaths.socketPath, awaitReply: isPermissionRequest)
     _ = replyToStdout(reply)

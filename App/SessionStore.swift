@@ -46,6 +46,11 @@ final class SessionStore {
         /// Nombre de prompts utilisateur (hooks UserPromptSubmit) — critère de
         /// « session substantielle » pour la rétrospective. 0 pour les synthétiques.
         var userPromptCount = 0
+        /// Souvenirs joints au DERNIER prompt par le recall proactif, et total
+        /// sur la session. Rendus visibles dans le détail : sans ça, l'injection
+        /// est totalement muette pour l'utilisateur.
+        var lastRecallInjected = 0
+        var totalRecallInjected = 0
 
         var terminalAnchor: TerminalAnchor {
             TerminalAnchor(cwd: cwd, tty: tty, bundleID: bundleID, termProgram: termProgram,
@@ -174,7 +179,8 @@ final class SessionStore {
                 mcpServers: tracked.mcpServers.sorted(),
                 contextUsedFraction: tracked.contextUsedFraction,
                 costUSD: tracked.costUSD,
-                cwd: tracked.cwd
+                cwd: tracked.cwd,
+                recallInjected: tracked.lastRecallInjected
             )
         }
     }
@@ -355,6 +361,9 @@ final class SessionStore {
         switch event.kind {
         case .userPromptSubmit:
             session.userPromptCount += 1
+            // Recall proactif : ce que le helper a joint à CE prompt.
+            session.lastRecallInjected = event.recallInjected ?? 0
+            session.totalRecallInjected += event.recallInjected ?? 0
         case .subagentStart:
             session.subagentCount += 1
         case .subagentStop:

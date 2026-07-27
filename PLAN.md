@@ -1,11 +1,11 @@
 # ATOLL — Plan détaillé
 
 > ⚠️ **Document HISTORIQUE (plan initial du 2026-07-18).** L'app est livrée et publiée
-> (**v0.11.0**, 2026-07-26) : les phases 1 à 11 sont faites — voir §5, tenu à jour.
+> (**v0.12.0**, 2026-07-27) : les phases 1 à 12 sont faites — voir §5, tenu à jour.
 > Deux écarts avec le plan d'origine, décidés en cours de route : le **chat intégré
 > (ex-Phase 6) et la dictée vocale ont été RETIRÉS** (Mehdi préfère Cursor), d'où le
-> décalage de numérotation ; les phases 7 à 11 ont été ajoutées après coup (mémoire,
-> robustesse, cockpit, verre, mémoire vive). Les sections 1 à 4 décrivent l'intention
+> décalage de numérotation ; les phases 7 à 12 ont été ajoutées après coup (mémoire,
+> robustesse, cockpit, verre, mémoire vive, boucle fermée). Les sections 1 à 4 décrivent l'intention
 > initiale et n'ont PAS été réécrites : pour l'état à jour du code, voir
 > `docs/HANDOFF.md`, `CLAUDE.md` et le README.
 
@@ -346,6 +346,12 @@ sessions par projet. Milestone C.
 ### Phase 10 — « Verre & ondulation » — ✅ livrée (v0.10.0)
 Liquid Glass (API publique, macOS 26) + transparence réglable + onde d'expansion, passe
 d'hygiène.
+
+### Phase 12 — « Boucle fermée » — ✅ livrée (v0.12.0)
+La rétrospective ne tournait quasiment jamais (1 run en 7 jours, 0 skill) : quota mis
+en cache, transcript condensé en Swift, prompt rééquilibré, journal de chaque décision
+— 8 notes et 2 skills dès le premier run réparé. Plus l'antériorité (ne pas réinventer
+ce qui existe), l'inventaire des plugins et les modèles par tâche.
 
 ### Phase 11 — « Mémoire vive » — ✅ livrée (v0.11.0)
 Curation périodique des notes, recall proactif opt-in (hook UserPromptSubmit bloquant),

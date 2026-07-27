@@ -61,6 +61,15 @@ struct SessionDetailView: View {
                 .font(AtollFont.mono(10))
             }
 
+            // Recall proactif : ce qui a été JOINT au dernier message. Sans
+            // cette ligne, l'injection est totalement muette (le bloc part
+            // avec `suppressOutput`, il n'apparaît qu'au fond du transcript).
+            if session.recallInjected > 0 {
+                Text("mémoire · \(session.recallInjected) souvenir(s) joint(s) au dernier message")
+                    .font(AtollFont.mono(10))
+                    .foregroundStyle(colors.dim)
+            }
+
             Spacer(minLength: 0)
         }
         .alert("Arrêter cette session ?", isPresented: $confirmingStop) {

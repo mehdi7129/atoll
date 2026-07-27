@@ -25,12 +25,18 @@ public struct AgentSession: Identifiable, Equatable, Sendable {
     public var mcpServers: [String]
     public var contextUsedFraction: Double?
     public var costUSD: Double?
+    /// Souvenirs joints au dernier prompt par le recall proactif (0 = aucun,
+    /// fonction éteinte ou rien trouvé). Rendu visible dans le détail : le bloc
+    /// injecté est masqué du terminal, l'îlot est le seul endroit où l'on peut
+    /// savoir que la session a reçu de la mémoire.
+    public var recallInjected: Int = 0
     public var cwd: String?
 
     public init(id: String = UUID().uuidString, projectName: String, gitBranch: String? = nil,
                 status: Status, subtitle: String? = nil, startedAt: Date = Date(),
                 model: String? = nil, subagentCount: Int = 0, mcpServers: [String] = [],
-                contextUsedFraction: Double? = nil, costUSD: Double? = nil, cwd: String? = nil) {
+                contextUsedFraction: Double? = nil, costUSD: Double? = nil, cwd: String? = nil,
+                recallInjected: Int = 0) {
         self.id = id
         self.projectName = projectName
         self.gitBranch = gitBranch
@@ -43,6 +49,7 @@ public struct AgentSession: Identifiable, Equatable, Sendable {
         self.contextUsedFraction = contextUsedFraction
         self.costUSD = costUSD
         self.cwd = cwd
+        self.recallInjected = recallInjected
     }
 
     /// La session réclame une DÉCISION de l'utilisateur MAINTENANT (permission

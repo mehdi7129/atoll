@@ -1,8 +1,9 @@
 # CLAUDE.md — instructions projet Atoll
 
 > 📌 **REPRISE DE DEV : lire `docs/HANDOFF.md` en premier** — état exact, méthode de
-> travail, et TOUS les pièges appris à la dure. (v0.11.0 publiée : Milestone B —
-> curation des notes, recall proactif, qualité du recall.)
+> travail, et TOUS les pièges appris à la dure. (v0.12.0 publiée : Phase 12
+> « Boucle fermée » — Atoll produit enfin des skills, cherche l'antériorité,
+> diagnostique les plugins.)
 
 Atoll est une app macOS native (Swift/SwiftUI) : une « Dynamic Island » autour du notch,
 esthétique ASCII, pour suivre et piloter les sessions Claude Code. Gratuit, open source,
@@ -109,8 +110,11 @@ Pièges de build appris à la dure :
   macOS 26) sur le panneau étendu, transparence réglable, onde d'expansion + hygiène.
 - ✅ Phase 11 — « Mémoire vive » (v0.11.0) : Milestone B — curation périodique des
   notes, recall proactif (opt-in), qualité du recall (dédup inter-fichiers + récence).
+- ✅ Phase 12 — « Boucle fermée » (v0.12.0) : la rétrospective produit VRAIMENT des
+  skills (condensé Swift, quota persistant, journal), antériorité (`SkillCatalog`),
+  inventaire des plugins, modèles par tâche.
 
-**Phase 12a — « Boucle fermée » (en cours, 2026-07-27)** — Atoll ne produisait AUCUN
+**Phase 12 — « Boucle fermée » (v0.12.0, 2026-07-27)** — Atoll ne produisait AUCUN
 skill. Diagnostic chiffré (agents) : **1 seule rétrospective lancée en 7 jours** sur
 ~29 sessions, 0 skill, et AUCUNE trace pour savoir pourquoi. Trois causes, corrigées :
 - **CAUSE N° 1 — le quota ne vivait qu'en mémoire.** `LearningGate` refusait
@@ -170,8 +174,31 @@ skill. Diagnostic chiffré (agents) : **1 seule rétrospective lancée en 7 jour
 - Debug : `notifyutil -p dev.mehdiguiard.atoll.debug.retroBig` lance une rétrospective
   sur le PLUS GROS transcript du projet (bypass gate) — c'est l'outil qui a permis de
   prouver la boucle sans attendre qu'une vraie session substantielle se termine.
-- Plan complet et jalons suivants (12b antériorité, 12c plugins, 12d réglages) :
-  `docs/ROADMAP-12-boucle-fermee.md`.
+- **12b ANTÉRIORITÉ** : `AtollCore/SkillCatalog` inventorie tout ce que Claude peut
+  DÉJÀ invoquer (117 entrées chez Mehdi : 18 skills, 59 commands `gsd:*`, 40 skills de
+  plugins) et le prompt le reçoit ; le modèle nomme ce que sa proposition recoupe
+  (`similar_existing`, porté jusqu'au meta.json et affiché EN TÊTE de la revue).
+  Doublé d'une détection LOCALE déterministe (`closestMatch`, mots significatifs
+  partagés, seuil 0,5) : la garantie ne peut pas dépendre du bon vouloir du modèle.
+  Pièges du catalogue : le nom fait autorité par le DOSSIER (collision `apex` vécue),
+  les commands ne sont pas des skills mais occupent le même espace de noms, plusieurs
+  versions d'un plugin coexistent (`unknown` perdant), un plugin désactivé n'est pas
+  invocable.
+- **12c PLUGINS** : `App/PluginInventory` pilote `claude plugin` (list, details,
+  enable/disable/install) — watchdog par commande (8 s / 20 s réseau / 90 s install),
+  pipes drainés en parallèle, spawn shell de login, process marqué
+  `ATOLL_RETROSPECTIVE=1`. **Atoll n'écrit JAMAIS dans `enabledPlugins` de
+  settings.json ni dans le cache** : seule la CLI modifie l'état, et aucune action
+  n'est automatique. Mesuré en vrai : 31 installés / 4 activés / 1 cassé
+  (`security-pro`, fichiers déclarés manquants) / 6 doublons entre marketplaces.
+  ÉCART CLI : `plugin details` accepte l'id COMPLET `nom@marketplace` — l'utiliser,
+  sinon on lit le coût du mauvais plugin homonyme.
+- **12d MODÈLES PAR TÂCHE** : rétrospective / curation / recherche, parmi
+  haiku · sonnet · opus · fable (défauts : Haiku pour chercher, Sonnet pour analyser).
+- **RECALL VISIBLE** : le helper remonte le nombre de souvenirs injectés dans
+  l'enveloppe (`enrich.recallInjected`) → affiché dans le détail de session. Sans ça
+  l'injection était totalement muette (le bloc part avec `suppressOutput`).
+- Plan et critères mesurables : `docs/ROADMAP-12-boucle-fermee.md`.
 
 **Phase 11 — « Mémoire vive » (v0.11.0, 2026-07-26)** = Milestone B de la feuille de
 route « Atoll 2 ». Trois volets, tous vérifiés en vrai :

@@ -175,6 +175,8 @@ private struct ClaudeCodePane: View {
     @State private var proactiveRecallError: String?
     @State private var plugins = PluginInventory.shared
     @State private var pluginError: String?
+    @State private var pluginNeed = ""
+    @State private var confirmingInstall: PluginSearchResult.Match?
 
     private var store: SessionStore { .shared }
 
@@ -269,6 +271,7 @@ private struct ClaudeCodePane: View {
                             Button("Désactiver") {
                                 Task { pluginError = await plugins.setEnabled(false, pluginID: plugin.id) }
                             }
+                            .help("Le plugin reste installé ; réactivable par `claude plugin enable`.")
                             .buttonStyle(.borderless)
                             .disabled(plugins.busyPluginID != nil)
                         }
@@ -286,12 +289,15 @@ private struct ClaudeCodePane: View {
                         .foregroundStyle(.secondary)
                 }
                 HStack {
-                    Button("Actualiser") { plugins.refresh() }
+                    Button("Actualiser") {
+                        pluginError = nil // une erreur passée ne survit pas à un succès
+                        plugins.refresh()
+                    }
                         .disabled(plugins.isRefreshing)
                     Button("Coût en tokens") {
                         // À la demande : `claude plugin details` par plugin activé.
                         for plugin in plugins.snapshot?.installed.filter(\.isEnabled) ?? [] {
-                            plugins.loadTokenCost(for: plugin.name)
+                            plugins.loadTokenCost(for: plugin.id)
                         }
                     }
                     .disabled(plugins.snapshot == nil)
@@ -305,6 +311,47 @@ private struct ClaudeCodePane: View {
                 jamais lui-même à votre settings.json. Installer un plugin exécute du \
                 code tiers (hooks au démarrage, serveurs MCP) : ça ne se fait que sur \
                 votre geste explicite.
+                """)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+
+            Section("Trouver un plugin") {
+                HStack {
+                    TextField("de quoi avez-vous besoin ?", text: $pluginNeed)
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit { runPluginSearch() }
+                    Button("Chercher") { runPluginSearch() }
+                        .disabled(pluginNeed.trimmingCharacters(in: .whitespaces).isEmpty
+                                  || plugins.isSearching)
+                }
+                if plugins.isSearching {
+                    HStack {
+                        ProgressView().controlSize(.small)
+                        Text("comparaison au catalogue public…").font(.caption)
+                    }
+                }
+                ForEach(plugins.searchMatches, id: \.pluginID) { match in
+                    HStack(alignment: .top) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(match.pluginID)
+                            Text(match.reason)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        // Installer = exécuter du code tiers : confirmation
+                        // explicite, jamais un simple clic.
+                        Button("Installer…") { confirmingInstall = match }
+                            .buttonStyle(.borderless)
+                            .disabled(plugins.busyPluginID != nil)
+                    }
+                }
+                Text("""
+                Décrivez un besoin en français : Atoll le compare aux 268 plugins du \
+                catalogue public (rien n'est envoyé d'autre que votre phrase et les \
+                descriptions publiques). Un plugin qu'il aurait inventé est écarté \
+                d'office — seul un identifiant présent au catalogue peut être proposé.
                 """)
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -343,10 +390,33 @@ private struct ClaudeCodePane: View {
         // Même raison que le volet Apprentissage : avec la section Plugins et
         // sa liste, la hauteur intrinsèque dépassait l'écran.
         .frame(minHeight: 420, idealHeight: 560, maxHeight: 620)
+        .alert("Installer ce plugin ?", isPresented: Binding(
+            get: { confirmingInstall != nil },
+            set: { if !$0 { confirmingInstall = nil } }
+        ), presenting: confirmingInstall) { match in
+            Button("Annuler", role: .cancel) { confirmingInstall = nil }
+            Button("Installer", role: .destructive) {
+                let id = match.pluginID
+                confirmingInstall = nil
+                Task { pluginError = await plugins.install(pluginID: id) }
+            }
+        } message: { match in
+            Text("""
+            \(match.pluginID) sera installé par `claude plugin install`. Un plugin \
+            peut enregistrer des hooks exécutés au démarrage de CHAQUE session et \
+            lancer des serveurs MCP : c'est du code tiers qui s'exécutera avec vos \
+            droits. Il restera désactivable à tout moment.
+            """)
+        }
         .onAppear {
             hooksInstalled = HookInstaller.isInstalled
             MemoryIndexer.shared.refreshStats()
         }
+    }
+
+    private func runPluginSearch() {
+        let need = pluginNeed
+        Task { pluginError = await plugins.search(need: need) }
     }
 
     /// « 31 installés · 4 activés · 1 cassé ».
@@ -361,7 +431,7 @@ private struct ClaudeCodePane: View {
     private func pluginDetail(_ plugin: InstalledPlugin) -> String {
         var parts: [String] = []
         if let version = plugin.version, version != "unknown" { parts.append("v\(version)") }
-        if let tokens = plugins.tokenCosts[plugin.name] {
+        if let tokens = plugins.tokenCosts[plugin.id] {
             parts.append("~\(tokens) tok/session")
         }
         if !plugin.mcpServerNames.isEmpty {

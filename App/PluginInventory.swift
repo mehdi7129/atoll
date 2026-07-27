@@ -247,7 +247,9 @@ final class PluginInventory {
         // confondus) — c'est voulu : on sérialise les écritures de la CLI.
         guard busyPluginID == nil else {
             log.debug("action ignorée sur \(pluginID, privacy: .public) : une autre est en cours")
-            return nil
+            // Une action ignorée n'est PAS un succès : le dire (piège de la
+            // Phase 9, « stop fire-and-forget qui ment sur son résultat »).
+            return "Une autre action plugin est en cours."
         }
         busyPluginID = pluginID
         defer { busyPluginID = nil }
@@ -303,6 +305,57 @@ final class PluginInventory {
         }.value
         claudePath = resolved
         return resolved
+    }
+
+    // MARK: - Recherche par besoin
+
+    /// Résultat de la dernière recherche « quel plugin répond à ce besoin ? ».
+    /// Vidé à chaque nouvelle recherche.
+    private(set) var searchMatches: [PluginSearchResult.Match] = []
+    private(set) var isSearching = false
+
+    /// Compare un besoin exprimé en français au catalogue PUBLIC des plugins.
+    ///
+    /// Deux gardes qui comptent :
+    /// - le catalogue est chargé d'abord (`--available`, réseau) — sans lui, il
+    ///   n'y a rien à comparer ;
+    /// - `PluginSearchResult.parse` DROPPE tout id absent du catalogue : une
+    ///   hallucination du modèle ne doit jamais devenir une commande
+    ///   d'installation. C'est la garde centrale de cette fonction.
+    func search(need: String) async -> String? {
+        let trimmed = need.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        guard !isSearching else { return nil }
+        isSearching = true
+        searchMatches = []
+        defer { isSearching = false }
+
+        if snapshot?.available.isEmpty ?? true {
+            await refreshNow(includeAvailable: true)
+        }
+        guard let snapshot, !snapshot.available.isEmpty else {
+            return "Catalogue des plugins indisponible."
+        }
+        guard let claude = await resolveClaudePath() else {
+            return "Binaire claude introuvable."
+        }
+
+        let arguments = PluginSearchPrompt.cliArguments(
+            model: LearningSettings.shared.searchModel,
+            budgetUSD: 0.30
+        ) + [PluginSearchPrompt.userPrompt(need: trimmed,
+                                           catalog: snapshot.summaryForPrompt())]
+        let outcome = await Self.run(arguments: arguments, claude: claude, timeout: 120)
+        guard outcome.status == 0 else {
+            return "Recherche impossible : \(outcome.diagnostic)"
+        }
+        let known = Set(snapshot.available.map(\.id))
+        guard let result = PluginSearchResult.parse(cliOutput: outcome.output, knownIDs: known) else {
+            return "Réponse inexploitable."
+        }
+        searchMatches = result.matches
+        log.info("recherche « \(trimmed.prefix(40), privacy: .public) » : \(result.matches.count) candidat(s)")
+        return result.matches.isEmpty ? "Aucun plugin ne correspond." : nil
     }
 
     // MARK: - Spawn borné

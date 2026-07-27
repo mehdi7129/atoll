@@ -575,4 +575,47 @@ final class SkillCatalogTests: XCTestCase {
         XCTAssertFalse(words.contains("claude"))
         XCTAssertFalse(words.contains("session"))
     }
+
+    /// RÉGRESSION MESURÉE : la rétrospective rédige en FRANÇAIS, 89 des 119
+    /// descriptions du catalogue sont en ANGLAIS — la comparaison par le texte
+    /// ratait 5 des 6 vrais doublons de la machine. Les IDENTIFIANTS, eux,
+    /// restent en anglais des deux côtés : c'est le filet qui compte.
+    func testClosestMatchCrossesTheLanguageBarrierViaIdentifiers() throws {
+        try seedUserSkill(directory: "fix-pr-comments",
+                          description: "Fetch PR review comments and implement all requested changes")
+        try seedUserSkill(directory: "create-pr",
+                          description: "Create and push PR with auto-generated title and description")
+        let catalog = makeCatalog()
+
+        // Titre et description en français, slug en anglais (le cas réel).
+        let match = catalog.closestMatch(
+            slug: "fix-pr-comments-workflow",
+            title: "Traiter les commentaires de revue d'une pull request",
+            description: "Récupérer les commentaires et appliquer les corrections demandées"
+        )
+        XCTAssertEqual(match?.id, "fix-pr-comments")
+    }
+
+    /// Une mise à jour d'un skill déjà appris ne doit pas se signaler comme son
+    /// propre doublon (`atoll-<slug>` est SON installation précédente).
+    func testClosestMatchCanExcludeTheProposalTwin() throws {
+        try seedUserSkill(directory: "atoll-release-pipeline",
+                          description: "Publier une release Atoll avec appcast Sparkle correct")
+        let catalog = makeCatalog()
+
+        XCTAssertEqual(
+            catalog.closestMatch(slug: "release-pipeline",
+                                 title: "Publier une release Atoll",
+                                 description: "Build, notarisation, DMG, appcast")?.id,
+            "atoll-release-pipeline",
+            "sans exclusion, le jumeau est bien trouvé"
+        )
+        XCTAssertNil(
+            catalog.closestMatch(slug: "release-pipeline",
+                                 title: "Publier une release Atoll",
+                                 description: "Build, notarisation, DMG, appcast",
+                                 excluding: ["atoll-release-pipeline"]),
+            "exclu : une mise à jour n'est pas un doublon d'elle-même"
+        )
+    }
 }

@@ -64,6 +64,7 @@ final class SkillReviewCenter {
     /// Recharge propositions + skills installés + stats d'usage.
     func refresh() {
         proposals = store.discoverProposals()
+        similarByProposal = computeSimilarities(for: proposals)
         let userModified = Set(store.reconcile().userModified)
         let usage = loadUsage()
         installed = store.installedSkills().map { skill in
@@ -118,18 +119,57 @@ final class SkillReviewCenter {
         installed.first { $0.skill.slug == proposal.slug }?.userModified ?? false
     }
 
-    /// Ce que l'utilisateur peut DÉJÀ invoquer et qui recoupe cette
-    /// proposition : ce que l'analyse a déclaré, complété par une détection
-    /// LOCALE déterministe (jalon 12b). Le modèle peut oublier de remplir le
-    /// champ — la garantie « on ne propose pas un doublon » ne doit pas
-    /// dépendre de lui.
+    /// Antériorités calculées UNE fois par `refresh()` (jamais dans le corps
+    /// d'une vue : `SkillCatalog.entries()` ouvre ~260 fichiers, 75-145 ms —
+    /// mesuré en revue —, et SwiftUI rappelle le corps à chaque flèche, chaque
+    /// décision, chaque changement de thème).
+    private(set) var similarByProposal: [SkillProposal.ID: String] = [:]
+
+    /// Ce que l'utilisateur peut DÉJÀ invoquer et qui recoupe cette proposition.
     func similarCapability(for proposal: SkillProposal) -> String? {
-        if let declared = proposal.similarExisting, !declared.isEmpty { return declared }
-        return SkillCatalog().closestMatch(
-            slug: proposal.slug,
-            title: proposal.title,
-            description: proposal.description
-        )?.id
+        similarByProposal[proposal.id]
+    }
+
+    /// Calcule les antériorités du lot courant.
+    ///
+    /// Deux règles issues de la revue :
+    /// - ce que le MODÈLE déclare n'est retenu que s'il existe vraiment dans le
+    ///   catalogue. Un « none », « N/A » ou un id halluciné s'affichait sinon
+    ///   comme une antériorité réelle ET court-circuitait la détection locale —
+    ///   la garantie se désarmait toute seule ;
+    /// - le skill JUMEAU (`atoll-<slug>`, l'installation précédente de cette
+    ///   même proposition) est exclu : sinon toute mise à jour se signale comme
+    ///   son propre doublon, et un avertissement systématique s'apprend à
+    ///   ignorer. La fenêtre a déjà « (màj) » pour ce cas.
+    private func computeSimilarities(for proposals: [SkillProposal]) -> [SkillProposal.ID: String] {
+        guard !proposals.isEmpty else { return [:] }
+        let catalog = SkillCatalog()
+        let entries = catalog.entries()
+        let known = Dictionary(entries.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+
+        var result: [SkillProposal.ID: String] = [:]
+        for proposal in proposals {
+            let twin = SkillSlug.dirName(for: proposal.slug)
+            if let declared = proposal.similarExisting?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+               !declared.isEmpty, declared != twin, let entry = known[declared] {
+                result[proposal.id] = label(for: entry)
+                continue
+            }
+            if let match = catalog.closestMatch(slug: proposal.slug,
+                                                title: proposal.title,
+                                                description: proposal.description,
+                                                excluding: [twin]) {
+                result[proposal.id] = label(for: match)
+            }
+        }
+        return result
+    }
+
+    /// « gsd:plan-phase » ou « example-skills:pdf [désactivé] » — une capacité
+    /// qu'on ne peut pas invoquer n'est pas un doublon au même titre.
+    private func label(for entry: CatalogEntry) -> String {
+        entry.isAvailable ? entry.id : "\(entry.id) [désactivé]"
     }
 
     func requestReviewWindow() {

@@ -2,16 +2,16 @@
 
 > Document de continuité pour reprendre le dev après un compactage de conversation.
 > **À lire en premier** avec `CLAUDE.md` (règles) et `PLAN.md` (plan produit).
-> Dernière mise à jour : **2026-07-26**, app **v0.11.0** (Milestone B : curation des
-> notes, recall proactif, qualité du recall).
+> Dernière mise à jour : **2026-07-27**, app **v0.12.0** (Phase 12 « Boucle fermée » :
+> Atoll produit enfin des skills, cherche l'antériorité, diagnostique les plugins).
 
 ---
 
 ## 0. TL;DR — REPRISE APRÈS COMPACTAGE (lire ceci d'abord)
 
 Atoll est une « Dynamic Island » ASCII pour Claude Code sur macOS (Swift/SwiftUI, GPL-3.0,
-repo PUBLIC `github.com/mehdi7129/atoll`). **Phases 1 à 11 livrées et publiées** (v0.11.0,
-GitHub Releases, DMG notarisé + appcast Sparkle). L'app tourne, 370 tests AtollCore verts,
+repo PUBLIC `github.com/mehdi7129/atoll`). **Phases 1 à 12 livrées et publiées** (v0.12.0,
+GitHub Releases, DMG notarisé + appcast Sparkle). L'app tourne, 468 tests AtollCore verts,
 `main` synchronisé. Publier = `Scripts/release.sh` puis `gh release create` + `git push`
 (voir §1).
 
@@ -52,16 +52,30 @@ lancer sur demande EXPLICITE (jamais d'objectif auto) ; perso d'abord.
   (`AtollCore/LearningInventory.swift`). Voir CLAUDE.md « Phase 11 » pour les faits
   vérifiés et les pièges — dont le format `hook_additional_context` et la clé de dédup.
 
-**PROCHAINE ÉTAPE : à décider avec Mehdi** (la feuille de route « Atoll 2 » est
-épuisée). Pistes restées sur la table, aucune tranchée :
+- **Phase 12 « Boucle fermée » (v0.12.0)** : la rétrospective ne tournait quasiment
+  jamais (1 run en 7 jours, 0 skill). Réparée — quota mis en cache, transcript CONDENSÉ
+  en Swift (compression 150× à 590×, le modèle voit enfin la session entière), prompt
+  rééquilibré, journal de chaque décision. **Résultat : 8 notes + 2 skills dès le
+  premier run**, tous deux approuvés et actifs. S'y ajoutent l'antériorité
+  (`SkillCatalog`, 117 capacités connues), l'inventaire des plugins
+  (`PluginInventory`), les modèles par tâche et le renommage « Intensité du Liquid
+  Glass ». Détails et pièges : CLAUDE.md « Phase 12 ».
+
+**PROCHAINE ÉTAPE : à décider avec Mehdi.** Pistes restées sur la table :
 - **Sceller les notes** comme les skills (manifeste + SHA256) : aujourd'hui n'importe
   quel processus local peut déposer un `.md` dans `~/.atoll/learning/notes/`, qui sera
   indexé puis curé. `~/.atoll` est passé en 0700 (autres comptes exclus), mais la
   chaîne transcript → rétrospective → note → curation → recall n'a pas de scellé.
+  ARBITRAGE À FAIRE : contre un processus du MÊME utilisateur, un manifeste
+  n'apporterait rien (il pourrait le réécrire aussi) — le scellé n'a de sens que
+  couplé à quelque chose que ce processus ne peut pas forger.
 - **Rendre l'injection visible** : le bloc du recall proactif part avec
   `suppressOutput: true` (choix assumé : 1 800 caractères à chaque prompt seraient
   illisibles au terminal) — il n'apparaît donc que dans le transcript. Une ligne
   récapitulative dans l'îlot serait le bon endroit.
+- **Recherche de plugin PAR BESOIN** : le catalogue public (268 entrées avec leur
+  popularité) est décodé, le prompt de mise en correspondance est écrit — il manque le
+  geste produit dans l'UI (« trouve-moi un plugin pour X ») et l'arbitrage sur son coût.
 - **Multi-provider** (Codex/OpenCode…) à la AgentGlance ; jump-back Ghostty/tmux ;
   notification quand une tâche bg finit ; vue flotte par état.
 - **Limite connue** : `ProactiveRecall.keywords` découpe sur les frontières de mots —

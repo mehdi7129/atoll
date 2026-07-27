@@ -222,23 +222,55 @@ public struct SkillCatalog: Sendable {
     /// est volontairement HAUT (0,5) : mieux vaut ne rien signaler que crier au
     /// doublon à chaque proposition, ce qui apprendrait à ignorer l'avertissement.
     public func closestMatch(slug: String, title: String, description: String,
-                             threshold: Double = 0.5) -> CatalogEntry? {
-        let needle = Self.significantWords(from: "\(slug) \(title) \(description)")
-        guard needle.count >= 2 else { return nil }
+                             threshold: Double = 0.5,
+                             excluding excluded: Set<String> = []) -> CatalogEntry? {
+        // DEUX comparaisons, on garde la meilleure (revue) :
+        // 1. le texte complet (slug + titre + description) — marche quand les
+        //    deux côtés parlent la même langue ;
+        // 2. les IDENTIFIANTS seuls (slug proposé vs id de l'entrée) — le
+        //    filet indispensable, parce que la rétrospective rédige en
+        //    FRANÇAIS alors que 89 des 119 descriptions du catalogue sont en
+        //    anglais : « Traiter les commentaires de PR » ne ressemblait pas à
+        //    « Fetch PR review comments », alors que `pr-review-comments`
+        //    ressemble beaucoup à `fix-pr-comments`. Sans ça, 5 des 6 vrais
+        //    doublons de la machine passaient à travers (mesuré).
+        let fullNeedle = Self.significantWords(from: "\(slug) \(title) \(description)")
+        let idNeedle = Self.identifierWords(from: slug)
+        guard fullNeedle.count >= 2 || idNeedle.count >= 1 else { return nil }
 
         var best: (entry: CatalogEntry, score: Double)?
-        for entry in entries() {
+        for entry in entries() where !excluded.contains(entry.id) {
+            var score = 0.0
             let hay = Self.significantWords(
                 from: "\(entry.id) \(entry.name) \(entry.description)")
-            guard !hay.isEmpty else { continue }
-            let shared = needle.intersection(hay).count
-            guard shared > 0 else { continue }
-            let score = Double(shared) / Double(min(needle.count, hay.count))
+            if !hay.isEmpty, fullNeedle.count >= 2 {
+                let shared = fullNeedle.intersection(hay).count
+                if shared > 0 {
+                    score = Double(shared) / Double(min(fullNeedle.count, hay.count))
+                }
+            }
+            let idHay = Self.identifierWords(from: entry.id)
+            if !idHay.isEmpty, !idNeedle.isEmpty {
+                let shared = idNeedle.intersection(idHay).count
+                if shared > 0 {
+                    score = max(score, Double(shared) / Double(min(idNeedle.count, idHay.count)))
+                }
+            }
             if score >= threshold, score > (best?.score ?? 0) {
                 best = (entry, score)
             }
         }
         return best?.entry
+    }
+
+    /// Mots d'un IDENTIFIANT (`fix-pr-comments`, `gsd:plan-phase`) : découpe
+    /// sur les séparateurs d'identifiant, ≥ 2 caractères (« pr » compte !),
+    /// mots trop courants écartés comme ailleurs.
+    static func identifierWords(from identifier: String) -> Set<String> {
+        let tokens = identifier.lowercased().split { !$0.isLetter && !$0.isNumber }
+        return Set(tokens.map(String.init).filter {
+            $0.count >= 2 && !genericWords.contains($0)
+        })
     }
 
     /// Mots de ≥ 4 caractères, minuscules, sans diacritiques, hors mots-outils

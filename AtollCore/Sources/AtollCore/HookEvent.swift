@@ -69,6 +69,11 @@ public struct ParsedHookEvent: Equatable, Sendable {
     public let tty: String?
     public let terminalHint: String?
     public let entrypoint: String?
+    /// Nombre de souvenirs joints au prompt par le recall proactif (nil si la
+    /// fonction est éteinte ou n'a rien trouvé). Remonté par le helper pour que
+    /// l'îlot puisse le DIRE : le bloc injecté part avec `suppressOutput`, il
+    /// est donc invisible au terminal.
+    public let recallInjected: Int?
     /// Sous-ensemble d'environnement pour le jump-back (Phase 4).
     public let env: [String: String]
 
@@ -120,6 +125,7 @@ public struct ParsedHookEvent: Equatable, Sendable {
         tty = enrich["tty"] as? String
         terminalHint = enrich["terminalHint"] as? String
         entrypoint = enrich["entrypoint"] as? String
+        recallInjected = (enrich["recallInjected"] as? NSNumber)?.intValue
         env = (enrich["env"] as? [String: String]) ?? [:]
     }
 

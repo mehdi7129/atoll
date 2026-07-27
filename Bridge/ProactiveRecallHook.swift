@@ -44,7 +44,7 @@ enum ProactiveRecallHook {
     ///   "additionalContext":"…"},"suppressOutput":true}`.
     /// `suppressOutput` évite d'afficher le bloc dans le transcript verbeux du
     /// terminal : le contexte est pour le modèle, pas pour l'écran.
-    static func contextJSON(payload: [String: Any]) -> Data? {
+    static func contextJSON(payload: [String: Any]) -> (json: Data, count: Int)? {
         guard let config = loadConfig(), config.enabled else { return nil }
         guard let prompt = payload["prompt"] as? String,
               let query = ProactiveRecall.query(fromPrompt: prompt) else { return nil }
@@ -92,7 +92,11 @@ enum ProactiveRecallHook {
             ],
             "suppressOutput": true,
         ]
-        return try? JSONSerialization.data(withJSONObject: object)
+        guard let json = try? JSONSerialization.data(withJSONObject: object) else { return nil }
+        // Le NOMBRE d'extraits remonte à l'îlot avec l'événement : c'est la
+        // seule façon pour l'utilisateur de savoir que sa session a reçu de la
+        // mémoire (le bloc lui-même est masqué du terminal).
+        return (json: json, count: min(significant.count, config.maxHits))
     }
 
     /// Racine du dépôt contenant `path` : on remonte jusqu'au premier dossier

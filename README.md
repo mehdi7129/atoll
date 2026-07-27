@@ -30,8 +30,9 @@ y compris pour les sessions lancées depuis le terminal de Cursor.
 | 9 · Cockpit ambiant (lancer une tâche en arrière-plan depuis le notch) | ✅ |
 | 10 · Verre & ondulation (Liquid Glass macOS 26 · transparence réglable) | ✅ |
 | 11 · Mémoire vive (curation des notes · souvenirs proposés d'office · recall trié) | ✅ |
+| 12 · Boucle fermée (Atoll apprend vraiment · antériorité · plugins) | ✅ |
 
-**Version courante : v0.11.0** (voir les [Releases](https://github.com/mehdi7129/atoll/releases)).
+**Version courante : v0.12.0** (voir les [Releases](https://github.com/mehdi7129/atoll/releases)).
 
 Voir le [plan détaillé](PLAN.md), la [recherche](docs/research/) et [CLAUDE.md](CLAUDE.md)
 pour contribuer.
@@ -64,6 +65,25 @@ pour contribuer.
   contradictions sont SIGNALÉES, jamais tranchées. L'ancienne version part dans
   `~/.atoll/learning/archive` — **vérifiée avant tout remplacement** —, et un
   résultat vide ou trop rétréci est refusé.
+- **Atoll apprend de vos sessions, pour de vrai.** Il lit lui-même vos transcripts
+  (9 à 47 Mo) et n'envoie à l'analyse que la substance — intentions, conclusions,
+  erreurs résolues, commandes qui ont marché : **une compression de 150× à 590×**, donc
+  une session vue en entier au lieu de 8 % d'un fichier. Les procédures rejouables
+  deviennent de vrais skills Claude Code, après votre revue. Chaque fin de session
+  laisse une trace lisible (analysée, ou sautée et pourquoi) dans Réglages ›
+  Apprentissage — vous savez toujours ce que fait Atoll et ce qu'il a coûté.
+- **Il ne réinvente pas ce que vous avez déjà** : avant de proposer un skill, Atoll
+  compare le besoin à tout ce que Claude peut déjà invoquer chez vous (vos skills, vos
+  slash commands, les skills de vos plugins) et signale ce que la proposition recoupe,
+  au moment de la revue.
+- **Vos plugins, enfin lisibles** : combien sont installés, combien réellement activés,
+  lesquels sont cassés, et **ce qu'ils coûtent en tokens à chaque session**. Activer,
+  désactiver ou installer passe toujours par la commande officielle `claude plugin`,
+  sur votre geste explicite — jamais automatiquement (un plugin, c'est du code tiers
+  qui s'exécute au démarrage de vos sessions).
+- **Modèle au choix par tâche** : Haiku pour chercher, Sonnet pour analyser, Opus ou
+  Fable si vous préférez — réglable indépendamment pour la rétrospective, la curation
+  et la recherche.
 - **Rétrospective (opt-in, expérimental)** : après chaque session substantielle —
   et seulement si votre fenêtre de quota 5 h a de la marge — une analyse en
   LECTURE SEULE extrait les leçons durables : notes mémoire (indexées, citées par
@@ -89,9 +109,9 @@ pour contribuer.
   compacte réglable par écran** (petit / moyen / large — ex. large sur un moniteur externe,
   moyen sur le MacBook).
 - **Apparence en verre** (macOS 26) : le panneau étendu se pose sur un vrai fond
-  **Liquid Glass** (API publique — repli sobre sur macOS 14/15), avec un curseur de
-  **transparence réglable** et une onde discrète à l'ouverture (respecte « Réduire les
-  animations »). Le contenu ASCII reste net par-dessus.
+  **Liquid Glass** (API publique — repli sobre sur macOS 14/15), avec un curseur
+  d'**intensité** (0 % = fond plein, 100 % = verre pur) et une onde discrète à
+  l'ouverture (respecte « Réduire les animations »). Le contenu ASCII reste net.
 
 ## Principes
 
