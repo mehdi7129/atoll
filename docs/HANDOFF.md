@@ -60,6 +60,15 @@ le **prompt disait « en cas de doute, zéro skill »**. Résultat après répar
 route « Atoll 2 » est épuisée : la suite se décide AVEC Mehdi. Ce qui suit est la
 liste réelle de ce qui reste, avec le contexte de décision — pas une liste de vœux.
 
+> ⚠️ **SI TU FAIS UN AUDIT** (Mehdi en demande régulièrement) : le risque n'est PAS
+> de rater des choses, c'est de « corriger » des choix délibérés. **Lis le §B et le
+> §C avant de proposer quoi que ce soit** — le CJK non géré, le bloc de souvenirs
+> masqué, les symboles d'échafaudage, le polling OAuth écarté, le scellé des notes
+> abandonné : tout cela est ASSUMÉ et documenté avec sa raison. Un audit utile ici
+> cherche des DÉFAUTS avec un scénario reproductible (la revue adversariale
+> multi-agents du §2 est l'outil qui marche), pas des écarts de style ni des
+> « améliorations » qui rouvriraient des arbitrages déjà rendus.
+
 ### A. Pistes identifiées, non tranchées (demander à Mehdi avant d'ouvrir)
 
 1. **Multi-provider** (Codex, OpenCode…) à la façon d'AgentGlance. Gros chantier,
