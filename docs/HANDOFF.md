@@ -245,6 +245,26 @@ Ces points ne sont écrits nulle part ailleurs et coûtent cher à redécouvrir.
   la synthèse d'un type `Equatable`. Struct nommée obligatoire.
 - Lire deux pipes **en série** (stdout puis stderr) peut interbloquer un sous-processus
   dont stderr sature. `async let` sur les deux.
+- **`Task.detached` pour écrire un fichier d'état = régression de données.** Deux
+  sauvegardes rapprochées partent en parallèle et l'ordre des `rename` atomiques n'est
+  pas garanti : le PLUS ANCIEN état peut gagner. Ici ça reperdait le drapeau
+  « déjà notifié » → double annonce au redémarrage. Le projet écrit ses états
+  **synchronement sur le MainActor** (`SessionStore.writeSnapshot`) — s'y tenir.
+- **Une regex « tout ce qui est entre deux chevrons » réécrit la prose.** `<[^>]{1,200}>`
+  transformait « la condition i < n && n > 0 » en « la condition i 0 » et
+  « remplacé Array<String> » en « remplacé Array » : un résumé grammaticalement correct
+  qui dit le CONTRAIRE du vrai. Distinguer par la CASSE (balises HTML minuscules vs
+  génériques Swift capitalisés), et en cas de doute GARDER le texte.
+- **Quantificateurs non bornés = O(k·n).** `\[([^\]]*)\]\([^)]*\)` repart de chaque `[`
+  et balaie jusqu'au bout : **3,2 s mesurés** sur 20 000 crochets non appariés, sur le
+  MainActor. Borner (`{0,200}`) en plus du plafond d'entrée.
+- **Le cache d'un `NSSound` doit être indexé par USAGE, pas par fichier.** Deux
+  événements qui pointent le même son partageaient une instance : le premier son était
+  coupé net par le second et rejoué à son volume.
+- **Une revue adversariale multi-agents sur du code qui touche la config utilisateur en
+  vaut la peine** : 3 agents ont trouvé 6 + 7 + 10 défauts réels sur du code qui
+  compilait, passait ses tests et « marchait » en démonstration. Les plus graves
+  (perte silencieuse de hooks tiers) n'auraient jamais été vus autrement.
 
 ---
 
