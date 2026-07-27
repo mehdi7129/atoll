@@ -9,135 +9,104 @@
 
 ## 0. TL;DR — REPRISE APRÈS COMPACTAGE (lire ceci d'abord)
 
-Atoll est une « Dynamic Island » ASCII pour Claude Code sur macOS (Swift/SwiftUI, GPL-3.0,
-repo PUBLIC `github.com/mehdi7129/atoll`). **Phases 1 à 12 livrées et publiées** (v0.12.0,
-GitHub Releases, DMG notarisé + appcast Sparkle). L'app tourne, 468 tests AtollCore verts,
-`main` synchronisé. Publier = `Scripts/release.sh` puis `gh release create` + `git push`
-(voir §1).
+Atoll est une « Dynamic Island » ASCII pour Claude Code sur macOS (Swift/SwiftUI,
+GPL-3.0, repo PUBLIC `github.com/mehdi7129/atoll`).
 
-**Feuille de route « Atoll 2 »** (`~/.claude/plans/indexed-snacking-dahl.md`, validée par
-Mehdi) — **les trois milestones sont livrés** : A robustesse ✅ (Phase 8) · B mémoire
-approfondie ✅ (Phase 11) · C cockpit ✅ (Phase 9, fait avant B car la fondation flotte le
-rendait bon marché). Fondations : migration sur interfaces SUPPORTÉES ; autonomie =
-lancer sur demande EXPLICITE (jamais d'objectif auto) ; perso d'abord.
-**La feuille de route est donc à REDÉFINIR avec Mehdi avant d'entamer quoi que ce soit.**
+### État EXACT au 2026-07-27 (fin de session)
 
-**Ce qui vient d'être livré (cette session) :**
-- **Phase 7 « Atoll apprend » (v0.5→0.7)** : mémoire FTS5 + `atoll-recall` ; rétrospective
-  read-only → notes + skills proposés ; curation (revue humaine).
-- **Phase 8 « Sur rails » (v0.8.0)** = Milestone A : découverte des sessions via
-  `claude agents --json` (autorité) + hooks (temps réel), scan de processus en REPLI
-  (le daemon d'arrière-plan de l'Agent View cassait le scan). Voir CLAUDE.md « Phase 8 ».
-- **Phase 9 « Cockpit ambiant » (v0.9.0)** = Milestone C : `FleetLauncher` +
-  `FleetLauncherWindow` (lancer `claude --bg` depuis le notch), ARRÊTER avec confirmation,
-  menu « Lancer une tâche… » ⌘N. Voir CLAUDE.md « Phase 9 ».
-- **Clarté des sessions (v0.9.1)** : l'îlot regroupe les sessions PAR PROJET (racine `.git`)
-  — un projet à 1 session = ligne directe, à ≥2 sessions = dossier pliable `▸ Nom · N`
-  (repli par défaut, flèche pour déplier). Règle la confusion « 3 sessions pour 2 »
-  (la 3e = la session de dev imbriquée dans le même projet). Code :
-  `App/ExpandedView.swift` (`projectGroups`, `folderHeader`, enum `ProjectRoot`).
-- **Phase 10 « Verre & ondulation » (v0.10.0)** : fond **Liquid Glass** (API PUBLIQUE
-  `.glassEffect`, macOS 26 + repli macOS 14/15) sur le panneau étendu, **transparence
-  réglable** (Réglages › Général), onde d'expansion (shader Metal `layerEffect`, macOS 14+,
-  respecte Reduce Motion) — `App/IslandVisuals.swift` + `App/ExpansionRipple.metal`. + passe
-  d'HYGIÈNE (3 warnings d'isolation, 9 symboles morts). Né de l'analyse du dépôt jumeau
-  **AgentGlance** (verre en API PUBLIQUE, PAS leur hack d'API privée CAFilter). Voir
-  CLAUDE.md « Phase 10 ». PIÈGE BUILD : Metal Toolchain à télécharger sous Xcode 26.
+| Quoi | Où |
+|---|---|
+| Version publiée | **v0.12.0** (DMG notarisé + appcast Sparkle, 18 URLs vérifiées 200) |
+| Dernier commit | `15972e7` « Appcast v0.12.0 » — `main` poussé, **arbre propre** |
+| Tests | **492 verts** (`cd AtollCore && swift test`), build **0 warning** |
+| Phases | **1 à 12 livrées**. La feuille de route « Atoll 2 » (milestones A/B/C) est ÉPUISÉE |
+| Build de dev | `~/Applications/Atoll.app` (Debug) — **jamais** écrasé par la Release |
 
-- **Phase 11 « Mémoire vive » (v0.11.0)** = Milestone B, les quatre volets :
-  curation périodique des notes (`App/NotesCurationService.swift`), recall proactif
-  opt-in (`Bridge/ProactiveRecallHook.swift` + hook UserPromptSubmit rendu BLOQUANT
-  quand il est activé), qualité du recall (dédup inter-fichiers + récence,
-  `AtollCore/MemoryRanking.swift`), tableau de bord des notes
-  (`AtollCore/LearningInventory.swift`). Voir CLAUDE.md « Phase 11 » pour les faits
-  vérifiés et les pièges — dont le format `hook_additional_context` et la clé de dédup.
+**Rien n'est en cours, rien n'est à moitié fait.** Une reprise commence par choisir
+un chantier au §1.
 
-- **Phase 12 « Boucle fermée » (v0.12.0)** : la rétrospective ne tournait quasiment
-  jamais (1 run en 7 jours, 0 skill). Réparée — quota mis en cache, transcript CONDENSÉ
-  en Swift (compression 150× à 590×, le modèle voit enfin la session entière), prompt
-  rééquilibré, journal de chaque décision. **Résultat : 8 notes + 2 skills dès le
-  premier run**, tous deux approuvés et actifs. S'y ajoutent l'antériorité
-  (`SkillCatalog`, 117 capacités connues), l'inventaire des plugins
-  (`PluginInventory`), les modèles par tâche et le renommage « Intensité du Liquid
-  Glass ». Détails et pièges : CLAUDE.md « Phase 12 ».
+### Ce que fait Atoll aujourd'hui, de bout en bout
 
-**PROCHAINE ÉTAPE : à décider avec Mehdi.** Pistes restées sur la table :
-- **Sceller les notes** comme les skills (manifeste + SHA256) : aujourd'hui n'importe
-  quel processus local peut déposer un `.md` dans `~/.atoll/learning/notes/`, qui sera
-  indexé puis curé. `~/.atoll` est passé en 0700 (autres comptes exclus), mais la
-  chaîne transcript → rétrospective → note → curation → recall n'a pas de scellé.
-  ARBITRAGE À FAIRE : contre un processus du MÊME utilisateur, un manifeste
-  n'apporterait rien (il pourrait le réécrire aussi) — le scellé n'a de sens que
-  couplé à quelque chose que ce processus ne peut pas forger.
-- **Rendre l'injection visible** : le bloc du recall proactif part avec
-  `suppressOutput: true` (choix assumé : 1 800 caractères à chaque prompt seraient
-  illisibles au terminal) — il n'apparaît donc que dans le transcript. Une ligne
-  récapitulative dans l'îlot serait le bon endroit.
-- **Recherche de plugin PAR BESOIN** : le catalogue public (268 entrées avec leur
-  popularité) est décodé, le prompt de mise en correspondance est écrit — il manque le
-  geste produit dans l'UI (« trouve-moi un plugin pour X ») et l'arbitrage sur son coût.
-- **Multi-provider** (Codex/OpenCode…) à la AgentGlance ; jump-back Ghostty/tmux ;
-  notification quand une tâche bg finit ; vue flotte par état.
-- **Limite connue** : `ProactiveRecall.keywords` découpe sur les frontières de mots —
-  un prompt en japonais ou chinois (sans espaces) donne un seul token, donc pas de
-  recall proactif. Le russe, l'arabe et les langues à espaces fonctionnent.
+Îlot notch ASCII (thèmes, 4 palettes, largeur réglable par écran, Liquid Glass) ·
+suivi temps réel des sessions (`claude agents --json` autorité + hooks) · réponses
+depuis le notch (permissions ⌘Y/⌘N, plans, questions) · autonomie Manuel/Auto/
+Rockstar · quota serveur exact · jump-back terminal · lancer/arrêter une tâche en
+arrière-plan · mémoire FTS5 de tous les transcripts + skill `atoll-recall` ·
+souvenirs proposés d'office (opt-in) · rétrospective qui produit VRAIMENT des
+skills · curation des notes · inventaire et recherche de plugins.
 
-### Méthode de travail (rappel — la même qui a marché toute cette session)
+### Les deux skills qu'Atoll s'est appris (et qui SERVENT)
 
-Par milestone : (1) **explorer** (agents Explore, en parallèle) ; (2) **planifier**
-(mode plan, faire VALIDER par Mehdi via ExitPlanMode) ; (3) **implémenter en workflows
-parallèles** (AtollCore + tests D'ABORD, puis App/coutures faites à la main) ;
-(4) **VÉRIFIER EN VRAI** — jamais « ça compile donc ça marche » : lancer l'app, sessions
-réelles, **screenshots LUS** (notifyutil expand → screencapture → crop → Read le PNG) ;
-(5) **revue adversariale multi-agents** (Workflow : finders par dimension → 2 réfutateurs
-par trouvaille → corriger seulement les CONFIRMÉS) AVANT toute release ; (6) **release**
-notarisée (`Scripts/release.sh`) + `gh release create` + deltas + `git push` (retry si
-DNS github hoquette) + docs (README/CLAUDE.md/HANDOFF/mémoire projet).
+`atoll-release-pipeline` et `atoll-adversarial-review-workflow-recovery`, approuvés
+par Mehdi le 2026-07-27 et actifs dans `~/.claude/skills`. **La release v0.12.0 a été
+publiée en suivant le premier** — c'est la boucle qui se referme, et la meilleure
+façon de vérifier qu'elle marche : refaire une release en invoquant le skill.
 
-Rappels durs : `rm -rf` INTERDIT → `trash`. DerivedData HORS iCloud. Lancer la COPIE
-(~/Applications), jamais le produit de build. `/usr/bin/xattr` (le shim ~/.local/bin est
-cassé). Build : `xcodegen generate` (jamais versionner .xcodeproj) puis `xcodebuild
--project Atoll.xcodeproj -scheme Atoll -configuration Debug -derivedDataPath "$DD" build`
-puis `ditto … ~/Applications/Atoll.app && open ~/Applications/Atoll.app`. Tests :
-`cd AtollCore && swift test`. Triggers debug : `notifyutil -p dev.mehdiguiard.atoll.debug.<x>`
-(expand/compact/retro/seedSkill/skillReview/approveSkill/rejectSkill/curation/launcher…).
+### Phase 12 « Boucle fermée » — ce qu'il faut en retenir
 
-Ce qui marche aujourd'hui, de bout en bout :
-- Îlot notch ASCII (thème system/light/dark, 4 palettes, mono+orange par défaut).
-- **Taille de la barre compacte réglable PAR ÉCRAN** (petit/moyen/large, Réglages › Général).
-- Monitoring temps réel des vraies sessions Claude (hooks → socket → machine à états),
-  avec l'activité des sessions hookless lue sur le transcript (plus de « en cours » figé).
-- Réponses depuis le notch : permissions (⌘Y/⌘N), plans (approve/revise), questions.
-- **Niveau d'autonomie** : 1 sélecteur exclusif **Manuel / Auto / Rockstar** (Réglages).
-- Jump-back terminal (Cursor/VS Code via `cli -r`, Terminal.app/iTerm2 via AppleScript).
-- Vrais quotas serveur (tee-wrapper statusline, quota périmé rejeté), jauge par modèle
-  opt-in, % de contexte par session.
-- Ouvrir la session dans son terminal (« OUVRIR DANS CURSOR ») via le jump-back.
-- **Mémoire (7a)** : tous les transcripts indexés dans ~/.atoll/memory.db (FTS5,
-  backfill 329 Mo ≈ 1 min, suivi temps réel par nudges de fin de tour) ; les
-  sessions Claude interrogent via le skill `atoll-recall` → `atoll-bridge recall`
-  (fail-open exit 0 toujours). Réglages › Claude Code › Mémoire (opt-out, stats,
-  rebuild). Pièges et invariants : voir CLAUDE.md « Phase 7a ».
-- **Apprentissage (7b + 7c)** : rétrospective de fin de session (opt-in OFF) →
-  notes + skills proposés en quarantaine ; revue dans une fenêtre dédiée
-  (⌘⏎/⌘⌫), activation dans ~/.claude/skills, usage suivi, désinstallation
-  chirurgicale pilotée par manifeste+SHA256. Tout dans l'onglet Réglages ›
-  Apprentissage. Pièges : voir CLAUDE.md « Phase 7b » et « Phase 7c ».
-
-> **Chat intégré + dictée vocale RETIRÉS le 2026-07-19** (décision de Mehdi : il
-> chatte et dicte dans Cursor). Le bouton du détail de session ouvre désormais le
-> terminal Cursor. Ne pas ré-ajouter sans demande explicite.
->
-> **Numérotation des phases** : la « distribution » était la Phase 7 dans le PLAN
-> historique ; après le retrait du chat (ex-Phase 6), elle est devenue la Phase 6.
-> Le README et CLAUDE.md sont la référence à jour.
+Atoll ne produisait AUCUN skill (1 rétrospective lancée en 7 jours sur ~29 sessions).
+Trois causes, toutes corrigées : le **quota ne vivait qu'en mémoire** (le gate refusait
+« quota inconnu » après chaque redémarrage et pour toute session `--bg`) ; les
+**transcripts de 9 à 47 Mo** étaient hors de portée du budget (le modèle en voyait 8 %) ;
+le **prompt disait « en cas de doute, zéro skill »**. Résultat après réparation :
+8 notes + 2 skills dès le premier run. Détail complet et pièges : CLAUDE.md « Phase 12 ».
 
 ---
 
 ## 1. CE QU'IL RESTE À FAIRE
 
-Le gros est livré et publié. Reste surtout du polish à la demande, la CI optionnelle,
-et la roadmap v2 (multi-agents) à NE PAS entamer sans le demander à Mehdi.
+**Aucun chantier n'est en cours.** Les phases 1 à 12 sont livrées et la feuille de
+route « Atoll 2 » est épuisée : la suite se décide AVEC Mehdi. Ce qui suit est la
+liste réelle de ce qui reste, avec le contexte de décision — pas une liste de vœux.
+
+### A. Pistes identifiées, non tranchées (demander à Mehdi avant d'ouvrir)
+
+1. **Sceller les notes d'apprentissage** comme les skills (manifeste + SHA256).
+   *Le vrai problème* : n'importe quel processus local peut déposer un `.md` dans
+   `~/.atoll/learning/notes/`, qui sera indexé puis injecté. `~/.atoll` est passé en
+   0700 (autres comptes exclus) et le helper refuse un fichier qui ne lui appartient
+   pas. **ARBITRAGE À FAIRE AVANT DE CODER** : contre un processus du MÊME
+   utilisateur, un manifeste n'apporte rien (il pourrait le réécrire aussi). Le
+   scellé n'a de sens que couplé à quelque chose que ce processus ne peut pas forger.
+   Ne pas se lancer sans avoir répondu à ça.
+2. **Notification quand une tâche `--bg` se termine** — le cockpit lance, mais rien ne
+   prévient à la fin. Le hook `Stop` porte `last_assistant_message` : de quoi faire un
+   résumé d'une ligne. Demandé par Mehdi en Phase 9, jamais fait.
+3. **Vue flotte par ÉTAT** dans l'îlot étendu (à examiner / en attente de toi / en
+   cours / terminées), façon Agent View mais ambiant. Idée du plan « Atoll 2 » §C.
+4. **Multi-provider** (Codex, OpenCode…) à la façon d'AgentGlance. Gros chantier,
+   v2 assumée, **NE PAS entamer sans accord explicite**.
+5. **Jump-back Ghostty / tmux** (les adapters existent pour Terminal/iTerm2/Cursor).
+
+### B. Dette connue et assumée (ne PAS « corriger » sans raison)
+
+- **`ProactiveRecall.keywords` ne gère pas le CJK** : un prompt japonais/chinois sans
+  espaces donne un seul token → pas de recall proactif. Le russe et l'arabe marchent.
+  Documenté, pas un bug à corriger à l'aveugle.
+- **Le bloc de souvenirs injecté part avec `suppressOutput`** : invisible au terminal
+  (choix assumé — 1 800 caractères à chaque prompt seraient illisibles). Depuis
+  v0.12.0, le nombre d'extraits remonte à l'îlot ; le CONTENU, lui, ne se lit que
+  dans le transcript.
+- **`RetrospectivePrompt.userPrompt(transcriptPath:)`** n'a plus d'appelant hors
+  tests (l'app passe par le condensé). Gardé comme trace du contrat historique.
+- **`PluginSnapshot.availableRanked`** n'a pas d'appelant : échafaudage pour un
+  classement par popularité dans l'UI, si le besoin vient.
+- **Un plugin désactivé depuis Atoll ne peut pas y être réactivé** (le panneau
+  n'offre que « Désactiver » sur les activés). Volontaire pour l'instant : réactiver
+  = réexécuter du code tiers, et `claude plugin enable` fait le travail. À rouvrir
+  si Mehdi le demande.
+
+### C. Ce qui a été volontairement écarté (avec la raison)
+
+- **Polling OAuth du quota** (`api.anthropic.com/api/oauth/usage`) : zone grise des
+  CGU. Le tee-wrapper statusline suffit et est conforme. NE PAS ajouter sans accord.
+- **Export des skills vers un dépôt marketplace** : Mehdi ne veut, pour l'instant,
+  que le partage entre SES projets — déjà acquis (`~/.claude/skills` est global).
+- **Jump-back pane-level VS Code/Cursor** (extension `.vsix`) : le focus fenêtre via
+  `cursor -r` suffit ; l'extension est un chantier à part entière.
+- **API privées CGS/SkyLight** (écran verrouillé) : pas un besoin.
+- **CI GitHub Actions** pour la release : optionnel, jamais fait — la release locale
+  prend ~10 min et le skill `atoll-release-pipeline` la décrit intégralement.
 
 ### Publier une version (routine, ~5 min)
 1. Monter `MARKETING_VERSION` + `CURRENT_PROJECT_VERSION` dans `project.yml`, committer.
@@ -181,6 +150,79 @@ docs/appcast.xml — servi par GitHub Pages : main//docs).
 
 ---
 
+## 1bis. TRAVAILLER AVEC MEHDI — règles apprises À LA DURE (session du 2026-07-27)
+
+Ces points ne sont écrits nulle part ailleurs et coûtent cher à redécouvrir.
+
+### Écrans et captures — IMPÉRATIF
+- Mehdi a **deux écrans** : le MacBook (écran 1, `-D 1`, avec encoche, principal) où
+  **il travaille**, et un 4K externe (écran 2, `-D 2`, 3840×2160). Consigne explicite :
+  **toutes les captures se font sur l'écran 2**, jamais sur le 1.
+  → `screencapture -x -D 2 fichier.png` puis `sips -c H W --cropOffset TOP LEFT` et
+  **REGARDER l'image** (l'outil Read lit les PNG).
+- **Les fenêtres SwiftUI s'ouvrent sur l'écran PRINCIPAL** (donc devant lui). Il faut
+  les déplacer TOUT DE SUITE sur l'écran 2 :
+  ```sh
+  osascript -e 'tell application "System Events" to tell (first process whose bundle identifier is "dev.mehdiguiard.atoll") to repeat with w in windows
+    try
+      if (item 1 of (size of w)) > 400 then set position of w to {200, -1040}
+    end try
+  end repeat'
+  ```
+  (l'écran 2 vit en coordonnées **y négatives** : il est AU-DESSUS dans l'espace global.)
+- **INCIDENT VÉCU, à ne pas répéter** : une proposition de skill FACTICE, créée pour
+  tester la détection de doublon, s'est ouverte dans la fenêtre de revue sur son écran
+  pendant qu'il validait ses vrais skills — il l'a approuvée sans le vouloir. Il a fallu
+  la désinstaller proprement (archive + manifeste). **Ne jamais fabriquer d'artefact de
+  test qui puisse apparaître dans SON flux de décision.**
+- Le trigger `debug.settings` est **intermittent** : parfois la fenêtre ne s'ouvre pas.
+  Réessayer, et vérifier la présence de la fenêtre par AppleScript (`size of w`) avant
+  de conclure quoi que ce soit d'une capture vide.
+- L'îlot se **replie tout seul** quelques secondes après `debug.expand` : capturer
+  IMMÉDIATEMENT après le trigger (pas de `sleep 3` avant la capture).
+
+### Ce que Mehdi attend (observé, pas supposé)
+- **Vérifier en vrai**, jamais « ça compile donc ça marche ». Il demande explicitement
+  les captures et les tests intensifs.
+- **Utiliser beaucoup d'agents** en parallèle (il l'a redemandé deux fois) : modules
+  AtollCore indépendants confiés à un agent chacun, revues adversariales par dimension.
+- **Un plan avec des objectifs mesurables** avant les gros chantiers
+  (`docs/ROADMAP-12-boucle-fermee.md` en est le modèle : chaque jalon a un CHIFFRE).
+- Il tranche vite quand on lui pose une vraie question fermée (AskUserQuestion avec
+  une recommandation en premier). Ne pas lui demander ce qu'on peut décider soi-même.
+
+### Faits VÉRIFIÉS sur le CLI (2026-07-27, claude 2.1.220) — ne pas re-tester à l'aveugle
+- **`--safe-mode` convoque `claude-sonnet-5` EN PLUS du `--model` demandé**, et c'est lui
+  qui domine la facture : deux runs identiques, l'un en sonnet l'autre en haiku, ont
+  coûté **0,864 $ et 0,873 $**. Le réglage de modèle paraît donc sans effet si on ne
+  ventile pas — d'où `RetrospectiveReport.modelCosts` et l'affichage du modèle dominant.
+- Les alias `haiku` / `sonnet` / `opus` / `fable` sont **tous reconnus** par `--model`
+  (vérifiés un par un : `claude-haiku-4-5`, `claude-sonnet-5`, `claude-opus-5`,
+  `claude-fable-5`).
+- **`hookSpecificOutput.additionalContext` fonctionne** pour UserPromptSubmit : le CLI
+  l'écrit dans le transcript comme un attachment **`hook_additional_context`**. C'EST LA
+  SIGNATURE À CHERCHER pour prouver une injection — **ne jamais croire le modèle sur
+  parole** (haiku a répondu « NON » alors que son propre thinking citait les extraits).
+- **`claude plugin details` accepte l'id COMPLET `nom@marketplace`** — l'utiliser, sinon
+  la CLI répond pour un homonyme d'un autre marketplace (5 cas sur cette machine).
+- `claude plugin list --json` rend un **tableau nu** ; `--available --json` rend
+  `{installed, available}` et **touche le réseau** (watchdog obligatoire).
+
+### Pièges Swift/macOS payés cette session
+- **Ajouter un champ à un JSON persisté CASSE la lecture des anciens fichiers** : la
+  synthèse `Decodable` lève `keyNotFound` au lieu d'utiliser la valeur par défaut. Ça a
+  **effacé l'historique d'apprentissage** une fois. Tout type persisté qui gagne un champ
+  doit avoir un `init(from:)` explicite avec `decodeIfPresent`.
+- `.glassEffect(.regular)` **réfracte toujours**, même sous un scrim opaque à 100 % : le
+  bas du curseur ne rendait jamais un fond plein. Sous un plancher (6 %), ne pas poser
+  de verre du tout.
+- Les tuples ne conforment pas à `Equatable` : un champ `[(a: String, b: Double)]` casse
+  la synthèse d'un type `Equatable`. Struct nommée obligatoire.
+- Lire deux pipes **en série** (stdout puis stderr) peut interbloquer un sous-processus
+  dont stderr sature. `async let` sur les deux.
+
+---
+
 ## 2. MÉTHODE DE TRAVAIL QUI MARCHE (à reconduire)
 
 ### Revue adversariale multi-agents (le pilier qualité)
@@ -221,7 +263,7 @@ xcodebuild -project Atoll.xcodeproj -scheme Atoll -configuration Debug -derivedD
 ditto "$DD/Build/Products/Debug/Atoll.app" ~/Applications/Atoll.app   # lancer LA COPIE
 pkill -x Atoll; sleep 1; open ~/Applications/Atoll.app                # relancer
 
-cd AtollCore && swift test              # 370 tests
+cd AtollCore && swift test              # 492 tests
 
 # Debug runtime
 /usr/bin/log stream --predicate 'subsystem == "dev.mehdiguiard.atoll"' --level debug
@@ -235,7 +277,23 @@ cat ~/Library/"Application Support"/Atoll/state.json                  # sessions
 - `.jump` — jump-back de la 1re session à ancre résolvable
 - `.retro` / `.curation` — rétrospective sur la dernière session terminée / curation
   des notes (les deux consomment du quota : `#if DEBUG` uniquement)
+- **`.retroBig`** — rétrospective sur le PLUS GROS transcript du projet, sans passer par
+  le gate. **C'est LE trigger qui a permis de prouver la boucle d'apprentissage** sans
+  attendre qu'une vraie session substantielle se termine. ~0,87 $ le run.
+- **`.plugins`** — interroge `claude plugin list --json` et journalise l'inventaire
+  (catégorie de log `plugins`).
+- **`.pluginSearch`** — recherche un plugin pour un besoin en dur (consomme du quota).
 - `.launcher` / `.seedSkill` / `.skillReview` / `.approveSkill` / `.rejectSkill`
+
+### Vérifier l'apprentissage sans relire le code
+```sh
+python3 -c "import json,os; d=json.load(open(os.path.expanduser('~/.atoll/learning/retrospectives.json')));
+[print({k:v for k,v in a.items() if v is not None}) for a in d.get('attempts',[])[-5:]]"
+ls ~/.atoll/learning/proposed/          # skills en quarantaine (en attente de revue)
+ls ~/.claude/skills/ | grep atoll-      # skills appris ACTIFS + atoll-recall (infra)
+cat ~/.atoll/learning/installed.json    # manifeste des skills posés par Atoll
+sqlite3 ~/.atoll/memory.db "SELECT COUNT(*) FROM messages;"
+```
 
 ### Piloter le vrai helper
 ```sh
@@ -395,7 +453,9 @@ claude CLI (n'importe quel terminal) ──hook──▶ ~/.atoll/bin/atoll-brid
 - Communication en **français** ; identifiants de code en anglais, commentaires en français.
 
 ### Environnement machine de Mehdi
-- MacBook 14" à encoche, écran seul, résolution « More Space » 1800×1169, barre de menus masquée.
+- MacBook 14" à encoche (écran 1, principal, résolution « More Space » 1800×1169, barre
+  de menus masquée) **+ un écran externe 4K (écran 2, 3840×2160, en y NÉGATIF)**. Il
+  travaille sur le 1 → **toutes les captures se font sur le 2** (voir §1bis).
 - **Ses sessions claude tournent dans le terminal intégré de Cursor**
   (`__CFBundleIdentifier=com.todesktop.230313mzl4w4u92`, `TERM_PROGRAM=vscode`) → le jump-back
   vise Cursor en priorité.
@@ -407,9 +467,15 @@ claude CLI (n'importe quel terminal) ──hook──▶ ~/.atoll/bin/atoll-brid
 
 ## 7. PROCHAINE ACTION CONCRÈTE
 
-La feuille de route « Atoll 2 » (milestones A, B, C) est **entièrement livrée** —
-il n'y a plus de prochaine étape écrite d'avance. **Demander à Mehdi la direction**
-avant d'ouvrir un chantier ; les pistes non tranchées sont listées au §0.
+La feuille de route « Atoll 2 » (milestones A, B, C) est **entièrement livrée**, et la
+phase 12 « Boucle fermée » aussi — il n'y a plus de prochaine étape écrite d'avance.
+**Demander à Mehdi la direction** avant d'ouvrir un chantier ; les pistes non tranchées,
+la dette assumée et ce qui a été écarté sont listés au **§1**.
+
+Si la reprise doit commencer par quelque chose d'utile sans rien décider : **refaire une
+release en invoquant le skill `atoll-release-pipeline`** — c'est le meilleur test de bout
+en bout de la boucle d'apprentissage (le skill vient d'Atoll lui-même), et ça revérifie
+signature, notarisation et appcast d'un coup.
 
 Quel que soit le chantier, la routine de fin ne change pas :
 1. AtollCore + tests d'abord, coutures App/Bridge ensuite.
