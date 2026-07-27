@@ -1,7 +1,8 @@
 # CLAUDE.md — instructions projet Atoll
 
 > 📌 **REPRISE DE DEV : lire `docs/HANDOFF.md` en premier** — état exact, méthode de
-> travail, et TOUS les pièges appris à la dure. (v0.13.2 publiée : Phase 13
+> travail, et TOUS les pièges appris à la dure. (v0.14.0 publiée : audit complet
+> — 59 défauts corrigés, cf. `docs/AUDIT-2026-07-27.md` ; auparavant v0.13.2, Phase 13
 > « Rendre la main » — la fin d'une tâche vient te chercher, deux sons à toi,
 > la flotte lisible par état ; puis réglages étirables et vocabulaire dé-jargonné.)
 

@@ -2,8 +2,9 @@
 
 > Document de continuité pour reprendre le dev après un compactage de conversation.
 > **À lire en premier** avec `CLAUDE.md` (règles) et `PLAN.md` (plan produit).
-> Dernière mise à jour : **2026-07-27**, app **v0.13.2** (Phase 13 « Rendre la main » :
-> la fin d'une tâche vient te chercher, deux sons à toi, la flotte lisible par état).
+> Dernière mise à jour : **2026-07-27**, app **v0.14.0** (audit complet : 59 défauts
+> corrigés — sécurité de l'auto-accept, pertes de données, bornage de l'îlot.
+> Voir `docs/AUDIT-2026-07-27.md`).
 
 ---
 
@@ -16,11 +17,11 @@ GPL-3.0, repo PUBLIC `github.com/mehdi7129/atoll`).
 
 | Quoi | Où |
 |---|---|
-| Version publiée | **v0.13.2** (DMG notarisé + appcast Sparkle) |
+| Version publiée | **v0.14.0** (DMG notarisé + appcast Sparkle) |
 | Git | `main` poussé, **arbre propre** — vérifier d'un coup : `git log --oneline -3 && git status --porcelain` (un hash écrit ici serait périmé dès le commit suivant) |
-| Tests | **596 verts** (`cd AtollCore && swift test`, ~0,7 s), build **0 warning** |
-| Phases | **1 à 13 livrées**. La feuille de route « Atoll 2 » (milestones A/B/C) est ÉPUISÉE |
-| Build installé | ⚠️ `~/Applications/Atoll.app` contient la **Release NOTARISÉE v0.13.2** (installée depuis le DMG en fin de session, pour que Mehdi ait le produit fini). Pour reprendre la boucle de dev : **DÉPLACER ce bundle** (`mv`) puis `ditto` le Debug — `ditto` fusionne et casserait le sceau |
+| Tests | **628 verts** (`cd AtollCore && swift test`, ~1 s), build **0 warning** |
+| Phases | **1 à 13 livrées** + audit complet du 2026-07-27. La feuille de route « Atoll 2 » (milestones A/B/C) est ÉPUISÉE |
+| Build installé | ⚠️ `~/Applications/Atoll.app` contient la **Release NOTARISÉE v0.14.0** (installée depuis le DMG en fin de session, pour que Mehdi ait le produit fini). Pour reprendre la boucle de dev : **DÉPLACER ce bundle** (`mv`) puis `ditto` le Debug — `ditto` fusionne et casserait le sceau |
 
 **Rien n'est en cours, rien n'est à moitié fait.** Une reprise commence par choisir
 un chantier au §1.
