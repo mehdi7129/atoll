@@ -109,6 +109,18 @@ Les quatre qui comptent :
   les payloads et répondre `{"behavior":"allow"}` — décision que le CLI honore.
   Contrôle `LOCAL_PEERCRED` côté helper (vérifié : les hooks passent toujours).
 
+**PIÈGE DE RELEASE (vécu en publiant v0.14.0)** : bouger `MARKETING_VERSION`
+NE SUFFIT PAS. Sparkle identifie une mise à jour par `CFBundleVersion`
+(= `CURRENT_PROJECT_VERSION`), et `generate_appcast` échoue à la toute fin —
+APRÈS le build, les deux notarisations et les deux staples, soit ~8 min perdues —
+avec « Duplicate updates are not supported. Found archives 'Atoll-X.zip' and
+'Atoll-Y.zip' which contain the same bundle version ». Chaque release incrémente
+`CURRENT_PROJECT_VERSION` de 1 (0.10.0 → 15 … 0.13.2 → 20, 0.14.0 → 21). Vérifier
+AVANT de lancer `Scripts/release.sh` :
+`grep -n 'MARKETING_VERSION\|CURRENT_PROJECT_VERSION' project.yml`. Et si l'échec
+survient quand même, retirer l'archive fautive de `dist/updates/` avant de relancer
+(sinon elle continue de provoquer la collision).
+
 PIÈGES DE MÉTHODE appris pendant cet audit :
 - **`claude agents --json` ne liste QUE les sessions vivantes** ; le champ
   `state` (`done`/`stopped`) n'apparaît qu'avec `--all`, et ces entrées-là
