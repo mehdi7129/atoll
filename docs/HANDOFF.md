@@ -17,8 +17,8 @@ GPL-3.0, repo PUBLIC `github.com/mehdi7129/atoll`).
 | Quoi | Où |
 |---|---|
 | Version publiée | **v0.12.0** (DMG notarisé + appcast Sparkle, 18 URLs vérifiées 200) |
-| Dernier commit | `15972e7` « Appcast v0.12.0 » — `main` poussé, **arbre propre** |
-| Tests | **492 verts** (`cd AtollCore && swift test`), build **0 warning** |
+| Dernier commit | `4d48b52` « HANDOFF : point de reprise » — `main` poussé, **arbre propre** |
+| Tests | **494 verts** (`cd AtollCore && swift test`, ~0,8 s), build **0 warning** |
 | Phases | **1 à 12 livrées**. La feuille de route « Atoll 2 » (milestones A/B/C) est ÉPUISÉE |
 | Build de dev | `~/Applications/Atoll.app` (Debug) — **jamais** écrasé par la Release |
 
@@ -108,7 +108,12 @@ liste réelle de ce qui reste, avec le contexte de décision — pas une liste d
 - **CI GitHub Actions** pour la release : optionnel, jamais fait — la release locale
   prend ~10 min et le skill `atoll-release-pipeline` la décrit intégralement.
 
-### Publier une version (routine, ~5 min)
+### D. Référence — publier une version (LIVRÉE, ce n'est PAS du travail restant)
+
+Le skill `atoll-release-pipeline` décrit la procédure complète et à jour ; ce qui suit
+en est le résumé, gardé ici au cas où le skill serait absent de la machine.
+
+#### Publier une version (routine, ~10 min)
 1. Monter `MARKETING_VERSION` + `CURRENT_PROJECT_VERSION` dans `project.yml`, committer.
 2. `./Scripts/release.sh` → build signé, notarisation, DMG, appcast (imprime les commandes).
 3. `gh release create vX.Y.Z <dmg> <zip>` + joindre les `dist/updates/*.delta`.
@@ -134,19 +139,6 @@ docs/appcast.xml — servi par GitHub Pages : main//docs).
 - Onboarding premier lancement (`OnboardingView`, flag `onboardingDone`, menu
   « Bienvenue… ») ; icône ASCII générée (`App/Assets.xcassets`).
 - **CI** (optionnel, non fait) : GitHub Actions archive → notarytool → stapler → generate_appcast.
-
-### Reste de la roadmap (voir PLAN.md §5) — après la 7
-- Multi-agents (Codex/Gemini/…) : v2, hors périmètre v1 (Claude-only), NE PAS l'entamer
-  sans le demander à Mehdi.
-
-### Éléments différés VOLONTAIREMENT (ne pas « corriger » sans raison)
-- **Polling OAuth du quota** (endpoint `api.anthropic.com/api/oauth/usage`) : laissé de
-  côté — zone grise des CGU. Le tee-wrapper statusline suffit et est conforme. NE PAS
-  ajouter sans accord explicite de Mehdi.
-- **Jump-back pane-level pour VS Code/Cursor** (extension `.vsix` compagnon) : v1 fait
-  du focus fenêtre via `cursor -r <racine>`, suffisant. L'extension est un gros chantier
-  optionnel (voir `docs/research/research-followup-terminal-jump-back.md`).
-- **API privées CGS/SkyLight** (affichage sur écran verrouillé) : non implémenté, pas un besoin.
 
 ---
 
@@ -270,7 +262,7 @@ cd AtollCore && swift test              # 492 tests
 cat ~/Library/"Application Support"/Atoll/state.json                  # sessions + pending + autonomy
 ```
 
-### Triggers de debug (`notifyutil -p <nom>`) — allow/deny/select/jump/chat sont `#if DEBUG`
+### Triggers de debug (`notifyutil -p <nom>`) — seuls `.expand`/`.compact` existent en Release
 - `dev.mehdiguiard.atoll.debug.expand` / `.compact` — étend+épingle / replie l'îlot
 - `.select` — sélectionne la 1re session (vue détail)
 - `.allow` / `.deny` — résout la 1re carte en attente
