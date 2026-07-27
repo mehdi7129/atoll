@@ -33,7 +33,7 @@ y compris pour les sessions lancées depuis le terminal de Cursor.
 | 12 · Boucle fermée (Atoll apprend vraiment · antériorité · plugins) | ✅ |
 | 13 · Rendre la main (fin de tâche annoncée · sons personnalisables · flotte par état) | ✅ |
 
-**Version courante : v0.13.0** (voir les [Releases](https://github.com/mehdi7129/atoll/releases)).
+**Version courante : v0.13.1** (voir les [Releases](https://github.com/mehdi7129/atoll/releases)).
 
 Voir le [plan détaillé](PLAN.md), la [recherche](docs/research/) et [CLAUDE.md](CLAUDE.md)
 pour contribuer.
@@ -190,7 +190,7 @@ cd AtollCore && swift test
 ```
 App/         cible app (fenêtre notch, thème, vues SwiftUI, services)
 AtollCore/   package SPM : logique pure testée (palettes, ASCII, géométrie, modèles,
-             index mémoire, prompts, sons, garde-fous) — 592 tests
+             index mémoire, prompts, sons, garde-fous) — 596 tests
 Bridge/      helper CLI `atoll-bridge` embarqué dans le bundle : appelé par les
              hooks Claude Code, parle à l'app par socket Unix, fail-open absolu
 Shared/      code partagé app ↔ helper (inspection de processus)

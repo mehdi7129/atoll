@@ -79,7 +79,17 @@ final class FleetLauncher {
         let command = "unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN; "
             + "exec " + FleetLaunch.shellQuote(claude) + " --bg " + FleetLaunch.shellQuote(task)
 
-        let output: String? = await Task.detached(priority: .userInitiated) { () -> String? in
+        /// Résultat du spawn. On distingue « le processus n'a même pas
+        /// démarré » (échec net) de « il a démarré et rendu un code non nul » —
+        /// dans le second cas la session peut TRÈS BIEN tourner (avertissement
+        /// tardif, plugin en échec, watchdog qui coupe une lecture qui traîne).
+        struct LaunchOutcome: Sendable {
+            let spawned: Bool
+            let exitedCleanly: Bool
+            let output: String
+        }
+
+        let outcome = await Task.detached(priority: .userInitiated) { () -> LaunchOutcome in
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/bin/zsh")
             process.arguments = ["-l", "-c", command]
@@ -88,26 +98,46 @@ final class FleetLauncher {
             let out = Pipe()
             process.standardOutput = out
             process.standardError = out
-            guard (try? process.run()) != nil else { return nil }
+            guard (try? process.run()) != nil else {
+                return LaunchOutcome(spawned: false, exitedCleanly: false, output: "")
+            }
             // `--bg` backgroundise et rend la main : lecture courte + garde-fou.
             Self.armWatchdog(process, seconds: 20)
             let data = (try? out.fileHandleForReading.readToEnd()) ?? Data()
             process.waitUntilExit()
-            return process.terminationStatus == 0 ? String(decoding: data, as: UTF8.self) : nil
+            return LaunchOutcome(spawned: true,
+                                 exitedCleanly: process.terminationStatus == 0,
+                                 output: String(decoding: data, as: UTF8.self))
         }.value
 
-        guard let output else {
-            lastError = "Échec du lancement (claude a renvoyé une erreur)."
-            log.error("launch échoué dans \(cwd, privacy: .public)")
+        guard outcome.spawned else {
+            lastError = "Impossible de lancer claude."
+            log.error("spawn impossible dans \(cwd, privacy: .public)")
             return nil
         }
-        let id = FleetLaunch.parseSessionID(output)
-        log.info("tâche lancée dans \(cwd, privacy: .public) — id \(id ?? "?", privacy: .public)")
+
+        let id = FleetLaunch.parseSessionID(outcome.output)
         // Suivi jusqu'à la fin : c'est la SEULE catégorie de sessions qu'Atoll
         // connaît de première main (il vient de la lancer), donc la seule qu'il
         // peut annoncer sans risque de fausse alerte. `id` peut être nil ou
         // tronqué — le journal sait rattraper (dossier + horodatage).
+        //
+        // ENREGISTRÉE MÊME EN CAS DE CODE DE SORTIE NON NUL : le processus a
+        // bien tourné, donc la session peut exister. Ne rien enregistrer serait
+        // le seul cas SANS retour possible — ni le hook `Stop` (la tâche n'est
+        // pas suivie) ni le rattrapage ne pourraient plus rien pour elle.
+        // L'inverse ne coûte rien : si la session n'apparaît jamais dans la
+        // flotte, la réconciliation clôt l'entrée EN SILENCE passé le délai de
+        // grâce (`seenAlive == false`) — jamais de fausse annonce.
         TaskCompletionNotifier.shared.register(task: task, cwd: cwd, sessionID: id)
+
+        if outcome.exitedCleanly {
+            log.info("tâche lancée dans \(cwd, privacy: .public) — id \(id ?? "?", privacy: .public)")
+        } else {
+            lastError = "claude a signalé une erreur. Si la session a tout de même "
+                      + "démarré, elle apparaîtra dans l'îlot et sa fin te sera annoncée."
+            log.error("launch en erreur dans \(cwd, privacy: .public) — tâche suivie malgré tout")
+        }
         return id
     }
 

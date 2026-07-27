@@ -14,17 +14,36 @@ public enum FleetLaunch {
         // Retire les séquences ANSI (le CLI colore l'id).
         let stripped = output.replacingOccurrences(
             of: "\u{1B}\\[[0-9;]*m", with: "", options: .regularExpression)
-        // UUID complet d'abord, sinon un id court (>= 8 hex).
-        let patterns = [
-            "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
-            "\\b[0-9a-f]{8}\\b",
-        ]
-        for pattern in patterns {
-            if let range = stripped.range(of: pattern, options: .regularExpression) {
-                return String(stripped[range])
-            }
+
+        // Un UUID complet est une preuve : on le prend sans hésiter.
+        if let range = stripped.range(
+            of: "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+            options: .regularExpression) {
+            return String(stripped[range])
         }
-        return nil
+
+        // Un id COURT (8 hex nus) n'est une preuve que s'il est SEUL. Sinon
+        // c'est un pari : un hash, un identifiant de plugin ou un simple
+        // nombre (« 12345678 » est de l'hexadécimal valide) serait pris pour
+        // l'identifiant de session. Et se tromper coûte cher : une tâche liée
+        // à un faux id n'est plus rattrapable par dossier (`adopt` n'agit que
+        // sur les tâches SANS id), donc sa fin ne serait jamais annoncée.
+        // Mieux vaut rendre nil et laisser le rattrapage faire son travail.
+        let candidates = shortHexCandidates(in: stripped)
+        return candidates.count == 1 ? candidates[0] : nil
+    }
+
+    /// Tous les groupes de 8 caractères hexadécimaux isolés, dédoublonnés.
+    static func shortHexCandidates(in text: String) -> [String] {
+        guard let regex = try? NSRegularExpression(pattern: "\\b[0-9a-f]{8}\\b") else { return [] }
+        let range = NSRange(text.startIndex..., in: text)
+        var found: [String] = []
+        for match in regex.matches(in: text, range: range) {
+            guard let sub = Range(match.range, in: text) else { continue }
+            let token = String(text[sub])
+            if !found.contains(token) { found.append(token) }
+        }
+        return found
     }
 
     /// Échappe un argument pour `/bin/zsh -c` (guillemets simples POSIX).
