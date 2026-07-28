@@ -24,7 +24,7 @@ GPL-3.0, repo PUBLIC `github.com/mehdi7129/atoll`).
 | Git | `main` poussé, **arbre propre** — vérifier d'un coup : `git log --oneline -3 && git status --porcelain` (un hash écrit ici serait périmé dès le commit suivant) |
 | Tests | **636 verts** (`cd AtollCore && swift test`, ~1 s), build **0 warning** |
 | Phases | **1 à 14 livrées** + audit complet du 2026-07-27. La feuille de route « Atoll 2 » (milestones A/B/C) est ÉPUISÉE |
-| Build installé | ⚠️ `~/Applications/Atoll.app` contient la **Release NOTARISÉE v0.14.1** (installée depuis le DMG en fin de session, pour que Mehdi ait le produit fini). Pour reprendre la boucle de dev : **DÉPLACER ce bundle** (`mv`) puis `ditto` le Debug — `ditto` fusionne et casserait le sceau |
+| Build installé | ⚠️ `~/Applications/Atoll.app` contient la **Release NOTARISÉE v0.15.0** (installée depuis le DMG en fin de session, pour que Mehdi ait le produit fini). Pour reprendre la boucle de dev : installer le Debug **À CÔTÉ**, en `~/Applications/Atoll-dev.app`, et ne jamais `ditto` par-dessus la Release — `ditto` FUSIONNE et un `Atoll.debug.dylib` résiduel casse le sceau. Quitter l'une avant de lancer l'autre (même bundle id) |
 
 **Rien n'est en cours, rien n'est à moitié fait.** Une reprise commence par choisir
 un chantier au §1.
