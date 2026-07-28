@@ -26,15 +26,17 @@ struct SessionDetailView: View {
                         .foregroundStyle(colors.fg)
                         .lineLimit(1)
                     Spacer()
-                    Text(AsciiArt.statusBadge(session.status))
-                        .foregroundStyle(badgeColor)
+                    if let badge = AsciiArt.statusBadge(session.status) {
+                        Text(badge)
+                            .foregroundStyle(badgeColor)
+                    }
                 }
                 .font(AtollFont.mono(11, weight: .bold))
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
-            Text(AsciiArt.rule(56))
+            Text(AsciiArt.rule(79))
                 .foregroundStyle(colors.dim)
                 .lineLimit(1)
 
@@ -186,7 +188,9 @@ struct SessionDetailView: View {
     private var badgeColor: Color {
         switch session.status {
         case .working: return colors.accent
-        case .awaitingPermission, .awaitingInput: return colors.warn
+        case .awaitingPermission: return colors.warn
+        // Voir `ExpandedView.badgeColor` : inatteignable, mais pas orange.
+        case .awaitingInput: return colors.dim
         case .done: return colors.ok
         }
     }

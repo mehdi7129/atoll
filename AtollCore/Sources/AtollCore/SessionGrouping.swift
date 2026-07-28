@@ -37,6 +37,27 @@ public enum SessionStateBucket: Int, CaseIterable, Sendable, Comparable {
     public static func < (lhs: SessionStateBucket, rhs: SessionStateBucket) -> Bool {
         lhs.rawValue < rhs.rawValue
     }
+
+    /// Ordre dans lequel les rangées sont ATTRIBUÉES quand il n'y en a pas pour
+    /// tout le monde — distinct de l'ordre d'AFFICHAGE (`rawValue`).
+    ///
+    /// L'affichage répond à « qu'est-ce qui m'attend » : ce qui dort figure haut
+    /// dans la liste parce que c'est à moi de jouer. Mais quand le budget est
+    /// serré, c'est l'inverse qu'il faut : trois sessions DORMANTES ne doivent
+    /// pas évincer la seule qui TRAVAILLE. Le cas est réel — budget de 4 rangées
+    /// (une bannière est affichée), 3 sessions au repos et 1 en cours : l'ancien
+    /// remplissage séquentiel donnait quatre rangées de sessions dormantes et
+    /// renvoyait la seule session active derrière « +1 autre ». Depuis que le
+    /// badge a disparu de ces lignes-là, elles ne portent même plus d'état :
+    /// le panneau se remplissait de rien.
+    var allocationPriority: Int {
+        switch self {
+        case .awaitingDecision: return 0   // bloquant : toujours en premier
+        case .working: return 1            // ce qui se passe maintenant
+        case .awaitingInput: return 2      // au repos : ça peut attendre une ligne
+        case .done: return 3
+        }
+    }
 }
 
 public struct SessionStateGroup: Identifiable, Equatable, Sendable {
@@ -114,21 +135,45 @@ public enum SessionGrouping {
     /// ne resterait que l'en-tête n'est pas ouvert du tout.
     public static func byState(_ sessions: [AgentSession], rowBudget: Int) -> BoundedStateGrouping {
         let full = byState(sessions)
-        guard rowBudget > 0 else {
+        guard rowBudget > 0, !full.isEmpty else {
             return BoundedStateGrouping(groups: [], hiddenCount: sessions.count)
         }
-        var remaining = rowBudget
-        var kept: [SessionStateGroup] = []
-        for group in full {
-            // 1 rangée d'en-tête + au moins 1 session, sinon on n'ouvre pas.
-            guard remaining >= 2 else { break }
-            remaining -= 1
-            let slice = Array(group.sessions.prefix(remaining))
-            remaining -= slice.count
-            kept.append(SessionStateGroup(bucket: group.bucket, sessions: slice))
+
+        // Attribution PAR TOURS, dans l'ordre d'`allocationPriority` : chaque
+        // état non vide reçoit son en-tête et UNE session avant qu'un autre n'en
+        // reçoive une deuxième. Le remplissage séquentiel d'avant laissait le
+        // premier état de la liste manger tout le budget — voir le commentaire
+        // d'`allocationPriority`.
+        //
+        // Un état non ouvert coûte 2 rangées (en-tête + 1re session), un état
+        // déjà ouvert n'en coûte plus qu'une : un groupe ne s'ouvre donc jamais
+        // pour n'afficher que son en-tête.
+        let order = full.indices.sorted {
+            full[$0].bucket.allocationPriority < full[$1].bucket.allocationPriority
         }
-        let shown = kept.reduce(0) { $0 + $1.sessions.count }
-        return BoundedStateGrouping(groups: kept, hiddenCount: max(0, sessions.count - shown))
+        var shown = [Int](repeating: 0, count: full.count)
+        var remaining = rowBudget
+        var progressed = true
+        while remaining > 0, progressed {
+            progressed = false
+            for index in order {
+                guard shown[index] < full[index].sessions.count else { continue }
+                let cost = shown[index] == 0 ? 2 : 1
+                guard remaining >= cost else { continue }
+                remaining -= cost
+                shown[index] += 1
+                progressed = true
+                if remaining == 0 { break }
+            }
+        }
+
+        // …mais l'AFFICHAGE reprend l'ordre d'urgence pour l'utilisateur.
+        let kept = full.indices.filter { shown[$0] > 0 }.map { index in
+            SessionStateGroup(bucket: full[index].bucket,
+                              sessions: Array(full[index].sessions.prefix(shown[index])))
+        }
+        let total = shown.reduce(0, +)
+        return BoundedStateGrouping(groups: kept, hiddenCount: max(0, sessions.count - total))
     }
 }
 

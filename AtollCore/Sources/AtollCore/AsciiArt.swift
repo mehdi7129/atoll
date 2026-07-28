@@ -56,11 +56,20 @@ public enum AsciiArt {
 
     // MARK: - Badges d'état
 
-    public static func statusBadge(_ status: AgentSession.Status) -> String {
+    /// Badge d'état d'une session, ou `nil` quand il n'y a RIEN à annoncer.
+    ///
+    /// `awaitingInput` ne porte plus de badge (demande de Mehdi, 2026-07-28) :
+    /// une session qui a rendu la main et attend un prompt est l'état de REPOS,
+    /// pas un événement. Lui coller « [ INPUT? ] » mettait un point
+    /// d'interrogation orange sur la moitié de la flotte en permanence, comme si
+    /// chaque session dormante réclamait quelque chose — alors que
+    /// `AgentSession.needsAttention` dit exactement l'inverse. Le silence est
+    /// l'information : ce qui porte un badge se passe VRAIMENT.
+    public static func statusBadge(_ status: AgentSession.Status) -> String? {
         switch status {
         case .working: return "[ WORKING ]"
         case .awaitingPermission: return "[ APPROVE? ]"
-        case .awaitingInput: return "[ INPUT? ]"
+        case .awaitingInput: return nil
         case .done: return "[ DONE ]"
         }
     }

@@ -2,10 +2,12 @@
 
 > Document de continuité pour reprendre le dev après un compactage de conversation.
 > **À lire en premier** avec `CLAUDE.md` (règles) et `PLAN.md` (plan produit).
-> Dernière mise à jour : **2026-07-27**, app **v0.14.1** (audit complet, PUIS revue
-> adversariale des corrections elles-mêmes : 59 + 25 défauts corrigés — sécurité
-> de l'auto-accept, pertes de données, bornage de l'îlot.
-> Voir `docs/AUDIT-2026-07-27.md`).
+> Dernière mise à jour : **2026-07-28**, app **v0.15.0** — Phase 14 « Arêtes
+> franches » : coins hauts droits, contour refait au calibrage Apple MESURÉ,
+> ouverture débarrassée de son contour fantôme (deux causes distinctes), badge
+> « INPUT? » retiré. Détail et chiffres : `CLAUDE.md` § Phase 14.
+> Auparavant v0.14.1 : audit complet PUIS revue adversariale des corrections
+> elles-mêmes, 59 + 25 défauts corrigés (`docs/AUDIT-2026-07-27.md`).
 
 ---
 
@@ -14,14 +16,14 @@
 Atoll est une « Dynamic Island » ASCII pour Claude Code sur macOS (Swift/SwiftUI,
 GPL-3.0, repo PUBLIC `github.com/mehdi7129/atoll`).
 
-### État EXACT au 2026-07-27 (fin de session)
+### État EXACT au 2026-07-28 (fin de session)
 
 | Quoi | Où |
 |---|---|
-| Version publiée | **v0.14.1** (DMG notarisé + appcast Sparkle) |
+| Version | **v0.15.0** — Phase 14 « Arêtes franches » |
 | Git | `main` poussé, **arbre propre** — vérifier d'un coup : `git log --oneline -3 && git status --porcelain` (un hash écrit ici serait périmé dès le commit suivant) |
 | Tests | **636 verts** (`cd AtollCore && swift test`, ~1 s), build **0 warning** |
-| Phases | **1 à 13 livrées** + audit complet du 2026-07-27. La feuille de route « Atoll 2 » (milestones A/B/C) est ÉPUISÉE |
+| Phases | **1 à 14 livrées** + audit complet du 2026-07-27. La feuille de route « Atoll 2 » (milestones A/B/C) est ÉPUISÉE |
 | Build installé | ⚠️ `~/Applications/Atoll.app` contient la **Release NOTARISÉE v0.14.1** (installée depuis le DMG en fin de session, pour que Mehdi ait le produit fini). Pour reprendre la boucle de dev : **DÉPLACER ce bundle** (`mv`) puis `ditto` le Debug — `ditto` fusionne et casserait le sceau |
 
 **Rien n'est en cours, rien n'est à moitié fait.** Une reprise commence par choisir

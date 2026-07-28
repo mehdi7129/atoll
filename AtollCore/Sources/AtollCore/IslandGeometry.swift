@@ -55,10 +55,16 @@ public enum IslandGeometry {
     /// Taille du panneau étendu (assez haut pour les cartes interactives).
     public static let expandedSize = CGSize(width: 600, height: 340)
 
-    /// Marge horizontale du contenu étendu : les flancs de la NotchShape sont
-    /// insetés de topRadius (19 pt) — le contenu doit s'en écarter en plus de
-    /// sa propre respiration, sinon il déborde du corps visible du panneau.
-    public static let expandedContentInset: CGFloat = 38
+    /// Marge horizontale du contenu étendu.
+    ///
+    /// Elle valait 38 pt tant que la `NotchShape` évasait ses coins hauts : les
+    /// flancs du panneau étaient alors insetés de 19 pt et le contenu devait
+    /// s'en écarter d'autant, EN PLUS de sa propre respiration — un chiffre
+    /// composite qui ne se lisait pas. Depuis que les coins hauts sont droits
+    /// (2026-07-28), les flancs sont au bord : la marge redevient une pure
+    /// décision de mise en page. 26 pt, la même respiration à gauche et à
+    /// droite qu'un panneau système, et 24 pt de largeur de texte gagnés.
+    public static let expandedContentInset: CGFloat = 26
 
     /// Rect de la fenêtre : top-centrée sur l'écran, collée au bord supérieur.
     public static func windowRect(screenFrame: CGRect) -> CGRect {

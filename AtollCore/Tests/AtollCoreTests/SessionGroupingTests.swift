@@ -155,6 +155,54 @@ final class SessionGroupingTests: XCTestCase {
         XCTAssertEqual(bounded.hiddenCount, 1)
     }
 
+    /// Le budget serré ne doit pas laisser des sessions DORMANTES évincer la
+    /// seule qui travaille. Cas réel : une bannière est affichée (budget 4),
+    /// 3 sessions au repos et 1 en cours — l'ancien remplissage séquentiel
+    /// dessinait quatre rangées de sessions dormantes et renvoyait la session
+    /// active derrière « +1 autre ».
+    func testWorkingSurvivesABudgetFilledByIdleSessions() {
+        let sessions = [
+            session("i1", .awaitingInput),
+            session("i2", .awaitingInput),
+            session("i3", .awaitingInput),
+            session("w", .working(tool: "Bash")),
+        ]
+        let bounded = SessionGrouping.byState(sessions, rowBudget: 4)
+        XCTAssertTrue(bounded.groups.contains { $0.bucket == .working },
+                      "la session en cours a été évincée : \(bounded.groups.map(\.bucket))")
+        // L'ordre d'AFFICHAGE reste celui de l'urgence, pas celui de l'attribution.
+        XCTAssertEqual(bounded.groups.map(\.bucket), [.awaitingInput, .working])
+        XCTAssertEqual(bounded.hiddenCount, 2)
+    }
+
+    /// Une demande de permission passe avant tout, y compris avant le travail en
+    /// cours : c'est le seul état qui BLOQUE.
+    func testAwaitingDecisionIsServedFirst() {
+        let sessions = [
+            session("p", .awaitingPermission(tool: "Bash")),
+            session("i1", .awaitingInput),
+            session("i2", .awaitingInput),
+            session("w", .working(tool: nil)),
+        ]
+        let bounded = SessionGrouping.byState(sessions, rowBudget: 4)
+        XCTAssertEqual(bounded.groups.map(\.bucket), [.awaitingDecision, .working])
+        XCTAssertEqual(bounded.hiddenCount, 2)
+    }
+
+    /// Budget large : rien ne change par rapport au remplissage séquentiel.
+    func testGenerousBudgetShowsEverything() {
+        let sessions = [
+            session("i1", .awaitingInput),
+            session("i2", .awaitingInput),
+            session("i3", .awaitingInput),
+            session("w", .working(tool: nil)),
+        ]
+        let bounded = SessionGrouping.byState(sessions, rowBudget: 6)
+        XCTAssertEqual(bounded.hiddenCount, 0)
+        XCTAssertEqual(bounded.groups.map(\.bucket), [.awaitingInput, .working])
+        XCTAssertEqual(bounded.groups.first?.sessions.count, 3)
+    }
+
     func testBannerShrinksTheBudget() {
         XCTAssertLessThan(IslandRowBudget.rows(bannerShown: true),
                           IslandRowBudget.rows(bannerShown: false))

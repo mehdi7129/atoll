@@ -86,7 +86,9 @@ final class AsciiArtTests: XCTestCase {
     func testStatusBadges() {
         XCTAssertEqual(AsciiArt.statusBadge(.working(tool: nil)), "[ WORKING ]")
         XCTAssertEqual(AsciiArt.statusBadge(.awaitingPermission(tool: "Bash")), "[ APPROVE? ]")
-        XCTAssertEqual(AsciiArt.statusBadge(.awaitingInput), "[ INPUT? ]")
+        // Une session au repos ne porte AUCUN badge : « [ INPUT? ] » criait
+        // sur la moitié de la flotte en permanence (demande de Mehdi, 2026-07-28).
+        XCTAssertNil(AsciiArt.statusBadge(.awaitingInput))
         XCTAssertEqual(AsciiArt.statusBadge(.done), "[ DONE ]")
     }
 

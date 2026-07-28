@@ -105,7 +105,13 @@ struct ExpandedView: View {
             // En-tête + bascule de mode. Le titre rétrécit pour laisser la
             // place au sélecteur (la grille ASCII reste sur une ligne).
             HStack(spacing: 6) {
-                Text(AsciiArt.sectionHeader("SESSIONS", width: 52))
+                // 68 et non 70 : la rangée partage sa largeur avec la bascule
+                // `[ PROJET ]` (la plus large des deux libellés, 55,6 pt) et les
+                // 16 pt incompressibles du HStack. À 70 caractères il ne restait
+                // que 0,38 pt de marge sur 548 — la moindre variation d'avance
+                // monospace, sur une autre version de macOS, tronquait l'en-tête
+                // principal de l'îlot avec une ellipse. 68 laisse 13,6 pt.
+                Text(AsciiArt.sectionHeader("SESSIONS", width: 68))
                     .lineLimit(1)
                     .foregroundStyle(colors.dim)
                 Spacer(minLength: 4)
@@ -303,7 +309,7 @@ struct ExpandedView: View {
 
     private var learningBanner: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(AsciiArt.sectionHeader("APPRENTISSAGE", width: 72))
+            Text(AsciiArt.sectionHeader("APPRENTISSAGE", width: 79))
                 .lineLimit(1)
                 .foregroundStyle(colors.dim)
             HStack(spacing: 8) {
@@ -327,7 +333,7 @@ struct ExpandedView: View {
     private func taskDoneBanner(_ task: LaunchedTask) -> some View {
         let others = TaskCompletionNotifier.shared.unacknowledged.count - 1
         return VStack(alignment: .leading, spacing: 6) {
-            Text(AsciiArt.sectionHeader("TÂCHE TERMINÉE", width: 72))
+            Text(AsciiArt.sectionHeader("TÂCHE TERMINÉE", width: 79))
                 .lineLimit(1)
                 .foregroundStyle(colors.dim)
             HStack(spacing: 8) {
@@ -373,7 +379,7 @@ struct ExpandedView: View {
 
     private var footerBody: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(AsciiArt.sectionHeader("QUOTA", width: 72))
+            Text(AsciiArt.sectionHeader("QUOTA", width: 79))
                 .lineLimit(1)
                 .foregroundStyle(colors.dim)
 
@@ -486,6 +492,11 @@ private struct SessionRow: View {
     let colors: ThemeColors
     let onTap: () -> Void
 
+    /// Largeur réservée au badge d'état, badge absent compris.
+    /// « [ APPROVE? ] » est le plus large : 12 caractères × 6,7998 pt d'avance à
+    /// `AtollFont.mono(11)` (mesuré par CoreText) = 81,6 pt, arrondi à 82.
+    static let badgeSlot: CGFloat = 82
+
     var body: some View {
         Button(action: onTap) {
             VStack(alignment: .leading, spacing: 1) {
@@ -501,8 +512,15 @@ private struct SessionRow: View {
                         Text("ctx \(Int(context * 100))%")
                             .foregroundStyle(context >= 0.8 ? colors.warn : colors.dim)
                     }
-                    Text(AsciiArt.statusBadge(session.status))
+                    // Pas de badge pour une session au repos : rien à annoncer.
+                    // Mais la PLACE reste réservée — sinon « ctx NN% » change de
+                    // colonne d'une ligne à l'autre selon qu'un badge est présent
+                    // ou non (mesuré : 80,8 pt d'écart). Dans une interface dont
+                    // toute l'esthétique est une grille de caractères, la seule
+                    // colonne chiffrée de la liste ne peut pas se déplacer.
+                    Text(AsciiArt.statusBadge(session.status) ?? "")
                         .foregroundStyle(badgeColor)
+                        .frame(width: Self.badgeSlot, alignment: .trailing)
                 }
                 if let detail {
                     Text("  └ \(detail)")
@@ -544,8 +562,12 @@ private struct SessionRow: View {
         switch session.status {
         case .working:
             AsciiSpinnerView(color: colors.accent)
-        case .awaitingPermission, .awaitingInput:
+        case .awaitingPermission:
             Text("!").foregroundStyle(colors.warn)
+        case .awaitingInput:
+            // Au repos : point discret, comme l'en-tête de son groupe. Le « ! »
+            // orange est réservé à ce qui BLOQUE (`needsAttention`).
+            Text("·").foregroundStyle(colors.dim)
         case .done:
             Text("·").foregroundStyle(colors.ok)
         }
@@ -554,7 +576,11 @@ private struct SessionRow: View {
     private var badgeColor: Color {
         switch session.status {
         case .working: return colors.accent
-        case .awaitingPermission, .awaitingInput: return colors.warn
+        case .awaitingPermission: return colors.warn
+        // Inatteignable tant que `statusBadge` rend `nil` pour cet état — mais
+        // laisser `warn` ici serait une mine : le jour où l'on réintroduirait un
+        // badge au repos, il ressortirait en orange d'alerte.
+        case .awaitingInput: return colors.dim
         case .done: return colors.ok
         }
     }

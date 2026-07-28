@@ -1,10 +1,10 @@
 # CLAUDE.md — instructions projet Atoll
 
 > 📌 **REPRISE DE DEV : lire `docs/HANDOFF.md` en premier** — état exact, méthode de
-> travail, et TOUS les pièges appris à la dure. (v0.14.1 publiée : audit complet
-> — 59 défauts corrigés, cf. `docs/AUDIT-2026-07-27.md` ; auparavant v0.13.2, Phase 13
-> « Rendre la main » — la fin d'une tâche vient te chercher, deux sons à toi,
-> la flotte lisible par état ; puis réglages étirables et vocabulaire dé-jargonné.)
+> travail, et TOUS les pièges appris à la dure. (v0.15.0 : Phase 14 « Arêtes franches »
+> — coins hauts droits, contour au calibrage Apple, ouverture sans contour fantôme,
+> badge « INPUT? » retiré ; auparavant v0.14.1, audit complet — 59 + 25 défauts
+> corrigés, cf. `docs/AUDIT-2026-07-27.md`.)
 
 Atoll est une app macOS native (Swift/SwiftUI) : une « Dynamic Island » autour du notch,
 esthétique ASCII, pour suivre et piloter les sessions Claude Code. Gratuit, open source,
@@ -39,8 +39,11 @@ Pièges de build appris à la dure :
   `notifyutil -p dev.mehdiguiard.atoll.debug.expand` étend + épingle l'îlot,
   `…debug.compact` le replie ; puis `screencapture -x f.png`, rogner la bande
   supérieure centrale avec sips, et REGARDER l'image (l'outil Read lit les PNG).
-  Piège vu en vrai : la NotchShape insète ses flancs de topRadius → le contenu
-  étendu doit s'écarter de `IslandGeometry.expandedContentInset`.
+  **FILMER plutôt que photographier** quand le défaut est une ANIMATION :
+  `screencapture -x -v -V 3 -D 2 f.mov` puis `ffmpeg … tile=4x8` pour une planche
+  de vignettes, ou un profil de luminance par image. C'est ce qui a permis de
+  séparer, en Phase 14, deux causes qui se superposaient — voir plus bas.
+  (`ffmpeg` est présent : `/opt/homebrew/bin/ffmpeg`.)
 
 ## Architecture
 
@@ -191,6 +194,114 @@ PIÈGES DE MÉTHODE appris pendant cet audit :
 - ✅ Phase 13 — « Rendre la main » (v0.13.0) : annonce de fin de tâche `--bg`,
   deux sons personnalisables (avec reprise réversible des hooks `afplay`),
   vue de la flotte par état.
+- ✅ Phase 14 — « Arêtes franches » (v0.15.0) : coins hauts droits, contour au
+  calibrage Apple mesuré, ouverture sans contour fantôme, badge « INPUT? » retiré.
+
+**Phase 14 — « Arêtes franches » (v0.15.0, 2026-07-28)** — trois défauts signalés par
+Mehdi sur la v0.14.1, tous reproduits et mesurés avant d'être corrigés.
+
+- **LE BADGE « [ INPUT? ] » EST RETIRÉ.** `AsciiArt.statusBadge` renvoie désormais
+  `String?`, et `nil` pour `.awaitingInput`. Ce n'était pas qu'une question de goût :
+  `claude agents --json` rapporte `"status": "idle"`, `SessionStore.fleetPhase` écrase
+  `idle` ET `needsInput` sur la même phase `.waitingInput`, et TOUTE session découverte
+  par la flotte NAÎT `waitingInput` — le badge posait donc une question au nom d'une
+  session qui ne demandait rien, sur la moitié de la flotte en permanence. Le glyphe
+  de la ligne devait suivre : `.awaitingPermission` et `.awaitingInput` partageaient
+  `Text("!")` en `colors.warn`. Retirer le badge SANS scinder le glyphe aurait laissé
+  un « ! » orange inexpliqué — plus alarmant qu'avant. `.awaitingInput` prend donc un
+  `·` en `colors.dim`, ce que `AgentSession.needsAttention` disait déjà (permission
+  SEULEMENT). `badgeColor` est scindé de même : inatteignable aujourd'hui, mais y
+  laisser `warn` était une mine pour la prochaine réintroduction.
+
+- **LES COINS HAUTS SONT DROITS** (`App/NotchShape.swift`, réécrite). L'ancien tracé
+  évasait les coins supérieurs vers l'extérieur par une quad-Bézier tangente au bord
+  haut : le « coin » était un rebroussement à 180° qui dégénérait en biseau effilé
+  sous-pixel, et l'arête haute était plus large que le corps — l'œil y lisait deux
+  contours emboîtés (vérifié au zoom 4×). Cet évasement a un sens quand la surface
+  ÉPOUSE l'encoche ; il n'en a aucun sur 600 pt de large quand l'encoche en fait 220.
+  La forme est maintenant un `UnevenRoundedRectangle` `.continuous` (le squircle
+  d'Apple), rayons hauts 0, rayon bas 18 déployé / 12 compact.
+  - **`topRadius` N'EXISTE PLUS** et le piège « la NotchShape insète ses flancs de
+    topRadius » est CADUC : il décrivait un effet de bord, pas une intention.
+  - **`IslandGeometry.expandedContentInset` : 38 → 26.** 38 valait « 19 d'inset subi
+    + 19 de respiration » ; sans inset subi, la marge redevient une décision de mise
+    en page. Le corps visible passe de 562 à **600 pt** (mesuré : 565 → 601 px).
+  - **Les règles ASCII étaient calibrées sur l'ancienne boîte** : 52 → 70 (SESSIONS,
+    qui partage sa rangée avec `[ PROJET ]`/`[ ÉTAT ]`), 72 → 79 (QUOTA,
+    APPRENTISSAGE, TÂCHE TERMINÉE), `rule(56)` → `rule(79)`. Chiffre à retenir :
+    **l'avance de `AtollFont.mono(11)` vaut 6,7998 pt** (5,5635 pt à 9 pt) — dans une
+    boîte de 548 pt, 79 caractères laissent 10,8 pt de mou et **81 débordent**.
+  - **`NotchShape.sideInset`** (compact 6 / déployé 0) : sans inset latéral du tout,
+    l'îlot AU REPOS occupait exactement la largeur rapportée de l'encoche. Or cette
+    largeur est une BOÎTE ENGLOBANTE et la découpe physique a des coins bas arrondis :
+    à un pixel près, du noir pouvait se peindre sur la dalle, invisible sur fond
+    sombre et visible sur fond clair. Le retrait est donc remis, mais NOMMÉ, et
+    seulement là où il sert.
+
+- **LE CONTOUR EST REFAIT AU CALIBRAGE APPLE**, mesuré au pixel sur CETTE machine
+  (macOS 26.5.2) et non supposé :
+  - **`.glassEffect` ne dessine AUCUN liseré** (six configurations testées, dont un
+    vrai `buttonStyle(.glass)`) : tout trait qu'on dessine est le SEUL trait, aucun
+    risque de double bordure.
+  - Un vrai menu système, sur fond gris contrôlé, donne la MÊME structure sur ses
+    quatre côtés : **1 px de contour sombre au bord, puis 2 px de liseré clair juste
+    à l'intérieur**. Apple pose donc DEUX traits, pas un. D'où `contourColor`
+    (`black` 0,70 sombre / 0,45 clair, UNIFORME — le contour ne se dégrade pas) et
+    `borderGradient` (`white` 0,35 → 0,24 sombre ; 0,60 → 0,42 clair). Le rapport
+    haut/bas est **1 → 0,7**, jamais 1 → 0,2 : plus bas, les deux coins inférieurs —
+    les SEULS coins arrondis du panneau — perdent leur arête.
+  - **Épaisseur = 1 pixel PHYSIQUE** (`NotchViewModel.hairline = 1/backingScaleFactor`,
+    soit 0,5 pt en interne et 1,0 pt sur le 4K) pour le contour, le double pour le
+    liseré. C'est exactement ce qu'Apple mesure.
+  - **Le trait est découplé de la palette.** Il utilisait `colors.dim`, qui vaut vert
+    en Phosphor et or en Amber : le bord se lisait comme un élément d'art ASCII, pas
+    comme l'arête d'un matériau. Ne PAS retoucher `Palette.Variant.dim` pour autant,
+    il peint tout le texte secondaire des fenêtres secondaires.
+  - **L'arête HAUTE n'est pas bordée**, et elle s'efface en FONDU sur 16 pt (5 % de la
+    hauteur, donc ~2 pt en compact — une longueur fixe mangerait la moitié d'un bord
+    de 26 pt). Un liseré à y = 0 tracerait une ligne claire en travers de la barre des
+    menus, sur un bord qui n'existe pas physiquement. Apple n'a pas de cas « bordé
+    d'un seul côté » : sous Tahoe ses menus FLOTTENT et ne touchent plus rien.
+  - **`borderStrength`** : 0 sur l'encoche en compact (fusion), 0,55 sur la pilule
+    compacte d'un écran sans encoche (elle porte ce bord 24 h/24, sans session), 1
+    déployé.
+  - **Deux ombres** après `.compositingGroup()` : courte (0,26 / r3 / y1) pour poser
+    l'arête, longue (0,26 / r22 / **y5**) pour l'altitude. Le y valait 10 : deux fois
+    trop, l'ajustement gaussien sur une vraie fenêtre macOS 26 donne σ ≈ 11,7 pt et un
+    décalage de +5. Contrainte : la fenêtre ne fait que 760 × 460 et
+    `NotchPanel.hasShadow = false` — `radius + |y| ≤ 70`, sinon l'ombre est coupée net.
+
+- **L'OUVERTURE N'EXHIBE PLUS DE CONTOUR FANTÔME — DEUX causes distinctes**, trouvées
+  parce qu'on a FILMÉ l'ouverture à 60 i/s au lieu de la photographier.
+  - **Cause n° 1, visible seulement sur l'écran à ENCOCHE** : le trait était un enfant
+    CONDITIONNEL de `.overlay` (`if !isCompactCap`), donc absent en compact. SwiftUI ne
+    l'interpolait pas, il l'INSÉRAIT — et une vue insérée naît à sa géométrie FINALE
+    avec un simple fondu. On voyait donc le contour du panneau déployé pendant que le
+    corps mettait ~0,25 s à grandir jusqu'à lui : littéralement « d'abord le contour,
+    ensuite la fenêtre qui vient s'y coller ». Contrôle décisif : sur l'écran 2
+    (`isCompactCap` toujours faux, donc trait présent dans les deux états) le même
+    trait se déplaçait continûment. Le bord est désormais TOUJOURS rendu, seule son
+    opacité change. **Règle générale : ce qui doit s'animer ne doit jamais être un
+    `if` dans un ViewBuilder.** Même correction appliquée à `IslandBackground`, qui
+    basculait entre trois branches.
+  - **Cause n° 2, sur les deux écrans, d'autant plus visible que le verre est fort** :
+    le Liquid Glass met ~250 ms à se matérialiser, hors de notre contrôle. MESURÉ à
+    100 % de verre : la luminance intérieure du panneau monte de 9 à 30 en ~250 ms
+    alors que la géométrie est déjà à 66 % de sa largeur finale — le panneau est un
+    contour presque vide. Le même relevé avec le verre à 0 donne une luminance
+    CONSTANTE à 9,0. Correctif : `IslandBackground.glassReveal` (0 = fond plein,
+    1 = l'intensité réglée), animé de 0 à 1 en `easeOut(0,30).delay(0,10)` à
+    l'ouverture. Le verre se matérialise SOUS un aplat, personne ne le voit arriver.
+    Après correction : luminance constante à 9,0 pendant toute la croissance.
+  - **PIÈGE DU CORRECTIF** : `glassReveal` est un `@State`. Si la fenêtre est
+    reconstruite alors que l'îlot est DÉJÀ déployé (écran branché, résolution
+    changée), il repart à 0 et seule une TRANSITION vers `.expanded` le remonte — le
+    panneau resterait en fond plein pour toujours. D'où le rattrapage dans `.onAppear`.
+
+- **`glassEffect(_:in:isEnabled:)` N'EXISTE PAS sur macOS 26** (SDK vérifié :
+  `SwiftUICore.swiftinterface` ne déclare que `glassEffect(_:in:)`). L'insertion
+  conditionnelle du verre reste donc nécessaire — elle est simplement devenue
+  INVISIBLE, puisqu'à l'instant où elle se produit l'aplat est opaque.
 
 **VOCABULAIRE DE L'INTERFACE (v0.13.2)** — les identifiants de code restent
 anglais et INCHANGÉS (`NotesCuration`, `RetrospectiveRunner`…), mais les

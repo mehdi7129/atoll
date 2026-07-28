@@ -56,6 +56,10 @@ struct InteractionCardView: View {
     // MARK: - En-tête
 
     private var header: some View {
+        // La règle est VOLONTAIREMENT courte (30 caractères), contrairement aux
+        // en-têtes de section du panneau qui traversent toute la largeur : ici
+        // la rangée continue avec le nom du projet, le rang dans la file et le
+        // temps écoulé. C'est un en-tête à métadonnées, pas un séparateur.
         HStack(spacing: 6) {
             Text(AsciiArt.sectionHeader(headerTitle, width: 30))
                 .lineLimit(1)

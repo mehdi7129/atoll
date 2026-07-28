@@ -43,6 +43,11 @@ final class NotchViewModel {
     /// Identifiant de l'écran de ce contrôleur : clé de la taille réglable.
     let displayID: String
 
+    /// Densité de l'écran hôte. Sert à tracer le liseré sur UN pixel physique :
+    /// 0,5 pt sur un écran Retina, 1 pt sur un écran non-Retina. Un trait de
+    /// 1 pt sur du Retina fait deux pixels et se voit comme un cadre.
+    let hairline: CGFloat
+
     /// Largeur compacte choisie pour CET écran (observe IslandSettings → l'îlot
     /// se redimensionne en direct quand on change le réglage).
     var compactWidth: IslandWidth { IslandSettings.shared.width(for: displayID) }
@@ -51,6 +56,7 @@ final class NotchViewModel {
         notchSize = screen.notchSize
         menuBarHeight = screen.menuBarHeight
         displayID = screen.displayUUIDString
+        hairline = 1 / max(screen.backingScaleFactor, 1)
         self.isPrimary = isPrimary
         // Résolu ICI (init MainActor) et non en argument par défaut, qui
         // s'évalue en contexte nonisolated → warning d'isolation (erreur Swift 6).
