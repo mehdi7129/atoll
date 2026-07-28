@@ -33,7 +33,7 @@ y compris pour les sessions lancées depuis le terminal de Cursor.
 | 12 · Boucle fermée (Atoll apprend vraiment · antériorité · plugins) | ✅ |
 | 13 · Rendre la main (fin de tâche annoncée · sons personnalisables · flotte par état) | ✅ |
 
-**Version courante : v0.14.0** (voir les [Releases](https://github.com/mehdi7129/atoll/releases)).
+**Version courante : v0.14.1** (voir les [Releases](https://github.com/mehdi7129/atoll/releases)).
 
 Voir le [plan détaillé](PLAN.md), la [recherche](docs/research/) et [CLAUDE.md](CLAUDE.md)
 pour contribuer.

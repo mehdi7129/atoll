@@ -1,7 +1,7 @@
 # CLAUDE.md — instructions projet Atoll
 
 > 📌 **REPRISE DE DEV : lire `docs/HANDOFF.md` en premier** — état exact, méthode de
-> travail, et TOUS les pièges appris à la dure. (v0.14.0 publiée : audit complet
+> travail, et TOUS les pièges appris à la dure. (v0.14.1 publiée : audit complet
 > — 59 défauts corrigés, cf. `docs/AUDIT-2026-07-27.md` ; auparavant v0.13.2, Phase 13
 > « Rendre la main » — la fin d'une tâche vient te chercher, deux sons à toi,
 > la flotte lisible par état ; puis réglages étirables et vocabulaire dé-jargonné.)
@@ -87,7 +87,16 @@ Pièges de build appris à la dure :
 **AUDIT COMPLET DU 2026-07-27** — `docs/AUDIT-2026-07-27.md` (à lire avant tout
 travail sur les zones citées). Workflow de 234 agents, 18 dimensions, chaque
 défaut vérifié par 2 lentilles adversariales : 108 allégués → 71 confirmés, 30
-contestés, 7 réfutés (59 distincts). **Tous corrigés**, 628 tests verts.
+contestés, 7 réfutés (59 distincts). **Tous corrigés**, puis une SECONDE revue
+adversariale des corrections elles-mêmes (118 agents) a trouvé **25 régressions**,
+également corrigées. 636 tests verts.
+
+**LEÇON GÉNÉRALE** : une correction de sécurité mérite sa propre revue
+adversariale. Le garde-fou des interpréteurs posé le matin se rouvrait en
+retirant UNE ESPACE (`python3 -c'code'` collé produit un token unique qui
+n'égalait aucun drapeau connu) ; le verrou anti-double-spawn de la rétrospective
+bloquait sa propre file ; le filtre de quota masquait des jauges valides. Voir
+`docs/AUDIT-2026-07-27.md`.
 Les quatre qui comptent :
 - **`&` n'était pas un séparateur de segment dans `AutoAcceptPolicy`** : une
   commande destructrice placée après un `&` était AUTO-APPROUVÉE (seul le
