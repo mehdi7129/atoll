@@ -27,18 +27,95 @@
 Atoll est une « Dynamic Island » ASCII pour Claude Code sur macOS (Swift/SwiftUI,
 GPL-3.0, repo PUBLIC `github.com/mehdi7129/atoll`).
 
-### État EXACT au 2026-07-28 (fin de session)
+### État EXACT au 2026-08-03 (fin de session)
 
 | Quoi | Où |
 |---|---|
-| Version | **v0.15.1** — le son survit à l'app |
+| Version | **v0.16.0** — la mémoire répond, et Atoll rend ce qui n'est pas à lui (PUBLIÉE : release GitHub, DMG et zip notarisés+agrafés, appcast poussé et ses URL vérifiées 200) |
 | Git | `main` poussé, **arbre propre** — vérifier d'un coup : `git log --oneline -3 && git status --porcelain` (un hash écrit ici serait périmé dès le commit suivant) |
-| Tests | **653 verts** (`cd AtollCore && swift test`, ~1 s), build **0 warning** |
-| Phases | **1 à 14 livrées** + audit complet du 2026-07-27. La feuille de route « Atoll 2 » (milestones A/B/C) est ÉPUISÉE |
-| Build installé | ⚠️ `~/Applications/Atoll.app` contient la **Release NOTARISÉE v0.15.1** (installée depuis le DMG en fin de session, pour que Mehdi ait le produit fini). Pour reprendre la boucle de dev : installer le Debug **À CÔTÉ**, en `~/Applications/Atoll-dev.app`, et ne jamais `ditto` par-dessus la Release — `ditto` FUSIONNE et un `Atoll.debug.dylib` résiduel casse le sceau. Quitter l'une avant de lancer l'autre (même bundle id) |
+| Tests | **644 verts** (`cd AtollCore && swift test`, ~1 s), build **0 warning** |
+| Phases | **1 à 14 livrées**, la **9 RETIRÉE** le 2026-08-03. Feuille de route « Atoll 2 » ÉPUISÉE ; le cadre en vigueur est `docs/VISION-2026-08.md`, décliné en `docs/PLAN-2026-08-court-terme.md` |
+| Build installé | `~/Applications/Atoll.app` = **Release NOTARISÉE v0.16.0**, lancée et vérifiée (`spctl : accepted — Notarized Developer ID`, staple validé). Il n'y a **plus de build Debug installé** : l'`Atoll-dev.app` v0.15.1 a été mis à la corbeille en fin de session, il portait le MÊME bundle id et prêtait à confusion. Pour reprendre la boucle de dev, réinstaller le Debug en `~/Applications/Atoll-dev.app` — jamais `ditto` par-dessus la Release, `ditto` FUSIONNE et un `Atoll.debug.dylib` résiduel casse le sceau. Quitter l'une avant de lancer l'autre |
 
 **Rien n'est en cours, rien n'est à moitié fait.** Une reprise commence par choisir
 un chantier au §1.
+
+### v0.16.0 — quatre lots, et ce qu'ils apprennent
+
+Cadre : `docs/VISION-2026-08.md`, né du constat de Mehdi qu'Anthropic livre
+nativement de plus en plus de la surface d'Atoll (agent view, `auto-mode`,
+`ultrareview`, remote-control, agent teams). Conséquence de méthode : **soustraire
+avant d'ajouter**. Bilan net **−910 lignes**.
+
+1. **La mémoire RÉPOND.** 8 135 messages « drone » indexés, et `recall` rendait
+   « Aucun résultat » : en mode strict, tous les mots doivent tenir dans le MÊME
+   fragment (404 caractères en moyenne). Le défaut n'était pas dans `MemoryIndex`
+   mais dans son APPEL — le commentaire de `MatchMode` le disait déjà, la leçon
+   n'avait été appliquée qu'au recall PROACTIF. Élargissement **seulement sur zéro
+   résultat**, jamais sur « peu » (ça diluerait les recherches précises qui marchent).
+   Contrepartie assumée : un OR de mots fréquents apparie jusqu'à 64 % de la base →
+   trois ceintures NON optionnelles (bandeau « RECHERCHE ÉLARGIE », champ `relaxed`
+   par objet JSON, tri par COUVERTURE) + une section du SKILL.md qui interdit d'en
+   tirer un « on avait décidé X ».
+2. **La mémoire cesse d'avaler le bruit** : 134 enveloppes `<task-notification>`
+   valaient **17 % du corpus `user`**. Filtre STRUCTUREL (`origin.kind`, vérifié
+   127/127 sur douze versions du CLI), jamais textuel — une conversation qui *parle*
+   de ces balises n'en serait pas victime. **PIÈGE ÉVITÉ** : la purge ne passe PAS
+   par `schemaVersion`, car toute valeur inattendue de `user_version` fait passer
+   `migrateIfNeeded` par `recreateFromScratch`, qui SUPPRIME la base — et 548
+   messages appartiennent à cinq transcripts disparus du disque. Compteur dans
+   `PRAGMA application_id`.
+3. **Niveau « Auto » retiré** (`claude auto-mode` est first-party, actif par défaut,
+   35,5 Ko de politique ; notre allowlist avait dû être corrigée deux fois pour des
+   contournements). Tout réglage inconnu retombe sur `.manual`, le plus prudent.
+4. **Cockpit ⌘N retiré** : jamais utilisé (`launched-tasks.json` = `{"tasks":[]}`) et
+   il lançait `claude --bg` **sans `-w/--worktree`**.
+
+**LES DEUX LEÇONS DE MÉTHODE, qui valent au-delà de ces lots :**
+
+- **Écrire les tests du code PARTAGÉ avant de supprimer son autre appelant.**
+  `ShellSplitter` est partagé avec `SoundHookEditor` et n'avait aucun test propre :
+  les 22 tests d'`AutoAcceptPolicy` étaient sa seule couverture. `ShellSplitterTests`,
+  écrit AVANT la suppression, a trouvé aussitôt un vrai défaut — **`\r\n` est UN SEUL
+  `Character` en Swift**, le `switch` ne testait que `\n` et `\r`.
+- **Retirer du code fait MONTER la surface de documentation fausse.** La revue a
+  confirmé 5 défauts documentaires contre 1 seul de code : le README public vendait
+  encore le cockpit ⌘N et la notification de fin de tâche au présent, et la liste de
+  triggers de `CLAUDE.md` se disait « exhaustive » en omettant `retroBig`, `plugins`
+  et `pluginSearch`. La passe docs fait partie du retrait, pas d'après.
+
+### Le bouton ARRÊTER n'avait JAMAIS fonctionné (corrigé le 2026-08-03)
+
+Trouvé par la revue adversariale du diff, et plus vieux que ces lots — il datait de
+la Phase 9. `claude stop` liste `~/.claude/jobs/`, ne garde que les entrées appariant
+`^[a-f0-9]{8}$`, puis retient celles dont le NOM **commence par** l'argument reçu. Un
+dossier de 8 caractères ne peut pas commencer par une chaîne de 36 : Atoll passait
+`session.id` en entier, donc EXIT=1 systématique. L'utilisateur validait une
+confirmation destructrice pour lire « L'arrêt a échoué ».
+
+MESURÉ sur le job MORT `1b6e885d` (aucune session vivante touchée) :
+
+```
+claude stop 1b6e885d                              → « stopped 1b6e885d »,  EXIT=0
+claude stop 1b6e885d-60ff-4bfa-bd56-353e6f4ba7c8  → « No job matching »,   EXIT=1
+```
+
+`FleetLaunch.jobIdentifier` (AtollCore, 6 tests) rend le préfixe ou `nil` — jamais un
+argument normalisé, car `stop` agit sur la PREMIÈRE correspondance et un préfixe
+inventé pourrait désigner une AUTRE session. Le jeu `[a-f0-9]` est écrit en toutes
+lettres, pas délégué à `Character.isHexDigit` (plus large : majuscules, chiffres
+pleine chasse, chiffres arabes). `FleetLauncher.stop` REMONTE désormais le stderr de
+la CLI au lieu d'inventer une cause.
+
+> **LA LEÇON, et c'est la plus transférable du lot** : le fait « `claude --bg`
+> n'imprime parfois qu'un PRÉFIXE de 8 hex alors que les hooks portent l'UUID
+> complet » était **déjà écrit dans `CLAUDE.md` depuis la Phase 13**. Il avait été
+> rangé sous « notifications » et n'a protégé qu'elles. Une connaissance classée sous
+> un seul titre ne généralise pas toute seule à ses voisines.
+
+> **CE QUI N'A PAS ÉTÉ VÉRIFIÉ** : le bouton n'a pas été CLIQUÉ dans l'app sur une
+> session vivante — ça l'aurait tuée. Le correctif est prouvé par ses deux bouts (le
+> test unitaire rend `1b6e885d`, la CLI l'accepte), pas par le geste complet.
 
 ### Ce que fait Atoll aujourd'hui, de bout en bout
 
@@ -89,9 +166,19 @@ attend, visible pour Rockstar seul — ce mode suspend les règles `permissions.
 
 ## 1. CE QU'IL RESTE À FAIRE
 
-**Aucun chantier n'est en cours.** Les phases 1 à 13 sont livrées et la feuille de
-route « Atoll 2 » est épuisée : la suite se décide AVEC Mehdi. Ce qui suit est la
-liste réelle de ce qui reste, avec le contexte de décision — pas une liste de vœux.
+**Aucun chantier n'est en cours.** Les phases sont livrées, la feuille de route
+« Atoll 2 » est épuisée, et les quatre lots de la v0.16.0 sont publiés. La suite se
+décide AVEC Mehdi. Ce qui suit est la liste réelle de ce qui reste, avec le contexte
+de décision — pas une liste de vœux.
+
+> 📌 **LE CADRE EN VIGUEUR est `docs/VISION-2026-08.md`** (Atoll SAIT, se SOUVIENT,
+> APPELLE), décliné en `docs/PLAN-2026-08-court-terme.md`. Il part d'une inquiétude
+> que Mehdi a formulée lui-même : Cursor et Claude Code évoluent si vite qu'Atoll
+> pourrait ne plus servir à rien. La réponse retenue n'est pas d'ajouter des
+> fonctions, c'est de **soustraire tout ce qu'Anthropic fait mieux nativement** et de
+> ne garder que ce qu'Atoll est seul à faire. Lire ces deux documents AVANT de
+> proposer un chantier — plusieurs idées séduisantes y sont déjà écartées, avec la
+> raison.
 
 > ⚠️ **SI TU FAIS UN AUDIT** (Mehdi en demande régulièrement) : le risque n'est PAS
 > de rater des choses, c'est de « corriger » des choix délibérés. **Lis le §B et le
@@ -108,11 +195,21 @@ liste réelle de ce qui reste, avec le contexte de décision — pas une liste d
    v2 assumée, **NE PAS entamer sans accord explicite**.
 2. **Jump-back Ghostty / tmux** (les adapters existent pour Terminal/iTerm2/Cursor).
    Mehdi a tranché le 2026-07-27 : **sans valeur tant qu'il travaille dans Cursor**.
-3. **Notification de fin pour les `--bg` lancées du TERMINAL** (hors notch). Écarté
-   en Phase 13 : la seule façon de les reconnaître serait
-   `AgentSessionInfo.Kind.background`, dont le code documente qu'il n'est pas fiable
-   → risque de sonner sur une session que Mehdi regarde. À rouvrir seulement si le
-   CLI expose un jour un marqueur sûr.
+3. **« Rapport de retour » de fin de session** (`docs/VISION-2026-08.md` §4.1) — la
+   seule piste de cette liste qui soit vraiment ouverte. Contexte : l'annonce de fin
+   de tâche de la Phase 13 a été SUPPRIMÉE avec le cockpit, parce que sa seule source
+   était la fenêtre ⌘N et qu'elle n'a donc jamais sonné une seule fois. Si le sujet
+   se rouvre, il faudra une source RÉELLE, et c'est le point dur : reconnaître une
+   `--bg` lancée du terminal passerait par `AgentSessionInfo.Kind.background`, dont
+   le code documente qu'il n'est pas fiable (une session interactive a déjà été
+   rapportée `background`) → risque de sonner sur une session que Mehdi regarde.
+   Le hook `Stop` et son `last_assistant_message` restent le bon signal.
+   **`AtollCore/TaskCompletion` est CONSERVÉ exprès pour ça**, documenté comme
+   échafaudage : `inputCap` est vivant (`HookEvent` borne `last_assistant_message`
+   avec) et `plainText` est la brique du rapport. Aplatir du Markdown sans avaler la
+   prose d'un projet Swift a coûté plusieurs revues et 22 tests. **Si ce rapport
+   n'est pas construit, ce fichier doit être SUPPRIMÉ** — c'est écrit dans son
+   en-tête, ne pas le laisser pourrir indéfiniment.
 
 **Tranché et ABANDONNÉ** — sceller les notes d'apprentissage (manifeste + SHA256).
 L'arbitrage laissé ouvert a été rendu le 2026-07-27, et il est négatif : contre un
@@ -516,11 +613,25 @@ Le chat intégré n'existe plus (retiré le 2026-07-19), mais `RetrospectiveRunn
 - `HookSettingsEditor` / `StatusLineEditor` / `BridgePaths` — édition chirurgicale de
   settings.json (hooks + statusline), chemins partagés.
 - `PermissionDecision` — construit les décisions JSON du hook PermissionRequest.
-- `AutoAcceptPolicy` / `AutonomyLevel` — auto-approbation (allowlist) + niveau exclusif.
+- `AutonomyLevel` — niveau exclusif **Manuel ou Rockstar** (`resolve` normalise le
+  décodage et fait retomber tout inconnu — « auto » compris — sur `.manual`).
+  ⛔️ `AutoAcceptPolicy` est SUPPRIMÉE depuis le 2026-08-03.
+- `ShellSplitter` — découpe une ligne de commande en segments. **PARTAGÉ** avec
+  `SoundHookEditor` : il touche les hooks de l'UTILISATEUR, ne pas y toucher sans
+  faire tourner `ShellSplitterTests`.
+- `FleetLaunch` — `shellQuote` (bilan, plugins, curation) et `jobIdentifier` (le
+  préfixe 8 hex que `claude stop` sait résoudre). Tout ce qui lançait a été retiré.
+- `TaskCompletion` — ÉCHAFAUDAGE ASSUMÉ, pas du code vivant : `inputCap` sert à
+  `HookEvent`, `plainText` attend le rapport de retour (§1.A.3). À supprimer si ce
+  chantier ne se fait pas.
 - `Quota` (`StatusLinePayload`, `QuotaSnapshot`) — parse le payload statusline.
 - `TerminalTarget` (`TerminalResolver`, `WorkspaceRoot`, `IDECommandLine`) /
   `TerminalScripts` — résolution du terminal + AppleScript (jump-back).
 - `MemoryIndex` (+ `MemoryRanking`) — index FTS5, dédup inter-fichiers, récence.
+  Depuis v0.16.0 : `searchRelaxing` (strict, puis élargi SEULEMENT sur zéro résultat)
+  et `runHygieneIfNeeded` (purge unique des enveloppes machine, compteur dans
+  `PRAGMA application_id` — **jamais `user_version`**, qui déclencherait
+  `recreateFromScratch` et supprimerait la base).
 - `ProactiveRecall` / `NotesCurationPrompt` / `LearningInventory` — recall proactif,
   curation des notes, inventaire du tableau de bord (Phase 11).
 
@@ -538,6 +649,9 @@ Le chat intégré n'existe plus (retiré le 2026-07-19), mais `RetrospectiveRunn
 - `InteractionCenter` (singleton) — cartes en attente + décisions + auto-approbation.
 - `RetrospectiveRunner` / `NotesCurationService` — les deux `claude -p` internes
   (rétrospective de fin de session, curation périodique des notes).
+- `FleetLauncher` — ne lance plus rien depuis le 2026-08-03 : il ne porte que
+  `stop` (le bouton ARRÊTER du détail de session, avec confirmation). Le nom est
+  resté trompeur ; le renommer casserait l'historique `git blame` pour peu de gain.
 - `TerminalJumpService` + `AutomationPermission` — jump-back (hors main + timeout).
 - `HookInstaller` — façade d'installation (tout passe par le helper `atoll-bridge`).
 - `ThemeManager` / `ThemeColors` — application du thème (NSApp.appearance).
@@ -588,15 +702,31 @@ claude CLI (n'importe quel terminal) ──hook──▶ ~/.atoll/bin/atoll-brid
 
 ## 7. PROCHAINE ACTION CONCRÈTE
 
-La feuille de route « Atoll 2 » (milestones A, B, C) est **entièrement livrée**, et la
-phase 12 « Boucle fermée » aussi — il n'y a plus de prochaine étape écrite d'avance.
-**Demander à Mehdi la direction** avant d'ouvrir un chantier ; les pistes non tranchées,
-la dette assumée et ce qui a été écarté sont listés au **§1**.
+La feuille de route « Atoll 2 » est entièrement livrée, et les quatre lots de la
+v0.16.0 sont publiés — **il n'y a plus de prochaine étape écrite d'avance.**
+**Demander à Mehdi la direction** avant d'ouvrir un chantier. Lire d'abord
+`docs/VISION-2026-08.md` et `docs/PLAN-2026-08-court-terme.md` (le cadre en vigueur),
+puis le **§1** pour les pistes non tranchées, la dette assumée et ce qui a été écarté.
 
-Si la reprise doit commencer par quelque chose d'utile sans rien décider : **refaire une
-release en invoquant le skill `atoll-release-pipeline`** — c'est le meilleur test de bout
-en bout de la boucle d'apprentissage (le skill vient d'Atoll lui-même), et ça revérifie
-signature, notarisation et appcast d'un coup.
+Si la reprise doit commencer par quelque chose d'utile sans rien décider, par ordre
+de valeur :
+
+1. **Laisser vivre la v0.16.0 quelques jours, puis MESURER.** Deux choses viennent
+   d'être réglées sur la base de chiffres, et elles méritent d'être revérifiées sur
+   des chiffres : la recherche mémoire rend-elle des résultats UTILES (et à quelle
+   fréquence tombe-t-elle en « RECHERCHE ÉLARGIE » ?), et le corpus `user` a-t-il
+   cessé de se remplir d'enveloppes machine ? `sqlite3 ~/.atoll/memory.db` répond aux
+   deux. C'est le seul chantier qui n'engage rien et qui informe tout le reste.
+2. **Demander à Mehdi ce que la recherche élargie lui rend en pratique.** Le
+   compromis (élargir seulement sur zéro résultat, jamais sur « peu ») a été tranché
+   par raisonnement, pas par son usage. C'est un réglage, il peut se rediscuter.
+3. **Refaire une release en invoquant le skill `atoll-release-pipeline`** — test de
+   bout en bout de la boucle d'apprentissage (le skill vient d'Atoll lui-même), et ça
+   revérifie signature, notarisation et appcast d'un coup.
+
+⚠️ **Ce qu'il ne faut PAS faire spontanément** : ajouter une fonction. Le cadre en
+vigueur dit l'inverse, et la v0.16.0 vient de retirer 910 lignes nettes pour cette
+raison. Une idée d'ajout se propose à Mehdi, elle ne se code pas d'initiative.
 
 Quel que soit le chantier, la routine de fin ne change pas :
 1. AtollCore + tests d'abord, coutures App/Bridge ensuite.
