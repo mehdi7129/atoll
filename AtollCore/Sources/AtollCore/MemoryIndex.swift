@@ -413,6 +413,73 @@ public final class MemoryIndex {
         return Array(hits.prefix(limit))
     }
 
+    // MARK: - Recherche élargie (recall manuel)
+
+    /// Résultat d'une recherche qui a pu s'élargir, et QUI LE DIT.
+    public struct RelaxedSearch: Sendable {
+        public let hits: [Hit]
+        /// La recherche stricte n'a RIEN rendu : les résultats ci-dessus ne
+        /// contiennent donc pas tous les mots demandés. Doit être annoncé à
+        /// l'utilisateur — sans quoi le modèle lira du bruit comme un souvenir.
+        public let relaxed: Bool
+
+        public init(hits: [Hit], relaxed: Bool) {
+            self.hits = hits
+            self.relaxed = relaxed
+        }
+    }
+
+    /// Cherche strictement (tous les mots), et n'élargit (au moins un mot) que
+    /// si le strict ne rend **RIEN**.
+    ///
+    /// POURQUOI (mesuré le 2026-08-03). L'index contient 8 135 messages
+    /// contenant « drone », mais `recall "drone Houdini trajectoire"` ne rendait
+    /// RIEN : en `.all`, les trois mots doivent tenir dans un SEUL fragment
+    /// (404 caractères en moyenne). Le commentaire de `MatchMode` le disait
+    /// déjà — « avec 6 à 8 mots-clés, le AND ne trouve JAMAIS rien » — mais la
+    /// leçon n'avait été appliquée qu'au recall PROACTIF, jamais à la recherche
+    /// manuelle, qui est pourtant celle que l'utilisateur et le skill appellent.
+    ///
+    /// LE REPLI EST SUR ZÉRO, JAMAIS SUR « PEU DE RÉSULTATS ». Une condition du
+    /// genre `hits.count < limit` dégraderait les recherches précises qui
+    /// marchent : `recall "notarisation appcast"` rend 3 résultats exacts, les
+    /// diluer avec 5 extraits ne contenant qu'« appcast » serait une régression.
+    ///
+    /// CONTREPARTIE ASSUMÉE : élargie, la recherche ne rend presque plus jamais
+    /// « aucun résultat » — un OR de mots fréquents apparie jusqu'à 22 366
+    /// messages (64 % de la base). C'est pourquoi `relaxed` existe et DOIT être
+    /// affiché : le silence était une information honnête, on la remplace par un
+    /// avertissement, pas par du bruit muet.
+    public func searchRelaxing(rawQuery: String, limit: Int, projectPrefix: String?,
+                               now: Date? = nil, excludingSessionID: String? = nil,
+                               roles: Set<TranscriptLine.Role>? = nil) throws -> RelaxedSearch {
+        let strict = try search(rawQuery: rawQuery, limit: limit, projectPrefix: projectPrefix,
+                                now: now, excludingSessionID: excludingSessionID,
+                                mode: .all, roles: roles)
+        guard strict.isEmpty else { return RelaxedSearch(hits: strict, relaxed: false) }
+
+        let wide = try search(rawQuery: rawQuery, limit: limit, projectPrefix: projectPrefix,
+                              now: now, excludingSessionID: excludingSessionID,
+                              mode: .any, roles: roles)
+        // Rien non plus : ne PAS annoncer un élargissement qui n'a rien donné.
+        guard !wide.isEmpty else { return RelaxedSearch(hits: [], relaxed: false) }
+        return RelaxedSearch(hits: MemoryRanking.byCoverage(wide, terms: Self.queryTerms(rawQuery)),
+                             relaxed: true)
+    }
+
+    /// Les mots d'une requête, tels qu'ils seront cherchés : découpe sur les
+    /// espaces, étoile de préfixe retirée, vides ignorés. Sert au tri par
+    /// couverture — et rend le découpage testable indépendamment de FTS5.
+    public static func queryTerms(_ raw: String) -> [String] {
+        raw.split(whereSeparator: { $0.isWhitespace })
+            .map { token -> String in
+                var body = token[...]
+                while body.hasSuffix("*") { body = body.dropLast() }
+                return String(body)
+            }
+            .filter { !$0.isEmpty }
+    }
+
     /// Statistiques globales : nombre de sessions, de messages, et taille
     /// logique de la base (`page_count × page_size` — ignore le `-wal`).
     public func stats() throws -> Stats {

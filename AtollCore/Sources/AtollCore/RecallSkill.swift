@@ -46,6 +46,18 @@ public enum RecallSkill {
     d'erreur, termes techniques) ; `mot*` cherche par préfixe ; accents ignorés.
     Peu de résultats pertinents ? Reformuler avec des synonymes ou élargir.
 
+    ## ⚠ « RECHERCHE ÉLARGIE » — à lire avant de conclure
+
+    La recherche exige d'abord que TOUS les mots soient présents. Si rien ne
+    correspond, elle réessaie avec AU MOINS UN mot et l'annonce par un bandeau
+    `⚠ RECHERCHE ÉLARGIE` (en `--json` : `"relaxed": true` sur chaque objet).
+
+    **Quand ce bandeau est là, les extraits ne répondent PAS forcément à la
+    question.** Ce sont des pistes, classées du plus couvrant au moins couvrant.
+    Ne jamais en tirer une affirmation du type « on avait décidé X » : dire que
+    la recherche n'a rien trouvé d'exact, et citer au plus ce qui est clairement
+    pertinent. Sans bandeau, les extraits contiennent bien tous les mots.
+
     ## Lire les résultats
 
     Chaque résultat donne : date, projet, titre de session, rôle (user/assistant/

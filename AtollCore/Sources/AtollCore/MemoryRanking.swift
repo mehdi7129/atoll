@@ -118,4 +118,43 @@ public enum MemoryRanking {
             .sorted { ($0.score, $0.index) < ($1.score, $1.index) }
             .map { hits[$0.index] }
     }
+
+    // MARK: - Couverture des termes (recherche élargie)
+
+    /// Combien de termes de la requête ce résultat contient-il ?
+    ///
+    /// Sert UNIQUEMENT à la recherche élargie (`MemoryIndex.searchRelaxing`) :
+    /// quand aucun message ne contient TOUS les mots, on remonte ceux qui en
+    /// contiennent au moins un — et il faut alors mettre en tête ceux qui en
+    /// couvrent le plus. Sans ce tri, un extrait ne partageant qu'un mot sur
+    /// trois se retrouve devant un extrait qui en partage deux (mesuré :
+    /// 5ᵉ position sur 8 avant correction).
+    ///
+    /// On compte dans le SNIPPET, où FTS5 encadre chaque terme trouvé de
+    /// `«…»` — c'est donc la liste des mots qui ont RÉELLEMENT matché, pas une
+    /// approximation textuelle. La comparaison est insensible à la casse et aux
+    /// diacritiques, comme l'index (`unicode61 remove_diacritics 2`).
+    public static func coverage(of hit: MemoryIndex.Hit, terms: [String]) -> Int {
+        guard !terms.isEmpty else { return 0 }
+        let folded = hit.snippet.folding(options: [.diacriticInsensitive, .caseInsensitive],
+                                         locale: Locale(identifier: "fr_FR"))
+        var found = 0
+        for term in terms where !term.isEmpty {
+            let needle = term.folding(options: [.diacriticInsensitive, .caseInsensitive],
+                                      locale: Locale(identifier: "fr_FR"))
+            if folded.contains(needle) { found += 1 }
+        }
+        return found
+    }
+
+    /// Reclasse par couverture DÉCROISSANTE, en préservant l'ordre d'entrée à
+    /// couverture égale (le classement bm25 + récence garde donc le dernier mot).
+    public static func byCoverage(_ hits: [MemoryIndex.Hit], terms: [String]) -> [MemoryIndex.Hit] {
+        guard hits.count > 1, !terms.isEmpty else { return hits }
+        return hits.enumerated()
+            .map { (index: $0.offset, score: coverage(of: $0.element, terms: terms)) }
+            // `sorted` n'est pas stable : l'index d'entrée départage.
+            .sorted { ($0.score, -$0.index) > ($1.score, -$1.index) }
+            .map { hits[$0.index] }
+    }
 }

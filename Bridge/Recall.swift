@@ -55,20 +55,24 @@ enum RecallCLI {
         }
         defer { index.close() }
 
-        let hits: [MemoryIndex.Hit]
+        // Recherche STRICTE d'abord, ÉLARGIE seulement si elle ne rend rien —
+        // et l'élargissement est ANNONCÉ. Voir `MemoryIndex.searchRelaxing` :
+        // l'index contenait 8 135 messages « drone » et n'en rendait aucun pour
+        // « drone Houdini trajectoire », faute d'un message contenant les trois.
+        let result: MemoryIndex.RelaxedSearch
         do {
-            hits = try index.search(rawQuery: options.query,
-                                    limit: options.limit,
-                                    projectPrefix: options.projectPrefix)
+            result = try index.searchRelaxing(rawQuery: options.query,
+                                              limit: options.limit,
+                                              projectPrefix: options.projectPrefix)
         } catch {
             print("Recherche impossible dans l'index mémoire — continuez sans.")
             return 0
         }
 
         if options.json {
-            printJSON(hits: hits)
+            printJSON(hits: result.hits, relaxed: result.relaxed)
         } else {
-            printText(hits: hits, query: options.query)
+            printText(hits: result.hits, query: options.query, relaxed: result.relaxed)
         }
         return 0
     }
@@ -125,12 +129,22 @@ enum RecallCLI {
     ///    (assistant) …extrait avec «termes» marqués…
     ///    session <uuid> · reprendre : claude --resume <uuid>
     /// ```
-    private static func printText(hits: [MemoryIndex.Hit], query: String) {
+    private static func printText(hits: [MemoryIndex.Hit], query: String, relaxed: Bool) {
         guard !hits.isEmpty else {
             print("Aucun résultat pour « \(query) ». Essayez d'autres mots-clés ou un préfixe (mot*).")
             return
         }
         print("MÉMOIRE ATOLL — \(hits.count) résultat(s) pour « \(query) »")
+        if relaxed {
+            // AVERTISSEMENT OBLIGATOIRE. Sans lui, on remplace un silence
+            // honnête (« aucun résultat ») par du bruit muet : un OR de mots
+            // fréquents apparie jusqu'à 64 % de la base, il y a TOUJOURS de quoi
+            // remplir la page. Le lecteur — humain ou modèle — doit savoir que
+            // ces extraits ne répondent PAS à la question posée.
+            print("⚠ RECHERCHE ÉLARGIE : aucun message ne contient tous les mots.")
+            print("  Voici ceux qui en contiennent au moins un, les plus couvrants d'abord.")
+            print("  Ils ne répondent PAS forcément à la question — à lire comme des pistes.")
+        }
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyy-MM-dd HH:mm" // heure LOCALE : celle que vit l'utilisateur
@@ -179,10 +193,15 @@ enum RecallCLI {
     /// Tableau d'objets `{sessionId, project, projectDir, title, date, role,
     /// snippet, resume}` — `.sortedKeys` (même pattern que `status()`) pour une
     /// sortie stable et diffable ; les absences sont des `null` explicites.
-    private static func printJSON(hits: [MemoryIndex.Hit]) {
+    /// `relaxed` est porté par CHAQUE objet plutôt que par une enveloppe : la
+    /// sortie reste un tableau (aucun consommateur à casser), et l'information
+    /// ne peut pas être perdue en chemin. L'omettre ferait mentir la sortie
+    /// `--json` par le silence, là où le mode texte, lui, avertit.
+    private static func printJSON(hits: [MemoryIndex.Hit], relaxed: Bool) {
         let iso = ISO8601DateFormatter()
         let payload: [[String: Any]] = hits.map { hit in
             [
+                "relaxed": relaxed,
                 "sessionId": hit.sessionID,
                 "project": jsonValue(hit.projectPath),
                 "projectDir": hit.projectDir,
