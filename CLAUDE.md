@@ -412,9 +412,9 @@ l'utilisateur et mourir avec, c'est l'esprit de la règle n° 1 violé.
   testait que `\n` et `\r`, donc une commande à fins de ligne Windows n'était pas
   découpée.
 - **LE COCKPIT EST RETIRÉ** (fenêtre ⌘N, Phase 9). Jamais utilisé —
-  `launched-tasks.json` = `{"tasks":[]}` (le fichier SUBSISTE sur la machine de Mehdi,
-  vide, plus lu ni écrit par personne — inoffensif, à balayer si on repasse par là)
-  — et `FleetLauncher` lançait `claude --bg`
+  `launched-tasks.json` = `{"tasks":[]}` (fichier d'état mis à la corbeille le
+  2026-08-03 : plus aucun code ne le lit ni ne l'écrit) — et `FleetLauncher` lançait
+  `claude --bg`
   **sans `-w/--worktree`** alors que le drapeau existe : une tâche écrivait dans l'arbre
   de travail de Mehdi pendant qu'il éditait, en Rockstar. **LE PIÈGE** :
   `SessionStore` joue le son de fin dans le MÊME bloc `if event.kind == .stop` que
