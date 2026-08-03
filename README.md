@@ -27,12 +27,12 @@ y compris pour les sessions lancées depuis le terminal de Cursor.
 | 7b · Rétrospective (leçons + skills proposés en fin de session) | ✅ |
 | 7c · Curation (revue des skills, stats d'usage, hygiène) | ✅ |
 | 8 · Sur rails supportés (`claude agents --json` = autorité de découverte) | ✅ |
-| 9 · Cockpit ambiant (lancer une tâche en arrière-plan depuis le notch) | ✅ |
 | 10 · Verre & ondulation (Liquid Glass macOS 26 · transparence réglable) | ✅ |
 | 11 · Mémoire vive (rangement des notes · souvenirs joints aux messages · recall trié) | ✅ |
 | 12 · Boucle fermée (Atoll apprend vraiment · antériorité · plugins) | ✅ |
 | 13 · Rendre la main (fin de tâche annoncée · sons personnalisables · flotte par état) | ✅ |
 | 14 · Arêtes franches (coins droits · contour calibré Apple · ouverture nette) | ✅ |
+| 15 · Le son survit à l'app · la mémoire répond · moins de surface | ✅ |
 
 **Version courante : v0.15.1** (voir les [Releases](https://github.com/mehdi7129/atoll/releases)).
 
@@ -45,8 +45,9 @@ pour contribuer.
   états), avec l'état de chacune (en cours, en attente, permission…) et le % de contexte.
 - **Répondre depuis le notch** : permissions (⌘Y/⌘N), validation de plans, questions —
   sans quitter votre terminal.
-- **Niveau d'autonomie** (Réglages) : Manuel, Auto (allowlist sûre) ou Rockstar (aucune
-  protection — vos règles `deny` sont suspendues puis restaurées, à vos risques et périls).
+- **Niveau d'autonomie** (Réglages) : Manuel ou Rockstar (aucune protection — vos règles
+  `deny` sont suspendues puis restaurées, à vos risques et périls). Le niveau « Auto »
+  a été retiré : `claude auto-mode` le fait mieux, nativement et par défaut.
 - **Quota exact** 5 h / 7 j du serveur, jauge par modèle en option, reset lisible.
 - **Mémoire longue durée** : tous vos transcripts (tous projets) indexés en local
   (SQLite FTS5, ~/.atoll/memory.db — rien ne quitte la machine). Vos sessions

@@ -352,11 +352,6 @@ final class SessionStore {
         idleTimers[snapshot.id]?.cancel()
         idleTimers[snapshot.id] = nil
         scheduleRemoval(snapshot.id)
-        // Filet de sûreté pour l'annonce de fin de tâche : si aucun hook `Stop`
-        // n'est passé (hooks absents, session tuée, Atoll redémarré en cours de
-        // route), la disparition de la session fait foi. Idempotent : une tâche
-        // déjà annoncée ne l'est pas deux fois.
-        TaskCompletionNotifier.shared.handleSessionGone(sessionID: snapshot.id)
         onSessionEnded?(snapshot, reason)
         scheduleSnapshot()
     }
@@ -406,15 +401,14 @@ final class SessionStore {
             if let path = session.transcriptPath {
                 MemoryIndexer.shared.nudge(transcriptPath: path)
             }
-            // Signal PRÉFÉRÉ pour annoncer une tâche finie : `Stop` porte
-            // `last_assistant_message`, donc un vrai résumé. `SessionEnd`, lui,
-            // n'a rien à dire du résultat → traité comme une simple disparition.
             if event.kind == .stop {
-                TaskCompletionNotifier.shared.handleTurnEnded(
-                    sessionID: session.id,
-                    lastAssistantMessage: event.lastAssistantMessage)
                 // Le son remplace le hook `afplay` que l'utilisateur avait sur
                 // `Stop` : même instant, mais réglable et anti-rafale.
+                //
+                // NE PAS RETIRER CE BLOC en croyant nettoyer le cockpit : il a
+                // longtemps contenu AUSSI l'annonce de fin de tâche, et c'est
+                // par proximité qu'on recasserait ce que la v0.15.1 a réparé.
+                // Le son ne dépend d'aucune tâche lancée : il suit le hook.
                 SoundCenter.shared.play(.taskCompleted)
             }
         default:
@@ -819,27 +813,6 @@ final class SessionStore {
                 changed = true
             }
         }
-        // Tâches lancées depuis le notch — APRÈS les filtres et le traitement,
-        // sur des sessions VIVANTES uniquement. Deux raisons de ne pas le faire
-        // dans la boucle ci-dessus : une entrée au statut terminal aurait pu
-        // être adoptée puis aussitôt annoncée « terminée » quelques secondes
-        // après le lancement ; et l'ordre du tableau JSON n'est pas garanti, ce
-        // qui pouvait PERMUTER deux tâches lancées dans le même dossier.
-        let live = infos
-            .filter { !$0.status.isTerminal }
-            .filter { pid in pid.pid.map { !internalPids.contains($0) } ?? true }
-            .sorted { ($0.startedAt ?? .distantPast) < ($1.startedAt ?? .distantPast) }
-        for info in live {
-            TaskCompletionNotifier.shared.adopt(sessionID: info.sessionID,
-                                                cwd: info.cwd, startedAt: info.startedAt)
-        }
-        // …puis clore les tâches dont la session n'est plus là. C'est le SEUL
-        // chemin qui rattrape une tâche terminée pendant qu'Atoll ne tournait
-        // pas : ni le hook `Stop` ni `markEnded` ne la concernent, sa session
-        // n'ayant jamais réintégré le store.
-        TaskCompletionNotifier.shared.reconcileWithFleet(
-            activeSessionIDs: Set(live.map(\.sessionID)))
-
         if changed { scheduleSnapshot() }
     }
 

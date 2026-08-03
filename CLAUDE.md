@@ -182,9 +182,9 @@ PIÈGES DE MÉTHODE appris pendant cet audit :
 - ✅ Phase 8 — « Sur rails » (v0.8.0) : découverte des sessions via l'interface
   SUPPORTÉE `claude agents --json` (autorité), hooks = temps réel, scan de
   processus = repli. Milestone A de la feuille de route « Atoll 2 ».
-- ✅ Phase 9 — « Cockpit ambiant » (v0.9.0) : lancer une tâche en arrière-plan
-  (`claude --bg`) depuis le notch (fenêtre dédiée), arrêter une session
-  (`claude stop`, avec confirmation). Milestone C de la feuille de route.
+- ⛔️ Phase 9 — « Cockpit ambiant » (v0.9.0) : **RETIRÉE le 2026-08-03**. Le
+  lancement depuis le notch n'avait JAMAIS servi et partait sans `-w`. Seul
+  l'arrêt d'une session (`claude stop`, avec confirmation) subsiste.
 - ✅ Phase 10 — « Verre & ondulation » (v0.10.0) : fond Liquid Glass (API PUBLIQUE,
   macOS 26) sur le panneau étendu, transparence réglable, onde d'expansion + hygiène.
 - ✅ Phase 11 — « Mémoire vive » (v0.11.0) : Milestone B — curation périodique des
@@ -351,6 +351,60 @@ l'utilisateur et mourir avec, c'est l'esprit de la règle n° 1 violé.
 - MESURÉ : app fermée → `afplay -v 0.100 …/finish.mp3` lancé ; app ouverte → helper
   muet ; stdout et stderr du hook **vides** ; latence **11 ms avec son contre 12 ms
   sans** ; trois `Stop` d'affilée → **un seul** son.
+
+**v0.16.0 — QUATRE LOTS : la mémoire répond, et Atoll rend ce qui n'est pas à lui**
+(2026-08-03, cadre : `docs/VISION-2026-08.md` — Atoll SAIT, se SOUVIENT, APPELLE).
+
+- **LA MÉMOIRE RÉPOND ENFIN.** L'index contenait **8 135 messages « drone »** et
+  `recall "drone Houdini trajectoire"` rendait « Aucun résultat » : en `MatchMode.all`
+  les trois mots doivent tenir dans le MÊME fragment (404 caractères en moyenne). Le
+  défaut n'était pas dans `MemoryIndex` mais dans son APPEL — `Bridge/Recall.swift` ne
+  passait aucun mode. Le commentaire de `MatchMode` le savait déjà (« avec plusieurs
+  mots, le AND ne trouve JAMAIS rien ») : la leçon n'avait été appliquée qu'au recall
+  PROACTIF. `searchRelaxing` : strict d'abord, élargi SEULEMENT sur zéro — jamais sur
+  « peu de résultats », qui diluerait les recherches précises qui marchent.
+  CONTREPARTIE : un OR de mots fréquents apparie jusqu'à 22 366 messages (64 % de la
+  base), donc la recherche ne rend presque plus jamais « rien ». D'où **trois ceintures
+  non optionnelles** : bandeau « RECHERCHE ÉLARGIE », champ `relaxed` sur chaque objet
+  JSON (par objet, pour ne casser aucun consommateur du tableau), et tri par COUVERTURE
+  (`MemoryRanking.byCoverage`, qui compte les termes réellement marqués « … » par FTS5).
+  Plus une section du SKILL.md qui apprend au modèle à ne jamais tirer un « on avait
+  décidé X » d'une recherche élargie.
+- **LA MÉMOIRE CESSE D'AVALER LE BRUIT.** 134 enveloppes `<task-notification>` étaient
+  indexées comme messages `user` — **17 % de tout le corpus `user`**, or `user` ne pèse
+  que 792 messages sur 34 785 (contre 12 990 `tool`). Discriminant STRUCTUREL :
+  `origin.kind == "task-notification"`, vérifié **127/127 sur douze versions du CLI**.
+  Écartés : `promptSource == "system"` (129 lignes, dont **2 vraies instructions**) et
+  tout filtre textuel (une conversation qui PARLE de ces balises en serait victime).
+  Il faut LES DEUX BOUTS : le filtre d'ingestion n'est pas rétroactif (`openFile` ne
+  recule l'offset que sur inode/troncature), d'où `runHygieneIfNeeded`.
+  **PIÈGE ÉVITÉ** : la purge ne passe PAS par `schemaVersion` — toute valeur inattendue
+  de `user_version` fait passer `migrateIfNeeded` par `recreateFromScratch`, qui
+  SUPPRIME la base, et **548 messages appartiennent à cinq transcripts disparus du
+  disque**. Le compteur vit dans `PRAGMA application_id`. Et `ProactiveRecall` refuse
+  désormais un prompt qui EST lui-même une enveloppe machine (la boucle se refermait :
+  15 des 84 injections observées répondaient à une notification par des notifications).
+- **LE NIVEAU « AUTO » EST RETIRÉ.** `claude auto-mode` est first-party, actif par
+  défaut, 35,5 Ko de politique `allow`/`soft_deny`/`hard_deny`. Notre allowlist avait
+  été corrigée DEUX fois pour des contournements. `AutonomyLevel.resolve` normalise le
+  décodage (recopié à cinq endroits sans un test) et tout inconnu — « auto » compris —
+  retombe sur `.manual`, le plus PRUDENT : un réglage orphelin ne promeut personne en
+  Rockstar. **ORDRE IMPÉRATIF, et il a payé** : `ShellSplitter` est partagé avec
+  `SoundHookEditor` et n'avait AUCUN test propre — les 22 tests de la politique étaient
+  sa seule couverture. `ShellSplitterTests`, écrit AVANT la suppression, a trouvé
+  aussitôt un vrai défaut : **`\r\n` est UN SEUL Character en Swift**, le `switch` ne
+  testait que `\n` et `\r`, donc une commande à fins de ligne Windows n'était pas
+  découpée.
+- **LE COCKPIT EST RETIRÉ** (fenêtre ⌘N, Phase 9). Jamais utilisé —
+  `launched-tasks.json` = `{"tasks":[]}` — et `FleetLauncher` lançait `claude --bg`
+  **sans `-w/--worktree`** alors que le drapeau existe : une tâche écrivait dans l'arbre
+  de travail de Mehdi pendant qu'il éditait, en Rockstar. **LE PIÈGE** :
+  `SessionStore` joue le son de fin dans le MÊME bloc `if event.kind == .stop` que
+  l'appel au notifier — retirer le bloc recassait la v0.15.1. La ligne du son porte
+  désormais un avertissement. NE SE SUPPRIMENT PAS : `FleetLauncher` (bouton ARRÊTER)
+  et `FleetLaunch.shellQuote` (bilan, plugins, curation). `TaskCompletion` est
+  CONSERVÉ et documenté comme échafaudage : `inputCap` est vivant (`HookEvent`) et
+  `plainText` est la brique du rapport de retour prévu au moyen terme.
 
 **Phase 13 — « Rendre la main » (v0.13.0, 2026-07-27)** — Atoll savait démarrer et
 surveiller ; il apprend à rendre la main. Plan : `docs/ROADMAP-13-rendre-la-main.md`.
@@ -770,12 +824,12 @@ tenue à jour avec `App/AppDelegate.swift` :
 - `#if DEBUG` UNIQUEMENT (ils décident, dépensent du quota ou écrivent) :
   `allow` / `deny` (1re carte), `select` (1re session), `jump` (jump-back),
   `settings`, `onboarding`, `retro` (rétrospective sur la dernière session terminée),
-  `curation` (curation des notes), `launcher` (fenêtre de lancement),
+  `curation` (curation des notes),
   `seedSkill` / `skillReview` / `approveSkill` / `rejectSkill` (curation des skills),
   `seedPlugins` (inventaire de plugins factice, pour travailler l'UI sans réseau),
   `adoptSounds` / `restoreSounds` (reprise et restitution des hooks sonores —
   ÉCRIVENT dans settings.json), `playSounds` (écoute des deux sons),
-  `taskDone` (fin de tâche simulée : bannière + notification).
+  (`launcher` et `taskDone` retirés avec le cockpit, 2026-08-03).
 
 Debug des interactions (Phase 3) : `notifyutil -p dev.mehdiguiard.atoll.debug.allow`
 (ou `.deny`) résout la première carte en attente via les mêmes chemins que les boutons ;

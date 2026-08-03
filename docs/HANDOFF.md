@@ -36,7 +36,7 @@ un chantier au §1.
 
 Îlot notch ASCII (thèmes, 4 palettes, largeur réglable par écran, Liquid Glass) ·
 suivi temps réel des sessions (`claude agents --json` autorité + hooks) · réponses
-depuis le notch (permissions ⌘Y/⌘N, plans, questions) · autonomie Manuel/Auto/
+depuis le notch (permissions ⌘Y/⌘N, plans, questions) · autonomie Manuel ou
 Rockstar · quota serveur exact · jump-back terminal · lancer/arrêter une tâche en
 arrière-plan · mémoire FTS5 de tous les transcripts + skill `atoll-recall` ·
 souvenirs proposés d'office (opt-in) · rétrospective qui produit VRAIMENT des
@@ -383,7 +383,7 @@ cat ~/Library/"Application Support"/Atoll/state.json                  # sessions
 - **`.plugins`** — interroge `claude plugin list --json` et journalise l'inventaire
   (catégorie de log `plugins`).
 - **`.pluginSearch`** — recherche un plugin pour un besoin en dur (consomme du quota).
-- `.launcher` / `.seedSkill` / `.skillReview` / `.approveSkill` / `.rejectSkill`
+- `.seedSkill` / `.skillReview` / `.approveSkill` / `.rejectSkill`
 
 ### Vérifier l'apprentissage sans relire le code
 ```sh

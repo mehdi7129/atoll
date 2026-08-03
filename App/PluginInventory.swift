@@ -240,8 +240,8 @@ final class PluginInventory {
         verb: String
     ) async -> String? {
         // Garde de ré-entrance posée AVANT le premier await (piège vécu au
-        // FleetLauncher : `isLaunching` posé après l'await laissait passer un
-        // double-clic → deux `claude --bg`). Ici, deux `plugin enable`
+        // lanceur de tâches, retiré depuis : un drapeau posé APRÈS l'await
+        // laissait passer un double-clic → deux processus). Ici, deux `plugin enable`
         // concurrents réécriraient tous deux settings.json : mise à jour perdue.
         // La garde est GLOBALE (une seule mutation à la fois, tous plugins
         // confondus) — c'est voulu : on sérialise les écritures de la CLI.

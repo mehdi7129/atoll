@@ -5,149 +5,29 @@ import AtollCore
 
 private let log = Logger(subsystem: "dev.mehdiguiard.atoll", category: "launcher")
 
-/// Lance et arrête des sessions Claude Code d'arrière-plan (`claude --bg` /
-/// `claude stop`) depuis le notch — le cœur du « cockpit ambiant » (Milestone C).
+/// ARRÊTE une session Claude Code (`claude stop <id>`) depuis le détail d'une
+/// session — le kill-switch, avec confirmation.
 ///
-/// Lancement sur demande EXPLICITE uniquement (choix produit) : jamais d'objectif
-/// auto-généré. La session lancée est une session Claude normale (hooks actifs,
-/// auth par souscription) → le `FleetPoller` et les hooks la découvrent et la
-/// suivent comme n'importe quelle autre ; ses permissions remontent en cartes
-/// dans le notch (et s'auto-approuvent en Rockstar → hands-off).
+/// Le LANCEMENT (`claude --bg`, la fenêtre ⌘N du « cockpit ambiant ») a été
+/// retiré le 2026-08-03. Deux raisons, la seconde étant la vraie :
+/// - il n'avait JAMAIS servi — `~/.atoll/launched-tasks.json` valait `{"tasks":[]}`
+///   depuis la Phase 9 ;
+/// - il lançait `claude --bg` **sans `-w/--worktree`**, alors que le drapeau
+///   existe : une tâche écrivait directement dans l'arbre de travail de
+///   l'utilisateur, pendant qu'il éditait, en Rockstar, sans rien demander.
+/// `claude --bg` depuis le terminal fait le même travail, sans ce piège.
 @MainActor
 @Observable
 final class FleetLauncher {
     static let shared = FleetLauncher()
 
-    /// Dernier dossier utilisé — pré-remplit le lanceur.
-    static let lastDirKey = "fleetLauncherLastDir"
-
     private(set) var lastError: String?
-    private(set) var isLaunching = false
 
     /// Chemin claude résolu.
     @ObservationIgnored private var claudePath: String?
     /// Résolution coûteuse (login shell) tentée une seule fois — comme le
     /// FleetPoller (sinon re-source du profil à chaque launch/stop en échec).
     @ObservationIgnored private var triedLoginResolve = false
-
-    /// Réinitialise l'état transitoire à l'ouverture d'une nouvelle fenêtre
-    /// (le singleton persiste sinon une erreur périmée dans une fenêtre vierge).
-    func reset() {
-        lastError = nil
-    }
-
-    /// Dossier à pré-remplir : dernier utilisé, sinon le dossier de la session
-    /// sélectionnée, sinon le home.
-    func suggestedDirectory(selectedCwd: String?) -> String {
-        if let last = UserDefaults.standard.string(forKey: Self.lastDirKey),
-           FileManager.default.fileExists(atPath: last) { return last }
-        if let selectedCwd { return selectedCwd }
-        return FileManager.default.homeDirectoryForCurrentUser.path
-    }
-
-    /// Lance une tâche en arrière-plan dans `cwd`. Renvoie l'id de session si on a
-    /// pu l'extraire (best-effort) — le suivi réel passe de toute façon par le
-    /// FleetPoller. Erreur mémorisée dans `lastError`.
-    @discardableResult
-    func launch(task: String, cwd: String) async -> String? {
-        // Garde de ré-entrance : `launch` est @MainActor mais suspend sur
-        // `await`, ce qui autoriserait une 2e entrée (double-clic, ⌘⏎ maintenu)
-        // → deux `claude --bg` identiques (double quota, edits concurrents). Le
-        // check + le set sont ATOMIQUES sur le MainActor (aucun await entre eux).
-        guard !isLaunching else { return nil }
-        lastError = nil
-        guard FleetLaunch.isValidTask(task) else {
-            lastError = "Tâche vide."
-            return nil
-        }
-        var isDir: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: cwd, isDirectory: &isDir), isDir.boolValue else {
-            lastError = "Dossier introuvable : \(cwd)"
-            return nil
-        }
-        isLaunching = true // AVANT tout await (sinon la fenêtre de double-clic reste ouverte)
-        defer { isLaunching = false }
-        guard let claude = await resolveClaudePath() else {
-            lastError = "Binaire claude introuvable."
-            return nil
-        }
-        UserDefaults.standard.set(cwd, forKey: Self.lastDirKey)
-
-        // zsh de login (PATH/profil) ; unset ANTHROPIC_API_KEY pour rester sur
-        // l'auth par SOUSCRIPTION (tout l'intérêt) ; PAS de --safe-mode : on VEUT
-        // les hooks (pour qu'Atoll suive la session). `--bg` rend la main aussitôt.
-        let command = "unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN; "
-            + "exec " + FleetLaunch.shellQuote(claude) + " --bg " + FleetLaunch.shellQuote(task)
-
-        /// Résultat du spawn. On distingue « le processus n'a même pas
-        /// démarré » (échec net) de « il a démarré et rendu un code non nul » —
-        /// dans le second cas la session peut TRÈS BIEN tourner (avertissement
-        /// tardif, plugin en échec, watchdog qui coupe une lecture qui traîne).
-        struct LaunchOutcome: Sendable {
-            let spawned: Bool
-            let exitedCleanly: Bool
-            let output: String
-        }
-
-        let outcome = await Task.detached(priority: .userInitiated) { () -> LaunchOutcome in
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/bin/zsh")
-            process.arguments = ["-l", "-c", command]
-            process.currentDirectoryURL = URL(fileURLWithPath: cwd)
-            process.standardInput = FileHandle.nullDevice
-            let out = Pipe()
-            process.standardOutput = out
-            process.standardError = out
-            guard (try? process.run()) != nil else {
-                return LaunchOutcome(spawned: false, exitedCleanly: false, output: "")
-            }
-            // `--bg` backgroundise et rend la main : lecture courte + garde-fou.
-            Self.armWatchdog(process, seconds: 20)
-            let data = (try? out.fileHandleForReading.readToEnd()) ?? Data()
-            process.waitUntilExit()
-            return LaunchOutcome(spawned: true,
-                                 exitedCleanly: process.terminationStatus == 0,
-                                 output: String(decoding: data, as: UTF8.self))
-        }.value
-
-        guard outcome.spawned else {
-            lastError = "Impossible de lancer claude."
-            log.error("spawn impossible dans \(cwd, privacy: .public)")
-            return nil
-        }
-
-        let id = FleetLaunch.parseSessionID(outcome.output)
-        // Suivi jusqu'à la fin : c'est la SEULE catégorie de sessions qu'Atoll
-        // connaît de première main (il vient de la lancer), donc la seule qu'il
-        // peut annoncer sans risque de fausse alerte. `id` peut être nil ou
-        // tronqué — le journal sait rattraper (dossier + horodatage).
-        //
-        // ENREGISTRÉE MÊME EN CAS DE CODE DE SORTIE NON NUL : le processus a
-        // bien tourné, donc la session peut exister. Ne rien enregistrer serait
-        // le seul cas SANS retour possible — ni le hook `Stop` (la tâche n'est
-        // pas suivie) ni le rattrapage ne pourraient plus rien pour elle.
-        // L'inverse ne coûte rien : si la session n'apparaît jamais dans la
-        // flotte, la réconciliation clôt l'entrée EN SILENCE passé le délai de
-        // grâce (`seenAlive == false`) — jamais de fausse annonce.
-        //
-        // En revanche elle ne peut PAS adopter une session inconnue quand tout
-        // a échoué (sortie non nulle ET aucun id lisible) : l'utilisateur qui
-        // relance `claude` à la main dans le même dossier — réflexe normal
-        // quand « rien n'a démarré » — se faisait sinon voler sa session, dont
-        // la fin était annoncée comme celle de la tâche.
-        let launchFailed = !outcome.exitedCleanly && id == nil
-        TaskCompletionNotifier.shared.register(task: task, cwd: cwd, sessionID: id,
-                                               adoptable: !launchFailed)
-
-        if outcome.exitedCleanly {
-            log.info("tâche lancée dans \(cwd, privacy: .public) — id \(id ?? "?", privacy: .public)")
-        } else {
-            lastError = "claude a signalé une erreur. Si la session a tout de même "
-                      + "démarré, elle apparaîtra dans l'îlot et sa fin te sera annoncée."
-            log.error("launch en erreur dans \(cwd, privacy: .public) — tâche suivie malgré tout")
-        }
-        return id
-    }
 
     /// Arrête une session (kill-switch par session — `claude stop <id>`).
     /// Renvoie true si `claude stop` a réussi ; sur échec, renseigne `lastError`

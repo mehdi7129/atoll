@@ -1,11 +1,22 @@
 import Foundation
 
-/// Mise en forme de l'annonce « ta tâche est finie ».
+/// Réduire un dernier message d'assistant à UNE phrase lisible.
 ///
 /// Le hook `Stop` porte `last_assistant_message` : le dernier message du modèle,
-/// en Markdown, potentiellement très long et truffé de blocs de code. Une
-/// notification macOS n'affiche que quelques dizaines de caractères sur deux
-/// lignes — il faut en tirer UNE phrase lisible, ou rien.
+/// en Markdown, potentiellement très long et truffé de blocs de code. Il faut en
+/// tirer une phrase, ou rien.
+///
+/// ÉCHAFAUDAGE ASSUMÉ (2026-08-03). Son consommateur — l'annonce de fin des
+/// tâches lancées depuis le notch — est parti avec le cockpit, qui n'avait jamais
+/// servi. Ce fichier reste pour deux raisons, et il faut le dire plutôt que de le
+/// laisser traîner sans explication :
+/// - `inputCap` est VIVANT : `HookEvent` s'en sert pour borner
+///   `last_assistant_message` à la lecture du hook ;
+/// - `plainText` est la brique du « rapport de retour » prévu au moyen terme
+///   (`docs/VISION-2026-08.md` §4.1) : aplatir du Markdown en une ligne sans
+///   avaler la prose ordinaire d'un projet Swift a coûté plusieurs revues et
+///   22 tests. Le refaire dans trois semaines serait absurde.
+/// Si ce rapport n'est pas construit, ce fichier doit être supprimé.
 public enum TaskCompletion {
     /// Longueur visée pour le corps de la notification (au-delà, macOS tronque
     /// lui-même, mais sans ménagement et au milieu d'un mot).

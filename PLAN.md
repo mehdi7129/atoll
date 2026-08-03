@@ -339,7 +339,10 @@ des skills, stats d'usage, désinstallation chirurgicale).
 Découverte des sessions par `claude agents --json` (autorité) + hooks (temps réel), scan
 de processus en repli. Milestone A de la feuille de route « Atoll 2 ».
 
-### Phase 9 — « Cockpit ambiant » — ✅ livrée (v0.9.0 / v0.9.1)
+### Phase 9 — « Cockpit ambiant » — ✅ livrée (v0.9.0 / v0.9.1), ⛔️ RETIRÉE le 2026-08-03
+Le LANCEMENT depuis le notch n'avait jamais servi (`launched-tasks.json` = `{"tasks":[]}`)
+et partait sans `-w/--worktree` : une tâche écrivait dans l'arbre de travail pendant
+l'édition. Le bouton ARRÊTER, lui, reste. Voir `docs/VISION-2026-08.md`.
 Lancer une tâche en arrière-plan depuis le notch, arrêter une session, regroupement des
 sessions par projet. Milestone C.
 

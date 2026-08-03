@@ -11,7 +11,6 @@ import AtollCore
 /// qu'ils sont chez nous.
 struct AlertsPane: View {
     @AppStorage(SoundCenter.enabledKey) private var soundsEnabled = false
-    @AppStorage(TaskCompletionNotifier.notifyKey) private var notifyOnCompletion = true
 
     /// Redessine les Pickers après un import ou une migration (les choix vivent
     /// dans UserDefaults, hors du graphe d'observation SwiftUI).
@@ -23,7 +22,6 @@ struct AlertsPane: View {
     @State private var hooksInstalled = true
 
     private var center: SoundCenter { .shared }
-    private var notifier: TaskCompletionNotifier { .shared }
 
     var body: some View {
         Form {
@@ -50,41 +48,6 @@ struct AlertsPane: View {
                 .disabled(!soundsEnabled)
             }
 
-            Section("Fin de tâche") {
-                Toggle("Notification quand une tâche lancée depuis le notch se termine",
-                       isOn: $notifyOnCompletion)
-                Text("""
-                Une notification macOS avec un résumé d'une ligne — clique dessus \
-                pour ouvrir la session. Ne concerne QUE les tâches lancées depuis \
-                l'îlot : jamais tes sessions interactives. Déplie l'îlot et la \
-                trace y reste jusqu'à ce que tu l'écartes.
-                """)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-                // Un refus de macOS doit se VOIR ici : sans cela, la fonction
-                // paraît simplement cassée (c'est ainsi qu'on a découvert que
-                // les builds signés « adhoc » sont refusés d'office).
-                if let explanation = notifier.authorization.explanation {
-                    Text(explanation)
-                        .font(.caption)
-                        .foregroundStyle(notifier.authorization == .granted
-                                         ? Color.secondary : Color.orange)
-                    // Les deux chemins restent offerts tant que ce n'est pas
-                    // accordé : « refusé » peut aussi vouloir dire « jamais
-                    // inscrit » (c'est l'appel à la demande qui inscrit l'app),
-                    // auquel cas le bouton de demande suffit.
-                    HStack {
-                        Button("Autoriser les notifications") {
-                            notifier.requestAuthorization()
-                        }
-                        Button("Ouvrir les Réglages système…") {
-                            notifier.openSystemNotificationSettings()
-                        }
-                    }
-                }
-            }
-
             if let message {
                 Text(message)
                     .font(.caption)
@@ -95,7 +58,6 @@ struct AlertsPane: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
             center.refreshLibraries()
-            notifier.refreshAuthorization()
             hooksInstalled = HookInstaller.isInstalled
         }
     }

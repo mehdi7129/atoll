@@ -47,13 +47,7 @@ struct ExpandedView: View {
                 Spacer(minLength: 0)
                 // Bannière passive : jamais par-dessus une carte de permission
                 // (branche else uniquement), aucune ouverture forcée.
-                //
-                // Une tâche qui vient de finir passe AVANT un skill proposé :
-                // elle est datée, l'autre attendra.
-                if let finished = TaskCompletionNotifier.shared.unacknowledged.first {
-                    taskDoneBanner(finished)
-                        .layoutPriority(1)
-                } else if SkillReviewCenter.shared.pendingCount > 0 {
+                if SkillReviewCenter.shared.pendingCount > 0 {
                     learningBanner
                         .layoutPriority(1)
                 }
@@ -202,8 +196,7 @@ struct ExpandedView: View {
     /// Une bannière occupe-t-elle le bas du panneau ? Elle coûte ~66 pt, donc
     /// autant de rangées en moins pour la liste.
     private var bannerShown: Bool {
-        !TaskCompletionNotifier.shared.unacknowledged.isEmpty
-            || SkillReviewCenter.shared.pendingCount > 0
+        SkillReviewCenter.shared.pendingCount > 0
     }
 
     /// Rangées DESSINABLES sans pousser le quota hors du cadre. Les deux modes
@@ -319,37 +312,6 @@ struct ExpandedView: View {
                 AsciiButton(label: "REVOIR ⏎", color: colors.accent,
                             shortcut: .return, modifiers: []) {
                     SkillReviewCenter.shared.requestReviewWindow()
-                }
-            }
-        }
-    }
-
-    /// Une tâche lancée depuis le notch vient de se terminer : c'est ICI que le
-    /// cockpit rend la main. La notification macOS peut avoir été manquée (Ne pas
-    /// déranger, bannière évanouie) — cette trace-là, elle, attend d'être vue.
-    private func taskDoneBanner(_ task: LaunchedTask) -> some View {
-        let others = TaskCompletionNotifier.shared.unacknowledged.count - 1
-        return VStack(alignment: .leading, spacing: 6) {
-            Text(AsciiArt.sectionHeader("TÂCHE TERMINÉE", width: 79))
-                .lineLimit(1)
-                .foregroundStyle(colors.dim)
-            HStack(spacing: 8) {
-                Text("◇")
-                    .foregroundStyle(colors.accent)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(others > 0 ? "\(task.projectName) · +\(others) autre\(others > 1 ? "s" : "")"
-                                    : task.projectName)
-                        .lineLimit(1)
-                        .foregroundStyle(colors.accent)
-                    Text(task.summary ?? task.task)
-                        .lineLimit(2)
-                        .foregroundStyle(colors.fg)
-                }
-                Spacer(minLength: 6)
-                // Sans raccourci clavier : ⏎ appartient déjà à la bannière
-                // d'apprentissage et ⌘⏎/⌘⌫ aux cartes de permission.
-                AsciiButton(label: "VU", color: colors.dim, shortcut: nil) {
-                    TaskCompletionNotifier.shared.acknowledge(task)
                 }
             }
         }
