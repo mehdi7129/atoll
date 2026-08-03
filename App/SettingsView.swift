@@ -1012,14 +1012,16 @@ private struct AutonomyPane: View {
     @State private var denyParkingError: String?
 
     private var center: InteractionCenter { .shared }
-    private var currentLevel: AutonomyLevel { AutonomyLevel(rawValue: autonomyRaw) ?? .manual }
+    private var currentLevel: AutonomyLevel { AutonomyLevel.resolve(autonomyRaw) }
 
     var body: some View {
         Form {
             Section("Niveau d'autonomie") {
-                // Un seul réglage exclusif : Manuel / Auto / Rockstar.
+                // Un seul réglage exclusif : Manuel ou Rockstar. Le niveau « Auto »
+                // a été retiré le 2026-08-03 — `claude auto-mode` le fait mieux,
+                // par défaut, et notre allowlist était une dette de sécurité.
                 Picker("Niveau", selection: Binding(
-                    get: { AutonomyLevel(rawValue: autonomyRaw) ?? .manual },
+                    get: { AutonomyLevel.resolve(autonomyRaw) },
                     set: { newLevel in
                         if newLevel == .rockstar {
                             confirmingRockstar = true // confirmer avant d'activer
@@ -1063,8 +1065,7 @@ private struct AutonomyPane: View {
                 }
 
                 Text("""
-                Auto garde des garde-fous (allowlist ; destructif, plans et questions restent \
-                manuels). Rockstar n'en a AUCUN : tout est approuvé et vos règles deny \
+                Rockstar n'a AUCUNE protection : tout est approuvé et vos règles deny \
                 (ex. Bash(rm -rf *)) sont suspendues — parquées tant que le niveau reste \
                 Rockstar, même app fermée, puis restaurées dès que vous le quittez. Les \
                 sessions déjà ouvertes gardent les règles qu'elles ont lues : redémarrez-les \

@@ -120,8 +120,8 @@ struct OnboardingView: View {
                 number: "2",
                 title: "CHOISIR L'AUTONOMIE",
                 body: """
-                Dans le menu ≋ → Réglages… : Manuel (vous décidez de tout), Auto \
-                (permissions sûres approuvées, allowlist) ou Rockstar (aucune \
+                Dans le menu ≋ → Réglages… : Manuel (vous décidez de tout) \
+                ou Rockstar (aucune \
                 protection — à vos risques et périls).
                 """
             ) { EmptyView() }

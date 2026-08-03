@@ -87,9 +87,6 @@ struct ExpandedView: View {
             case .rockstar:
                 Text("[ ROCKSTAR ]")
                     .foregroundStyle(Color(hex: 0xFF3B30))
-            case .auto:
-                Text("[ AUTO ]")
-                    .foregroundStyle(colors.accent)
             case .manual:
                 EmptyView()
             }

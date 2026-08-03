@@ -3,18 +3,19 @@ import Foundation
 /// Découpe une ligne de shell en SEGMENTS de commande, en respectant les
 /// guillemets et les échappements.
 ///
-/// Deux endroits en ont besoin, pour des raisons opposées et également
-/// sérieuses :
-/// - `AutoAcceptPolicy` doit examiner CHAQUE commande enchaînée : ne pas couper
-///   sur `&` laissait `ls & <commande destructrice>` s'auto-approuver ;
-/// - `SoundHookEditor` ne doit parquer que les hooks qui jouent UNIQUEMENT un
-///   son : couper au mauvais endroit lui faisait retirer un hook qui fait autre
-///   chose, ou ignorer un hook sonore parfaitement ordinaire.
+/// Appelant actuel : `SoundHookEditor`, qui ne doit parquer que les hooks jouant
+/// UNIQUEMENT un son — couper au mauvais endroit lui ferait retirer un hook de
+/// l'utilisateur qui fait autre chose, ou ignorer un hook sonore parfaitement
+/// ordinaire. Ce sont les hooks de QUELQU'UN D'AUTRE : on ne se trompe pas.
 ///
-/// Les deux avaient leur propre découpage, par remplacement de chaînes. Aucun
-/// des deux ne voyait les guillemets, si bien que `git commit -m "a & b"` et
-/// `afplay son.wav >/dev/null 2>&1 &` étaient traités comme des enchaînements
-/// (revue des corrections, 2026-07-27). Une seule implémentation, ici, testée.
+/// Ce fichier est né de deux découpages maison, par remplacement de chaînes,
+/// dont aucun ne voyait les guillemets : `git commit -m "a & b"` et
+/// `afplay son.wav >/dev/null 2>&1 &` étaient lus comme des enchaînements
+/// (revue des corrections, 2026-07-27). Le second appelant, `AutoAcceptPolicy`,
+/// a été retiré le 2026-08-03 avec le niveau « Auto » — d'où
+/// `ShellSplitterTests`, écrit AVANT cette suppression : les tests de la
+/// politique étaient la seule couverture du splitter, et les retirer ensemble
+/// aurait ôté la dernière preuve qu'un composant encore utilisé fonctionne.
 ///
 /// Ce n'est PAS un analyseur de shell complet — il n'en existe pas de simple —
 /// mais il traite correctement ce qui décide : opérateurs hors chaîne,
@@ -71,7 +72,12 @@ public enum ShellSplitter {
                 // `>&` : le `&` appartient à la redirection.
                 current.append(c)
                 if next == "&" { current.append("&"); index += 2 } else { index += 1 }
-            case "\n", "\r":
+            // `\r\n` est UN SEUL Character en Swift (groupe de graphèmes) : ne
+            // tester que `\n` et `\r` le laissait passer pour du texte ordinaire,
+            // et une commande à fins de ligne Windows n'était pas découpée du
+            // tout (trouvé le 2026-08-03 par les premiers tests propres du
+            // splitter — il n'en avait aucun).
+            case "\n", "\r", "\r\n":
                 if splitOnNewlines { flush() } else { current.append(c) }
                 index += 1
             default:

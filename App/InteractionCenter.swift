@@ -60,18 +60,20 @@ final class InteractionCenter {
     /// HookInstaller.syncDenyParking) ; les hooks bloquants de l'utilisateur,
     /// eux, restent toujours actifs (ce sont des éléments de son workflow).
     var autonomyLevel: AutonomyLevel {
-        AutonomyLevel(rawValue: UserDefaults.standard.string(forKey: Self.autonomyKey) ?? "") ?? .manual
+        AutonomyLevel.resolve(UserDefaults.standard.string(forKey: Self.autonomyKey))
     }
 
-    /// Migration unique des deux anciens booléens vers le réglage à 3 niveaux.
-    /// Rockstar l'emporte s'il était activé, sinon auto, sinon manuel.
+    /// Migration unique des deux anciens booléens vers le réglage par niveaux.
+    ///
+    /// À GARDER malgré le retrait d'« auto » : sans elle, un utilisateur d'avant
+    /// ce réglage perdrait son Rockstar sans le savoir, et deux clés mortes
+    /// resteraient dans ses UserDefaults. L'ancien `autoAcceptKey` ne promeut
+    /// plus rien — il est simplement nettoyé, et son porteur retombe en Manuel,
+    /// le niveau le plus prudent.
     static func migrateAutonomyIfNeeded() {
         let defaults = UserDefaults.standard
         guard defaults.string(forKey: autonomyKey) == nil else { return }
-        let level: AutonomyLevel
-        if defaults.bool(forKey: rockstarKey) { level = .rockstar }
-        else if defaults.bool(forKey: autoAcceptKey) { level = .auto }
-        else { level = .manual }
+        let level: AutonomyLevel = defaults.bool(forKey: rockstarKey) ? .rockstar : .manual
         defaults.set(level.rawValue, forKey: autonomyKey)
         defaults.removeObject(forKey: rockstarKey)
         defaults.removeObject(forKey: autoAcceptKey)
@@ -102,15 +104,6 @@ final class InteractionCenter {
                 autoApprove(requestID, decision: decision, event: event,
                             label: event.toolSummary ?? event.toolName ?? kindLabel(kind),
                             tag: "rockstar")
-                return
-            }
-        case .auto:
-            // Permissions SÛRES uniquement (allowlist) — jamais destructif, plans
-            // ni questions (le classement plus haut les exclut du cas .permission).
-            if case .permission = kind,
-               AutoAcceptPolicy.isSafeToAutoAccept(toolName: event.toolName, toolInputData: event.toolInputData) {
-                autoApprove(requestID, decision: PermissionDecision.allow(), event: event,
-                            label: event.toolSummary ?? event.toolName ?? "outil", tag: "auto")
                 return
             }
         case .manual:
