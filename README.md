@@ -19,7 +19,7 @@ y compris pour les sessions lancées depuis le terminal de Cursor.
 | 1 · Coquille notch + thème ASCII | ✅ |
 | 2 · Monitoring des sessions réelles (hooks) | ✅ |
 | 3 · Interactions (permissions, plans, questions) | ✅ |
-| Auto-accept sûr · infos par session · quota exact | ✅ |
+| Infos par session · quota exact | ✅ |
 | 4 · Jump-back terminal (Cursor/VS Code · Terminal · iTerm2) | ✅ |
 | 5 · Quota exact (statusline · jauge par modèle · % contexte) | ✅ |
 | 6 · Distribution (Developer ID, notarisation, DMG, Sparkle) | ✅ |
@@ -27,10 +27,11 @@ y compris pour les sessions lancées depuis le terminal de Cursor.
 | 7b · Rétrospective (leçons + skills proposés en fin de session) | ✅ |
 | 7c · Curation (revue des skills, stats d'usage, hygiène) | ✅ |
 | 8 · Sur rails supportés (`claude agents --json` = autorité de découverte) | ✅ |
+| 9 · Cockpit ambiant (lancer une tâche depuis le notch) | ⛔ retirée |
 | 10 · Verre & ondulation (Liquid Glass macOS 26 · transparence réglable) | ✅ |
 | 11 · Mémoire vive (rangement des notes · souvenirs joints aux messages · recall trié) | ✅ |
 | 12 · Boucle fermée (Atoll apprend vraiment · antériorité · plugins) | ✅ |
-| 13 · Rendre la main (fin de tâche annoncée · sons personnalisables · flotte par état) | ✅ |
+| 13 · Rendre la main (sons personnalisables · flotte par état) | ✅ |
 | 14 · Arêtes franches (coins droits · contour calibré Apple · ouverture nette) | ✅ |
 | 15 · Le son survit à l'app · la mémoire répond · moins de surface | ✅ |
 
@@ -104,15 +105,11 @@ pour contribuer.
   liste aussi les notes mémoire et leur projet d'origine.
 - **Retour au terminal** : un clic ouvre la fenêtre de la session (Cursor/VS Code direct,
   Terminal.app / iTerm2 via automatisation).
-- **Cockpit ambiant** : lancez une tâche en arrière-plan (`claude --bg`) depuis le notch
-  — une fenêtre dédiée (tâche + dossier), la session tourne détachée et apparaît dans
-  l'îlot ; arrêtez-la d'un clic (avec confirmation). Répondez à ses permissions depuis
-  le notch, sans ouvrir de terminal.
-- **La tâche finit, Atoll rend la main** : une tâche lancée depuis le notch vous
-  prévient quand elle a terminé — notification macOS avec un **résumé d'une ligne**
-  tiré du dernier message de Claude (clic = l'îlot s'ouvre sur la session), et une
-  trace dans l'îlot qui attend d'être vue. Uniquement les tâches que vous avez
-  lancées depuis l'îlot : jamais vos sessions interactives, donc zéro fausse alerte.
+- **Arrêter une session** : depuis son détail, un bouton ARRÊTER (avec confirmation)
+  lance `claude stop`. Le LANCEMENT depuis le notch a été retiré en v0.16.0 : il
+  partait sans `-w/--worktree`, donc la tâche écrivait dans votre arbre de travail
+  pendant que vous éditiez. `claude --bg` depuis le terminal fait le même travail
+  sans ce piège.
 - **Deux sons, les vôtres** : un quand une décision vous attend, un autre quand une
   session a fini. Au choix parmi les 14 sons macOS ou **votre propre fichier**
   (aiff, wav, mp3, m4a, caf), avec un volume par événement et une écoute immédiate.

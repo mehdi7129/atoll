@@ -2,7 +2,15 @@
 
 > Document de continuité pour reprendre le dev après un compactage de conversation.
 > **À lire en premier** avec `CLAUDE.md` (règles) et `PLAN.md` (plan produit).
-> Dernière mise à jour : **2026-08-03**, app **v0.15.1** — le SON ne dépend plus de
+> Dernière mise à jour : **2026-08-03**, app **v0.16.0** — quatre lots, cadrés par
+> `docs/VISION-2026-08.md` (Atoll SAIT, se SOUVIENT, APPELLE) : (1) la mémoire
+> RÉPOND (recherche élargie quand le strict ne rend rien, tri par couverture,
+> bandeau « RECHERCHE ÉLARGIE ») ; (2) elle cesse d'avaler le bruit (les enveloppes
+> `<task-notification>` valaient 17 % du corpus `user`) ; (3) le niveau « Auto » est
+> retiré — `claude auto-mode` le fait mieux, nativement ; (4) le cockpit ⌘N est
+> retiré (jamais utilisé, lançait sans `-w`). Le bouton ARRÊTER, mort depuis la
+> Phase 9, est réparé : `claude stop` veut le PRÉFIXE 8 hex, pas l'UUID.
+> Auparavant v0.15.1 — le SON ne dépend plus de
 > l'app (le helper le joue quand elle est fermée : elle avait parqué les hooks
 > `afplay` de Mehdi puis était restée fermée deux jours, plus rien ne sonnait).
 > Auparavant v0.15.0, Phase 14 « Arêtes
@@ -37,11 +45,12 @@ un chantier au §1.
 Îlot notch ASCII (thèmes, 4 palettes, largeur réglable par écran, Liquid Glass) ·
 suivi temps réel des sessions (`claude agents --json` autorité + hooks) · réponses
 depuis le notch (permissions ⌘Y/⌘N, plans, questions) · autonomie Manuel ou
-Rockstar · quota serveur exact · jump-back terminal · lancer/arrêter une tâche en
-arrière-plan · mémoire FTS5 de tous les transcripts + skill `atoll-recall` ·
-souvenirs proposés d'office (opt-in) · rétrospective qui produit VRAIMENT des
-skills · curation des notes · inventaire et recherche de plugins · annonce de fin
-de tâche (notification + bannière) · deux sons personnalisables · flotte par état.
+Rockstar · quota serveur exact · jump-back terminal · arrêter une session ·
+mémoire FTS5 de tous les transcripts + skill `atoll-recall` (recherche élargie
+quand le strict ne rend rien) · souvenirs proposés d'office (opt-in) ·
+rétrospective qui produit VRAIMENT des skills · curation des notes · inventaire
+et recherche de plugins · deux sons personnalisables **qui sonnent même quand
+Atoll est fermée** · flotte par état.
 
 ### Les deux skills qu'Atoll s'est appris (et qui SERVENT)
 
@@ -227,7 +236,15 @@ Ces points ne sont écrits nulle part ailleurs et coûtent cher à redécouvrir.
 - Il tranche vite quand on lui pose une vraie question fermée (AskUserQuestion avec
   une recommandation en premier). Ne pas lui demander ce qu'on peut décider soi-même.
 
-### Notifications macOS — pièges qui coûtent une demi-journée (Phase 13)
+### ⛔️ Notifications macOS — RETIRÉES le 2026-08-03, faits conservés (Phase 13)
+
+> `TaskCompletionNotifier` est SUPPRIMÉ avec le cockpit : sa seule source était la
+> fenêtre ⌘N, qui n'a jamais lancé une tâche — l'annonce n'a donc jamais sonné une
+> seule fois. Plus aucune ligne du dépôt n'importe `UserNotifications`. Les faits
+> ci-dessous ont coûté une demi-journée et restent VRAIS : les garder évite de les
+> repayer si le « rapport de retour » de `docs/VISION-2026-08.md` §4.1 les rouvre.
+> La recette qui suit ne s'exécute plus (`~/.atoll/launched-tasks.json` n'est plus
+> ni lu ni écrit).
 - **Un build signé « adhoc » (= toute la boucle de dev Debug) ne peut PAS notifier.**
   `requestAuthorization` échoue avec « Notifications are not allowed for this
   application ». Ce n'est pas le code : c'est la signature. Ne pas chercher un bug
@@ -363,7 +380,7 @@ xcodebuild -project Atoll.xcodeproj -scheme Atoll -configuration Debug -derivedD
 ditto "$DD/Build/Products/Debug/Atoll.app" ~/Applications/Atoll.app   # lancer LA COPIE
 pkill -x Atoll; sleep 1; open ~/Applications/Atoll.app                # relancer
 
-cd AtollCore && swift test              # 492 tests
+cd AtollCore && swift test              # 644 tests
 
 # Debug runtime
 /usr/bin/log stream --predicate 'subsystem == "dev.mehdiguiard.atoll"' --level debug
@@ -468,8 +485,12 @@ Le chat intégré n'existe plus (retiré le 2026-07-19), mais `RetrospectiveRunn
   `git -C x push --force`, `base64|sh`, `${IFS}`…). → **ALLOWLIST** : n'auto-accepter que des
   commandes dont chaque segment est un outil de dev connu ET non destructeur ; rejet
   structurel de tout ce qui est opaque (interpréteur `-c`, `$()`, `eval`, `xargs`…). Les
-  lanceurs `npx/bunx/dlx` vérifient le **paquet réel** (`npx rimraf` bloqué). Voir
-  `AutoAcceptPolicy` + ses 22 tests de bypass.
+  lanceurs `npx/bunx/dlx` vérifient le **paquet réel** (`npx rimraf` bloqué).
+  ⛔️ `AutoAcceptPolicy` et ses 22 tests de bypass ont été SUPPRIMÉS le 2026-08-03
+  avec le niveau « Auto » : `claude auto-mode` est first-party, actif par défaut et
+  porte 35,5 Ko de politique. Le raisonnement ci-dessus reste la référence si l'on
+  devait un jour rejuger une commande nous-mêmes — il avait dû être corrigé DEUX
+  fois pour des contournements, ce qui est précisément l'argument du retrait.
 - **Règles `deny` et hooks bloquants de l'utilisateur** : ils passent dans Claude Code
   AVANT Atoll → aucun hook ne peut les outrepasser (vérifié : même
   `updatedPermissions setMode bypassPermissions` est ignoré par le CLI 2.1.215, et les

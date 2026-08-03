@@ -38,24 +38,43 @@ final class FleetLauncher {
             lastError = "Binaire claude introuvable — arrêt impossible."
             return false
         }
-        let ok = await Task.detached(priority: .utility) { () -> Bool in
+        // `claude stop` attend le PRÉFIXE de 8 hex, jamais l'UUID complet — voir
+        // `FleetLaunch.jobIdentifier`. Passer `session.id` en entier faisait
+        // échouer le kill-switch à tous les coups, depuis la Phase 9.
+        guard let jobID = FleetLaunch.jobIdentifier(for: sessionID) else {
+            lastError = "Cette session n'a pas d'identifiant que claude sache arrêter."
+            log.error("identifiant inattendu, arrêt impossible : \(sessionID, privacy: .public)")
+            return false
+        }
+        let outcome = await Task.detached(priority: .utility) { () -> (ok: Bool, message: String) in
             let process = Process()
             process.executableURL = URL(fileURLWithPath: claude)
-            process.arguments = ["stop", sessionID]
+            process.arguments = ["stop", jobID]
             process.standardOutput = FileHandle.nullDevice
-            process.standardError = FileHandle.nullDevice
-            guard (try? process.run()) != nil else { return false }
+            // Un kill-switch ne doit pas mentir sur son résultat : on RAPPORTE ce
+            // que la CLI a dit plutôt que d'inventer une cause. Le message est
+            // court (« No job matching '…' ») — pas de risque de blocage de pipe,
+            // et il est drainé avant `waitUntilExit`.
+            let pipe = Pipe()
+            process.standardError = pipe
+            guard (try? process.run()) != nil else { return (false, "claude stop n'a pas pu être lancé.") }
             Self.armWatchdog(process, seconds: 10)
+            let data = (try? pipe.fileHandleForReading.readToEnd()) ?? Data()
             process.waitUntilExit()
-            return process.terminationStatus == 0
+            let stderr = String(decoding: data, as: UTF8.self)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if process.terminationStatus == 0 { return (true, "") }
+            return (false, stderr.isEmpty
+                    ? "L'arrêt a échoué — la session tourne peut-être encore."
+                    : "Arrêt refusé par claude : \(stderr.prefix(160))")
         }.value
-        if ok {
-            log.info("session arrêtée : \(sessionID, privacy: .public)")
+        if outcome.ok {
+            log.info("session arrêtée : \(jobID, privacy: .public)")
         } else {
-            lastError = "L'arrêt a échoué — la session tourne peut-être encore."
-            log.error("échec de l'arrêt de \(sessionID, privacy: .public)")
+            lastError = outcome.message
+            log.error("échec de l'arrêt de \(jobID, privacy: .public) : \(outcome.message, privacy: .public)")
         }
-        return ok
+        return outcome.ok
     }
 
     // MARK: - Résolution du chemin claude (identique au FleetPoller)

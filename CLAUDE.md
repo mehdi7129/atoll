@@ -109,7 +109,8 @@ Les quatre qui comptent :
   ligne (`node -e`, `python3 -c`, `awk 'BEGIN{system(…)}'`) — la garde `-c` ne
   connaissait que les noms de shells. Le jugement se fait désormais par
   SEGMENT, plus par regex globale (donc `grep -e node` n'est pas pris pour
-  `node -e`).
+  `node -e`). ⛔️ `AutoAcceptPolicy` est SUPPRIMÉE depuis le 2026-08-03 — avoir dû
+  la corriger deux fois pour des contournements est l'argument même du retrait.
 - **Un seul instantané de flotte vide annonçait toutes les tâches `--bg`
   terminées**, définitivement (`notified` idempotent), pendant que l'îlot les
   affichait « en cours ». Le store tolérait 2 absences, le journal aucune :
@@ -408,23 +409,29 @@ l'utilisateur et mourir avec, c'est l'esprit de la règle n° 1 violé.
 
 **Phase 13 — « Rendre la main » (v0.13.0, 2026-07-27)** — Atoll savait démarrer et
 surveiller ; il apprend à rendre la main. Plan : `docs/ROADMAP-13-rendre-la-main.md`.
-- **FIN DE TÂCHE ANNONCÉE** (`AtollCore/LaunchedTask`, `TaskCompletion`,
-  `App/TaskCompletionNotifier`) : le cockpit (Phase 9) lançait une tâche `--bg` et ne
-  prévenait jamais à la fin. PORTÉE VOLONTAIREMENT ÉTROITE (choix de Mehdi) : SEULES
-  les tâches lancées depuis le notch — la seule catégorie qu'Atoll connaît de première
-  main. On n'utilise PAS `AgentSessionInfo.Kind.background` pour deviner (le code
-  documente qu'il n'est pas fiable : une session interactive a déjà été rapportée
-  `background`). Signal préféré = hook `Stop`, qui porte `last_assistant_message`
-  (désormais décodé dans `ParsedHookEvent`, tronqué à 20 000 caractères) ; filet de
-  sûreté = disparition de la session (`markEnded`). `complete` est IDEMPOTENT : les
-  deux signaux ne produisent qu'une annonce.
-  PIÈGES : `claude --bg` peut n'imprimer qu'un PRÉFIXE d'identifiant (8 hex) alors que
-  les hooks portent l'UUID complet → comparaison par préfixe, jamais par égalité
-  (sinon aucune notification n'arrive jamais) ; rattrapage `adopt` par dossier +
-  horodatage (fenêtre 180 s, jamais une session démarrée AVANT le lancement) ;
-  `UNUserNotificationCenter.delegate` est une référence FAIBLE → le délégué doit être
-  retenu, sinon les clics ne font rien ; journal persisté
-  (`~/.atoll/launched-tasks.json`) pour survivre à un redémarrage d'Atoll.
+- ⛔️ **FIN DE TÂCHE ANNONCÉE — RETIRÉE le 2026-08-03** avec le cockpit
+  (`LaunchedTask`, `TaskCompletionNotifier`, `FleetLauncherWindow` supprimés ; plus
+  aucune ligne du dépôt n'importe `UserNotifications`). Sa SEULE source était la
+  fenêtre ⌘N, qui n'a jamais lancé une tâche : l'annonce n'a donc **jamais sonné une
+  seule fois**. `TaskCompletion` est conservé et documenté comme échafaudage
+  (`inputCap` est vivant, `plainText` est la brique du rapport de retour prévu).
+  CE QUI RESTE VRAI, et qu'il faudra rappeler si le rapport de retour rouvre le
+  sujet : le signal préféré est le hook `Stop`, qui porte `last_assistant_message`
+  (décodé dans `ParsedHookEvent`, tronqué à 20 000 caractères) ; ne PAS se fier à
+  `AgentSessionInfo.Kind.background` (une session interactive a déjà été rapportée
+  `background`) ; `UNUserNotificationCenter.delegate` est une référence FAIBLE, le
+  délégué doit être retenu sinon les clics ne font rien.
+- **UN IDENTIFIANT DE SESSION N'EST PAS UN IDENTIFIANT DE JOB.** Le fait était écrit
+  ici depuis la Phase 13 — « `claude --bg` peut n'imprimer qu'un PRÉFIXE (8 hex)
+  alors que les hooks portent l'UUID complet » — mais n'avait été appliqué qu'à la
+  comparaison des notifications. Il vaut AUSSI pour `claude stop`, et le bouton
+  ARRÊTER en est mort sans bruit de la Phase 9 au 2026-08-03 : la commande liste
+  `~/.claude/jobs/`, ne garde que les entrées `^[a-f0-9]{8}$`, puis retient celles
+  dont le nom COMMENCE par l'argument — un dossier de 8 caractères ne peut jamais
+  commencer par une chaîne de 36. MESURÉ sur le job mort `1b6e885d` : préfixe →
+  « stopped 1b6e885d », EXIT=0 ; UUID complet → « No job matching '…' », EXIT=1.
+  D'où `FleetLaunch.jobIdentifier` (AtollCore, testé), et `FleetLauncher.stop` qui
+  REMONTE désormais le stderr de la CLI au lieu d'inventer une cause.
 - **FAIT VÉRIFIÉ (macOS 26)** : `UNUserNotificationCenter` REFUSE l'enregistrement
   d'un build signé « adhoc » (« Notifications are not allowed for this application ») —
   donc AUCUNE notification depuis la boucle de dev Debug. C'est l'appel à
@@ -629,8 +636,12 @@ route « Atoll 2 ». Trois volets, tous vérifiés en vrai :
   publique, pas leur hack. Reste en réserve : jump-back Ghostty/tmux, multi-provider.
 - Debug : `notifyutil -p dev.mehdiguiard.atoll.debug.expand` (le verre + l'onde jouent).
 
-**Phase 9 — « Cockpit ambiant » (v0.9.0, 2026-07-24)** — piloter la flotte depuis
-le notch (lancement sur demande EXPLICITE, pas d'objectif auto-généré) :
+**⛔️ Phase 9 — « Cockpit ambiant » (v0.9.0, 2026-07-24) — RETIRÉE le 2026-08-03.**
+Ce qui SUBSISTE : le bouton ARRÊTER de `SessionDetailView`, `FleetLauncher.stop`
+et `FleetLaunch.shellQuote`/`jobIdentifier`. Tout le reste décrit ci-dessous
+(`FleetLauncherWindow`, `launch`, `parseSessionID`, `isValidTask`, l'item de menu
+⌘N) N'EXISTE PLUS — conservé comme historique de décision, pas comme description
+de l'état du code :
 - AtollCore : `FleetLaunch` (parseSessionID défensif de la sortie `claude --bg`
   colorée ANSI — ne PAS dépendre du format, l'autorité reste le FleetPoller ;
   shellQuote ; isValidTask ; testé). App : `FleetLauncher` (@Observable ;
@@ -824,7 +835,11 @@ tenue à jour avec `App/AppDelegate.swift` :
 - `#if DEBUG` UNIQUEMENT (ils décident, dépensent du quota ou écrivent) :
   `allow` / `deny` (1re carte), `select` (1re session), `jump` (jump-back),
   `settings`, `onboarding`, `retro` (rétrospective sur la dernière session terminée),
+  `retroBig` (rétrospective sur le PLUS GROS transcript du projet, sans passer par
+  le gate — ~0,87 $ le run ; c'est LUI qui a prouvé la boucle d'apprentissage),
   `curation` (curation des notes),
+  `plugins` (inventaire réel via `claude plugin list --json`, catégorie de log
+  `plugins`) / `pluginSearch` (recherche d'un plugin — consomme du quota),
   `seedSkill` / `skillReview` / `approveSkill` / `rejectSkill` (curation des skills),
   `seedPlugins` (inventaire de plugins factice, pour travailler l'UI sans réseau),
   `adoptSounds` / `restoreSounds` (reprise et restitution des hooks sonores —
