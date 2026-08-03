@@ -81,6 +81,15 @@ public enum TranscriptLineParser {
         // isMeta : lignes fabriquées par le CLI (contexte injecté, slash-commands) —
         // l'enveloppe peut servir, le texte jamais.
         if line["isMeta"] as? Bool == true { return [] }
+        // Même contrat, par l'ORIGINE : une notification de tâche d'arrière-plan
+        // porte le type `user` mais n'a jamais été tapée par personne.
+        //
+        // MESURÉ le 2026-08-03 : 134 de ces enveloppes étaient indexées, soit
+        // 17 % de TOUT le corpus `user` de l'index — or `user` ne pèse que 792
+        // messages sur 34 785, ce sont les plus rares et les seuls à porter une
+        // intention. La boucle était fermée : 15 des 84 injections proactives
+        // observées répondaient à une notification… par d'autres notifications.
+        if isMachineOrigin(line["origin"]) { return [] }
         guard let message = line["message"] as? [String: Any] else { return [] }
 
         if let text = message["content"] as? String {
@@ -102,6 +111,32 @@ public enum TranscriptLineParser {
             }
         }
         return fragments
+    }
+
+    /// Origines dont le texte est fabriqué par la machine, jamais par l'humain.
+    ///
+    /// C'est un discriminant STRUCTUREL, pas textuel — et c'est délibéré :
+    /// - `origin.kind == "task-notification"` a été vérifié **127 fois sur 127**
+    ///   sur douze versions du CLI (2.1.173 → 2.1.220), zéro faux positif ;
+    /// - `promptSource == "system"` a été ÉCARTÉ : sur 1 513 transcripts, 129
+    ///   lignes le portent, dont **deux sont de vraies instructions** ;
+    /// - un filtre textuel (« contient `<task-id>` ») a été écarté aussi : une
+    ///   conversation qui PARLE de ces enveloppes en serait victime — celle du
+    ///   2026-08-03 en est l'exemple.
+    static let machineOrigins: Set<String> = ["task-notification"]
+
+    /// Décodage DÉFENSIF : `origin` peut être un dictionnaire (`{"kind": …}`),
+    /// une chaîne, ou absent. Une forme inattendue n'exclut RIEN — mieux vaut
+    /// indexer un peu de bruit que perdre une vraie intention.
+    private static func isMachineOrigin(_ origin: Any?) -> Bool {
+        if let dictionary = origin as? [String: Any],
+           let kind = dictionary["kind"] as? String {
+            return machineOrigins.contains(kind)
+        }
+        if let kind = origin as? String {
+            return machineOrigins.contains(kind)
+        }
+        return false
     }
 
     /// Texte tapé par l'utilisateur. Les échos de slash-commands (`<command-…>`,

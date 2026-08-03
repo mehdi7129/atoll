@@ -409,6 +409,13 @@ private actor MemoryIndexWorker {
             Self.setAsideDatabase()
             index = try? MemoryIndex(url: BridgePaths.memoryDatabaseURL, mode: .readWrite)
         }
+        // Ménage rétroactif, une seule fois : le filtre d'ingestion ne l'est
+        // pas (l'offset d'un transcript déjà lu ne recule jamais), donc sans
+        // cette purge les notifications de tâches déjà indexées resteraient là
+        // pour toujours et le correctif serait un mensonge.
+        if let index, let removed = try? index.runHygieneIfNeeded(), removed > 0 {
+            log.info("hygiène de l'index : \(removed, privacy: .public) notification(s) de tâche retirée(s)")
+        }
         return index
     }
 

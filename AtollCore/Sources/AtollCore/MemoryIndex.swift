@@ -250,6 +250,58 @@ public final class MemoryIndex {
         }
     }
 
+    // MARK: - Hygiène de l'index
+
+    /// Compteur d'HYGIÈNE — combien de ménages rétroactifs ont déjà été passés.
+    ///
+    /// Il vit dans `PRAGMA application_id` et **JAMAIS** dans `user_version`.
+    /// Toute valeur de `user_version` différente de `schemaVersion` fait passer
+    /// `migrateIfNeeded` par `recreateFromScratch`, qui SUPPRIME la base. Or
+    /// 548 messages appartiennent à cinq transcripts dont le JSONL n'existe
+    /// plus sur disque : ils seraient perdus définitivement — précisément ce que
+    /// `markMissing` a été écrit pour empêcher.
+    public static let hygieneVersion: Int32 = 1
+
+    /// Retire de l'index ce qui n'aurait jamais dû y entrer, une seule fois.
+    ///
+    /// POURQUOI UNE PURGE, et pas seulement un filtre à l'ingestion : le filtre
+    /// n'est PAS rétroactif. `openFile` ne remet l'offset à zéro que sur
+    /// changement d'inode ou troncature — aucun transcript déjà lu n'est relu,
+    /// donc les lignes déjà indexées y resteraient pour toujours. Livrer le
+    /// filtre sans la purge, c'est corriger le code sans corriger le produit.
+    ///
+    /// Renvoie le nombre de messages retirés (0 si le ménage a déjà eu lieu).
+    @discardableResult
+    public func runHygieneIfNeeded() throws -> Int {
+        let stored = Int32(try scalar("PRAGMA application_id"))
+        guard stored < Self.hygieneVersion else { return 0 }
+        var removed = 0
+        try withTransaction {
+            removed = Int(try scalar("""
+                SELECT COUNT(*) FROM messages
+                WHERE role = 'user' AND text LIKE '<task-notification>%'
+                """))
+            // Ancrage sur le DÉBUT du texte : une conversation qui PARLE de ces
+            // enveloppes (celle du 2026-08-03…) les cite en plein milieu d'une
+            // phrase et ne doit pas être effacée.
+            try run("""
+                DELETE FROM messages
+                WHERE role = 'user' AND text LIKE '<task-notification>%'
+                """)
+            try run("""
+                DELETE FROM sessions
+                WHERE id NOT IN (SELECT DISTINCT session_id FROM messages)
+                """)
+            try exec("PRAGMA application_id = \(Self.hygieneVersion)")
+        }
+        return removed
+    }
+
+    /// `PRAGMA application_id` — exposé pour les tests.
+    func storedHygieneVersion() throws -> Int32 {
+        Int32(try scalar("PRAGMA application_id"))
+    }
+
     // MARK: - Ingestion
 
     /// Ingère un lot de lignes lues entre `fileState.offset` et `newOffset`,

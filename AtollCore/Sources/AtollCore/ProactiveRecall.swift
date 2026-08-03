@@ -206,6 +206,12 @@ public enum ProactiveRecall {
         query(fromPrompt: prompt) != nil
     }
 
+    /// Enveloppes que le CLI fabrique lui-même et fait passer par le hook
+    /// `UserPromptSubmit`. Ancrées au DÉBUT du prompt : un message qui PARLE de
+    /// ces balises (une conversation sur ce correctif, par exemple) les cite au
+    /// milieu d'une phrase et garde tout son droit au recall.
+    static let machineEnvelopePrefixes = ["<task-notification>", "<system-reminder>"]
+
     /// La requête brute à passer à `MemoryIndex.search` — c'est
     /// `MemoryIndex.sanitizedMatchQuery` qui la rendra inerte pour FTS5 (nos
     /// tokens peuvent contenir `-`, `.` ou `_`, actifs en syntaxe FTS5).
@@ -220,6 +226,11 @@ public enum ProactiveRecall {
         // vérifier « au moins 12 caractères ».
         guard trimmed.prefix(minPromptCharacters).count >= minPromptCharacters else { return nil }
         guard !trimmed.hasPrefix("/"), !trimmed.hasPrefix("!") else { return nil }
+        // Le prompt EST une notification de la machine : personne n'a rien
+        // demandé, il n'y a donc rien à se rappeler. Sans cette garde, la boucle
+        // se referme sur elle-même — mesuré : 15 des 84 injections observées
+        // répondaient à une notification par d'autres notifications.
+        guard !machineEnvelopePrefixes.contains(where: trimmed.hasPrefix) else { return nil }
         let keywords = keywords(fromPrompt: trimmed)
         guard keywords.count >= minKeywords else { return nil }
         return keywords.joined(separator: " ")
