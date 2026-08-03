@@ -1,7 +1,8 @@
 # CLAUDE.md — instructions projet Atoll
 
 > 📌 **REPRISE DE DEV : lire `docs/HANDOFF.md` en premier** — état exact, méthode de
-> travail, et TOUS les pièges appris à la dure. (v0.15.0 : Phase 14 « Arêtes franches »
+> travail, et TOUS les pièges appris à la dure. (v0.15.1 : le son ne dépend plus de
+> l'app — le helper joue quand elle est fermée ; auparavant v0.15.0, Phase 14 « Arêtes franches »
 > — coins hauts droits, contour au calibrage Apple, ouverture sans contour fantôme,
 > badge « INPUT? » retiré ; auparavant v0.14.1, audit complet — 59 + 25 défauts
 > corrigés, cf. `docs/AUDIT-2026-07-27.md`.)

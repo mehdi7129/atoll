@@ -34,7 +34,7 @@ y compris pour les sessions lancées depuis le terminal de Cursor.
 | 13 · Rendre la main (fin de tâche annoncée · sons personnalisables · flotte par état) | ✅ |
 | 14 · Arêtes franches (coins droits · contour calibré Apple · ouverture nette) | ✅ |
 
-**Version courante : v0.15.0** (voir les [Releases](https://github.com/mehdi7129/atoll/releases)).
+**Version courante : v0.15.1** (voir les [Releases](https://github.com/mehdi7129/atoll/releases)).
 
 Voir le [plan détaillé](PLAN.md), la [recherche](docs/research/) et [CLAUDE.md](CLAUDE.md)
 pour contribuer.

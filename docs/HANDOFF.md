@@ -2,7 +2,10 @@
 
 > Document de continuité pour reprendre le dev après un compactage de conversation.
 > **À lire en premier** avec `CLAUDE.md` (règles) et `PLAN.md` (plan produit).
-> Dernière mise à jour : **2026-07-28**, app **v0.15.0** — Phase 14 « Arêtes
+> Dernière mise à jour : **2026-08-03**, app **v0.15.1** — le SON ne dépend plus de
+> l'app (le helper le joue quand elle est fermée : elle avait parqué les hooks
+> `afplay` de Mehdi puis était restée fermée deux jours, plus rien ne sonnait).
+> Auparavant v0.15.0, Phase 14 « Arêtes
 > franches » : coins hauts droits, contour refait au calibrage Apple MESURÉ,
 > ouverture débarrassée de son contour fantôme (deux causes distinctes), badge
 > « INPUT? » retiré. Détail et chiffres : `CLAUDE.md` § Phase 14.
@@ -20,11 +23,11 @@ GPL-3.0, repo PUBLIC `github.com/mehdi7129/atoll`).
 
 | Quoi | Où |
 |---|---|
-| Version | **v0.15.0** — Phase 14 « Arêtes franches » |
+| Version | **v0.15.1** — le son survit à l'app |
 | Git | `main` poussé, **arbre propre** — vérifier d'un coup : `git log --oneline -3 && git status --porcelain` (un hash écrit ici serait périmé dès le commit suivant) |
-| Tests | **636 verts** (`cd AtollCore && swift test`, ~1 s), build **0 warning** |
+| Tests | **653 verts** (`cd AtollCore && swift test`, ~1 s), build **0 warning** |
 | Phases | **1 à 14 livrées** + audit complet du 2026-07-27. La feuille de route « Atoll 2 » (milestones A/B/C) est ÉPUISÉE |
-| Build installé | ⚠️ `~/Applications/Atoll.app` contient la **Release NOTARISÉE v0.15.0** (installée depuis le DMG en fin de session, pour que Mehdi ait le produit fini). Pour reprendre la boucle de dev : installer le Debug **À CÔTÉ**, en `~/Applications/Atoll-dev.app`, et ne jamais `ditto` par-dessus la Release — `ditto` FUSIONNE et un `Atoll.debug.dylib` résiduel casse le sceau. Quitter l'une avant de lancer l'autre (même bundle id) |
+| Build installé | ⚠️ `~/Applications/Atoll.app` contient la **Release NOTARISÉE v0.15.1** (installée depuis le DMG en fin de session, pour que Mehdi ait le produit fini). Pour reprendre la boucle de dev : installer le Debug **À CÔTÉ**, en `~/Applications/Atoll-dev.app`, et ne jamais `ditto` par-dessus la Release — `ditto` FUSIONNE et un `Atoll.debug.dylib` résiduel casse le sceau. Quitter l'une avant de lancer l'autre (même bundle id) |
 
 **Rien n'est en cours, rien n'est à moitié fait.** Une reprise commence par choisir
 un chantier au §1.
