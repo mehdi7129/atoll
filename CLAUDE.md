@@ -1,11 +1,19 @@
 # CLAUDE.md — instructions projet Atoll
 
 > 📌 **REPRISE DE DEV : lire `docs/HANDOFF.md` en premier** — état exact, méthode de
-> travail, et TOUS les pièges appris à la dure. (v0.15.1 : le son ne dépend plus de
-> l'app — le helper joue quand elle est fermée ; auparavant v0.15.0, Phase 14 « Arêtes franches »
-> — coins hauts droits, contour au calibrage Apple, ouverture sans contour fantôme,
-> badge « INPUT? » retiré ; auparavant v0.14.1, audit complet — 59 + 25 défauts
-> corrigés, cf. `docs/AUDIT-2026-07-27.md`.)
+> travail, et TOUS les pièges appris à la dure.
+>
+> **Version publiée : v0.16.0** — la mémoire répond, et Atoll rend ce qui n'est pas à
+> lui (quatre lots, **−910 lignes nettes**). Le cadre en vigueur n'est plus une
+> feuille de route de fonctions mais `docs/VISION-2026-08.md` : Anthropic livre
+> nativement de plus en plus de la surface d'Atoll, donc **soustraire avant
+> d'ajouter**. Ne pas proposer d'ajout sans avoir lu ce document et son plan court
+> terme — plusieurs idées séduisantes y sont déjà écartées, avec la raison.
+>
+> Auparavant : v0.15.1 (le son ne dépend plus de l'app — le helper joue quand elle est
+> fermée) ; v0.15.0, Phase 14 « Arêtes franches » (coins hauts droits, contour au
+> calibrage Apple, ouverture sans contour fantôme, badge « INPUT? » retiré) ;
+> v0.14.1, audit complet — 59 + 25 défauts corrigés, cf. `docs/AUDIT-2026-07-27.md`.
 
 Atoll est une app macOS native (Swift/SwiftUI) : une « Dynamic Island » autour du notch,
 esthétique ASCII, pour suivre et piloter les sessions Claude Code. Gratuit, open source,
@@ -168,7 +176,8 @@ PIÈGES DE MÉTHODE appris pendant cet audit :
 - ✅ Phase 1 — coquille notch + thème ASCII (sessions factices)
 - ✅ Phase 2 — monitoring des sessions réelles (hooks → socket → machine à états)
 - ✅ Phase 3 — interactions (PermissionRequest bloquant : permissions, plans, questions)
-- ✅ Auto-accept sûr (allowlist), vrais quotas (statusline tee), infos par session
+- ✅ Vrais quotas (statusline tee), infos par session — ⛔️ l'auto-accept par
+  allowlist maison est RETIRÉ (2026-08-03), `claude auto-mode` le fait nativement
 - ✅ Phase 4 — jump-back terminal (Cursor/VS Code via `<cli> -r`, Terminal.app/iTerm2
   via AppleScript par TTY, fallback activation app ; ancre capturée aux hooks + KERN_PROCARGS2)
 - ✅ Phase 5 — quota exact (tee-wrapper statusline, rate_limits serveur + indicateur
@@ -193,11 +202,17 @@ PIÈGES DE MÉTHODE appris pendant cet audit :
 - ✅ Phase 12 — « Boucle fermée » (v0.12.0) : la rétrospective produit VRAIMENT des
   skills (condensé Swift, quota persistant, journal), antériorité (`SkillCatalog`),
   inventaire des plugins, modèles par tâche.
-- ✅ Phase 13 — « Rendre la main » (v0.13.0) : annonce de fin de tâche `--bg`,
-  deux sons personnalisables (avec reprise réversible des hooks `afplay`),
-  vue de la flotte par état.
+- ✅ Phase 13 — « Rendre la main » (v0.13.0) : deux sons personnalisables (avec
+  reprise réversible des hooks `afplay`), vue de la flotte par état. ⛔️ L'annonce
+  de fin de tâche `--bg` est RETIRÉE avec le cockpit (2026-08-03) : sa seule source
+  était la fenêtre ⌘N, elle n'a jamais sonné une seule fois.
 - ✅ Phase 14 — « Arêtes franches » (v0.15.0) : coins hauts droits, contour au
   calibrage Apple mesuré, ouverture sans contour fantôme, badge « INPUT? » retiré.
+- ✅ v0.16.0 (2026-08-03) — **pas une phase, un RETRAIT** : la mémoire répond, elle
+  cesse d'avaler le bruit, le niveau « Auto » et le cockpit partent. −910 lignes
+  nettes. À partir d'ici le cadre est `docs/VISION-2026-08.md`, pas une liste de
+  phases : la question n'est plus « qu'ajouter ? » mais « qu'est-ce qu'Atoll est
+  seul à faire ? ».
 
 **Phase 14 — « Arêtes franches » (v0.15.0, 2026-07-28)** — trois défauts signalés par
 Mehdi sur la v0.14.1, tous reproduits et mesurés avant d'être corrigés.
@@ -397,7 +412,9 @@ l'utilisateur et mourir avec, c'est l'esprit de la règle n° 1 violé.
   testait que `\n` et `\r`, donc une commande à fins de ligne Windows n'était pas
   découpée.
 - **LE COCKPIT EST RETIRÉ** (fenêtre ⌘N, Phase 9). Jamais utilisé —
-  `launched-tasks.json` = `{"tasks":[]}` — et `FleetLauncher` lançait `claude --bg`
+  `launched-tasks.json` = `{"tasks":[]}` (le fichier SUBSISTE sur la machine de Mehdi,
+  vide, plus lu ni écrit par personne — inoffensif, à balayer si on repasse par là)
+  — et `FleetLauncher` lançait `claude --bg`
   **sans `-w/--worktree`** alors que le drapeau existe : une tâche écrivait dans l'arbre
   de travail de Mehdi pendant qu'il éditait, en Rockstar. **LE PIÈGE** :
   `SessionStore` joue le son de fin dans le MÊME bloc `if event.kind == .stop` que
@@ -406,6 +423,27 @@ l'utilisateur et mourir avec, c'est l'esprit de la règle n° 1 violé.
   et `FleetLaunch.shellQuote` (bilan, plugins, curation). `TaskCompletion` est
   CONSERVÉ et documenté comme échafaudage : `inputCap` est vivant (`HookEvent`) et
   `plainText` est la brique du rapport de retour prévu au moyen terme.
+
+**REVUE ADVERSARIALE DU DIFF COMPLET** (5 lentilles, puis un réfutateur par défaut
+allégué — 35 agents) : **30 allégués → 6 confirmés**, 24 réfutés. La consigne « en
+cas de doute, RÉFUTE » est ce qui rend le chiffre exploitable ; sans elle on corrige
+du bruit. Deux enseignements, plus utiles que les correctifs eux-mêmes :
+
+- **RETIRER DU CODE FAIT MONTER LA SURFACE DE DOCUMENTATION FAUSSE.** 5 des 6
+  confirmés étaient documentaires — le README PUBLIC vendait encore le cockpit ⌘N et
+  la notification de fin de tâche AU PRÉSENT, et la liste de triggers debug de ce
+  fichier se disait « exhaustive » en omettant `retroBig`, `plugins` et
+  `pluginSearch`. La passe docs fait partie du retrait, pas d'après. Corollaire de
+  méthode : **confronter les listes au code par script**, ne pas les relire — c'est
+  ce qui a trouvé les trois triggers manquants et un compte de tests annoncé à deux
+  valeurs différentes (492 et 653) pour 644 réels.
+- **LE BOUTON ARRÊTER ÉTAIT MORT DEPUIS LA PHASE 9** — voir le fait dédié plus haut
+  (« UN IDENTIFIANT DE SESSION N'EST PAS UN IDENTIFIANT DE JOB »). La phrase
+  ci-dessus, « NE SE SUPPRIMENT PAS : `FleetLauncher` (bouton ARRÊTER) », a été
+  écrite en croyant ce bouton fonctionnel : la justification d'un module reposait sur
+  un chemin qui n'avait jamais rendu EXIT=0. **Garder du code parce qu'« il sert »
+  demande de vérifier qu'il sert vraiment**, surtout quand on est en train
+  d'élaguer — c'est le moment où l'on est le moins enclin à le faire.
 
 **Phase 13 — « Rendre la main » (v0.13.0, 2026-07-27)** — Atoll savait démarrer et
 surveiller ; il apprend à rendre la main. Plan : `docs/ROADMAP-13-rendre-la-main.md`.
