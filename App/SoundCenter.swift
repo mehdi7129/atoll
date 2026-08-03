@@ -68,6 +68,36 @@ final class SoundCenter {
     func start() {
         refreshLibraries()
         reconcile()
+        publishSettings()
+    }
+
+    /// Publie les réglages sonores dans `~/.atoll/sound-settings.json`, pour que
+    /// le helper puisse jouer **quand l'app n'est pas là**.
+    ///
+    /// Sans ce fichier, les sons meurent avec l'app — et c'est arrivé : Atoll a
+    /// pris les deux hooks `afplay` de Mehdi le 27 juillet, puis est restée
+    /// fermée deux jours. Plus rien ne sonnait, ni les siens ni les nôtres. Voir
+    /// `SoundFallback`.
+    ///
+    /// Écriture atomique, échec avalé : un réglage qui ne se publie pas ne doit
+    /// jamais empêcher l'app de fonctionner.
+    func publishSettings() {
+        var choices: [String: String] = [:]
+        var volumes: [String: Double] = [:]
+        for event in SoundEvent.allCases {
+            choices[event.rawValue] = choice(for: event).storageValue
+            volumes[event.rawValue] = volume(for: event)
+        }
+        let settings = SoundFallback.Settings(enabled: Self.soundsEnabled,
+                                              choices: choices, volumes: volumes)
+        do {
+            try FileManager.default.createDirectory(
+                at: BridgePaths.soundSettingsURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+            try SoundFallback.encode(settings).write(to: BridgePaths.soundSettingsURL, options: .atomic)
+        } catch {
+            log.error("réglages sonores non publiés : \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     /// Relit les bibliothèques de sons et l'état du settings.json.
@@ -145,9 +175,14 @@ final class SoundCenter {
         UserDefaults.standard.object(forKey: enabledKey) as? Bool ?? false
     }
 
+    /// Toute mutation republie le fichier lu par le helper : sans cela, le son
+    /// joué app fermée resterait celui d'avant le réglage.
     var soundsEnabled: Bool {
         get { Self.soundsEnabled }
-        set { UserDefaults.standard.set(newValue, forKey: Self.enabledKey) }
+        set {
+            UserDefaults.standard.set(newValue, forKey: Self.enabledKey)
+            publishSettings()
+        }
     }
 
     func choice(for event: SoundEvent) -> SoundChoice {
@@ -156,6 +191,7 @@ final class SoundCenter {
 
     func setChoice(_ choice: SoundChoice, for event: SoundEvent) {
         UserDefaults.standard.set(choice.storageValue, forKey: event.choiceKey)
+        publishSettings()
     }
 
     func volume(for event: SoundEvent) -> Double {
@@ -166,6 +202,7 @@ final class SoundCenter {
 
     func setVolume(_ volume: Double, for event: SoundEvent) {
         UserDefaults.standard.set(min(max(volume, 0), 1), forKey: event.volumeKey)
+        publishSettings()
     }
 
     // MARK: - Lecture

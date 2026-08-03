@@ -323,6 +323,34 @@ fenêtre elle-même via un `NSViewRepresentable` (`ResizableWindow`). Preuve
 visuelle : la pastille verte s'allume. Tous les volets remplissent désormais la
 fenêtre (`maxWidth/maxHeight: .infinity`) et leur Form défile.
 
+**LE SON NE DÉPEND PLUS DE L'APP (2026-08-03)** — panne constatée sur la machine de
+Mehdi : Atoll avait parqué ses deux hooks `afplay` le 27 juillet (donc **0 occurrence
+d'`afplay` dans `settings.json`**), puis l'app est restée fermée deux jours. Résultat :
+**rien ne sonnait**, ni ses hooks ni ceux d'Atoll — alors qu'il a mis ces sons
+précisément pour être APPELÉ plutôt que surveiller un écran. Prendre quelque chose à
+l'utilisateur et mourir avec, c'est l'esprit de la règle n° 1 violé.
+- **`SoundFallback` (AtollCore)** + **`Bridge/SoundPlayer.swift`** : le helper joue
+  lui-même, **uniquement si l'app n'a pas été jointe**. `sendToSocket` rend désormais un
+  `SocketOutcome{reached, reply}` — un `Data?` ne distinguait pas « app absente » de
+  « envoyé, rien à lire ». Exactement un des deux sonne, jamais les deux.
+- **`~/.atoll/sound-settings.json`** : réglages ÉCRITS par l'app (`publishSettings()`, à
+  chaque mutation) et LUS par le helper — même dispositif que `proactive-recall.json`.
+  Les `UserDefaults` ne conviennent pas : autre binaire, autre domaine, cache `cfprefsd`.
+- **Table de correspondance VOLONTAIREMENT plus étroite** que celle de l'app :
+  `Notification` → décision, `Stop` → terminé, et RIEN d'autre. Celle de `SoundCenter`
+  reconnaît aussi `PermissionRequest` et `SubagentStop` parce qu'elle sert à REPRENDRE
+  des hooks ; ici on JOUE — les accepter ferait sonner deux fois la même demande et
+  tinter chaque sous-agent. Ce sont exactement les deux événements sur lesquels Mehdi
+  avait posé ses `afplay`.
+- **`POSIX_SPAWN_SETSID` + les trois descripteurs sur `/dev/null`** : sans session
+  propre, `afplay` reste dans le groupe de processus du hook et peut être emporté ;
+  et **stdout est le canal de réponse d'un hook** — un octet de trop et le CLI lit une
+  réponse invalide. Anti-rafale par mtime d'un témoin dans `~/.atoll/run/` (le helper est
+  un processus neuf à chaque hook, il n'a aucune mémoire).
+- MESURÉ : app fermée → `afplay -v 0.100 …/finish.mp3` lancé ; app ouverte → helper
+  muet ; stdout et stderr du hook **vides** ; latence **11 ms avec son contre 12 ms
+  sans** ; trois `Stop` d'affilée → **un seul** son.
+
 **Phase 13 — « Rendre la main » (v0.13.0, 2026-07-27)** — Atoll savait démarrer et
 surveiller ; il apprend à rendre la main. Plan : `docs/ROADMAP-13-rendre-la-main.md`.
 - **FIN DE TÂCHE ANNONCÉE** (`AtollCore/LaunchedTask`, `TaskCompletion`,

@@ -19,9 +19,24 @@ import AtollCore
 /// décision de l'app sur la même connexion (half-close côté écriture) — le CLI
 /// borne l'attente via le timeout du hook, et l'app ferme la connexion sans
 /// données pour « rendre la main au terminal ».
-func sendToSocket(_ data: Data, path: String, awaitReply: Bool = false) -> Data? {
+/// Ce qu'on sait après une tentative d'envoi.
+///
+/// `reached` répond à une question que le simple `Data?` ne pouvait pas
+/// trancher : l'app a-t-elle VRAIMENT reçu l'enveloppe ? Sans réponse, on ne
+/// pouvait pas savoir s'il fallait jouer le son de secours — `nil` signifiait
+/// aussi bien « app absente » que « envoyé, rien à lire en retour ».
+struct SocketOutcome {
+    /// Connexion établie, pair authentifié comme NOUS, enveloppe écrite en entier.
+    let reached: Bool
+    /// Réponse de l'app, quand on l'attendait (PermissionRequest).
+    let reply: Data?
+
+    static let unreachable = SocketOutcome(reached: false, reply: nil)
+}
+
+func sendToSocket(_ data: Data, path: String, awaitReply: Bool = false) -> SocketOutcome {
     let fd = socket(AF_UNIX, SOCK_STREAM, 0)
-    guard fd >= 0 else { return nil }
+    guard fd >= 0 else { return .unreachable }
     defer { close(fd) }
 
     var timeout = timeval(tv_sec: 0, tv_usec: 700_000)
@@ -37,7 +52,7 @@ func sendToSocket(_ data: Data, path: String, awaitReply: Bool = false) -> Data?
     var address = sockaddr_un()
     address.sun_family = sa_family_t(AF_UNIX)
     let pathBytes = path.utf8CString
-    guard pathBytes.count <= MemoryLayout.size(ofValue: address.sun_path) else { return nil }
+    guard pathBytes.count <= MemoryLayout.size(ofValue: address.sun_path) else { return .unreachable }
     withUnsafeMutableBytes(of: &address.sun_path) { destination in
         pathBytes.withUnsafeBytes { source in
             destination.copyMemory(from: UnsafeRawBufferPointer(rebasing: source.prefix(destination.count)))
@@ -50,7 +65,7 @@ func sendToSocket(_ data: Data, path: String, awaitReply: Bool = false) -> Data?
             connect(fd, $0, length)
         }
     }
-    guard connected == 0 else { return nil }
+    guard connected == 0 else { return .unreachable }
 
     // À QUI parle-t-on ? `/private/tmp` est world-writable (sticky bit) : tant
     // qu'Atoll n'écoute pas, n'importe quel autre compte local peut créer
@@ -65,7 +80,7 @@ func sendToSocket(_ data: Data, path: String, awaitReply: Bool = false) -> Data?
     guard getsockopt(fd, 0 /* SOL_LOCAL */, LOCAL_PEERCRED, &credentials, &credentialsSize) == 0,
           credentials.cr_version == XUCRED_VERSION,
           credentials.cr_uid == getuid()
-    else { return nil }
+    else { return .unreachable }
 
     // DEADLINE GLOBALE (revue) : `SO_SNDTIMEO` borne chaque `write`, pas la
     // boucle — un lecteur lent qui accepte quelques octets à chaque tour la
@@ -75,18 +90,19 @@ func sendToSocket(_ data: Data, path: String, awaitReply: Bool = false) -> Data?
     var offset = 0
     let total = data.count
     while offset < total {
-        guard Date() < deadline else { return nil }
+        guard Date() < deadline else { return .unreachable }
         let written: Int = data.withUnsafeBytes { raw in
             write(fd, raw.baseAddress!.advanced(by: offset), min(total - offset, 65_536))
         }
-        guard written > 0 else { return nil }
+        guard written > 0 else { return .unreachable }
         offset += written
     }
     // Half-close : signale « enveloppe complète » au serveur tout en gardant
     // la voie de retour ouverte pour la décision.
     shutdown(fd, SHUT_WR)
 
-    guard awaitReply else { return nil }
+    // À partir d'ici l'app A REÇU l'enveloppe : c'est elle qui sonnera, pas nous.
+    guard awaitReply else { return SocketOutcome(reached: true, reply: nil) }
 
     var reply = Data()
     var chunk = [UInt8](repeating: 0, count: 65_536)
@@ -94,12 +110,12 @@ func sendToSocket(_ data: Data, path: String, awaitReply: Bool = false) -> Data?
         let count = read(fd, &chunk, chunk.count)
         if count > 0 {
             reply.append(contentsOf: chunk[0..<count])
-            if reply.count > 1_048_576 { return nil }
+            if reply.count > 1_048_576 { return SocketOutcome(reached: true, reply: nil) }
         } else if count == 0 {
-            return reply.isEmpty ? nil : reply
+            return SocketOutcome(reached: true, reply: reply.isEmpty ? nil : reply)
         } else {
             if errno == EINTR { continue }
-            return nil
+            return SocketOutcome(reached: true, reply: nil)
         }
     }
 }
@@ -169,8 +185,19 @@ func forwardHookEvent() {
     let envelope: [String: Any] = ["v": 1, "enrich": enrich, "payload": payload]
     guard let data = try? JSONSerialization.data(withJSONObject: envelope) else { return }
 
-    let reply = sendToSocket(data, path: BridgePaths.socketPath, awaitReply: isPermissionRequest)
-    _ = replyToStdout(reply)
+    let outcome = sendToSocket(data, path: BridgePaths.socketPath, awaitReply: isPermissionRequest)
+    _ = replyToStdout(outcome.reply)
+
+    // FILET SONORE. L'app joue les sons quand elle tourne ; quand elle est
+    // fermée, personne ne les jouait — et comme Atoll a PARQUÉ les hooks
+    // `afplay` de l'utilisateur, il se retrouvait totalement muet (constaté :
+    // deux jours sans le moindre signal). On ne joue donc QUE si l'enveloppe
+    // n'a pas été remise : exactement un des deux sonne, jamais les deux.
+    //
+    // Placé APRÈS `replyToStdout` : la réponse au CLI ne doit rien attendre.
+    if !outcome.reached, let eventName {
+        SoundPlayer.play(hookEvent: eventName)
+    }
 }
 
 @discardableResult

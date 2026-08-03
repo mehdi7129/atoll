@@ -106,6 +106,20 @@ public enum BridgePaths {
         homeDirectory.appendingPathComponent(".atoll/parked-sound-hooks.json")
     }
 
+    /// Réglages sonores, ÉCRITS par l'app et LUS PAR LE HELPER — même dispositif
+    /// que `proactive-recall.json`. C'est ce qui permet au son de sonner quand
+    /// Atoll est fermée : le helper, lui, tourne à chaque hook. Voir
+    /// `SoundFallback`.
+    public static var soundSettingsURL: URL {
+        homeDirectory.appendingPathComponent(".atoll/sound-settings.json")
+    }
+
+    /// État éphémère du helper (témoins d'anti-rafale). Séparé des réglages :
+    /// ce dossier peut être vidé à tout moment sans rien perdre.
+    public static var runDirectory: URL {
+        homeDirectory.appendingPathComponent(".atoll/run", isDirectory: true)
+    }
+
     // MARK: - Apprentissage (Phase 7b)
 
     /// Dernier quota serveur connu, mis en cache pour survivre à un
