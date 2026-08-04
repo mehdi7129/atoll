@@ -131,6 +131,18 @@ Les quatre qui comptent :
   les payloads et répondre `{"behavior":"allow"}` — décision que le CLI honore.
   Contrôle `LOCAL_PEERCRED` côté helper (vérifié : les hooks passent toujours).
 
+**ARBITRAGE RENDU — DEUX MODES, PAS TROIS (2026-08-04).** Manuel et Rockstar suffisent :
+un troisième mode « qui décide intelligemment » a été proposé par Mehdi puis écarté par
+lui le même jour, **sur mesure**. Détail chiffré et biais de la mesure dans
+`docs/HANDOFF.md` §1.C — à lire AVANT de reproposer l'idée, elle est séduisante et
+reviendra. Les deux chiffres à retenir : la mémoire ne change la réponse que sur
+**4 décisions sur 41** (p ≈ 1,00 — le gain vient de LIRE la question, pas de
+l'historique), et l'écart avec la référence donne **p ≈ 0,36**, donc rien de démontré.
+LEÇON DE MÉTHODE : `AsciiArt`/`PermissionDecision` documentaient que « les modèles
+listent en général l'option recommandée en premier » — hypothèse jamais vérifiée, et
+FAUSSE dans les faits : elle ne coïncide avec le choix de Mehdi que ~54 % du temps, pour
+un hasard à 37 %. Encore un fait supposé plutôt que mesuré, comme le bouton ARRÊTER.
+
 **ARBITRAGE RENDU — l'îlot au repos.** Deux intentions écrites s'opposaient :
 « au repos, l'îlot épouse l'encoche et reste invisible » (`IslandGeometry`) contre
 « le losange rouge est un indicateur persistant » (`CompactView`). Elles sont

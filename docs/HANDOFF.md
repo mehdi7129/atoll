@@ -238,6 +238,48 @@ fichier qui n'appartient pas à l'utilisateur, rôles injectables restreints, ca
 
 ### C. Ce qui a été volontairement écarté (avec la raison)
 
+- **UN TROISIÈME MODE D'AUTONOMIE « qui décide intelligemment »** — proposé par Mehdi
+  le 2026-08-04, **écarté par LUI le même jour, sur mesure**. On garde Manuel et
+  Rockstar, on n'ajoute rien. L'idée : entre « tu décides tout » et « je ne te demande
+  rien », un mode où un second Claude répondrait aux `AskUserQuestion` à sa place.
+  MESURÉ sur **41 décisions réelles** extraites de ses transcripts (questions qu'il a
+  tranchées lui-même, latence > 3 s) :
+
+  | | justesse | IC 95 % |
+  |---|---|---|
+  | hasard (2,9 options en moyenne) | 37 % | — |
+  | référence — ce que fait Rockstar aujourd'hui (« toujours la 1re option ») | **54 %** | [38–69] |
+  | un Claude qui lit la question, SANS mémoire | 63 % | [49–78] |
+  | un Claude qui lit la question, AVEC son historique | 66 % | [51–80] |
+
+  **Les deux résultats qui tranchent :**
+  1. **La mémoire n'apporte rien.** Elle n'a changé la réponse que sur 4 décisions
+     sur 41 (2 corrigées, 1 dégradée) — p ≈ 1,00. Le gain vient de LIRE la question,
+     pas de l'historique. C'était le contraire de l'hypothèse de départ (« la valeur
+     d'un second Claude, c'est son information différente, pas son raisonnement »).
+  2. **Le gain n'est pas significatif** : référence → avec mémoire donne 12 gagnées
+     contre 7 perdues, **p ≈ 0,36**, intervalles largement chevauchants. Une tendance
+     de +9 à +12 points, pas une preuve.
+
+  Et même à 66 %, **une décision sur trois reste fausse** — ce tiers-là étant presque
+  entièrement composé de choix de GOÛT (quelle variante de figure, quelle palette),
+  pour lesquels la réponse n'existe nulle part avant que Mehdi la formule. Aucune
+  quantité de mémoire n'y change quoi que ce soit.
+
+  BIAIS CONNU DE LA MESURE, à réappliquer si on refait l'expérience : le jeu de test
+  était trié par date, donc un agent pouvait voir les questions POSTÉRIEURES et en
+  déduire les réponses antérieures (constaté dans les justifications : « le globe v2
+  cité plus tard »). Ça biaise les deux bras également — la comparaison reste valide —
+  mais 63 % et 66 % sont OPTIMISTES par rapport à un vrai déploiement. La référence à
+  54 %, elle, n'est pas affectée.
+
+  **NE PAS ROUVRIR sans nouvelles données.** Ce qui pourrait légitimement le rouvrir :
+  un jeu de test bien plus grand (41 ne suffit pas), ou une mesure débiaisée. Ce qui ne
+  suffit PAS : l'intuition que « ça devrait marcher ». Ce qui reste vrai et n'a pas été
+  mesuré : Rockstar tranche **45 %** des questions (44 sur 96), toujours par la 1re
+  option, et cette 1re option ne coïncide avec le choix de Mehdi que dans ~54 % des cas.
+  Il le sait et l'assume — Rockstar est le mode « aucune protection », c'est son contrat.
+
 - **Polling OAuth du quota** (`api.anthropic.com/api/oauth/usage`) : zone grise des
   CGU. Le tee-wrapper statusline suffit et est conforme. NE PAS ajouter sans accord.
 - **Export des skills vers un dépôt marketplace** : Mehdi ne veut, pour l'instant,
