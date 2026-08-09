@@ -68,7 +68,18 @@ final class FleetPoller {
             return
         }
         if let data = await Self.runAgentsJSON(claudePath: path) {
-            let infos = AgentsSnapshot.decode(data)
+            // Code de sortie 0 ne veut pas dire « sortie comprise ». Un format
+            // non reconnu était décodé en `[]` puis publié avec `available:
+            // true` : l'îlot concluait que TOUTES les sessions avaient disparu,
+            // les clôturait en deux tours, et le repli par scan de processus ne
+            // s'armait jamais (`available` restait vrai). On traite désormais ce
+            // cas comme ce qu'il est : une sonde qui n'a rien conclu.
+            guard case .sessions(let infos) = AgentsSnapshot.decodeOutcome(data) else {
+                available = false
+                lastActive = false
+                SessionStore.shared.applyFleetSnapshot([], available: false)
+                return
+            }
             available = true
             // Cadence rapide seulement si une session travaille ou attend une
             // réponse — sinon on ralentit (au repos, un poll lent suffit ; les

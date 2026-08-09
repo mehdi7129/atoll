@@ -161,13 +161,36 @@ public enum HookSettingsEditor {
 
     // MARK: - Interne
 
+    /// `nil` = fichier ABSENT : on part d'un objet vide, c'est une création
+    /// délibérée. Un `Data` PRÉSENT mais vide (ou uniquement blanc) est tout
+    /// autre chose : un `settings.json` de 0 octet est un fichier CORROMPU —
+    /// une troncature attrapée en vol (trois écrivains se partagent ce fichier :
+    /// l'utilisateur, le CLI, nous). Les confondre était destructeur : `parse`
+    /// rendait `[:]`, et l'écriture qui suit reposait un fichier ne contenant
+    /// QUE nos hooks — statusLine, `permissions` (allow ET deny), `env`, `model`
+    /// et les hooks tiers disparaissaient en silence. On refuse, comme pour tout
+    /// JSON illisible : aucune écriture.
+    ///
+    /// L'asymétrie qui rendait le défaut invisible en relecture mérite d'être
+    /// nommée : *corrompu* → refus propre, *absent* → création délibérée,
+    /// *zéro octet* → écriture destructrice silencieuse. Trois branches, dont
+    /// une seule était fausse.
     private static func parse(_ data: Data?) throws -> [String: Any] {
-        guard let data, !data.isEmpty else { return [:] }
+        guard let data else { return [:] }
+        guard !isBlank(data) else { throw EditorError.unparseableSettings }
         guard let object = try? JSONSerialization.jsonObject(with: data),
               let dict = object as? [String: Any] else {
             throw EditorError.unparseableSettings
         }
         return dict
+    }
+
+    /// Vide, ou uniquement des espaces/retours : dans les deux cas il n'y a
+    /// aucun JSON à préserver, et rien ne prouve qu'il n'y en avait pas avant.
+    public static func isBlank(_ data: Data) -> Bool {
+        String(decoding: data, as: UTF8.self)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .isEmpty
     }
 
     private static func serialize(_ settings: [String: Any]) throws -> Data {

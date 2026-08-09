@@ -100,6 +100,11 @@ final class SessionStore {
     /// avant clôture : un snapshot transitoirement vide ne tue pas une session).
     @ObservationIgnored private var fleetMissed: [String: Int] = [:]
 
+    /// Passes de flotte consécutives DÉGRADÉES (aucune session vivante retrouvée
+    /// alors qu'on en suivait plusieurs) — voir `FleetReconciler.isProbeOutage`.
+    /// Remis à zéro dès qu'une passe voit au moins une session.
+    @ObservationIgnored private var fleetDegradedStreak = 0
+
     @ObservationIgnored private var exitWatchers: [pid_t: DispatchSourceProcess] = [:]
     @ObservationIgnored private var reconcileTask: Task<Void, Never>?
     @ObservationIgnored private var snapshotTask: Task<Void, Never>?
@@ -177,7 +182,11 @@ final class SessionStore {
                 contextUsedFraction: tracked.contextUsedFraction,
                 costUSD: tracked.costUSD,
                 cwd: tracked.cwd,
-                recallInjected: tracked.lastRecallInjected
+                recallInjected: tracked.lastRecallInjected,
+                // `isSynthetic` retombe à false dès le premier hook reçu : une
+                // session découverte par la flotte puis confirmée redevient donc
+                // « en attente de toi » à bon droit.
+                stateConfirmedByHook: !tracked.isSynthetic
             )
         }
     }
@@ -265,10 +274,17 @@ final class SessionStore {
         // demande a été tranchée ailleurs → annuler nos cartes en attente pour
         // cette session (fermeture silencieuse, le terminal garde la main).
         switch event.kind {
-        case .postToolUse, .postToolUseFailure, .permissionDenied, .stop, .sessionEnd, .userPromptSubmit:
+        case .permissionDenied, .stop, .sessionEnd, .userPromptSubmit:
+            // Ces quatre-là prouvent que la session a AVANCÉ : plus aucun
+            // dialogue de permission ne peut être en attente.
             // userPromptSubmit inclus : un nouveau prompt prouve qu'aucun dialogue
             // de permission n'est plus en attente pour cette session.
             InteractionCenter.shared.cancelForSession(event.sessionID)
+        case .postToolUse, .postToolUseFailure:
+            // Un hook d'OUTIL ne prouve rien tout seul : ceux d'un sous-agent
+            // portent le session_id du parent. On ne referme que la carte du
+            // même outil — voir `cancelForSession(_:tool:)`.
+            InteractionCenter.shared.cancelForSession(event.sessionID, tool: event.toolName)
         default:
             break
         }
@@ -777,6 +793,23 @@ final class SessionStore {
         // transitoirement vide/partiel ne tue pas une session vivante ; (2) une
         // carte de permission en attente prouve la session vivante (un helper y
         // est bloqué) → jamais clôturée.
+        // DISJONCTEUR DE PASSE. La tolérance ci-dessous compte PAR session ;
+        // elle ne dit donc rien d'une panne qui les rend toutes absentes en même
+        // temps (format de sortie changé, daemon qui hoquette). Quand on suivait
+        // au moins deux sessions vivantes et qu'aucune n'est corrélée, on
+        // dégrade la passe entière : on ne compte aucune absence, on ne clôture
+        // personne. Borné à `maxDegradedPasses` — un disjoncteur qui ne se
+        // ré-arme pas est un blocage.
+        let trackedAlive = sessions.indices.filter { sessions[$0].phase.isAlive }.count
+        if FleetReconciler.isProbeOutage(trackedAlive: trackedAlive,
+                                         seen: seen.count,
+                                         degradedStreak: fleetDegradedStreak) {
+            fleetDegradedStreak += 1
+            if changed { scheduleSnapshot() }
+            return
+        }
+        fleetDegradedStreak = 0
+
         for index in sessions.indices where sessions[index].phase.isAlive {
             let id = sessions[index].id
             if seen.contains(id) {

@@ -3,14 +3,22 @@
 > 📌 **REPRISE DE DEV : lire `docs/HANDOFF.md` en premier** — état exact, méthode de
 > travail, et TOUS les pièges appris à la dure.
 >
-> **Version publiée : v0.16.0** — la mémoire répond, et Atoll rend ce qui n'est pas à
-> lui (quatre lots, **−910 lignes nettes**). Le cadre en vigueur n'est plus une
-> feuille de route de fonctions mais `docs/VISION-2026-08.md` : Anthropic livre
-> nativement de plus en plus de la surface d'Atoll, donc **soustraire avant
-> d'ajouter**. Ne pas proposer d'ajout sans avoir lu ce document et son plan court
-> terme — plusieurs idées séduisantes y sont déjà écartées, avec la raison.
+> **Version publiée : v0.16.1** — sept défauts corrigés, dont **deux chemins
+> destructeurs** (un `settings.json` de zéro octet écrasait la config ; Rockstar
+> survivait à la fermeture d'Atoll) et **deux fonctions écrites, testées et jamais
+> appelées** (`MemoryRanking.byCoverage` sur le recall proactif,
+> `AgentsSnapshot` qui ne distinguait pas « aucune session » de « format inconnu »).
+> Aucune fonction ajoutée. Détail plus bas.
 >
-> Auparavant : v0.15.1 (le son ne dépend plus de l'app — le helper joue quand elle est
+> Le cadre en vigueur n'est pas une feuille de route de fonctions mais
+> `docs/VISION-2026-08.md` : Anthropic livre nativement de plus en plus de la surface
+> d'Atoll, donc **soustraire avant d'ajouter**. Ne pas proposer d'ajout sans avoir lu
+> ce document et son plan court terme — plusieurs idées séduisantes y sont déjà
+> écartées, avec la raison.
+>
+> Auparavant : v0.16.0 (la mémoire répond, et Atoll rend ce qui n'est pas à lui —
+> quatre lots, **−910 lignes nettes**) ;
+> v0.15.1 (le son ne dépend plus de l'app — le helper joue quand elle est
 > fermée) ; v0.15.0, Phase 14 « Arêtes franches » (coins hauts droits, contour au
 > calibrage Apple, ouverture sans contour fantôme, badge « INPUT? » retiré) ;
 > v0.14.1, audit complet — 59 + 25 défauts corrigés, cf. `docs/AUDIT-2026-07-27.md`.
@@ -435,6 +443,92 @@ l'utilisateur et mourir avec, c'est l'esprit de la règle n° 1 violé.
   et `FleetLaunch.shellQuote` (bilan, plugins, curation). `TaskCompletion` est
   CONSERVÉ et documenté comme échafaudage : `inputCap` est vivant (`HookEvent`) et
   `plainText` est la brique du rapport de retour prévu au moyen terme.
+
+**v0.16.1 — SEPT DÉFAUTS, AUCUNE FONCTION AJOUTÉE** (2026-08-09). Nés d'une question de
+Mehdi (« que vaut agent-orchestrator, 9k étoiles ? ») : l'analyse a conclu qu'il n'y a
+**rien à reprendre côté produit** — leur cœur est un IDE qui fait travailler des agents,
+l'inverse de l'axe d'Atoll, et 229 903 lignes de Go sans une seule recherche transversale.
+Le rendement était ailleurs : **cinq des sept correctifs portent sur du code à nous**.
+
+- **UN `settings.json` DE ZÉRO OCTET ÉCRASAIT LA CONFIGURATION.** `parse` faisait
+  `guard let data, !data.isEmpty else { return [:] }` : `nil` (fichier ABSENT, création
+  délibérée) et `Data()` (fichier PRÉSENT mais tronqué) tombaient dans la même branche.
+  L'écriture qui suit reposait alors un fichier ne contenant QUE les hooks Atoll — 19 hooks
+  GSD, statusLine, `permissions` (allow ET deny), `env`, `model` évaporés. Trois écrivains
+  se partagent ce fichier : il suffit d'en attraper un en pleine troncature. Corrigé aux
+  TROIS points d'entrée (`HookSettingsEditor`, `SoundHookEditor`, et `refreshBackup` qui
+  gravait le fichier vide comme backup « pré-Atoll » quand aucun backup n'existait encore —
+  les gardes existantes ne couvraient que le cas d'un backup DÉJÀ présent).
+  L'asymétrie qui rend ce défaut invisible en relecture : *corrompu* → refus propre,
+  *absent* → création délibérée, *zéro octet* → écriture destructrice silencieuse.
+- **ROCKSTAR NE SURVIT PLUS À ATOLL.** Tous les chemins de restitution supposaient que
+  l'app TOURNE : fermer Atoll (ou la laisser planter) laissait les règles `deny` de
+  l'utilisateur suspendues **indéfiniment**, sans îlot pour approuver quoi que ce soit — le
+  pire des deux états, et mot pour mot la faute déjà payée avec les sons en v0.15.1.
+  Le helper restitue désormais lui-même après un délai de grâce (`rockstarOrphanGrace`,
+  **2 h**). **PIÈGE ÉVITÉ, ET IL ÉTAIT DANS LA PREMIÈRE VERSION DU CORRECTIF** : se fier à
+  `parkedAt` mesure l'ancienneté du PARKING, pas l'absence de l'app — en Rockstar depuis
+  trois jours, un hook tombant pendant les secondes d'un redémarrage Sparkle aurait vu un
+  parking « vieux de trois jours » et restitué aussitôt. On mesure donc l'ABSENCE CONTINUE
+  via un témoin (`~/.atoll/run/app-absent-since`), effacé dès que l'app répond — le helper
+  est un processus neuf à chaque hook, il n'a aucune mémoire. Et `rockstarRestore` est
+  scindée : `performRockstarRestore` est **silencieuse** (sur un chemin de hook, stdout est
+  le canal de réponse du CLI), seule la commande CLI imprime.
+- **`byCoverage` N'ÉTAIT PAS BRANCHÉE SUR LE RECALL PROACTIF** — un seul appelant hors
+  tests, `searchRelaxing` (recall manuel). Or `skill_usage` dit qu'`atoll-recall` n'a
+  **jamais** été invoqué, pendant que le canal automatique injectait ~200 fois : le seul
+  canal de mémoire vivant était celui qui ne bénéficiait pas du tri. MESURÉ sur les 739
+  extraits réellement injectés : **32 % n'appariaient qu'UN terme, 43 % deux**. Même motif
+  que le défaut corrigé en v0.16.0 (`Recall.swift` sans `MatchMode`) : le savoir était dans
+  le code, pas dans l'appel.
+- **LA SONDE DE FLOTTE NE DISAIT PAS « JE N'AI PAS COMPRIS ».** `AgentsSnapshot.decode`
+  rendait `[]` aussi bien sur « aucune session » que sur un format non reconnu, et
+  `FleetPoller` publiait alors `available: true` : l'îlot concluait que TOUTE la flotte
+  était terminée, la clôturait en 4 à 12 s (en mettant un bilan payant en file par session
+  « terminée »), et le repli par scan de processus ne s'armait **jamais**. Ce n'est pas
+  théorique : le schéma a déjà bougé — sur 2.1.223, des entrées portent `state` sans
+  `status`, d'autres l'inverse. D'où `decodeOutcome` (`.sessions` / `.unrecognized`) et un
+  **disjoncteur de passe** (`FleetReconciler.isProbeOutage`) : une passe qui ne retrouve
+  AUCUNE des sessions vivantes suivies alors qu'on en suivait ≥ 2 est dégradée, au plus
+  deux fois de suite — un disjoncteur qui ne se ré-arme pas est un blocage, pas une sûreté
+  (leçon du verrou anti-double-spawn).
+- **UNE CARTE DE PERMISSION ÉTAIT EFFACÉE PAR N'IMPORTE QUEL SOUS-AGENT.** Tout
+  `postToolUse` de la session annulait toute carte en attente, sans regarder l'outil — or
+  les hooks d'outils d'un sous-agent portent le `session_id` du parent. `PermissionRequest`
+  ne porte pas de `tool_use_id` (vérifié sur 2.1.223 : seulement `tool_name`/`tool_input`/
+  `permission_suggestions`), donc le nom d'outil est le discriminant le plus fin
+  disponible : on ne referme que la carte du MÊME outil, et **l'ambiguïté ne referme rien**.
+  Les quatre événements qui prouvent que la session a avancé (`stop`, `sessionEnd`,
+  `permissionDenied`, `userPromptSubmit`) restent inconditionnels.
+- **LE BOUTON ARRÊTER NE S'AFFICHE PLUS QUAND IL NE PEUT RIEN FAIRE.** MESURÉ : les deux
+  sessions interactives de la machine n'ont **aucun** dossier `~/.claude/jobs/`, les deux
+  d'arrière-plan en ont un. `claude stop` sort donc en 1 sur une session interactive —
+  celles que Mehdi pilote. `FleetLaunch.hasJobDirectory` (fail-open : au moindre doute, on
+  affiche).
+- **« EN ATTENTE DE TOI » NE SE DIT PLUS D'UN ÉTAT NON CONFIRMÉ.** Le daemon ne connaît que
+  `busy`/`idle`, et `idle` recouvre « elle attend ton prompt » comme « elle est bloquée sur
+  une erreur réseau ». Toute session de flotte naissant `waitingInput`, le panneau
+  convoquait l'utilisateur au nom de sessions qui ne demandaient rien. `AgentSession`
+  porte désormais `stateConfirmedByHook` ; les non confirmées vont dans « EN COURS », qui
+  ne réclame aucune action. Même arbitrage que le retrait du badge « INPUT? » en Phase 14.
+
+**LA REVUE ADVERSARIALE A TROUVÉ UNE RÉGRESSION DANS CE LOT** (5 lentilles + un réfutateur
+par défaut allégué, 19 agents : **14 allégués → 1 confirmé**, 13 réfutés). Le confirmé est
+le dernier point ci-dessus : en fusionnant les non confirmées dans `.working`, il ne reste
+qu'UN seau, donc `allocationPriority` n'arbitre plus rien (il arbitre ENTRE les seaux) et
+l'ordre interne devient celui d'`uiSessions`, où `rank` classe `waitingInput` AVANT `busy`.
+MESURÉ par le réfutateur, qui a exécuté le vrai code : budget 4, trois dormantes non
+confirmées et une active → « EN COURS : idleA, idleB, idleC », **la seule session qui
+travaille passée derrière « +1 autre »** — précisément l'invariant qu'`allocationPriority`
+avait été écrit pour protéger. Correctif : partition STABLE à l'intérieur du seau
+`.working` (actives, puis dormantes), jamais `sorted` (le tri de Swift n'est pas stable, et
+deux regroupements successifs doivent rendre le même ordre). **Les trois tests ajoutés ont
+été vérifiés en neutralisant la partition : 4 échecs sans le correctif.** Un test de
+régression qui n'a jamais échoué ne prouve rien.
+
+LEÇON DE MÉTHODE : 5 des 7 défauts n'avaient rien à voir avec le dépôt qu'on analysait.
+Regarder longuement un autre projet a surtout servi à **relire le nôtre avec des yeux
+neufs** — et le seul emprunt réel est un raisonnement d'une phrase, pas une ligne de code.
 
 **REVUE ADVERSARIALE DU DIFF COMPLET** (5 lentilles, puis un réfutateur par défaut
 allégué — 35 agents) : **30 allégués → 6 confirmés**, 24 réfutés. La consigne « en

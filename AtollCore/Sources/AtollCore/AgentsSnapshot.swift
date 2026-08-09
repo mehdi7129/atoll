@@ -85,11 +85,50 @@ public enum AgentsSnapshot {
     /// est ignorée ; les champs manquants deviennent nil/unknown. Jamais de throw :
     /// une sortie corrompue ou d'un format futur rend simplement `[]` ou moins
     /// d'entrées, jamais un crash (le schéma du CLI n'est pas un contrat versionné).
-    public static func decode(_ data: Data) -> [AgentSessionInfo] {
-        guard let root = try? JSONSerialization.jsonObject(with: data),
-              let array = root as? [[String: Any]] else { return [] }
+    /// Résultat d'un décodage, avec la distinction que `[]` seul ne pouvait pas
+    /// porter : « le CLI a répondu, il n'y a aucune session » et « je ne
+    /// comprends pas ce que le CLI a répondu » menaient au MÊME tableau vide.
+    /// Or le second est une PANNE de sonde : conclure « toutes les sessions ont
+    /// disparu » y clôturait la flotte entière en 4 à 12 s, et mettait au
+    /// passage un bilan payant en file par session « terminée ».
+    /// Le schéma a déjà bougé sous nous (CLI 2.1.223 : des entrées portent
+    /// `state` sans `status`, d'autres l'inverse) : le jour où le tableau est
+    /// enveloppé dans un objet, cette distinction est tout ce qui protège.
+    public enum Outcome: Equatable {
+        /// Format reconnu. Le tableau PEUT être vide : c'est une vraie réponse.
+        case sessions([AgentSessionInfo])
+        /// Sortie illisible ou d'un format inconnu : sonde NON CONCLUANTE.
+        case unrecognized
+    }
 
-        return array.compactMap { entry in
+    /// Décodage qui distingue « aucune session » de « format non reconnu ».
+    public static func decodeOutcome(_ data: Data) -> Outcome {
+        guard let root = try? JSONSerialization.jsonObject(with: data) else { return .unrecognized }
+        // Tolérance de forme : le tableau nu d'aujourd'hui, ou un objet qui
+        // l'enveloppe demain sous une clé plausible. Tout le reste est inconnu.
+        let array: [[String: Any]]
+        if let direct = root as? [[String: Any]] {
+            array = direct
+        } else if let wrapper = root as? [String: Any],
+                  let nested = (wrapper["sessions"] ?? wrapper["agents"] ?? wrapper["data"])
+                    as? [[String: Any]] {
+            array = nested
+        } else if let empty = root as? [Any], empty.isEmpty {
+            // `[]` : tableau vide bien formé, aucune session. Réponse valide.
+            array = []
+        } else {
+            return .unrecognized
+        }
+        return .sessions(entries(array))
+    }
+
+    public static func decode(_ data: Data) -> [AgentSessionInfo] {
+        guard case .sessions(let infos) = decodeOutcome(data) else { return [] }
+        return infos
+    }
+
+    private static func entries(_ array: [[String: Any]]) -> [AgentSessionInfo] {
+        array.compactMap { entry in
             // sessionId ?? id : la seule clé requise (sans identité, inexploitable).
             guard let sessionID = (entry["sessionId"] ?? entry["id"] ?? entry["session_id"]) as? String,
                   !sessionID.isEmpty else { return nil }
@@ -148,6 +187,33 @@ public enum FleetReconciler {
         case existing(id: String)
         /// Aucune correspondance : nouvelle session de flotte à créer.
         case new
+    }
+
+    /// Nombre maximal de passes consécutives qu'on accepte de DÉGRADER avant de
+    /// laisser la passe de retrait faire son travail. Deux, pas plus : un
+    /// disjoncteur qui ne se ré-arme jamais est un blocage, pas une sûreté —
+    /// c'est exactement la faute du verrou anti-double-spawn qui bloquait sa
+    /// propre file (audit du 2026-07-27). Si la panne dure, on finit par
+    /// conclure, et le repli par scan a eu le temps de s'armer.
+    public static let maxDegradedPasses = 2
+
+    /// Une passe qui ne retrouve AUCUNE des sessions vivantes qu'on suit, alors
+    /// qu'on en suivait plusieurs, décrit une panne de sonde bien plus
+    /// probablement qu'une extinction simultanée.
+    ///
+    /// La tolérance existante (2 absences par session) ne protège pas de ça :
+    /// elle compte PAR session, donc trois passes en panne clôturent tout le
+    /// monde pareil. Ce test-ci porte sur la passe ENTIÈRE.
+    ///
+    /// Seuil à 2 sessions, pas davantage : au-dessous, « aucune vue » est un
+    /// événement banal (une seule session qui se termine vraiment). Le principe :
+    /// des sessions sans rapport entre elles ne s'éteignent pas toutes dans le
+    /// même intervalle de sonde — ce qui a produit une telle passe est une
+    /// panne, pas N décès simultanés.
+    public static func isProbeOutage(trackedAlive: Int, seen: Int,
+                                     degradedStreak: Int,
+                                     maxDegraded: Int = maxDegradedPasses) -> Bool {
+        trackedAlive >= 2 && seen == 0 && degradedStreak < maxDegraded
     }
 
     public static func correlate(_ info: AgentSessionInfo, among existing: [Existing]) -> Match {

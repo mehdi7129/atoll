@@ -31,12 +31,23 @@ public struct AgentSession: Identifiable, Equatable, Sendable {
     /// savoir que la session a reçu de la mémoire.
     public var recallInjected: Int = 0
     public var cwd: String?
+    /// Un hook a-t-il déjà prouvé cet état, ou ne fait-on que répéter le statut
+    /// grossier de `claude agents --json` ?
+    ///
+    /// Le daemon ne connaît que `busy` / `idle`, et `idle` recouvre aussi bien
+    /// « elle attend ton prompt » que « elle est bloquée sur une erreur réseau »
+    /// ou « elle a fini et n'est pas nettoyée ». Une session découverte par la
+    /// flotte et jamais confirmée par un hook ne permet donc PAS d'affirmer
+    /// qu'elle t'attend. Défaut `true` : les sessions à hooks — le cas normal —
+    /// sont confirmées par construction.
+    public var stateConfirmedByHook: Bool = true
 
     public init(id: String = UUID().uuidString, projectName: String, gitBranch: String? = nil,
                 status: Status, subtitle: String? = nil, startedAt: Date = Date(),
                 model: String? = nil, subagentCount: Int = 0, mcpServers: [String] = [],
                 contextUsedFraction: Double? = nil, costUSD: Double? = nil, cwd: String? = nil,
-                recallInjected: Int = 0) {
+                recallInjected: Int = 0, stateConfirmedByHook: Bool = true) {
+        self.stateConfirmedByHook = stateConfirmedByHook
         self.id = id
         self.projectName = projectName
         self.gitBranch = gitBranch

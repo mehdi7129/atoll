@@ -78,4 +78,46 @@ final class FleetLaunchTests: XCTestCase {
     func testJobIdentifierRejectsNonASCIIDigits() {
         XCTAssertNil(FleetLaunch.jobIdentifier(for: "١٢٣٤٥٦٧٨-60ff-4bfa-bd56-353e6f4ba7c8"))
     }
+
+    // MARK: - Un job à arrêter, ou pas
+
+    /// `claude stop` ne sait arrêter que ce que le daemon gère. Une session
+    /// INTERACTIVE n'a pas de dossier de job — mesuré sur la machine : les deux
+    /// sessions interactives n'en avaient aucun, les deux d'arrière-plan si.
+    /// Proposer « ARRÊTER » dessus affichait un bouton qui ne pouvait pas
+    /// aboutir, et qui échouait après confirmation.
+    func testHasJobDirectory() throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("atoll-jobs-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let session = "1b6e885d-60ff-4bfa-bd56-353e6f4ba7c8"
+        XCTAssertFalse(FleetLaunch.hasJobDirectory(for: session, jobsRoot: root),
+                       "aucun dossier : le bouton ne doit pas s'afficher")
+
+        try FileManager.default.createDirectory(
+            at: root.appendingPathComponent("1b6e885d"), withIntermediateDirectories: true)
+        XCTAssertTrue(FleetLaunch.hasJobDirectory(for: session, jobsRoot: root))
+    }
+
+    /// Un FICHIER nommé comme un job n'est pas un job.
+    func testHasJobDirectoryRejectsPlainFile() throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("atoll-jobs-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        FileManager.default.createFile(
+            atPath: root.appendingPathComponent("1b6e885d").path, contents: Data())
+        XCTAssertFalse(FleetLaunch.hasJobDirectory(
+            for: "1b6e885d-60ff-4bfa-bd56-353e6f4ba7c8", jobsRoot: root))
+    }
+
+    /// Un identifiant qui n'est pas un préfixe de job valide ne peut rien
+    /// arrêter : pas de bouton.
+    func testHasJobDirectoryRejectsInvalidIdentifier() {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+        XCTAssertFalse(FleetLaunch.hasJobDirectory(for: "synthetic-42", jobsRoot: root))
+    }
 }

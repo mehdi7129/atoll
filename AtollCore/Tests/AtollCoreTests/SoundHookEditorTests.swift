@@ -101,9 +101,23 @@ final class SoundHookEditorTests: XCTestCase {
         XCTAssertThrowsError(try SoundHookEditor.park(in: #"{"hooks": "oups"}"#.data(using: .utf8)!))
     }
 
-    func testParkOnEmptySettingsIsNoOp() throws {
+    /// Fichier ABSENT : rien à parquer, et surtout aucune erreur (machine neuve).
+    func testParkOnMissingSettingsIsNoOp() throws {
         XCTAssertNil(try SoundHookEditor.park(in: nil))
-        XCTAssertNil(try SoundHookEditor.park(in: Data()))
+    }
+
+    /// Fichier PRÉSENT mais vide : ce test affirmait un no-op, et c'était le
+    /// défaut lui-même. Un `settings.json` de 0 octet n'est pas une
+    /// configuration vide, c'est une troncature attrapée en vol — trois
+    /// écrivains se partagent ce fichier. Le traiter comme « rien à faire »
+    /// laissait le chemin d'écriture reposer un fichier ne contenant que nos
+    /// entrées, et la configuration de l'utilisateur disparaissait en silence.
+    /// On refuse désormais, comme pour tout JSON illisible.
+    func testParkOnBlankSettingsIsRefused() {
+        XCTAssertThrowsError(try SoundHookEditor.park(in: Data())) {
+            XCTAssertEqual($0 as? SoundHookEditor.EditorError, .unparseableSettings)
+        }
+        XCTAssertThrowsError(try SoundHookEditor.park(in: Data("  \n ".utf8)))
     }
 
     // MARK: - Restitution (le critère qui compte)

@@ -52,6 +52,13 @@ public enum BridgePaths {
         homeDirectory.appendingPathComponent(".claude/settings.json.atoll-backup")
     }
 
+    /// Racine des jobs du daemon Claude Code (un dossier par job, nommé par un
+    /// préfixe de 8 hex). Lue en SEULE LECTURE : format interne et instable,
+    /// même régime que les transcripts (règle n° 3).
+    public static var claudeJobsURL: URL {
+        homeDirectory.appendingPathComponent(".claude/jobs")
+    }
+
     // MARK: - Mémoire (Phase 7a)
 
     /// Index mémoire FTS5. Écrivain unique : l'app ; `atoll-bridge recall` ouvre

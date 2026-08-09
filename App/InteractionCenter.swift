@@ -230,6 +230,33 @@ final class InteractionCenter {
         }
     }
 
+    /// Annulation par un événement d'OUTIL (`PostToolUse`, `PostToolUseFailure`).
+    ///
+    /// Ces hooks-là ne prouvent PAS que la demande en attente a été tranchée :
+    /// les hooks d'outils d'un sous-agent portent le `session_id` du parent, si
+    /// bien qu'un `Task` en parallèle refermait la carte du parent — l'îlot
+    /// perdait la demande et rendait la main au terminal pendant que le helper
+    /// attendait encore. On n'annule donc que la carte portant le MÊME outil, et
+    /// **l'ambiguïté ne referme rien** : sans nom d'outil exploitable de part et
+    /// d'autre, on laisse la carte vivre (elle reste annulable par `Stop`,
+    /// `SessionEnd`, `PermissionDenied` ou un nouveau prompt, qui eux prouvent
+    /// que la session a avancé).
+    ///
+    /// `PermissionRequest` ne porte pas de `tool_use_id` (vérifié sur le binaire
+    /// 2.1.223, il n'a que `tool_name`/`tool_input`/`permission_suggestions`) :
+    /// le nom d'outil est le discriminant le plus fin dont on dispose.
+    func cancelForSession(_ sessionID: String, tool: String?) {
+        guard let tool, !tool.isEmpty else { return }
+        let toCancel = pending.filter { $0.sessionID == sessionID && $0.toolName == tool }
+        guard !toCancel.isEmpty else { return }
+        let ids = Set(toCancel.map(\.id))
+        pending.removeAll { ids.contains($0.id) }
+        for request in toCancel {
+            server?.cancelPending(request.id)
+            log.info("carte annulée (outil résolu ailleurs): \(request.id, privacy: .public)")
+        }
+    }
+
     private func resolve(_ id: String, _ build: (Pending) -> Data?) {
         guard let index = pending.firstIndex(where: { $0.id == id }) else { return }
         let request = pending.remove(at: index)

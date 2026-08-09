@@ -394,8 +394,14 @@ public enum SoundHookEditor {
         return hooks
     }
 
+    /// Même règle que `HookSettingsEditor.parse` : `nil` = fichier absent
+    /// (création délibérée), présent-mais-vide = fichier CORROMPU, on refuse.
+    /// Ce chemin-ci est le plus dangereux des deux : la reprise des hooks
+    /// sonores RETIRE des entrées de l'utilisateur. Sur un fichier de 0 octet
+    /// on ne retirerait rien, mais on réécrirait par-dessus sa configuration.
     private static func parse(_ data: Data?) throws -> [String: Any] {
-        guard let data, !data.isEmpty else { return [:] }
+        guard let data else { return [:] }
+        guard !HookSettingsEditor.isBlank(data) else { throw EditorError.unparseableSettings }
         guard let object = try? JSONSerialization.jsonObject(with: data),
               let dict = object as? [String: Any] else {
             throw EditorError.unparseableSettings

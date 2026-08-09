@@ -2,7 +2,27 @@
 
 > Document de continuité pour reprendre le dev après un compactage de conversation.
 > **À lire en premier** avec `CLAUDE.md` (règles) et `PLAN.md` (plan produit).
-> Dernière mise à jour : **2026-08-03**, app **v0.16.0** — quatre lots, cadrés par
+> Dernière mise à jour : **2026-08-09**, app **v0.16.1** — sept défauts corrigés,
+> aucune fonction ajoutée. Deux chemins DESTRUCTEURS fermés : un `settings.json` de
+> zéro octet était confondu avec un fichier absent (l'écriture reposait un fichier ne
+> contenant que nos hooks — 19 hooks GSD, statusLine, `permissions`, `env`, `model`
+> évaporés), et Rockstar SURVIVAIT à la fermeture d'Atoll (règles `deny` de
+> l'utilisateur suspendues indéfiniment, sans îlot pour approuver). Deux fonctions
+> écrites-testées-jamais-appelées branchées : `MemoryRanking.byCoverage` sur le recall
+> proactif (le SEUL canal de mémoire vivant — `atoll-recall` n'a jamais été invoqué),
+> et la distinction « aucune session » / « format inconnu » dans `AgentsSnapshot`
+> (sans elle, un format futur clôturait toute la flotte en 4 à 12 s). Plus : la carte
+> de permission n'est plus effacée par un sous-agent, le bouton ARRÊTER ne s'affiche
+> que si un job existe, « EN ATTENTE DE TOI » ne se dit plus d'un état non confirmé.
+> **La revue adversariale (19 agents, 14 allégués → 1 confirmé) a trouvé une
+> régression DANS ce lot** — corrigée, avec trois tests vérifiés en neutralisant le
+> correctif. Détail : `CLAUDE.md` § v0.16.1.
+> Origine du lot : une question sur agent-orchestrator (9k étoiles). Conclusion —
+> **rien à en reprendre côté produit** (un IDE qui fait travailler des agents, l'axe
+> inverse ; 229 903 lignes de Go sans une seule recherche transversale) ; 5 des 7
+> correctifs portent sur du code à nous.
+>
+> Auparavant **v0.16.0** (2026-08-03) — quatre lots, cadrés par
 > `docs/VISION-2026-08.md` (Atoll SAIT, se SOUVIENT, APPELLE) : (1) la mémoire
 > RÉPOND (recherche élargie quand le strict ne rend rien, tri par couverture,
 > bandeau « RECHERCHE ÉLARGIE ») ; (2) elle cesse d'avaler le bruit (les enveloppes

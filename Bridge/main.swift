@@ -198,6 +198,21 @@ func forwardHookEvent() {
     if !outcome.reached, let eventName {
         SoundPlayer.play(hookEvent: eventName)
     }
+
+    // FILET ROCKSTAR — même discriminant, même esprit que le filet sonore.
+    //
+    // Rockstar suspend les règles `permissions.deny` que l'utilisateur a écrites
+    // lui-même, et TOUS les chemins de restitution supposaient qu'Atoll TOURNE
+    // (sortie du mode, lancement de l'app, désinstallation). Ferme l'app en
+    // Rockstar — ou laisse-la planter — et les règles restent suspendues sur
+    // toute la machine, indéfiniment, sans îlot pour approuver quoi que ce soit :
+    // le pire des deux états. C'est mot pour mot la faute déjà payée avec les
+    // sons en v0.15.1 : prendre quelque chose à l'utilisateur et mourir avec.
+    if outcome.reached {
+        BridgeCLI.noteAppReachable()
+    } else {
+        BridgeCLI.restoreRockstarIfOrphaned()
+    }
 }
 
 @discardableResult
@@ -399,6 +414,14 @@ enum BridgeCLI {
     static func refreshBackup(currentData: Data?) throws {
         let fileManager = FileManager.default
         guard fileManager.fileExists(atPath: settingsURL.path) else { return }
+        // Fichier PRÉSENT mais vide (0 octet, ou uniquement du blanc) : c'est une
+        // troncature, pas une configuration. Sans cette garde, la toute première
+        // installation — celle où AUCUN backup n'existe encore — tombait
+        // directement sur le `copyItem` final et gravait le fichier vide comme
+        // « sauvegarde pré-Atoll », définitivement (le backup n'est jamais
+        // écrasé ensuite). Les gardes plus bas ne couvrent QUE le cas d'un
+        // backup déjà présent.
+        if let currentData, HookSettingsEditor.isBlank(currentData) { return }
         let backupPath = BridgePaths.settingsBackupURL.path
         if fileManager.fileExists(atPath: backupPath) {
             guard !HookSettingsEditor.isInstalled(in: currentData) else { return }
@@ -589,27 +612,121 @@ enum BridgeCLI {
     /// Rockstar terminé : réinsère les règles parquées (union avec celles
     /// ajoutées entre-temps). Le fichier de parking ne disparaît QU'APRÈS
     /// l'écriture réussie de settings.json.
-    static func rockstarRestore() -> Int32 {
+    /// Issue d'une restitution, sans le moindre effet de bord sur les flux : le
+    /// chemin de hook ne peut RIEN écrire (stdout y est le canal de réponse du
+    /// hook, stderr est avalé) ; seule la commande CLI parle.
+    enum RockstarRestoreOutcome {
+        case nothingParked
+        case restored(count: Int)
+        case unreadableParking
+        case failed(Error)
+    }
+
+    /// Cœur SILENCIEUX de la restitution. Appelé par la commande CLI (qui
+    /// imprime) et par le filet de hook (qui se tait).
+    static func performRockstarRestore() -> RockstarRestoreOutcome {
         do {
             guard FileManager.default.fileExists(atPath: BridgePaths.rockstarParkedDenyURL.path) else {
-                print("aucune règle parquée — rien à restaurer")
-                return 0
+                return .nothingParked
             }
             let parkedData = try Data(contentsOf: BridgePaths.rockstarParkedDenyURL)
             guard let parked = RockstarPermissionsEditor.decodeParked(parkedData) else {
                 // Corrompu : on le laisse en place pour diagnostic, on signale.
-                FileHandle.standardError.write(Data("fichier de parking illisible : \(BridgePaths.rockstarParkedDenyURL.path)\n".utf8))
-                return 1
+                return .unreadableParking
             }
             let current = try readSettings()
             let updated = try RockstarPermissionsEditor.restore(into: current, parked: parked.deny)
             try updated.write(to: settingsURL, options: .atomic)
             try FileManager.default.removeItem(at: BridgePaths.rockstarParkedDenyURL)
-            print("règles deny restaurées (\(parked.deny.count))")
-            return 0
+            return .restored(count: parked.deny.count)
         } catch {
+            return .failed(error)
+        }
+    }
+
+    static func rockstarRestore() -> Int32 {
+        switch performRockstarRestore() {
+        case .nothingParked:
+            print("aucune règle parquée — rien à restaurer")
+            return 0
+        case .restored(let count):
+            print("règles deny restaurées (\(count))")
+            return 0
+        case .unreadableParking:
+            FileHandle.standardError.write(Data("fichier de parking illisible : \(BridgePaths.rockstarParkedDenyURL.path)\n".utf8))
+            return 1
+        case .failed(let error):
             FileHandle.standardError.write(Data("échec de la restauration des règles deny : \(error)\n".utf8))
             return 1
+        }
+    }
+
+    /// Délai de grâce avant qu'un parking Rockstar orphelin soit restitué par le
+    /// helper lui-même.
+    ///
+    /// Le helper ne s'exécute qu'à l'occasion d'un hook : le scénario visé est
+    /// donc « tu travailles avec Claude, et Atoll n'est pas là ». Le délai
+    /// arbitre entre deux fautes symétriques :
+    /// - trop court, une simple mise à jour Sparkle (moins d'une minute), un
+    ///   redémarrage ou un plantage suivi d'une relance te sortiraient de
+    ///   Rockstar en plein travail, sans que tu l'aies demandé ;
+    /// - trop long, la machine reste désarmée une nuit entière de travail.
+    /// Deux heures absorbent très largement toute interruption technique, et
+    /// garantissent qu'une journée ne se passe pas sans garde-fou.
+    static let rockstarOrphanGrace: TimeInterval = 2 * 60 * 60
+
+    /// Témoin d'absence de l'app. Le helper est un processus NEUF à chaque hook :
+    /// il n'a aucune mémoire, il lui faut donc un fichier — même dispositif que
+    /// l'anti-rafale du son.
+    static var appAbsentWitnessURL: URL {
+        BridgePaths.runDirectory.appendingPathComponent("app-absent-since")
+    }
+
+    /// L'app a répondu : on efface le témoin. Le compte à rebours ne mesure que
+    /// des absences CONTINUES.
+    static func noteAppReachable() {
+        try? FileManager.default.removeItem(at: appAbsentWitnessURL)
+    }
+
+    /// Restitue les règles `deny` parquées si Atoll est injoignable DEPUIS
+    /// suffisamment longtemps. Silencieux et fail-open : c'est un chemin de
+    /// hook, il ne doit ni écrire sur les flux standard, ni retarder le CLI, ni
+    /// jamais faire échouer quoi que ce soit.
+    ///
+    /// Ce qui est mesuré est l'ABSENCE DE L'APP, pas l'ancienneté du parking.
+    /// Se fier à `parkedAt` était faux : en Rockstar depuis trois jours, un
+    /// hook tombant pendant les quelques secondes d'un redémarrage Sparkle
+    /// aurait vu un parking « vieux de trois jours » et restitué aussitôt — soit
+    /// exactement le faux positif que le délai de grâce doit empêcher.
+    static func restoreRockstarIfOrphaned(now: Date = Date()) {
+        // Rien de parqué : pas de témoin à tenir, pas de décision à prendre.
+        guard FileManager.default.fileExists(atPath: BridgePaths.rockstarParkedDenyURL.path) else {
+            noteAppReachable()
+            return
+        }
+        let witness = appAbsentWitnessURL
+        let since = (try? FileManager.default.attributesOfItem(atPath: witness.path)[.modificationDate]) as? Date
+        guard let since else {
+            // Première absence constatée : on pose le témoin et on ne décide
+            // rien. Le compte à rebours démarre maintenant.
+            try? FileManager.default.createDirectory(at: BridgePaths.runDirectory,
+                                                     withIntermediateDirectories: true)
+            FileManager.default.createFile(atPath: witness.path, contents: Data())
+            try? FileManager.default.setAttributes([.modificationDate: now],
+                                                   ofItemAtPath: witness.path)
+            return
+        }
+        // Témoin dans le FUTUR (horloge reculée) : on le repose à maintenant
+        // plutôt que de conclure sur un âge négatif.
+        guard now >= since else {
+            try? FileManager.default.setAttributes([.modificationDate: now],
+                                                   ofItemAtPath: witness.path)
+            return
+        }
+        guard now.timeIntervalSince(since) >= rockstarOrphanGrace else { return }
+        // Version SILENCIEUSE : ni stdout (canal de réponse du hook) ni stderr.
+        if case .restored = performRockstarRestore() {
+            try? FileManager.default.removeItem(at: witness)
         }
     }
 

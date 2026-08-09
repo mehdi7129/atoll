@@ -79,7 +79,20 @@ enum ProactiveRecallHook {
                                            roles: Self.injectableRoles),
               // Plancher de pertinence : mieux vaut UN souvenir juste que
               // trois dont deux ne partagent qu'un mot avec le prompt.
-              case let significant = MemoryRanking.aboveRelevanceFloor(hits),
+              // Puis tri par COUVERTURE — combien des mots du prompt l'extrait
+              // contient VRAIMENT. En mode `.any`, bm25 classe surtout par
+              // rareté des termes : un extrait qui n'apparie qu'un mot rare
+              // passait devant un extrait qui en apparie quatre. MESURÉ sur les
+              // 739 extraits réellement injectés : 32 % n'appariaient qu'UN
+              // terme, 43 % deux. Le tri ne change PAS l'ensemble retenu (le
+              // plancher a déjà filtré, et il porte sur `rank`, pas sur
+              // l'ordre) : il change lesquels survivent au cap `maxHits`.
+              // `byCoverage` préserve l'ordre d'entrée à couverture égale, donc
+              // le classement pertinence+récence garde le dernier mot.
+              case let significant = MemoryRanking.byCoverage(
+                  MemoryRanking.aboveRelevanceFloor(hits),
+                  terms: MemoryIndex.queryTerms(query)
+              ),
               let context = ProactiveRecall.additionalContext(hits: significant,
                                                               maxHits: config.maxHits,
                                                               now: Date())

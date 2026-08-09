@@ -13,6 +13,13 @@ struct SessionDetailView: View {
     @State private var confirmingStop = false
     @State private var stopMessage: String?
 
+    /// `claude stop` ne peut agir que sur une session gérée par le daemon.
+    /// Un simple `stat` sur un chemin : assez peu coûteux pour un `body`, et le
+    /// détail n'affiche qu'une session à la fois.
+    private var canStop: Bool {
+        FleetLaunch.hasJobDirectory(for: session.id, jobsRoot: BridgePaths.claudeJobsURL)
+    }
+
     private var store: SessionStore { .shared }
 
     var body: some View {
@@ -103,7 +110,10 @@ struct SessionDetailView: View {
                 // Kill-switch par session (`claude stop`). CONFIRMATION obligatoire :
                 // le bouton s'affiche pour toute session vivante, y compris la tienne
                 // — un clic direct arrêterait ta session de travail (footgun).
-                if session.status != .done {
+                // …et SEULEMENT si le daemon a un job à arrêter : sans dossier
+                // dans ~/.claude/jobs, `claude stop` sort en 1 (« No job
+                // matching »). C'est le cas de toute session interactive.
+                if session.status != .done, canStop {
                     AsciiButton(label: "ARRÊTER", color: colors.warn, shortcut: nil) {
                         confirmingStop = true
                     }

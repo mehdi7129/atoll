@@ -49,6 +49,10 @@ pour contribuer.
 - **Niveau d'autonomie** (Réglages) : Manuel ou Rockstar (aucune protection — vos règles
   `deny` sont suspendues puis restaurées, à vos risques et périls). Le niveau « Auto »
   a été retiré : `claude auto-mode` le fait mieux, nativement et par défaut.
+  Depuis la v0.16.1, Rockstar **ne survit plus à Atoll** : si l'app est fermée (ou
+  plante) alors que vos règles sont suspendues, le helper les restitue lui-même au
+  bout de deux heures d'absence — sans quoi la machine restait désarmée
+  indéfiniment, sans îlot pour approuver quoi que ce soit.
 - **Quota exact** 5 h / 7 j du serveur, jauge par modèle en option, reset lisible.
 - **Mémoire longue durée** : tous vos transcripts (tous projets) indexés en local
   (SQLite FTS5, ~/.atoll/memory.db — rien ne quitte la machine). Vos sessions
@@ -106,7 +110,11 @@ pour contribuer.
 - **Retour au terminal** : un clic ouvre la fenêtre de la session (Cursor/VS Code direct,
   Terminal.app / iTerm2 via automatisation).
 - **Arrêter une session** : depuis son détail, un bouton ARRÊTER (avec confirmation)
-  lance `claude stop`. Le LANCEMENT depuis le notch a été retiré en v0.16.0 : il
+  lance `claude stop`. Il n'apparaît que pour les sessions que le daemon gère
+  (celles lancées en arrière-plan) : une session interactive n'a pas de dossier de
+  job, `claude stop` n'a donc aucune prise sur elle — le bouton s'affichait quand
+  même jusqu'à la v0.16.1 et échouait après confirmation.
+  Le LANCEMENT depuis le notch a été retiré en v0.16.0 : il
   partait sans `-w/--worktree`, donc la tâche écrivait dans votre arbre de travail
   pendant que vous éditiez. `claude --bg` depuis le terminal fait le même travail
   sans ce piège.

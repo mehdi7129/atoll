@@ -34,6 +34,29 @@ public enum SessionStateBucket: Int, CaseIterable, Sendable, Comparable {
         }
     }
 
+    /// Seau d'une session, en tenant compte de ce qu'on SAIT réellement d'elle.
+    ///
+    /// « EN ATTENTE DE TOI » est une affirmation forte : elle réclame une action.
+    /// On ne la porte donc que sur un état CONFIRMÉ par un hook. Une session
+    /// seulement découverte par `agents --json` et rapportée `idle` est rangée
+    /// avec celles qui tournent : c'est imprécis, mais ça ne réclame rien —
+    /// alors que la ranger « en attente de toi » te convoquait au nom d'une
+    /// session qui ne demandait rien, en permanence, sur une bonne partie de la
+    /// flotte. C'est le même arbitrage que le retrait du badge « INPUT? » en
+    /// Phase 14, appliqué au regroupement par état.
+    ///
+    /// EFFET DE BORD ASSUMÉ : `working` a une priorité d'ALLOCATION plus haute
+    /// (1 contre 2). Au-delà de quatre sessions, une session réellement en
+    /// attente peut donc être reléguée derrière une session non confirmée. Le
+    /// mensonge permanent coûte plus cher que ce cas de bord — à revoir si le
+    /// panneau se met à mentir dans l'autre sens.
+    public static func bucket(for session: AgentSession) -> SessionStateBucket {
+        if case .awaitingInput = session.status, !session.stateConfirmedByHook {
+            return .working
+        }
+        return bucket(for: session.status)
+    }
+
     public static func < (lhs: SessionStateBucket, rhs: SessionStateBucket) -> Bool {
         lhs.rawValue < rhs.rawValue
     }
@@ -94,11 +117,39 @@ public enum SessionGrouping {
     public static func byState(_ sessions: [AgentSession]) -> [SessionStateGroup] {
         var byBucket: [SessionStateBucket: [AgentSession]] = [:]
         for session in sessions {
-            byBucket[SessionStateBucket.bucket(for: session.status), default: []].append(session)
+            byBucket[SessionStateBucket.bucket(for: session), default: []].append(session)
         }
         return SessionStateBucket.allCases.compactMap { bucket in
             guard let sessions = byBucket[bucket], !sessions.isEmpty else { return nil }
-            return SessionStateGroup(bucket: bucket, sessions: sessions)
+            guard bucket == .working else {
+                return SessionStateGroup(bucket: bucket, sessions: sessions)
+            }
+            // Les sessions NON CONFIRMÉES sont rangées ici faute de mieux (voir
+            // `bucket(for:)`), et elles y arrivent en tête : `SessionStore.rank`
+            // classe `waitingInput` AVANT `busy`. Quand le budget coupe, la
+            // seule session qui travaille vraiment se retrouvait alors derrière
+            // « +N autres » — mesuré : budget 4, trois dormantes non confirmées
+            // et une active donnaient « EN COURS : idleA, idleB, idleC ».
+            //
+            // C'est exactement l'invariant qu'`allocationPriority` protège
+            // (« trois sessions DORMANTES ne doivent pas évincer la seule qui
+            // TRAVAILLE ») — sauf qu'il ne peut plus rien ici : il arbitre ENTRE
+            // les seaux, et la fusion n'en laisse qu'un. On rétablit donc
+            // l'ordre À L'INTÉRIEUR du seau.
+            //
+            // Partition explicite plutôt que `sorted` : le tri de Swift n'est
+            // pas stable, et deux regroupements successifs doivent rendre
+            // exactement le même ordre (sinon l'îlot se réagence tout seul).
+            var actives: [AgentSession] = []
+            var dormantes: [AgentSession] = []
+            for session in sessions {
+                if case .awaitingInput = session.status {
+                    dormantes.append(session)
+                } else {
+                    actives.append(session)
+                }
+            }
+            return SessionStateGroup(bucket: bucket, sessions: actives + dormantes)
         }
     }
 
