@@ -217,23 +217,53 @@ public enum ProactiveRecall {
     /// tokens peuvent contenir `-`, `.` ou `_`, actifs en syntaxe FTS5).
     /// nil quand `shouldRecall` dit non : un seul point de décision.
     public static func query(fromPrompt prompt: String) -> String? {
-        // UN SEUL point de décision (revue) : `shouldRecall` délègue ici, et
-        // les mots-clés ne sont calculés qu'UNE fois — les deux fonctions ne
+        guard case .eligible(let query, _) = decide(prompt: prompt) else { return nil }
+        return query
+    }
+
+    /// Ce que le gate a décidé, ET POURQUOI.
+    ///
+    /// `query` rendait `nil` sans jamais dire lequel des quatre refus s'était
+    /// appliqué. Un journal qui ne compte que les injections rend un chiffre
+    /// ininterprétable : on ne peut pas distinguer « le gate est trop strict »
+    /// de « la base n'a rien ». Cette raison est le seul moyen de trancher — même
+    /// leçon que le journal de la rétrospective, dont les refus nommés
+    /// (`sessionTooShort`, `tooFewUserPrompts`) ont diagnostiqué la Phase 12.
+    public enum Decision: Equatable, Sendable {
+        /// Requête à passer à la recherche, avec le nombre de mots-clés retenus.
+        case eligible(query: String, keywords: Int)
+        case promptTooShort
+        case promptIsCommand
+        case promptIsMachineEnvelope
+        /// Porte le compte réel : « 1 mot-clé » et « 0 mot-clé » n'appellent pas
+        /// le même réglage si l'on décide un jour d'abaisser le seuil.
+        case tooFewKeywords(count: Int)
+    }
+
+    public static func decide(prompt: String) -> Decision {
+        // UN SEUL point de décision (revue) : `shouldRecall` et `query` délèguent
+        // ici, et les mots-clés ne sont calculés qu'UNE fois — les fonctions ne
         // peuvent plus diverger (elles le faisaient sur un prompt rembourré :
         // `shouldRecall` disait oui, `query` rendait nil).
         let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         // `prefix(n).count` évite de parcourir 8 Mo de graphèmes pour
         // vérifier « au moins 12 caractères ».
-        guard trimmed.prefix(minPromptCharacters).count >= minPromptCharacters else { return nil }
-        guard !trimmed.hasPrefix("/"), !trimmed.hasPrefix("!") else { return nil }
+        guard trimmed.prefix(minPromptCharacters).count >= minPromptCharacters else {
+            return .promptTooShort
+        }
+        guard !trimmed.hasPrefix("/"), !trimmed.hasPrefix("!") else { return .promptIsCommand }
         // Le prompt EST une notification de la machine : personne n'a rien
         // demandé, il n'y a donc rien à se rappeler. Sans cette garde, la boucle
         // se referme sur elle-même — mesuré : 15 des 84 injections observées
         // répondaient à une notification par d'autres notifications.
-        guard !machineEnvelopePrefixes.contains(where: trimmed.hasPrefix) else { return nil }
+        guard !machineEnvelopePrefixes.contains(where: trimmed.hasPrefix) else {
+            return .promptIsMachineEnvelope
+        }
         let keywords = keywords(fromPrompt: trimmed)
-        guard keywords.count >= minKeywords else { return nil }
-        return keywords.joined(separator: " ")
+        guard keywords.count >= minKeywords else {
+            return .tooFewKeywords(count: keywords.count)
+        }
+        return .eligible(query: keywords.joined(separator: " "), keywords: keywords.count)
     }
 
     // MARK: - Bloc injecté

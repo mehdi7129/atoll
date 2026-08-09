@@ -46,8 +46,43 @@ enum ProactiveRecallHook {
     /// terminal : le contexte est pour le modèle, pas pour l'écran.
     static func contextJSON(payload: [String: Any]) -> (json: Data, count: Int)? {
         guard let config = loadConfig(), config.enabled else { return nil }
-        guard let prompt = payload["prompt"] as? String,
-              let query = ProactiveRecall.query(fromPrompt: prompt) else { return nil }
+        guard let prompt = payload["prompt"] as? String else { return nil }
+
+        // INSTRUMENTATION. Chaque passage laisse une ligne, injecté OU refusé
+        // avec sa raison : sans les refus, le total des injections ne dit pas si
+        // le silence vient du gate, de la base ou du plancher de pertinence.
+        // Voir `RecallJournal`. Fail-open comme le reste : si le journal ne peut
+        // pas s'écrire, on continue sans lui.
+        let started = Date()
+        let session = (payload["session_id"] as? String).map { String($0.prefix(8)) }
+        let project = (payload["cwd"] as? String)
+            .flatMap { $0.isEmpty ? nil : $0 }
+            .map { URL(fileURLWithPath: Self.projectRoot(of: $0)).lastPathComponent }
+        func journal(_ outcome: RecallJournal.Outcome, keywords: Int? = nil, pool: Int? = nil,
+                     kept: Int? = nil, injected: Int? = nil, coverage: [Int]? = nil,
+                     blockChars: Int? = nil, keys: [String]? = nil) {
+            appendJournal(RecallJournal.Entry(
+                at: started, outcome: outcome, session: session, project: project,
+                keywords: keywords, pool: pool, kept: kept, injected: injected,
+                coverage: coverage, blockChars: blockChars,
+                elapsedMs: Int(Date().timeIntervalSince(started) * 1000), keys: keys))
+        }
+
+        let query: String
+        let keywordCount: Int
+        switch ProactiveRecall.decide(prompt: prompt) {
+        case .eligible(let resolved, let count):
+            query = resolved
+            keywordCount = count
+        case .promptTooShort:
+            journal(.promptTooShort); return nil
+        case .promptIsCommand:
+            journal(.promptIsCommand); return nil
+        case .promptIsMachineEnvelope:
+            journal(.promptIsMachineEnvelope); return nil
+        case .tooFewKeywords(let count):
+            journal(.tooFewKeywords, keywords: count); return nil
+        }
 
         // Portée projet : la RACINE du dépôt qui contient le cwd, pas le cwd
         // brut (revue) — lancer `claude` depuis ~/Desktop faisait matcher tous
@@ -60,7 +95,9 @@ enum ProactiveRecallHook {
                 .map(Self.projectRoot(of:))
             : nil
 
-        guard let index = openIndex() else { return nil }
+        guard let index = openIndex() else {
+            journal(.indexUnavailable, keywords: keywordCount); return nil
+        }
         defer { index.close() }
 
         // `now` fourni → classement pertinence + récence : dans un contexte
@@ -76,27 +113,38 @@ enum ProactiveRecallHook {
                                            // Mots-clés extraits d'une phrase :
                                            // OR obligatoire, le AND ne trouve rien.
                                            mode: .any,
-                                           roles: Self.injectableRoles),
-              // Plancher de pertinence : mieux vaut UN souvenir juste que
-              // trois dont deux ne partagent qu'un mot avec le prompt.
-              // Puis tri par COUVERTURE — combien des mots du prompt l'extrait
-              // contient VRAIMENT. En mode `.any`, bm25 classe surtout par
-              // rareté des termes : un extrait qui n'apparie qu'un mot rare
-              // passait devant un extrait qui en apparie quatre. MESURÉ sur les
-              // 739 extraits réellement injectés : 32 % n'appariaient qu'UN
-              // terme, 43 % deux. Le tri ne change PAS l'ensemble retenu (le
-              // plancher a déjà filtré, et il porte sur `rank`, pas sur
-              // l'ordre) : il change lesquels survivent au cap `maxHits`.
-              // `byCoverage` préserve l'ordre d'entrée à couverture égale, donc
-              // le classement pertinence+récence garde le dernier mot.
-              case let significant = MemoryRanking.byCoverage(
-                  MemoryRanking.aboveRelevanceFloor(hits),
-                  terms: MemoryIndex.queryTerms(query)
-              ),
-              let context = ProactiveRecall.additionalContext(hits: significant,
+                                           roles: Self.injectableRoles)
+        else {
+            journal(.searchFailed, keywords: keywordCount); return nil
+        }
+        guard !hits.isEmpty else {
+            journal(.noHits, keywords: keywordCount, pool: 0); return nil
+        }
+        // Plancher de pertinence : mieux vaut UN souvenir juste que trois dont
+        // deux ne partagent qu'un mot avec le prompt.
+        // Puis tri par COUVERTURE — combien des mots du prompt l'extrait
+        // contient VRAIMENT. En mode `.any`, bm25 classe surtout par rareté des
+        // termes : un extrait qui n'apparie qu'un mot rare passait devant un
+        // extrait qui en apparie quatre. MESURÉ sur les 739 extraits réellement
+        // injectés : 32 % n'appariaient qu'UN terme, 43 % deux. Le tri ne change
+        // PAS l'ensemble retenu (le plancher a déjà filtré, et il porte sur
+        // `rank`, pas sur l'ordre) : il change lesquels survivent au cap
+        // `maxHits`. `byCoverage` préserve l'ordre d'entrée à couverture égale,
+        // donc le classement pertinence+récence garde le dernier mot.
+        let terms = MemoryIndex.queryTerms(query)
+        let significant = MemoryRanking.byCoverage(
+            MemoryRanking.aboveRelevanceFloor(hits), terms: terms)
+        guard !significant.isEmpty else {
+            journal(.noneAboveFloor, keywords: keywordCount, pool: hits.count, kept: 0)
+            return nil
+        }
+        guard let context = ProactiveRecall.additionalContext(hits: significant,
                                                               maxHits: config.maxHits,
                                                               now: Date())
-        else { return nil }
+        else {
+            journal(.emptyBlock, keywords: keywordCount, pool: hits.count, kept: significant.count)
+            return nil
+        }
 
         let object: [String: Any] = [
             "hookSpecificOutput": [
@@ -105,11 +153,80 @@ enum ProactiveRecallHook {
             ],
             "suppressOutput": true,
         ]
-        guard let json = try? JSONSerialization.data(withJSONObject: object) else { return nil }
+        guard let json = try? JSONSerialization.data(withJSONObject: object) else {
+            journal(.emptyBlock, keywords: keywordCount, pool: hits.count, kept: significant.count)
+            return nil
+        }
+        // Ce qui est réellement parti : `additionalContext` écarte les extraits
+        // vides après nettoyage, puis coupe à `maxHits`. Journaliser
+        // `significant` tout entier compterait des extraits jamais injectés.
+        let sent = Array(significant.prefix(config.maxHits))
+        journal(.injected,
+                keywords: keywordCount, pool: hits.count, kept: significant.count,
+                injected: sent.count,
+                coverage: sent.map { MemoryRanking.coverage(of: $0, terms: terms) },
+                blockChars: context.count,
+                keys: sent.map(\.dedupKey))
         // Le NOMBRE d'extraits remonte à l'îlot avec l'événement : c'est la
         // seule façon pour l'utilisateur de savoir que sa session a reçu de la
         // mémoire (le bloc lui-même est masqué du terminal).
         return (json: json, count: min(significant.count, config.maxHits))
+    }
+
+    /// Fichier du journal. Sous `~/.atoll/`, jamais dans le dépôt : c'est une
+    /// mesure locale, elle ne se versionne pas et ne quitte pas la machine.
+    static var journalURL: URL {
+        BridgePaths.homeDirectory.appendingPathComponent(".atoll", isDirectory: true).appendingPathComponent("recall-journal.jsonl")
+    }
+
+    /// Ajoute une ligne au journal. TOTALEMENT silencieux et fail-open : ce code
+    /// tourne dans un hook BLOQUANT, aucune anomalie d'écriture ne doit retarder
+    /// une frappe ni salir stdout (canal de réponse du CLI).
+    ///
+    /// `O_APPEND` : deux hooks concurrents écrivent chacun leur ligne sans se
+    /// chevaucher — le noyau positionne à la fin à chaque `write`, et nos lignes
+    /// font quelques centaines d'octets.
+    static func appendJournal(_ entry: RecallJournal.Entry) {
+        guard let data = try? RecallJournal.encode(entry) else { return }
+        let path = journalURL.path
+        let fileManager = FileManager.default
+        try? fileManager.createDirectory(at: BridgePaths.homeDirectory.appendingPathComponent(".atoll", isDirectory: true), withIntermediateDirectories: true)
+        if !fileManager.fileExists(atPath: path) {
+            fileManager.createFile(atPath: path, contents: nil)
+        }
+        let descriptor = open(path, O_WRONLY | O_APPEND | O_CREAT, 0o644)
+        guard descriptor >= 0 else { return }
+        defer { close(descriptor) }
+        _ = data.withUnsafeBytes { raw -> Int in
+            guard let base = raw.baseAddress else { return 0 }
+            var offset = 0
+            while offset < raw.count {
+                let written = write(descriptor, base.advanced(by: offset), raw.count - offset)
+                if written < 0 {
+                    if errno == EINTR { continue }
+                    break
+                }
+                if written == 0 { break }
+                offset += written
+            }
+            return offset
+        }
+        compactIfNeeded()
+    }
+
+    /// Ne garde que la seconde moitié quand le fichier dépasse le plafond.
+    /// La taille est lue par `stat` (aucune lecture du contenu) : sur un journal
+    /// normal, ce chemin ne fait donc rien du tout.
+    static func compactIfNeeded() {
+        let path = journalURL.path
+        guard let size = (try? FileManager.default.attributesOfItem(atPath: path)[.size]) as? Int,
+              size > RecallJournal.maxBytes,
+              let data = try? Data(contentsOf: journalURL) else { return }
+        // Couper à la première fin de ligne après la moitié : jamais au milieu
+        // d'un objet JSON, sinon la première entrée survivante est illisible.
+        let half = data.count / 2
+        guard let cut = data[half...].firstIndex(of: 0x0A) else { return }
+        try? data[(cut + 1)...].write(to: journalURL, options: .atomic)
     }
 
     /// Racine du dépôt contenant `path` : on remonte jusqu'au premier dossier

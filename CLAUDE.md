@@ -3,7 +3,13 @@
 > 📌 **REPRISE DE DEV : lire `docs/HANDOFF.md` en premier** — état exact, méthode de
 > travail, et TOUS les pièges appris à la dure.
 >
-> **Version publiée : v0.16.1** — sept défauts corrigés, dont **deux chemins
+> **Version publiée : v0.16.2** — la mémoire est mise SOUS INSTRUMENT, pour pouvoir
+> être supprimée si elle ne sert pas. Journal des injections **et des refus**
+> (`atoll-bridge recall-stats`). **RENDEZ-VOUS ≈ 2026-09-09** : Mehdi utilise l'app un
+> mois, puis on tranche sur pièces. Ne rien ajouter d'ici là — les points 1 (voir les
+> flottes d'arrière-plan) et 3 (rapport de retour) attendent cette mesure.
+>
+> Auparavant **v0.16.1** — sept défauts corrigés, dont **deux chemins
 > destructeurs** (un `settings.json` de zéro octet écrasait la config ; Rockstar
 > survivait à la fermeture d'Atoll) et **deux fonctions écrites, testées et jamais
 > appelées** (`MemoryRanking.byCoverage` sur le recall proactif,
@@ -443,6 +449,49 @@ l'utilisateur et mourir avec, c'est l'esprit de la règle n° 1 violé.
   et `FleetLaunch.shellQuote` (bilan, plugins, curation). `TaskCompletion` est
   CONSERVÉ et documenté comme échafaudage : `inputCap` est vivant (`HookEvent`) et
   `plainText` est la brique du rapport de retour prévu au moyen terme.
+
+**v0.16.2 — LA MÉMOIRE EST MISE SOUS INSTRUMENT** (2026-08-09). Décision de Mehdi :
+mesurer un mois, PUIS trancher. Ce qui est instrumenté n'est pas une fonction de plus,
+c'est la possibilité de SUPPRIMER — `atoll-recall` n'a jamais été invoqué en 22 jours
+pendant que le recall proactif injectait ~200 fois, et personne ne peut dire si ces
+injections servent.
+
+- **`~/.atoll/recall-journal.jsonl`** : une ligne par passage du hook, **injecté OU
+  refusé avec sa raison**. Le point capital est le second : un journal qui ne compterait
+  que les injections rendrait un chiffre ININTERPRÉTABLE (« 300 injections » ne dit pas
+  si le silence des autres prompts vient du gate, de la base ou du plancher). C'est
+  exactement ce qui a permis de diagnostiquer la Phase 12 : 39 `sessionTooShort`,
+  10 `tooFewUserPrompts`, 5 runs.
+- **`ProactiveRecall.decide`** remplace le `nil` muet de `query` par une raison
+  (`promptTooShort`, `promptIsCommand`, `promptIsMachineEnvelope`, `tooFewKeywords`).
+  `query` et `shouldRecall` en dérivent — un test verrouille leur cohérence.
+- **`Outcome.searched`** sépare « le gate a dit non » (gratuit, réglable) de « la mémoire
+  n'a rien à dire » (le vrai signal sur la valeur de la base).
+- **Ce qui n'est PAS enregistré** : ni le prompt, ni le contenu des souvenirs — ce serait
+  recopier la base à côté de la base. On garde des métadonnées et les `keys`
+  (`dedupKey` des extraits), seule prise pour remonter au contenu le jour de l'analyse.
+  Zéro télémétrie, fichier local, plafonné à 4 Mio (le journal de télémétrie à 956 Mo
+  d'un projet voisin rappelle ce que coûte un plafond absent).
+- **`atoll-bridge recall-stats [--json]`** rend le rapport. Sans journal, il le DIT au
+  lieu d'afficher des zéros : absence de mesure et mesure nulle ne sont pas la même
+  chose — c'est l'erreur qui a fait juger le cockpit sur un fichier d'état né après lui.
+- **PIÈGE TROUVÉ EN MESURANT POUR DE VRAI, pas en relisant le code** : la médiane de
+  latence portait sur TOUS les passages. Or les refus du gate coûtent 0 ms et sont
+  majoritaires : la médiane tombait à 0 et la ligne de latence **disparaissait du
+  rapport**. Sur un mois, l'information qu'on veut justement lire — est-ce que ça
+  ralentit la frappe ? — se serait tue toute seule. La médiane porte désormais sur les
+  seuls passages ayant interrogé la base.
+- MESURÉ à l'installation : refus du gate **10-12 ms**, injection **73 ms** (dont 62 de
+  recherche), stdout et stderr vides, exit 0. Sur un prompt réel de 4 mots-clés, aucun
+  des 5 extraits injectés n'en appariait plus de 2 — premier point de mesure, à ne pas
+  surinterpréter, mais c'est exactement ce que le mois doit établir.
+
+**CE QU'IL FAUDRA FAIRE DANS UN MOIS** (≈ 2026-09-09) : `atoll-bridge recall-stats`.
+Trois chiffres décident — le taux d'injection, la répartition des couvertures
+(part des extraits n'appariant qu'UN mot du prompt), et la latence médiane. Si la
+mémoire proactive remplit surtout du contexte sans répondre, elle rejoint le cockpit
+et le niveau « Auto ». **Le journal ne dit PAS si un souvenir a servi** : pour
+l'utilité réelle, croiser `keys` avec `memory.db` et la réponse qui a suivi.
 
 **v0.16.1 — SEPT DÉFAUTS, AUCUNE FONCTION AJOUTÉE** (2026-08-09). Nés d'une question de
 Mehdi (« que vaut agent-orchestrator, 9k étoiles ? ») : l'analyse a conclu qu'il n'y a

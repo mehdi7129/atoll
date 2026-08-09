@@ -730,6 +730,53 @@ enum BridgeCLI {
         }
     }
 
+    /// `atoll-bridge recall-stats [--json]` — l'état de la mémoire proactive.
+    ///
+    /// Sans journal : on le DIT, au lieu de rendre des zéros qui se liraient
+    /// comme « la fonction ne sert à rien ». Absence de mesure et mesure nulle
+    /// ne sont pas la même chose — c'est exactement l'erreur qui a fait juger le
+    /// cockpit sur un fichier d'état né après lui.
+    static func recallStats(arguments: [String]) -> Int32 {
+        let url = ProactiveRecallHook.journalURL
+        guard let data = try? Data(contentsOf: url), !data.isEmpty else {
+            print("Aucun journal (\(url.path)).")
+            print("Soit le recall proactif est éteint, soit aucun prompt n'est encore passé")
+            print("depuis l'installation de cette version. Vérifier :")
+            print("  cat ~/.atoll/proactive-recall.json")
+            return 0
+        }
+        let entries = RecallJournal.entries(in: data)
+        guard !entries.isEmpty else {
+            print("Journal présent mais illisible (\(data.count) octets) — aucune entrée décodée.")
+            return 1
+        }
+        let summary = RecallJournal.summarize(entries)
+        if arguments.contains("--json") {
+            var counts: [String: Int] = [:]
+            for (outcome, count) in summary.byOutcome { counts[outcome.rawValue] = count }
+            var histogram: [String: Int] = [:]
+            for (coverage, count) in summary.coverageHistogram { histogram[String(coverage)] = count }
+            let object: [String: Any] = [
+                "total": summary.total,
+                "searched": summary.searched,
+                "byOutcome": counts,
+                "injectedSnippets": summary.injectedSnippets,
+                "coverageHistogram": histogram,
+                "totalBlockChars": summary.totalBlockChars,
+                "medianElapsedMs": summary.medianElapsedMs,
+                "maxElapsedMs": summary.maxElapsedMs,
+                "injectionRate": summary.injectionRate,
+                "thinMatchRate": summary.thinMatchRate,
+            ]
+            if let json = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys, .prettyPrinted]) {
+                print(String(decoding: json, as: UTF8.self))
+            }
+            return 0
+        }
+        print(RecallJournal.report(summary))
+        return 0
+    }
+
     static func status() -> Int32 {
         let settings = try? Data(contentsOf: BridgePaths.claudeSettingsURL)
         let state: [String: Any] = [
@@ -770,6 +817,11 @@ case "rockstar-restore":
 case "recall":
     // Recherche dans l'index mémoire (skill atoll-recall). Fail-open : exit 0.
     exit(RecallCLI.run(arguments: Array(CommandLine.arguments.dropFirst(2))))
+case "recall-stats":
+    // Lit `~/.atoll/recall-journal.jsonl` et rend le résumé. C'est CE verbe qui
+    // permettra, après un mois d'usage, de décider si le recall proactif mérite
+    // d'exister — ou de rejoindre le cockpit et le niveau « Auto ».
+    exit(BridgeCLI.recallStats(arguments: Array(CommandLine.arguments.dropFirst(2))))
 case "statusline":
     // Tee des rate_limits vers l'app (fail-open, ne produit rien sur stdout).
     forwardStatusline()

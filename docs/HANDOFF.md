@@ -2,7 +2,19 @@
 
 > Document de continuité pour reprendre le dev après un compactage de conversation.
 > **À lire en premier** avec `CLAUDE.md` (règles) et `PLAN.md` (plan produit).
-> Dernière mise à jour : **2026-08-09**, app **v0.16.1** — sept défauts corrigés,
+> Dernière mise à jour : **2026-08-09**, app **v0.16.2** — la mémoire est mise SOUS
+> INSTRUMENT. `~/.atoll/recall-journal.jsonl` enregistre chaque passage du hook,
+> **injecté ou refusé avec sa raison**, et `atoll-bridge recall-stats` rend le
+> rapport. But explicite : pouvoir SUPPRIMER le recall proactif s'il ne sert pas
+> (`atoll-recall` n'a jamais été invoqué en 22 jours, le canal automatique injecte
+> ~200 fois, personne ne sait si ça sert).
+> **RENDEZ-VOUS ≈ 2026-09-09** — plan validé par Mehdi : il utilise l'app un mois,
+> puis on lit `recall-stats` et on tranche ; ENSUITE seulement on regarde les deux
+> autres pistes (voir les flottes d'arrière-plan via `~/.claude/jobs/`, et le rapport
+> de retour de VISION §4). **NE RIEN AJOUTER D'ICI LÀ** : toucher au recall pendant
+> la mesure invaliderait le mois.
+>
+> Auparavant **v0.16.1** (2026-08-09) — sept défauts corrigés,
 > aucune fonction ajoutée. Deux chemins DESTRUCTEURS fermés : un `settings.json` de
 > zéro octet était confondu avec un fichier absent (l'écriture reposait un fichier ne
 > contenant que nos hooks — 19 hooks GSD, statusLine, `permissions`, `env`, `model`
