@@ -67,6 +67,13 @@ pour contribuer.
   DONNÉES — jamais des instructions, et jamais des sorties d'outils). Recherche
   100 % locale en quelques millisecondes ; fail-open : à la moindre anicroche,
   rien n'est injecté et le CLI continue.
+  Depuis la v0.16.2, chaque passage laisse une ligne dans
+  `~/.atoll/recall-journal.jsonl` — injecté, ou refusé avec sa raison —
+  consultable par `atoll-bridge recall-stats`. Ce journal ne contient **ni vos
+  prompts ni le contenu des souvenirs** (des métadonnées et des identifiants),
+  il est plafonné, il reste sur votre machine et n'est envoyé nulle part : il
+  existe pour qu'une fonction qui ne sert pas puisse être **supprimée** sur
+  preuve plutôt que gardée par habitude.
 - **Ranger les notes (opt-in)** : les notes accumulées par les bilans de session
   finissent par se répéter et se contredire. Une analyse en LECTURE SEULE (sans
   aucun outil) les relit toutes et propose une version fusionnée ; les
