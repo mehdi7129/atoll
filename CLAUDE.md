@@ -58,6 +58,15 @@ Pièges de build appris à la dure :
 - Debug : `/usr/bin/log stream --predicate 'subsystem == "dev.mehdiguiard.atoll"' --level debug`
   (les niveaux info/debug ne sont pas persistés — `log show` ne les voit pas) ; état des
   sessions dans `~/Library/Application Support/Atoll/state.json`.
+- **`screencapture` EXIGE la permission « Enregistrement de l'écran »** pour le processus
+  qui l'appelle (le terminal, ou Claude Code). Sans elle, TOUTES les formes échouent —
+  plein écran, `-R` (région) et `-l` (fenêtre) — avec des messages qui ne nomment jamais
+  la cause : « could not create image from display / from rect / from window ». Vécu le
+  2026-08-10 en voulant produire une capture pour le README : c'est une permission TCC,
+  aucun contournement en ligne de commande. À accorder dans Réglages Système ›
+  Confidentialité et sécurité › Enregistrement de l'écran. **Toute la procédure de
+  vérification visuelle ci-dessous en dépend** : si les captures échouent en série,
+  chercher là AVANT de soupçonner l'app.
 - **Vérification VISUELLE obligatoire** après tout changement d'UI :
   `notifyutil -p dev.mehdiguiard.atoll.debug.expand` étend + épingle l'îlot,
   `…debug.compact` le replie ; puis `screencapture -x f.png`, rogner la bande
@@ -82,6 +91,31 @@ Pièges de build appris à la dure :
   **Source de vérité technique** : formats JSON exacts, APIs vérifiées, pièges connus.
   Les consulter avant d'implémenter une intégration.
 - `PLAN.md` — plan produit/technique et roadmap par phases (état d'avancement inclus).
+
+**RÈGLE ÉDITORIALE DU README** (refonte du 2026-08-10, demandée par Mehdi : « il y a
+beaucoup trop d'informations et on s'y perd »). Le README est la vitrine, pas le journal
+de bord — il s'adresse à quelqu'un qui ne connaît PAS le projet et se demande à quoi il
+sert. Il avait dérivé : 219 lignes, un tableau de 20 « phases » de développement au
+3e écran, 18 fonctionnalités énumérées avec leur historique (« retiré en v0.16.0 »,
+« le bouton s'affichait quand même jusqu'à la v0.16.1 ») — du changelog déguisé en
+documentation — et un numéro de version faux depuis trois releases.
+- **Ce qui y entre** : le problème que l'app résout, ce qu'on voit, ce qu'on fait, ce
+  qu'elle ne fait PAS (c'est un argument, pas une lacune), comment l'installer.
+- **Ce qui n'y entre pas** : les phases, l'historique des versions, ce qui a été retiré,
+  les chiffres internes qui ne prouvent rien au lecteur (« 1 155 doublons sur 28 000 »).
+  Tout ça vit ICI et dans `docs/HANDOFF.md`.
+- **Structure** : les trois verbes de la vision (savoir / se souvenir / appeler), le
+  secondaire replié dans des `<details>`. Partie visible ≈ 130 lignes.
+- **Les blocs ASCII valent capture** — l'app EST en ASCII. Mais ils doivent être FIDÈLES :
+  vérifier les libellés dans `AsciiArt` (`[ WORKING ]`, `[ APPROVE? ]`, `[ DONE ]`, et
+  **rien** pour `awaitingInput` depuis la Phase 14) et `InteractionCardView`
+  (`DENY ⌘N` / `ALLOW ⌘Y`). Un README qui montre une UI inexistante est pire qu'un
+  README ennuyeux.
+- **Ne jamais référencer une image absente** : `![…](assets/ilot.png)` sur un fichier
+  qui n'existe pas affiche une image cassée sur la page d'accueil du dépôt. Il n'y a
+  AUCUNE capture dans le dépôt à ce jour — en ajouter une demande la permission
+  « Enregistrement de l'écran » (voir plus haut), et de vérifier qu'aucun nom de projet
+  client n'y figure : le dépôt est PUBLIC.
 
 ## Règles critiques
 
