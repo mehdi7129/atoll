@@ -59,18 +59,88 @@
 Atoll est une « Dynamic Island » ASCII pour Claude Code sur macOS (Swift/SwiftUI,
 GPL-3.0, repo PUBLIC `github.com/mehdi7129/atoll`).
 
-### État EXACT au 2026-08-03 (fin de session)
+### État EXACT au 2026-08-10 (fin de session)
 
 | Quoi | Où |
 |---|---|
-| Version | **v0.16.0** — la mémoire répond, et Atoll rend ce qui n'est pas à lui (PUBLIÉE : release GitHub, DMG et zip notarisés+agrafés, appcast poussé et ses URL vérifiées 200) |
-| Git | `main` poussé, **arbre propre** — vérifier d'un coup : `git log --oneline -3 && git status --porcelain` (un hash écrit ici serait périmé dès le commit suivant) |
-| Tests | **644 verts** (`cd AtollCore && swift test`, ~1 s), build **0 warning** |
+| Version | **v0.16.2** — la mémoire sous instrument (PUBLIÉE : release GitHub, DMG et zip notarisés+agrafés, appcast poussé et ses **12 URL vérifiées 200**, GitHub Pages basculé) |
+| Git | `main` poussé, **arbre propre**, et **une seule branche** (`main`) : les deux branches de travail ont été supprimées après fusion. Vérifier d'un coup : `git log --oneline -3 && git status --porcelain` (un hash écrit ici serait périmé dès le commit suivant) |
+| Tests | **686 verts** (`cd AtollCore && swift test`, ~1 s), build **0 warning** |
 | Phases | **1 à 14 livrées**, la **9 RETIRÉE** le 2026-08-03. Feuille de route « Atoll 2 » ÉPUISÉE ; le cadre en vigueur est `docs/VISION-2026-08.md`, décliné en `docs/PLAN-2026-08-court-terme.md` |
-| Build installé | `~/Applications/Atoll.app` = **Release NOTARISÉE v0.16.0**, lancée et vérifiée (`spctl : accepted — Notarized Developer ID`, staple validé). Il n'y a **plus de build Debug installé** : l'`Atoll-dev.app` v0.15.1 a été mis à la corbeille en fin de session, il portait le MÊME bundle id et prêtait à confusion. Pour reprendre la boucle de dev, réinstaller le Debug en `~/Applications/Atoll-dev.app` — jamais `ditto` par-dessus la Release, `ditto` FUSIONNE et un `Atoll.debug.dylib` résiduel casse le sceau. Quitter l'une avant de lancer l'autre |
+| Build installé | `~/Applications/Atoll.app` = **Release NOTARISÉE v0.16.2** (bundle 27), installée et vérifiée le 2026-08-10 : `spctl : accepted — Notarized Developer ID`, staple validé, helper signé, app relancée. **C'est ce qui rend la mesure d'un mois possible** : la 0.16.0 qui traînait jusque-là n'avait pas l'instrumentation. L'ancien bundle est conservé sous `~/Applications/Atoll-0.16.0-remplacee-*.app`. Pas de build Debug installé — pour reprendre la boucle de dev, l'installer en `~/Applications/Atoll-dev.app`, jamais `ditto` par-dessus la Release (`ditto` FUSIONNE, un `Atoll.debug.dylib` résiduel casse le sceau) |
+| Mesure en cours | `~/.atoll/recall-journal.jsonl` — **vierge au 2026-08-10 15:0x**, remis à zéro après les tests d'installation. Ne pas l'effacer, ne pas toucher au recall d'ici le rendez-vous |
 
-**Rien n'est en cours, rien n'est à moitié fait.** Une reprise commence par choisir
-un chantier au §1.
+**Rien n'est en cours, rien n'est à moitié fait** — sauf UNE chose qui court toute
+seule : la mesure de la mémoire (voir juste dessous).
+
+### ⏳ LE SEUL RENDEZ-VOUS EN COURS — vers le 2026-09-09
+
+Plan arrêté avec Mehdi le 2026-08-10 : **il utilise l'app un mois, puis on tranche sur
+pièces.** Une seule commande le jour dit :
+
+```sh
+atoll-bridge recall-stats          # ou --json
+```
+
+Trois chiffres décident du sort du recall proactif : le **taux d'injection**, la
+**répartition des couvertures** (part des extraits n'appariant qu'UN mot du prompt) et
+la **latence médiane** des passages ayant cherché. Si la mémoire proactive remplit
+surtout du contexte sans répondre, elle rejoint le cockpit et le niveau « Auto ».
+
+**NE RIEN AJOUTER D'ICI LÀ**, et surtout ne pas toucher au recall ni au plancher de
+pertinence : toute modification pendant la fenêtre invalide le mois. Les deux autres
+pistes discutées attendent ce chiffre — (1) voir les flottes d'arrière-plan via
+`~/.claude/jobs/<8hex>/state.json`, (2) le rapport de retour de `VISION §4`.
+
+Le journal ne dit PAS si un souvenir a SERVI : pour l'utilité réelle, croiser le champ
+`keys` avec `memory.db` et la réponse qui a suivi dans le transcript.
+
+### v0.16.1 / v0.16.2 — ce que la session des 9-10 août apprend
+
+Sept défauts corrigés puis la mémoire instrumentée. Les faits sont dans `CLAUDE.md` ;
+voici ce qui se réutilise.
+
+- **ANALYSER UN CONCURRENT SERT SURTOUT À RELIRE LE SIEN.** Point de départ : « que vaut
+  agent-orchestrator, 9k étoiles ? ». Conclusion après 15 agents : **rien à en reprendre
+  côté produit** (un IDE qui fait travailler des agents, l'axe inverse ; 229 903 lignes
+  de Go sans une seule recherche transversale ; télémétrie par défaut ; loopback non
+  authentifié écrit comme une règle à préserver). Mais **5 des 7 correctifs portent sur
+  du code à nous**, trouvés parce qu'on revenait au nôtre avec un œil neuf. Le seul
+  emprunt réel tient en une phrase de raisonnement.
+- **VÉRIFIER QU'UNE FONCTION PUBLIQUE BIEN TESTÉE A DES APPELANTS HORS TESTS.** Le motif
+  s'est répété DEUX fois dans le même lot : `MemoryRanking.byCoverage` (écrite, testée,
+  documentée, jamais appelée par le canal de mémoire vivant) et la distinction
+  « aucune session » / « format inconnu ». `grep <symbole>` en excluant `/Tests/` est un
+  contrôle de dix secondes qui a rapporté deux des trois meilleurs correctifs.
+- **UNE REVUE ADVERSARIALE TROUVE LES RÉGRESSIONS DE SES PROPRES CORRECTIFS.** 19 agents,
+  14 allégués, **1 confirmé** — et le confirmé était une régression que le lot venait
+  d'introduire (la fusion des seaux évinçait la seule session active hors du panneau,
+  cassant par l'intérieur l'invariant qu'`allocationPriority` protégeait). Le réfutateur
+  ne l'a pas raisonnée : il a EXÉCUTÉ le vrai `SessionGrouping` et mesuré.
+- **UN TEST DE RÉGRESSION DOIT ÊTRE VÉRIFIÉ EN NEUTRALISANT LE CORRECTIF.** Les trois
+  tests ajoutés ont été confirmés par 4 échecs sans lui. Un test qui n'a jamais échoué
+  ne prouve rien.
+- **MESURER POUR DE VRAI RÉVÈLE CE QUE LA RELECTURE NE VOIT PAS.** En faisant tourner le
+  helper : la médiane de latence portait sur TOUS les passages, or les refus du gate
+  coûtent 0 ms et sont majoritaires — la médiane tombait à 0 et la ligne de latence
+  **disparaissait du rapport**. Sur un mois, l'information qu'on veut lire se serait tue
+  toute seule. Défaut invisible en relisant le code, évident en l'exécutant.
+- **PIÈGE SPARKLE, VÉCU DEUX FOIS DE SUITE** : `generate_appcast --download-url-prefix`
+  réécrit l'URL de TOUTES les entrées vers le tag courant. En v0.16.2, l'appcast
+  référençait donc `v0.16.2/Atoll-0.16.1.zip` — il a fallu **réhéberger le ZIP de la
+  version précédente dans la nouvelle release**, sinon 404 pour tous ceux qui viennent
+  de 0.15.x. Vérifier systématiquement les URL après publication (script d'une boucle
+  `curl -sI`, toutes doivent rendre 200).
+- **`Scripts/release.sh` A UN SHEBANG `#!/bin/zsh`** et utilise un qualificateur de glob
+  zsh (`*.delta(N)`). Lancé avec `bash`, il plante ligne 106 — APRÈS les deux
+  notarisations, donc sans dégât mais après 8 minutes. `zsh Scripts/release.sh`.
+- **UN WORKTREE NEUF N'A PAS `dist/updates/`** : `generate_appcast` n'y trouve aucune
+  archive antérieure et produit un appcast sans historique ni delta. Copier les `.zip`
+  du dépôt principal avant, sinon les utilisateurs téléchargent l'app entière.
+- **LE README DÉRIVE EN CHANGELOG.** Refondu le 2026-08-10 (219 → 131 lignes visibles) :
+  il avait accumulé un tableau de 20 « phases », l'historique de ce qui avait été retiré,
+  et un numéro de version faux depuis trois releases. Règle éditoriale désormais dans
+  `CLAUDE.md` — s'y tenir, la dérive est graduelle et invisible.
 
 ### v0.16.0 — quatre lots, et ce qu'ils apprennent
 
