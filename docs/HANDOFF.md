@@ -2,7 +2,16 @@
 
 > Document de continuité pour reprendre le dev après un compactage de conversation.
 > **À lire en premier** avec `CLAUDE.md` (règles) et `PLAN.md` (plan produit).
-> Dernière mise à jour : **2026-08-09**, app **v0.16.2** — la mémoire est mise SOUS
+> Dernière mise à jour : **2026-08-11**. Session de VEILLE, aucune ligne de code
+> touchée (gel en vigueur, voir le rendez-vous ci-dessous). Trois choses à savoir en
+> reprenant : (1) **Spotify a publié Xirp le 10 août** — app macOS qui gère des
+> sessions Claude Code en worktrees isolés ; **Mehdi l'a installée et elle lui
+> plaît** ; (2) la mesure de la mémoire donne déjà un signal net — **86 % des
+> extraits injectés n'apparient qu'un ou deux mots** du prompt, pour **110 ms**
+> ajoutés à chaque frappe ; (3) le dépôt est propre : une seule branche, aucun
+> worktree, tags sans écart. Détail en §0.bis.
+>
+> Auparavant, app **v0.16.2** — la mémoire est mise SOUS
 > INSTRUMENT. `~/.atoll/recall-journal.jsonl` enregistre chaque passage du hook,
 > **injecté ou refusé avec sa raison**, et `atoll-bridge recall-stats` rend le
 > rapport. But explicite : pouvoir SUPPRIMER le recall proactif s'il ne sert pas
@@ -59,7 +68,7 @@
 Atoll est une « Dynamic Island » ASCII pour Claude Code sur macOS (Swift/SwiftUI,
 GPL-3.0, repo PUBLIC `github.com/mehdi7129/atoll`).
 
-### État EXACT au 2026-08-10 (fin de session)
+### État EXACT au 2026-08-11 (fin de session)
 
 | Quoi | Où |
 |---|---|
@@ -68,10 +77,102 @@ GPL-3.0, repo PUBLIC `github.com/mehdi7129/atoll`).
 | Tests | **686 verts** (`cd AtollCore && swift test`, ~1 s), build **0 warning** |
 | Phases | **1 à 14 livrées**, la **9 RETIRÉE** le 2026-08-03. Feuille de route « Atoll 2 » ÉPUISÉE ; le cadre en vigueur est `docs/VISION-2026-08.md`, décliné en `docs/PLAN-2026-08-court-terme.md` |
 | Build installé | `~/Applications/Atoll.app` = **Release NOTARISÉE v0.16.2** (bundle 27), installée et vérifiée le 2026-08-10 : `spctl : accepted — Notarized Developer ID`, staple validé, helper signé, app relancée. **C'est ce qui rend la mesure d'un mois possible** : la 0.16.0 qui traînait jusque-là n'avait pas l'instrumentation. L'ancien bundle est conservé sous `~/Applications/Atoll-0.16.0-remplacee-*.app`. Pas de build Debug installé — pour reprendre la boucle de dev, l'installer en `~/Applications/Atoll-dev.app`, jamais `ditto` par-dessus la Release (`ditto` FUSIONNE, un `Atoll.debug.dylib` résiduel casse le sceau) |
-| Mesure en cours | `~/.atoll/recall-journal.jsonl` — **vierge au 2026-08-10 15:0x**, remis à zéro après les tests d'installation. Ne pas l'effacer, ne pas toucher au recall d'ici le rendez-vous |
+| Mesure en cours | `~/.atoll/recall-journal.jsonl` — parti **vierge le 2026-08-10**, **42 passages au 2026-08-11**. Ne pas l'effacer, ne pas toucher au recall d'ici le rendez-vous |
 
 **Rien n'est en cours, rien n'est à moitié fait** — sauf UNE chose qui court toute
 seule : la mesure de la mémoire (voir juste dessous).
+
+### 0.bis — CE QUE LA SESSION DU 2026-08-11 A APPRIS (veille, zéro code)
+
+**PREMIERS CHIFFRES DE LA MESURE, après ~1 jour (42 passages)** — ils ne concluent pas,
+mais ils orientent :
+
+| Mesure | Valeur |
+|---|---|
+| Injections | 29 / 42 passages (69 %) |
+| Refus « enveloppe machine » | 11 (26 %) — le filtre de la v0.16.0 travaille |
+| Extraits n'appariant que **1 ou 2 mots** | **86 %** (41 % + 45 %) |
+| Extraits appariant 3 mots ou plus | 14 % |
+| Latence ajoutée à la frappe | **110 ms** médiane, **349 ms** au pire |
+
+Lecture : la mémoire **remplit du contexte plus qu'elle ne répond**, et ça se paie sur un
+hook BLOQUANT. Cohérent avec le fait mesuré la veille : **79,5 % du texte indexé est du
+`tool`/`tool_result`** (contre 3,2 % de messages `user`). Le journal mesure donc un canal
+alimenté majoritairement de bruit — il conclura probablement « supprimer », et ce serait
+juste sur une preuve faussée. D'où la piste à préparer (sans la livrer) : comparer avec le
+corpus `~/.claude/projects/*/memory/*.md` qu'Anthropic écrit **gratuitement** — mesuré :
+**123 fichiers, 349 774 caractères**, contre **11 notes / 10 503 caractères** produites par
+la rétrospective d'Atoll en 24 jours. Rapport de 33 pour 1, et Anthropic ne les lit JAMAIS
+transversalement (il n'injecte que le `MEMORY.md` du dépôt courant).
+
+**SPOTIFY A PUBLIÉ XIRP LE 2026-08-10** — app macOS (bêta publique) qui gère des sessions
+Claude Code / Codex / Gemini, **une par worktree git**, jusqu'à 50 en parallèle. 1 300
+ingénieurs Spotify, 36 000 sessions internes. **Installée sur la machine de Mehdi
+(`/Applications/Xirp.app`) et il l'apprécie.** Leur diagnostic, mot pour mot : *« That's not
+a documentation problem. It's a retrieval problem. »* — soit exactement la conclusion à
+laquelle cette session est arrivée sur la mémoire d'Atoll, par un chemin indépendant.
+- Ce qui les sépare d'Atoll : Xirp exige un **compte**, c'est une **app à ouvrir**, il vise
+  l'**organisation** (Backstage/Portal, ownership des services) et il **fait travailler**
+  les agents. Atoll : zéro compte, ambiant, une machine, et il ne fait pas travailler.
+  **Portal n'est PAS obligatoire** — Xirp gère aussi des sessions purement locales, donc le
+  recouvrement est plus large que leur discours ne le dit.
+- **À VÉRIFIER EN DEUX MINUTES quand une session Xirp tourne** : est-ce qu'Atoll la voit ?
+  Les hooks vivent dans `~/.claude/settings.json` (donc toute session de la machine) et
+  `agents --json` liste tout le daemon. La compatibilité est probablement DÉJÀ acquise,
+  gratuitement. Si elle n'apparaît pas, c'est que Xirp isole sa config
+  (`--setting-sources ""`) — c'est le seul point technique inconnu.
+
+**ARBITRAGE RENDU — « Xirp + Rockstar pour être autonome » : NON.** Mehdi l'a proposé le
+2026-08-11. Le raisonnement à conserver, parce que l'idée reviendra :
+- **Rockstar ne décide rien.** Ce n'est pas une intelligence qui arbitre, c'est un
+  interrupteur qui RETIRE des protections. Les six règles suspendues, relevées ce jour dans
+  `~/.atoll/rockstar-parked-deny.json` : `Bash(rm -rf *)`, `Bash(sudo *)`,
+  `Bash(curl * | bash)`, `Bash(wget * | bash)`, `Read(./.env)`, `Read(./.env.*)`.
+- **Le worktree isole le DÉPÔT, pas le SYSTÈME.** Aucune de ces six règles ne parle du
+  dépôt : elles parlent de la machine, des secrets et du réseau. Cinquante agents en
+  worktrees isolés restent cinquante agents capables de lire `~/.aws` ou d'exécuter du code
+  téléchargé.
+- Rockstar a été conçu pour des sessions **surveillées** — c'est la raison pour laquelle
+  l'îlot reste visible en permanence tant qu'il est actif (décision écrite dans CLAUDE.md).
+  L'associer à de l'orchestration non surveillée en retourne le sens.
+- **Limite architecturale à connaître** : le parking est GLOBAL, pas par session. On ne peut
+  pas aujourd'hui dire « Rockstar pour mes sessions interactives, protections maintenues
+  pour les agents Xirp ». C'est la bonne granularité, et c'est la seule évolution
+  défendable de Rockstar — à poser APRÈS le 9 septembre.
+
+**VEILLE — le fil de @Zoeillle (11 août, 4 138 vues) : « Vous utilisez quel RAG et quel
+système de mémoire sur vos agents ? »** 10 réponses, analysées par 13 agents. Son outil
+s'appelle **Écurie** (v4.0, code NON public : « reste de l'IP de ma boîte ») ; « Madeleine »
+n'est pas l'outil mais **un agent nommé** parmi trois (Madeleine, Louisa, Navii).
+**RIEN N'EST À REPRENDRE**, et chaque refus est mesuré — ne pas rouvrir sans élément neuf :
+- **LEANN** : 438 Mo de modèle et ~2 s, contre 19 ms aujourd'hui. Troc à l'envers.
+- **mem0** : leur propre papier donne 66,88 % contre 72,90 % pour le contexte complet ; et
+  son prompt ordonne au modèle de SUPPRIMER un souvenir contredit, quand `NotesCuration`
+  remonte les contradictions sans jamais trancher.
+- **Qdrant / pgvector / sqlite-vec** : un scan cosinus brute force en Swift sur 40 504
+  vecteurs prend **25 ms** ici — le problème qu'ils résolvent n'existe pas à cette échelle.
+- **Embeddings Gemini** : enverrait ~15,7 Mo de transcripts de tous les projets à Google,
+  plus un appel réseau dans un hook bloquant.
+- **`NLContextualEmbedding`** (seule voie native admissible) : **mesuré mauvais sur ce
+  corpus** — « notarisation Sparkle appcast » ressort plus proche de « drone Houdini
+  trajectoire » (0,9116) que de « codesign xattr resource fork » (0,9059).
+- **Porter `atoll-recall` en MCP** : le rendrait MOINS visible (un outil MCP ne charge que
+  son nom, un skill charge sa description entière).
+- **OpenTelemetry** : mesuré 7,24 s → 11,16 s vers un collecteur qui ne répond pas, et
+  l'exportateur Prometheus se lie sur `*:9464` sans authentification.
+
+**DEUX PIÈGES DE MÉTHODE VÉCUS CE JOUR :**
+- **TCC peut couper l'accès au Bureau EN COURS DE SESSION.** Signature exacte :
+  `Operation not permitted` sur `~/Desktop`, `~/Documents` ET `~/Downloads` — les trois
+  dossiers protégés — pendant que `~/.atoll` et `~/Applications` répondent normalement.
+  L'app à ré-autoriser est **ClaudeCode.app**
+  (`~/.local/share/claude/ClaudeCode.app`), dans Réglages Système › Confidentialité et
+  sécurité › Fichiers et dossiers (ou Accès complet au disque). Aucun contournement
+  possible en ligne de commande — et il ne faut pas en chercher.
+- **Un répertoire courant devenu invalide bloque TOUT Bash**, y compris les commandes qui
+  le corrigeraient (`cd`, `pwd`) : le garde-fou évalue le cwd AVANT d'exécuter. Sortie :
+  `ExitWorktree`, qui repositionne la session. Cause ici : un `cd` vers le dossier du job
+  pour compiler un utilitaire, resté actif.
 
 ### ⏳ LE SEUL RENDEZ-VOUS EN COURS — vers le 2026-09-09
 
