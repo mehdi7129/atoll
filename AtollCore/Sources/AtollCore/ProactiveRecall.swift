@@ -133,7 +133,9 @@ public enum ProactiveRecall {
 
     /// Cap du titre de session rendu (ellipsis comprise) : un titre est le
     /// premier prompt d'une session, il peut faire des kilo-octets.
-    private static let titleLimit = 80
+    /// Publique comme `snippetLimit` : les tests du cap ont besoin de composer
+    /// une ligne PLEINE sans recopier le chiffre à la main.
+    public static let titleLimit = 80
     /// Cap du chemin de projet rendu (ellipsis comprise).
     private static let projectLimit = 60
 
@@ -285,6 +287,37 @@ public enum ProactiveRecall {
     /// raboté — on rend toujours AU MOINS un extrait quand `hits` n'est pas
     /// vide, mais jamais un caractère de plus que le cap.
     public static func additionalContext(hits: [MemoryIndex.Hit], maxHits: Int, now: Date) -> String? {
+        injectedBlock(hits: hits, maxHits: maxHits, now: now)?.text
+    }
+
+    /// Le bloc ET les extraits qu'il contient RÉELLEMENT.
+    ///
+    /// POURQUOI CE TYPE EXISTE. Le journal du recall (`RecallJournal`) enregistrait
+    /// `significant.prefix(maxHits)`, en croyant que c'était ce qui partait. Or la
+    /// construction du bloc écarte DEUX fois : les extraits vides après nettoyage,
+    /// puis tous ceux qui ne tiennent pas sous `maxContextCharacters`. Mesuré à
+    /// `maxHits: 5` avec des extraits pleins : le bloc en emporte 4 et le journal
+    /// en comptait 5 — avec 5 couvertures et 5 `keys`, dont une pour un souvenir
+    /// que le modèle n'a jamais vu. Le biais n'était pas neutre : `byCoverage`
+    /// trie par couverture décroissante, donc l'extrait sacrifié est TOUJOURS le
+    /// moins pertinent, ce qui gonflait `thinMatchRate` — le chiffre même qui doit
+    /// décider si la mémoire proactive mérite d'exister.
+    ///
+    /// Rendre les deux ensemble, depuis la MÊME boucle, rend la divergence
+    /// impossible : il n'y a plus de second endroit où recompter.
+    public struct InjectedBlock: Equatable, Sendable {
+        /// Le texte à passer au CLI.
+        public let text: String
+        /// Les extraits effectivement présents dans `text`, dans l'ordre.
+        public let hits: [MemoryIndex.Hit]
+
+        public init(text: String, hits: [MemoryIndex.Hit]) {
+            self.text = text
+            self.hits = hits
+        }
+    }
+
+    public static func injectedBlock(hits: [MemoryIndex.Hit], maxHits: Int, now: Date) -> InjectedBlock? {
         guard maxHits > 0 else { return nil }
         // Un extrait vide après nettoyage (snippet de blancs, de contrôles ou
         // entièrement caviardé) ne dirait rien mais consommerait une place et
@@ -295,21 +328,25 @@ public enum ProactiveRecall {
         guard !candidates.isEmpty else { return nil }
 
         var lines: [String] = []
+        var kept: [MemoryIndex.Hit] = []
         for hit in candidates {
             let line = renderedLine(hit, now: now)
             let candidateBlock = block(lines: lines + [line])
             if candidateBlock.count <= maxContextCharacters {
                 lines.append(line)
+                kept.append(hit)
             } else if lines.isEmpty {
                 // Cas pathologique (chemin ou titre démesurés) : on garde le
-                // premier extrait, raboté pile à la place disponible.
+                // premier extrait, raboté pile à la place disponible. Il EST
+                // dans le bloc — donc il compte.
                 lines.append(truncated(line, limit: max(soloLineBudget, 1)))
+                kept.append(hit)
                 break
             } else {
                 break
             }
         }
-        return block(lines: lines)
+        return InjectedBlock(text: block(lines: lines), hits: kept)
     }
 
     // MARK: - Rendu (privé)

@@ -9,6 +9,21 @@
 > mois, puis on tranche sur pièces. Ne rien ajouter d'ici là — les points 1 (voir les
 > flottes d'arrière-plan) et 3 (rapport de retour) attendent cette mesure.
 >
+> **AUDIT DU 2026-08-12 — trois défauts corrigés, aucune fonction ajoutée**
+> (`docs/AUDIT-2026-08-12.md`, 700 tests verts). Deux étaient des chemins
+> DESTRUCTEURS sur `settings.json` : le correctif « fichier de zéro octet » de la
+> v0.16.1 n'avait couvert que **3 des 5 écrivains** — `RockstarPermissionsEditor`
+> (le pire : il écrit PUIS supprime le parking, la config écrasée n'a plus aucune
+> trace) et `StatusLineEditor` (perte en cascade : `originalCommand` à `nil`, donc
+> la statusline de l'utilisateur passait pour inexistante) étaient restés au
+> `guard let data, !data.isEmpty`. Le troisième : le journal du recall comptait
+> `significant.prefix(maxHits)` au lieu des extraits RÉELLEMENT partis
+> (`ProactiveRecall.injectedBlock` rend désormais texte et hits depuis la même
+> boucle). **Mesuré sur les vraies données : ce dernier n'avait jamais mordu** —
+> blocs à 1347 caractères max pour un cap à 1800 — donc le rendez-vous de
+> septembre garde sa base. C'est le journal lui-même qui a démenti l'estimation
+> théorique du biais.
+>
 > Auparavant **v0.16.1** — sept défauts corrigés, dont **deux chemins
 > destructeurs** (un `settings.json` de zéro octet écrasait la config ; Rockstar
 > survivait à la fermeture d'Atoll) et **deux fonctions écrites, testées et jamais
@@ -303,7 +318,7 @@ Mehdi sur la v0.14.1, tous reproduits et mesurés avant d'être corrigés.
   - **`IslandGeometry.expandedContentInset` : 38 → 26.** 38 valait « 19 d'inset subi
     + 19 de respiration » ; sans inset subi, la marge redevient une décision de mise
     en page. Le corps visible passe de 562 à **600 pt** (mesuré : 565 → 601 px).
-  - **Les règles ASCII étaient calibrées sur l'ancienne boîte** : 52 → 70 (SESSIONS,
+  - **Les règles ASCII étaient calibrées sur l'ancienne boîte** : 52 → 68 (SESSIONS,
     qui partage sa rangée avec `[ PROJET ]`/`[ ÉTAT ]`), 72 → 79 (QUOTA,
     APPRENTISSAGE, TÂCHE TERMINÉE), `rule(56)` → `rule(79)`. Chiffre à retenir :
     **l'avance de `AtollFont.mono(11)` vaut 6,7998 pt** (5,5635 pt à 9 pt) — dans une
@@ -688,7 +703,8 @@ surveiller ; il apprend à rendre la main. Plan : `docs/ROADMAP-13-rendre-la-mai
   puis restitution **JSON-identique** à la sauvegarde.
 - **FLOTTE PAR ÉTAT** (`AtollCore/SessionGrouping`) : bascule `[ PROJET ] / [ ÉTAT ]`
   dans l'îlot, ordre imposé à examiner → en attente de toi → en cours → terminées.
-  BORNÉ à 4 lignes (`ExpandedView.stateRowBudget`) : le panneau a une hauteur FIXE et
+  BORNÉ à 4 lignes (`IslandRowBudget.rows`, via `ExpandedView.rowBudget`) : le
+  panneau a une hauteur FIXE et
   la vue dépliée poussait le quota hors du cadre (vu en capture) ; le surplus est
   ANNONCÉ (« +N autres »), jamais tronqué en silence.
 - Nouveaux triggers debug (`#if DEBUG`, ils écrivent) : `adoptSounds`, `restoreSounds`,

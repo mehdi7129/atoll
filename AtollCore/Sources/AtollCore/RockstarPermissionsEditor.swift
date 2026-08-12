@@ -109,8 +109,21 @@ public enum RockstarPermissionsEditor {
         return deny
     }
 
+    /// nil = fichier ABSENT (création délibérée, machine neuve) ; fichier
+    /// PRÉSENT mais vide ou réduit à des blancs = troncature → refus SANS
+    /// écriture.
+    ///
+    /// Les deux tombaient dans la même branche (`guard let data, !data.isEmpty`),
+    /// et `restore` reposait alors un fichier ne contenant QUE les règles deny :
+    /// hooks tiers, statusLine, `permissions.allow`, `env` et `model` disparus.
+    /// C'est le chemin le PLUS dangereux des cinq écrivains de ce fichier, parce
+    /// que `performRockstarRestore` supprime le parking juste après avoir écrit —
+    /// la trace s'en va avec la configuration. Même garde que
+    /// `HookSettingsEditor` et `SoundHookEditor` (v0.16.1), qui l'avaient reçue
+    /// sans que celui-ci ni `StatusLineEditor` ne l'obtiennent.
     private static func parse(_ data: Data?) throws -> [String: Any] {
-        guard let data, !data.isEmpty else { return [:] }
+        guard let data else { return [:] }
+        guard !HookSettingsEditor.isBlank(data) else { throw EditorError.unparseableSettings }
         guard let object = try? JSONSerialization.jsonObject(with: data),
               let dict = object as? [String: Any] else {
             throw EditorError.unparseableSettings

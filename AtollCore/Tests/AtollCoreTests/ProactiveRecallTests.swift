@@ -363,4 +363,104 @@ final class ProactiveRecallTests: XCTestCase {
         XCTAssertLessThanOrEqual(block.count, ProactiveRecall.maxContextCharacters)
         XCTAssertTrue(block.hasSuffix("(Recherche complète : le skill atoll-recall.)"))
     }
+
+    // MARK: - Ce que le journal enregistre DOIT être ce qui est parti
+
+    /// L'INVARIANT. Le journal du recall décidera si la mémoire proactive mérite
+    /// d'exister ; il enregistrait `significant.prefix(maxHits)`, alors que la
+    /// construction du bloc écarte en plus les extraits vides et tous ceux qui
+    /// ne tiennent pas sous le cap de caractères. `injectedBlock.hits` est
+    /// désormais la SEULE source : il doit toujours coïncider avec les lignes
+    /// réellement présentes dans le texte, et avec le nombre annoncé en en-tête.
+    private func assertBlockIsSelfConsistent(
+        _ block: ProactiveRecall.InjectedBlock, file: StaticString = #filePath, line: UInt = #line
+    ) {
+        let lines = hitLines(of: block.text)
+        XCTAssertEqual(block.hits.count, lines.count,
+                       "les extraits journalisés doivent être ceux du bloc", file: file, line: line)
+        XCTAssertTrue(block.text.hasPrefix("[Atoll · mémoire] \(block.hits.count) extrait(s)"),
+                      "l'en-tête annonce un autre compte que `hits`", file: file, line: line)
+        XCTAssertLessThanOrEqual(block.text.count, ProactiveRecall.maxContextCharacters,
+                                 file: file, line: line)
+    }
+
+    /// Le cas MESURÉ : cinq extraits pleins au réglage maximum. Le bloc n'en
+    /// emporte que quatre — le cinquième ne doit pas être journalisé, ni compté,
+    /// ni voir sa `key` enregistrée (elle désignerait un souvenir que le modèle
+    /// n'a jamais lu).
+    func testInjectedBlockNeCompteQueCeQuiTientSousLeCap() throws {
+        let now = try fixedNow()
+        // Extraits PLEINS : titre et snippet à leur limite, chemin de projet
+        // réaliste. C'est le régime ordinaire d'un vrai prompt, pas un cas
+        // pathologique — cinq lignes de cette taille ne tiennent pas dans 1800
+        // caractères, quatre oui.
+        let hits = (0..<5).map {
+            makeHit(title: String(repeating: "t", count: ProactiveRecall.titleLimit),
+                    projectPath: "/Users/mehdi/Desktop/Dynamic_Island",
+                    timestamp: try? daysBefore($0, now),
+                    snippet: String(repeating: "mémoire index recall proactif souvenir ", count: 8))
+        }
+        let block = try XCTUnwrap(ProactiveRecall.injectedBlock(hits: hits, maxHits: 5, now: now))
+
+        assertBlockIsSelfConsistent(block)
+        XCTAssertLessThan(block.hits.count, hits.count, "le cap dur aurait dû mordre")
+        // Les extraits retenus sont les PREMIERS, dans l'ordre : c'est ce qui
+        // rend le sacrifice prévisible (byCoverage a déjà trié).
+        XCTAssertEqual(block.hits, Array(hits.prefix(block.hits.count)))
+    }
+
+    /// Les extraits vides après nettoyage sont écartés AVANT le cap : ils ne
+    /// doivent apparaître ni dans le bloc, ni dans `hits`.
+    func testInjectedBlockEcarteLesExtraitsVides() throws {
+        let now = try fixedNow()
+        let plein = makeHit(timestamp: now, snippet: "un vrai souvenir de session")
+        let vide = makeHit(timestamp: now, snippet: "   \u{0007}\n  ")
+        let block = try XCTUnwrap(
+            ProactiveRecall.injectedBlock(hits: [vide, plein, vide], maxHits: 3, now: now))
+
+        assertBlockIsSelfConsistent(block)
+        XCTAssertEqual(block.hits, [plein])
+    }
+
+    /// Cas nominal (le réglage par défaut) : rien n'est sacrifié, et le compte
+    /// reste juste. Sans ce test, un correctif qui renverrait toujours `[]`
+    /// passerait l'invariant.
+    func testInjectedBlockRendToutQuandToutTient() throws {
+        let now = try fixedNow()
+        let hits = (0..<3).map { makeHit(timestamp: try? daysBefore($0, now)) }
+        let block = try XCTUnwrap(ProactiveRecall.injectedBlock(hits: hits, maxHits: 3, now: now))
+
+        assertBlockIsSelfConsistent(block)
+        XCTAssertEqual(block.hits, hits)
+    }
+
+    /// L'extrait unique raboté EST dans le bloc : il doit être compté.
+    func testInjectedBlockCompteLExtraitRabote() throws {
+        let now = try fixedNow()
+        let monster = makeHit(title: String(repeating: "T", count: 5000),
+                              projectPath: "/" + String(repeating: "p", count: 3000),
+                              timestamp: now,
+                              snippet: String(repeating: "s", count: 5000))
+        let block = try XCTUnwrap(ProactiveRecall.injectedBlock(hits: [monster], maxHits: 1, now: now))
+
+        assertBlockIsSelfConsistent(block)
+        XCTAssertEqual(block.hits, [monster])
+    }
+
+    /// `additionalContext` reste l'ancien contrat, rendu par la même boucle :
+    /// aucun second endroit où le comportement pourrait diverger.
+    func testAdditionalContextEtInjectedBlockRendentLeMemeTexte() throws {
+        let now = try fixedNow()
+        let hits = (0..<5).map {
+            makeHit(timestamp: try? daysBefore($0, now),
+                    snippet: String(repeating: "mémoire index recall ", count: 12))
+        }
+        for maxHits in 1...5 {
+            let block = ProactiveRecall.injectedBlock(hits: hits, maxHits: maxHits, now: now)
+            XCTAssertEqual(ProactiveRecall.additionalContext(hits: hits, maxHits: maxHits, now: now),
+                           block?.text, "maxHits = \(maxHits)")
+        }
+        XCTAssertNil(ProactiveRecall.injectedBlock(hits: [], maxHits: 3, now: now))
+        XCTAssertNil(ProactiveRecall.injectedBlock(hits: hits, maxHits: 0, now: now))
+    }
 }

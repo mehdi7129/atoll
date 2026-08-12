@@ -138,13 +138,17 @@ enum ProactiveRecallHook {
             journal(.noneAboveFloor, keywords: keywordCount, pool: hits.count, kept: 0)
             return nil
         }
-        guard let context = ProactiveRecall.additionalContext(hits: significant,
-                                                              maxHits: config.maxHits,
-                                                              now: Date())
+        // `injectedBlock` rend le texte ET les extraits qu'il contient vraiment :
+        // c'est la seule façon de journaliser ce qui est PARTI plutôt que ce
+        // qu'on espérait envoyer (voir `ProactiveRecall.InjectedBlock`).
+        guard let block = ProactiveRecall.injectedBlock(hits: significant,
+                                                        maxHits: config.maxHits,
+                                                        now: Date())
         else {
             journal(.emptyBlock, keywords: keywordCount, pool: hits.count, kept: significant.count)
             return nil
         }
+        let context = block.text
 
         let object: [String: Any] = [
             "hookSpecificOutput": [
@@ -157,10 +161,13 @@ enum ProactiveRecallHook {
             journal(.emptyBlock, keywords: keywordCount, pool: hits.count, kept: significant.count)
             return nil
         }
-        // Ce qui est réellement parti : `additionalContext` écarte les extraits
-        // vides après nettoyage, puis coupe à `maxHits`. Journaliser
-        // `significant` tout entier compterait des extraits jamais injectés.
-        let sent = Array(significant.prefix(config.maxHits))
+        // CE QUI EST RÉELLEMENT PARTI — pas ce qu'on espérait envoyer.
+        // `prefix(maxHits)` ne suffisait pas : la construction du bloc écarte
+        // aussi les extraits vides après nettoyage ET ceux qui ne tiennent pas
+        // sous le cap de caractères. À 5 extraits pleins, elle en emporte 4 —
+        // et l'en-tête du bloc annonçait donc « 4 » au modèle pendant que le
+        // journal en enregistrait 5, couvertures et `keys` comprises.
+        let sent = block.hits
         journal(.injected,
                 keywords: keywordCount, pool: hits.count, kept: significant.count,
                 injected: sent.count,
@@ -169,8 +176,9 @@ enum ProactiveRecallHook {
                 keys: sent.map(\.dedupKey))
         // Le NOMBRE d'extraits remonte à l'îlot avec l'événement : c'est la
         // seule façon pour l'utilisateur de savoir que sa session a reçu de la
-        // mémoire (le bloc lui-même est masqué du terminal).
-        return (json: json, count: min(significant.count, config.maxHits))
+        // mémoire (le bloc lui-même est masqué du terminal). Même compte que le
+        // journal et que l'en-tête du bloc : il n'y a plus qu'une source.
+        return (json: json, count: sent.count)
     }
 
     /// Fichier du journal. Sous `~/.atoll/`, jamais dans le dépôt : c'est une

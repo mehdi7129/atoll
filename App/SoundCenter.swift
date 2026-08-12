@@ -57,6 +57,21 @@ final class SoundCenter {
     static var settingsURL: URL { BridgePaths.claudeSettingsURL.resolvingSymlinksInPath() }
     private var settingsURL: URL { Self.settingsURL }
 
+    /// nil = fichier ABSENT (machine neuve). Fichier PRÉSENT mais illisible
+    /// (droits, I/O) → l'erreur REMONTE et aucune écriture n'a lieu.
+    ///
+    /// `try? Data(contentsOf:)` confondait les deux, et `applyRestore` écrivait
+    /// alors un settings.json réduit aux seuls hooks restitués — la même faute
+    /// que le fichier de zéro octet, sur l'autre bout de la lecture. Le helper
+    /// tient cet invariant depuis toujours (`BridgeCLI.readSettings`), et cette
+    /// classe le tenait déjà pour son PROPRE fichier de parking
+    /// (`parkingState()` distingue `.none` d'`.unreadable`) : il manquait
+    /// seulement au fichier de l'utilisateur.
+    private static func readSettings() throws -> Data? {
+        guard FileManager.default.fileExists(atPath: settingsURL.path) else { return nil }
+        return try Data(contentsOf: settingsURL)
+    }
+
     /// Instants de dernière lecture, par événement — anti-rafale.
     @ObservationIgnored private var lastPlayed: [SoundEvent: Date] = [:]
     /// `NSSound` déjà chargés, par valeur de réglage : éviter de relire le
@@ -385,7 +400,7 @@ final class SoundCenter {
         if case .unreadable = state { throw SoundCenterError.parkingUnreadable }
 
         let settingsURL = Self.settingsURL
-        let data = try? Data(contentsOf: settingsURL)
+        let data = try Self.readSettings()
         guard let result = try SoundHookEditor.park(in: data) else { return }
         try ensureSettingsBackup()
 
@@ -425,7 +440,9 @@ final class SoundCenter {
 
     private func applyRestore(_ parked: SoundHookEditor.ParkedSoundHooks) throws {
         let settingsURL = Self.settingsURL
-        let data = try? Data(contentsOf: settingsURL)
+        // Illisible → on ÉCHOUE ici, parking intact : l'utilisateur retentera.
+        // Avec `try?`, on aurait écrit un fichier réduit aux hooks restitués.
+        let data = try Self.readSettings()
         let restored = try SoundHookEditor.restore(into: data, parked: parked.hooks)
         try restored.write(to: settingsURL, options: .atomic)
         // Le parking ne disparaît QU'APRÈS une écriture réussie : sinon un

@@ -99,8 +99,20 @@ public enum StatusLineEditor {
 
     // MARK: - Interne
 
+    /// nil = fichier ABSENT (création délibérée) ; fichier PRÉSENT mais vide ou
+    /// réduit à des blancs = troncature → refus SANS écriture.
+    ///
+    /// Ici la perte était DOUBLE : `install` reposait un fichier réduit à
+    /// `statusLine`, et comme le fichier lu paraissait vide, `originalCommand`
+    /// valait nil — la statusline de l'utilisateur était donc enregistrée comme
+    /// « aucune », si bien que la désinstallation l'aurait RETIRÉE au lieu de la
+    /// restituer. Même garde que `HookSettingsEditor` et `SoundHookEditor`
+    /// (v0.16.1).
     private static func parse(_ data: Data?) throws -> [String: Any] {
-        guard let data, !data.isEmpty else { return [:] }
+        guard let data else { return [:] }
+        guard !HookSettingsEditor.isBlank(data) else {
+            throw HookSettingsEditor.EditorError.unparseableSettings
+        }
         guard let object = try? JSONSerialization.jsonObject(with: data),
               let dict = object as? [String: Any] else {
             throw HookSettingsEditor.EditorError.unparseableSettings

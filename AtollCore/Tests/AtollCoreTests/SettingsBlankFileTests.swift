@@ -82,4 +82,100 @@ final class SettingsBlankFileTests: XCTestCase {
     func testRestitutionDesHooksSonoresRefuseUnFichierVide() {
         XCTAssertThrowsError(try SoundHookEditor.restore(into: Data(), parked: []))
     }
+
+    // MARK: - RockstarPermissionsEditor (le chemin le PLUS dangereux)
+
+    /// Le correctif de v0.16.1 avait couvert `HookSettingsEditor`,
+    /// `SoundHookEditor` et `refreshBackup` — mais NI celui-ci NI
+    /// `StatusLineEditor`, restés au `guard let data, !data.isEmpty`.
+    ///
+    /// Ici l'écriture est doublement irrattrapable : `performRockstarRestore`
+    /// supprime `rockstar-parked-deny.json` juste après avoir écrit, donc la
+    /// configuration écrasée n'a plus aucune trace nulle part.
+    func testRestitutionRockstarRefuseUnFichierVide() {
+        XCTAssertThrowsError(
+            try RockstarPermissionsEditor.restore(into: Data(), parked: ["Bash(rm -rf:*)"])
+        ) {
+            XCTAssertEqual($0 as? RockstarPermissionsEditor.EditorError, .unparseableSettings)
+        }
+        for blanc in ["   ", "\n", "\r\n"] {
+            XCTAssertThrowsError(
+                try RockstarPermissionsEditor.restore(into: Data(blanc.utf8), parked: ["x"]),
+                "« \(blanc.debugDescription) » aurait dû être refusé")
+        }
+    }
+
+    /// Machine neuve : aucun settings.json. La restitution doit continuer de
+    /// produire un fichier — sinon on ne pourrait plus jamais sortir de Rockstar
+    /// sur une installation fraîche.
+    func testRestitutionRockstarAccepteUnFichierAbsent() throws {
+        let produced = try RockstarPermissionsEditor.restore(into: nil, parked: ["Bash(rm:*)"])
+        let root = try XCTUnwrap(try JSONSerialization.jsonObject(with: produced) as? [String: Any])
+        let permissions = try XCTUnwrap(root["permissions"] as? [String: Any])
+        XCTAssertEqual(permissions["deny"] as? [String], ["Bash(rm:*)"])
+    }
+
+    /// `park` était déjà sain (il sort en `nil` sans écrire quand il n'y a rien
+    /// à suspendre) : il doit maintenant REFUSER explicitement, pour que
+    /// `rockstarPark` ne grave pas un backup « pré-Atoll » vide au passage.
+    func testSuspensionRockstarRefuseUnFichierVide() {
+        XCTAssertThrowsError(try RockstarPermissionsEditor.park(in: Data()))
+    }
+
+    /// La configuration complète survit à une restitution normale — le
+    /// correctif ne doit pas transformer le refus en régression fonctionnelle.
+    func testRestitutionRockstarPreserveToutLeReste() throws {
+        let existing = Data("""
+        {"hooks":{"PreToolUse":[]},"statusLine":{"type":"command","command":"maligne"},
+         "permissions":{"allow":["Read(*)"]},"env":{"A":"b"},"model":"opus"}
+        """.utf8)
+        let produced = try RockstarPermissionsEditor.restore(into: existing, parked: ["Bash(rm:*)"])
+        let root = try XCTUnwrap(try JSONSerialization.jsonObject(with: produced) as? [String: Any])
+        XCTAssertNotNil(root["hooks"])
+        XCTAssertNotNil(root["statusLine"])
+        XCTAssertNotNil(root["env"])
+        XCTAssertEqual(root["model"] as? String, "opus")
+        let permissions = try XCTUnwrap(root["permissions"] as? [String: Any])
+        XCTAssertEqual(permissions["allow"] as? [String], ["Read(*)"])
+        XCTAssertEqual(permissions["deny"] as? [String], ["Bash(rm:*)"])
+    }
+
+    // MARK: - StatusLineEditor (la perte y est DOUBLE)
+
+    /// Sur un fichier vide, `install` reposait `statusLine` seul ET rendait
+    /// `originalCommand == nil` : la statusline de l'utilisateur passait pour
+    /// inexistante, donc la désinstallation l'aurait supprimée au lieu de la
+    /// restituer. Le refus protège les deux.
+    func testInstallStatuslineRefuseUnFichierVide() {
+        XCTAssertThrowsError(
+            try StatusLineEditor.install(into: Data(), wrapperCommand: "/x/atoll-statusline")
+        ) {
+            XCTAssertEqual($0 as? HookSettingsEditor.EditorError, .unparseableSettings)
+        }
+    }
+
+    func testInstallStatuslineAccepteUnFichierAbsent() throws {
+        let result = try StatusLineEditor.install(into: nil, wrapperCommand: "/x/atoll-statusline")
+        XCTAssertNil(result.originalCommand, "aucune statusline préexistante sur machine neuve")
+        let root = try XCTUnwrap(try JSONSerialization.jsonObject(with: result.settings) as? [String: Any])
+        XCTAssertNotNil(root["statusLine"])
+    }
+
+    func testDesinstallationStatuslineRefuseUnFichierVide() {
+        XCTAssertThrowsError(try StatusLineEditor.uninstall(from: Data(), originalCommand: "maligne"))
+    }
+
+    func testMigrationRefreshIntervalRefuseUnFichierVide() {
+        XCTAssertThrowsError(try StatusLineEditor.addRefreshIntervalIfMissing(into: Data()))
+    }
+
+    /// Une vraie configuration doit toujours passer, et la commande d'origine
+    /// être mémorisée — c'est elle qui sera restituée à la désinstallation.
+    func testInstallStatuslinePreserveEtMemorise() throws {
+        let existing = Data(#"{"statusLine":{"type":"command","command":"maligne"},"model":"opus"}"#.utf8)
+        let result = try StatusLineEditor.install(into: existing, wrapperCommand: "/x/atoll-statusline")
+        XCTAssertEqual(result.originalCommand, "maligne")
+        let root = try XCTUnwrap(try JSONSerialization.jsonObject(with: result.settings) as? [String: Any])
+        XCTAssertEqual(root["model"] as? String, "opus")
+    }
 }
