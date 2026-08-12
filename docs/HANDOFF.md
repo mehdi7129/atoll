@@ -161,6 +161,41 @@ n'est pas l'outil mais **un agent nommé** parmi trois (Madeleine, Louisa, Navii
 - **OpenTelemetry** : mesuré 7,24 s → 11,16 s vers un collecteur qui ne répond pas, et
   l'exportateur Prometheus se lie sur `*:9464` sans authentification.
 
+**LES RÉSUMÉS DE COMPACTION NE SONT PAS INDEXÉS — gisement à examiner le 9 septembre**
+(constaté le 2026-08-12). `ProactiveRecallHook.injectableRoles` déclare `summary` comme
+rôle injectable, et `MemoryIndex` sait le stocker. Pourtant :
+
+```
+SELECT COUNT(*) FROM messages WHERE role='summary';   →  0
+grep compact_boundary ~/.claude/projects/*/*.jsonl    →  9 compactions, 5 transcripts
+```
+
+**Zéro sur neuf.** Or c'est le contenu le plus dense de la machine. Exemple réel relevé
+dans un transcript :
+
+```
+compactMetadata.trigger                  manual
+compactMetadata.preTokens                969 937
+compactMetadata.postTokens                13 544
+compactMetadata.cumulativeDroppedTokens  956 393
+compactMetadata.durationMs               133 888
+compactMetadata.preservedSegment         headUuid + anchorUuid
+```
+
+Chaque résumé est donc **l'essence de ~970 000 jetons condensée en ~13 500** (72:1,
+98,6 % écarté) — exactement le « ce qui a été appris » qui manque à un index composé à
+**79,5 % de `tool`/`tool_result`**. À rapprocher du corpus `~/.claude/projects/*/memory/*.md`
+(123 fichiers, 349 774 caractères) : deux gisements de conclusions déjà écrits, gratuits,
+qu'Atoll n'exploite ni l'un ni l'autre.
+
+**À VÉRIFIER AVANT DE CONCLURE À UN DÉFAUT** : le marqueur est une ligne
+`type: "system"`, `subtype: "compact_boundary"` dont le champ `content` vaut
+« Conversation compacted » — le texte du résumé lui-même n'est PAS dans cette ligne. Il
+faut d'abord établir OÙ le CLI écrit le résumé (probablement le premier message de la
+session suivante, ou le `preservedSegment`) avant de supposer que `TranscriptLineParser`
+le rate. Ne pas coder avant d'avoir la réponse — et de toute façon pas avant le 9/09,
+c'est une modification d'ingestion qui fausserait la mesure.
+
 **DEUX PIÈGES DE MÉTHODE VÉCUS CE JOUR :**
 - **TCC peut couper l'accès au Bureau EN COURS DE SESSION.** Signature exacte :
   `Operation not permitted` sur `~/Desktop`, `~/Documents` ET `~/Downloads` — les trois
@@ -187,6 +222,15 @@ Trois chiffres décident du sort du recall proactif : le **taux d'injection**, l
 **répartition des couvertures** (part des extraits n'appariant qu'UN mot du prompt) et
 la **latence médiane** des passages ayant cherché. Si la mémoire proactive remplit
 surtout du contexte sans répondre, elle rejoint le cockpit et le niveau « Auto ».
+
+**MAIS LA QUESTION DU JOUR DIT N'EST PEUT-ÊTRE PAS « GARDER OU SUPPRIMER ».** Le journal
+mesure la qualité d'un CORPUS (les transcripts, 79,5 % de sorties d'outils) autant que
+celle du mécanisme. Deux autres corpus, déjà écrits et gratuits, sont ignorés par Atoll :
+les **123 fichiers `memory/`** d'Anthropic (349 774 caractères) et les **9 résumés de
+compaction** (chacun l'essence de ~970 000 jetons). Poser les trois questions dans cet
+ordre : (1) le mécanisme est-il bon ? (2) le corpus est-il le bon ? (3) faut-il supprimer,
+ou changer de corpus ? Conclure « ça ne sert pas » sans avoir regardé (2) serait une
+décision juste sur une preuve faussée — le mode de panne du bouton ARRÊTER.
 
 **NE RIEN AJOUTER D'ICI LÀ**, et surtout ne pas toucher au recall ni au plancher de
 pertinence : toute modification pendant la fenêtre invalide le mois. Les deux autres
