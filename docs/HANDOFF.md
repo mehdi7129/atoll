@@ -2,11 +2,12 @@
 
 > Document de continuité pour reprendre le dev après un compactage de conversation.
 > **À lire en premier** avec `CLAUDE.md` (règles) et `PLAN.md` (plan produit).
-> Dernière mise à jour : **2026-08-14**. Journée en trois temps : un **audit
+> Dernière mise à jour : **2026-08-14**. Journée en quatre temps : un **audit
 > complet** (`docs/AUDIT-2026-08-14.md`, 18 défauts corrigés dont trois chemins
 > destructeurs), puis **deux outils de continuité**, puis **deux campagnes de
-> relecture** qui ont porté la couverture du dépôt à 100 %. 696 tests, build sans
-> warning, `Scripts/check-docs.py` vert.
+> relecture** qui ont porté la couverture du dépôt à 100 %, puis la **v0.16.3
+> publiée** et les **six constats sérieux restants corrigés** (voir plus bas).
+> 733 tests, build sans warning, `Scripts/check-docs.py` vert.
 >
 > **DEUX OUTILS À CONNAÎTRE AVANT DE REPRENDRE — ils remplacent de la discipline
 > par de la mécanique :**
@@ -30,8 +31,18 @@
 > (`TranscriptTailer` lisait `title`, le CLI écrit `aiTitle` — 571 lignes réelles
 > vérifiées, 0 portant `title`), deux sessions du même projet affichaient
 > « Desktop/Dynamic_Island », et un `"sessionId": null` faisait disparaître une
-> session entière de l'îlot. **Le reste des constats est consigné, pas corrigé** :
-> c'est la première chose à reprendre.
+> session entière de l'îlot.
+>
+> **LES SIX CONSTATS SÉRIEUX RESTANTS SONT CORRIGÉS** (2026-08-14, après la
+> v0.16.3 — donc **non publiés** : ils partiront avec la prochaine release).
+> Détail et validation dans `docs/AUDIT-2026-08-14-correctifs.md` : contrat
+> `knownIDs` de la recherche de plugins, bornes du schéma de curation, relecture
+> d'inventaire sautée après `enable`/`disable`, slash commands de plugins jamais
+> inventoriées (catalogue 117 → 134 entrées), repli de jump-back posé sur une
+> seule des deux sorties, et les parts réservées du condensé qui sacrifiaient
+> l'intention utilisateur avant les sorties d'outils. Chaque test de
+> non-régression a été **vérifié par sabotage**. Ce qui reste des campagnes n'est
+> que du mineur, consigné dans les deux documents de relecture.
 >
 > À savoir aussi en reprenant :
 >
@@ -823,7 +834,7 @@ xcodebuild -project Atoll.xcodeproj -scheme Atoll -configuration Debug -derivedD
 ditto "$DD/Build/Products/Debug/Atoll.app" ~/Applications/Atoll.app   # lancer LA COPIE
 pkill -x Atoll; sleep 1; open ~/Applications/Atoll.app                # relancer
 
-cd AtollCore && swift test              # 691 tests (2026-08-14)
+cd AtollCore && swift test              # 733 tests (2026-08-14, après les six correctifs)
 Scripts/check-docs.py --no-tests        # ce document ment-il ? (quelques secondes)
 
 # Debug runtime

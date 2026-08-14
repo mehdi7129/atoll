@@ -378,4 +378,68 @@ final class TranscriptDigestTests: XCTestCase {
         let outils = TranscriptDigest.entries(from: lines).filter { $0.role == .tool }
         XCTAssertEqual(outils.map(\.text), ["swift build"])
     }
+
+    // MARK: - L'intention utilisateur part EN DERNIER (2026-08-14)
+
+    /// La réserve de 40 % accordée à `.tool`/`.toolResult` INVERSAIT la priorité
+    /// qu'elle sert : une entrée `.tool` encore dans sa part était épargnée en
+    /// passe 0, tandis que les `.user`, sans réserve, restaient sacrifiables.
+    /// L'élagage attaquait donc la demande de l'utilisateur pendant que 40 % du
+    /// budget restait sanctuarisé pour les rôles que `sacrificeRank` classe
+    /// PREMIERS à partir.
+    func testLIntentionUtilisateurSurvitAUnDelugeDoutils() {
+        // Scénario DISCRIMINANT : les outils tiennent DANS leur réserve (25 % +
+        // 15 % de 150 000), et c'est l'utilisateur qui fait déborder. En passe 0,
+        // l'ancien code épargnait donc les outils et taillait dans l'intention.
+        var lines: [TranscriptLine] = []
+        for index in 0..<30 {   // 30 000 caractères, sous les 37 500 réservés
+            lines.append(TranscriptLine(
+                uuid: "t\(index)", sessionID: nil, timestamp: nil, cwd: nil, gitBranch: nil,
+                fragments: [.init(role: .tool, text: "Bash · COMMANDE-" + String(repeating: "x", count: 980))]
+            ))
+        }
+        for index in 0..<15 {   // 15 000 caractères, sous les 22 500 réservés
+            lines.append(TranscriptLine(
+                uuid: "r\(index)", sessionID: nil, timestamp: nil, cwd: nil, gitBranch: nil,
+                fragments: [.init(role: .toolResult, text: String(repeating: "y", count: 1000))]
+            ))
+        }
+        for index in 0..<300 {  // 270 000 caractères : le budget explose
+            lines.append(TranscriptLine(
+                uuid: "u\(index)", sessionID: nil, timestamp: nil, cwd: nil, gitBranch: nil,
+                fragments: [.init(role: .user, text: "DEMANDE " + String(repeating: "z", count: 890))]
+            ))
+        }
+        let result = TranscriptDigest.make(lines: lines)
+        XCTAssertLessThanOrEqual(result.characterCount, TranscriptDigest.defaultCharacterBudget)
+
+        let demandes = result.text.components(separatedBy: "DEMANDE ").count - 1
+        let commandes = result.text.components(separatedBy: "COMMANDE-").count - 1
+        // L'INVARIANT, énoncé tel quel : `sacrificeRank` classe `.tool` PREMIER
+        // à partir et `.user` DERNIER. Donc tant qu'une seule demande a été
+        // sacrifiée, il ne doit rester AUCUNE sortie d'outil.
+        //
+        // MESURÉ sur ce scénario : sans le correctif, 3 commandes survivaient
+        // pendant que 138 demandes étaient élaguées — la réserve les épargnait
+        // en passe 0 alors que l'intention, sans réserve, restait sacrifiable.
+        XCTAssertLessThan(demandes, 300, "prérequis du test : le budget doit déborder")
+        XCTAssertEqual(commandes, 0,
+                       "\(commandes) sortie(s) d'outil survivent alors que \(300 - demandes) demandes ont été sacrifiées")
+    }
+
+    /// Le contrôle : quand SEULES des entrées `.user` dépassent le budget, elles
+    /// restent élaguables — la passe 1 n'épargne plus rien, sinon le condensé
+    /// dépasserait son plafond.
+    func testUnBudgetSatureUniquementParDesUserFinitParElaguer() {
+        var lines: [TranscriptLine] = []
+        for index in 0..<400 {
+            lines.append(TranscriptLine(
+                uuid: "u\(index)", sessionID: nil, timestamp: nil, cwd: nil, gitBranch: nil,
+                fragments: [.init(role: .user, text: String(repeating: "z", count: 900))]
+            ))
+        }
+        let result = TranscriptDigest.make(lines: lines)
+        XCTAssertLessThanOrEqual(result.characterCount, TranscriptDigest.defaultCharacterBudget)
+        XCTAssertGreaterThan(result.entriesKept, 0)
+    }
 }

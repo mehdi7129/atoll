@@ -272,6 +272,18 @@ final class PluginInventory {
         // locale : la CLI est l'autorité, et elle peut avoir fait autre chose
         // que ce qu'on croit (dépendance, marketplace, refus silencieux).
         // Sans réseau : `--available` reste une action explicite.
+        //
+        // ATTENDRE d'abord un rafraîchissement en vol. `refreshNow` sort
+        // immédiatement sur sa garde de ré-entrance : la relecture n'avait alors
+        // PAS lieu, et le rafraîchissement concurrent — parti AVANT la mutation,
+        // donc porteur de l'état d'AVANT — publiait ensuite son instantané en
+        // posant `lastRefreshedAt = Date()`. Le panneau affichait un inventaire
+        // périmé avec l'heure courante : précisément ce que cet horodatage a été
+        // ajouté pour empêcher. Le motif d'attente existe déjà dans `search()`,
+        // et pour la même raison.
+        while isRefreshing {
+            try? await Task.sleep(for: .milliseconds(300))
+        }
         await refreshNow(includeAvailable: false)
         return nil
     }
@@ -391,16 +403,19 @@ final class PluginInventory {
             return "Binaire claude introuvable."
         }
 
+        // Le catalogue ET les identifiants qu'il contient viennent du MÊME
+        // appel : `parse` n'accepte donc que ce que le modèle a vraiment vu.
+        // Les redériver depuis `available` en validait ~268 pour ~120 montrés.
+        let catalog = snapshot.promptCatalog()
         let arguments = PluginSearchPrompt.cliArguments(
             model: LearningSettings.shared.searchModel,
             budgetUSD: 0.30
-        ) + [PluginSearchPrompt.userPrompt(need: trimmed,
-                                           catalog: snapshot.summaryForPrompt())]
+        ) + [PluginSearchPrompt.userPrompt(need: trimmed, catalog: catalog.text)]
         let outcome = await Self.run(arguments: arguments, claude: claude, timeout: 120)
         guard outcome.status == 0 else {
             return "Recherche impossible : \(outcome.diagnostic)"
         }
-        let known = Set(snapshot.available.map(\.id))
+        let known = catalog.shownIDs
         // Même repli que les trois autres chemins qui spawnent `claude` : un
         // `.zprofile` bavard précède le JSON sur stdout du shell de login, et
         // faisait échouer TOUTE recherche en permanence — après avoir dépensé

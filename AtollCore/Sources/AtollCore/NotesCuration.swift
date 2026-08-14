@@ -113,16 +113,48 @@ public struct NotesCurationOutput: Equatable, Sendable {
 
     // MARK: - Revalidation
 
+    /// Bornes du schéma, REVALIDÉES ici.
+    ///
+    /// Le `jsonSchema` envoyé au modèle les déclare (40 notes, titre 100,
+    /// contenu 2 000, 20 sources de 120, 20 contradictions de 300) — mais un
+    /// schéma est une DEMANDE, pas une garantie : ce parseur est présenté comme
+    /// « la validation qui compte » et n'en appliquait aucune. Son jumeau du
+    /// même dépôt, `RetrospectiveReport`, borne tout depuis toujours : encore le
+    /// motif « appliqué à une partie seulement de ses points », entre deux
+    /// parseurs de sortie de modèle.
+    ///
+    /// Les constantes viennent de `NotesCurationPrompt` là où elles existent,
+    /// pour que le schéma et sa revalidation ne puissent pas diverger.
+    enum Limit {
+        static let notes = NotesCurationPrompt.maxNotes            // 40
+        static let noteContent = NotesCurationPrompt.maxNoteCharacters // 2 000
+        static let title = 100
+        static let sources = 20
+        static let sourceLength = 120
+        static let contradictions = 20
+        static let summary = 300
+        static let files = 10
+    }
+
+    /// Coupe sans jamais scinder un caractère : `prefix` opère sur des
+    /// `Character`, donc un emoji ou une lettre accentuée reste entier.
+    private static func capped(_ text: String, _ limit: Int) -> String {
+        text.count <= limit ? text : String(text.prefix(limit))
+    }
+
     private static func validatedNotes(_ value: Any?) -> [Note] {
         var notes: [Note] = []
         for entry in (value as? [Any]) ?? [] {
+            guard notes.count < Limit.notes else { break }
             guard let dict = entry as? [String: Any],
                   let title = trimmedNonEmpty(dict["title"]),
                   let content = trimmedNonEmpty(dict["content"]) else { continue }
             notes.append(Note(
-                title: title,
-                content: content,
+                title: capped(title, Limit.title),
+                content: capped(content, Limit.noteContent),
                 sources: validatedStrings(dict["sources"])
+                    .prefix(Limit.sources)
+                    .map { capped($0, Limit.sourceLength) }
             ))
         }
         return notes
@@ -131,11 +163,14 @@ public struct NotesCurationOutput: Equatable, Sendable {
     private static func validatedContradictions(_ value: Any?) -> [Contradiction] {
         var contradictions: [Contradiction] = []
         for entry in (value as? [Any]) ?? [] {
+            guard contradictions.count < Limit.contradictions else { break }
             guard let dict = entry as? [String: Any],
                   let summary = trimmedNonEmpty(dict["summary"]) else { continue }
             contradictions.append(Contradiction(
-                summary: summary,
+                summary: capped(summary, Limit.summary),
                 files: validatedStrings(dict["files"])
+                    .prefix(Limit.files)
+                    .map { capped($0, Limit.sourceLength) }
             ))
         }
         return contradictions

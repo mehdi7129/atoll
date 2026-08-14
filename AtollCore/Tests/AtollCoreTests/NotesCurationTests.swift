@@ -332,4 +332,55 @@ final class NotesCurationTests: XCTestCase {
             return XCTFail("re-curation à l'identique refusée : \(plan)")
         }
     }
+
+    // MARK: - Les bornes du schéma sont REVALIDÉES (2026-08-14)
+
+    /// Un schéma est une DEMANDE, pas une garantie : le parseur doit borner
+    /// lui-même, comme le fait `RetrospectiveReport` depuis toujours.
+    func testLeParsingBorneCeQueLeSchemaDemande() throws {
+        let titre = String(repeating: "T", count: 300)
+        let contenu = String(repeating: "C", count: 5000)
+        let source = String(repeating: "s", count: 400)
+        let sources = Array(repeating: "\"" + source + "\"", count: 30).joined(separator: ",")
+        let une = "{\"title\":\"" + titre + "\",\"content\":\"" + contenu + "\",\"sources\":[" + sources + "]}"
+        let toutes = Array(repeating: une, count: 45).joined(separator: ",")
+        let json = "{\"structured_output\":{\"notes\":[" + toutes + "],\"contradictions\":[]}}"
+        let out = try XCTUnwrap(NotesCurationOutput.parse(cliOutput: Data(json.utf8)))
+
+        XCTAssertEqual(out.notes.count, NotesCurationPrompt.maxNotes, "45 notes proposées, 40 retenues")
+        for n in out.notes {
+            XCTAssertLessThanOrEqual(n.title.count, 100)
+            XCTAssertLessThanOrEqual(n.content.count, NotesCurationPrompt.maxNoteCharacters)
+            XCTAssertLessThanOrEqual(n.sources.count, 20)
+            for s in n.sources { XCTAssertLessThanOrEqual(s.count, 120) }
+        }
+    }
+
+    /// Idem pour les contradictions.
+    func testLesContradictionsSontBorneesAussi() throws {
+        let resume = String(repeating: "S", count: 900)
+        let fichier = String(repeating: "f", count: 400)
+        let fichiers = Array(repeating: "\"" + fichier + "\"", count: 15).joined(separator: ",")
+        let une = "{\"summary\":\"" + resume + "\",\"files\":[" + fichiers + "]}"
+        let toutes = Array(repeating: une, count: 25).joined(separator: ",")
+        let json = "{\"structured_output\":{\"notes\":[],\"contradictions\":[" + toutes + "]}}"
+        let out = try XCTUnwrap(NotesCurationOutput.parse(cliOutput: Data(json.utf8)))
+        XCTAssertEqual(out.contradictions.count, 20)
+        for k in out.contradictions {
+            XCTAssertLessThanOrEqual(k.summary.count, 300)
+            XCTAssertLessThanOrEqual(k.files.count, 10)
+            for f in k.files { XCTAssertLessThanOrEqual(f.count, 120) }
+        }
+    }
+
+    /// Une coupe ne doit jamais scinder un caractère composé.
+    func testLaCoupeNeScindePasUnCaractere() throws {
+        let emoji = String(repeating: "🇫🇷", count: 200)
+        let json = "{\"structured_output\":{\"notes\":[{\"title\":\"" + emoji
+            + "\",\"content\":\"c\",\"sources\":[]}],\"contradictions\":[]}}"
+        let out = try XCTUnwrap(NotesCurationOutput.parse(cliOutput: Data(json.utf8)))
+        let titre = try XCTUnwrap(out.notes.first?.title)
+        XCTAssertEqual(titre.count, 100)
+        XCTAssertTrue(titre.hasSuffix("🇫🇷"), "le drapeau n'est pas coupé en deux")
+    }
 }

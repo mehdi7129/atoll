@@ -94,11 +94,64 @@ restent exploitables comme MAJORANT, et comme le relevé dépassait déjà le se
 qu'il soutenait n'en est que renforcée : la réalité est pire, pas meilleure. Le
 format injecté n'a pas bougé — le gel est respecté.
 
-## Reste ouvert
+## Les six constats sérieux, traités
 
-Six constats sérieux des campagnes, consignés dans les deux documents de
-relecture : le contrat `knownIDs` de la recherche de plugins, l'absence de
-revalidation des bornes du schéma dans la curation, la relecture sautée après
-`enable`/`disable`, les slash commands de plugins jamais inventoriées, le repli
-de jump-back posé sur une seule des deux sorties, et les parts réservées du
-condensé qui sacrifient l'intention utilisateur avant des sorties d'outils.
+Tous corrigés le 2026-08-14, chacun avec son test de non-régression **vérifié par
+sabotage** (le correctif neutralisé, le test doit rougir — sinon il ne prouve
+rien) :
+
+1. **Le contrat `knownIDs` de la recherche de plugins** était implicite :
+   l'appelant reconstituait de son côté la liste des identifiants montrés au
+   modèle, et les deux vues divergeaient dès qu'une ligne était tronquée.
+   `PluginSnapshot.promptCatalog` rend désormais `(text, shownIDs)`, et
+   `shownIDs` n'admet un identifiant **que s'il survit à la troncature** —
+   la garde ne peut plus se croire informée d'une ligne coupée.
+2. **La curation ne revalidait pas les bornes du schéma** : un modèle qui rend
+   plus long que le contrat passait tel quel. `NotesCuration.Limit` + `capped()`,
+   appliqués aux notes ET aux contradictions.
+3. **La relecture d'inventaire était sautée après `enable`/`disable`** quand un
+   rafraîchissement était déjà en vol : l'UI affichait l'état d'avant la
+   mutation. `perform()` attend la fin du vol en cours avant son `refreshNow`.
+4. **Les slash commands des plugins n'étaient pas inventoriées** — seules celles
+   de l'utilisateur l'étaient, alors qu'elles partagent le même espace de noms.
+   Le catalogue passe de 117 à 134 entrées sur cette machine. Balayage limité à
+   `<version>/commands/` : les dossiers de même nom nichés ailleurs sont des
+   GABARITS de dépôt, non invocables, et un catalogue qui invente est pire qu'un
+   catalogue qui rate.
+5. **Le repli de jump-back n'était posé que sur une des deux sorties** : le refus
+   d'automatisation tombe tantôt au préflight, tantôt à l'exécution (`-1743`), et
+   sur cette seconde sortie le bouton principal du détail de session ne faisait
+   qu'avertir sans remonter la fenêtre.
+6. **Les parts réservées du condensé sacrifiaient l'intention utilisateur** avant
+   les sorties d'outils, exactement à l'envers de la priorité que la réserve sert
+   (`sacrificeRank` classe `.tool` premier à partir, `.user` dernier). MESURÉ sur
+   le scénario du test : 3 commandes survivaient pendant que 138 demandes étaient
+   élaguées ; 0 après correctif.
+
+## La revue adversariale de ces six correctifs
+
+Trois lentilles (bornes, catalogue, concurrence) puis un réfutateur par constat
+allégué, 14 agents : **11 allégués → 2 confirmés**, 9 réfutés. Les deux confirmés
+décrivent le MÊME défaut, et il était à moi : le message d'échec du test du
+correctif n° 6 portait `\\(commandes)` — un antislash échappé, pas une
+interpolation. Le seul test qui prouve l'invariant rendait donc, le jour où il
+rougit, un message sans aucun chiffre. Séquelle de mes heredocs Python ;
+l'occurrence était unique dans tout le dépôt, vérifié.
+
+Deux enseignements valent plus que le correctif :
+
+- **Un agent a rapporté un « INCIDENT DE REVUE » critique** : avoir écrasé des
+  fichiers du dépôt. Réfuté — sa preuve était un test INTERMITTENT, mesuré 20
+  fois sur 21 comme passant. Vérification faite d'abord et indépendamment
+  (`git status`, présence des six correctifs, suite verte) : le dépôt était
+  intact. Une alerte d'intégrité se vérifie sur le disque, jamais sur le récit.
+- **Une réfutation peut être juste sur son argument et fausse sur sa portée.**
+  La collision « une command et un skill homonymes du même plugin se disputent
+  un id » a été réfutée deux fois, au motif que `CatalogEntry.path` n'a aucun
+  consommateur d'affichage. C'est exact — et hors sujet : le consommateur est
+  `closestMatch`, la garde d'antériorité DÉTERMINISTE, qui note les propositions
+  sur `"\(id) \(name) \(description)"` et rattrapait 5 des 6 vrais doublons de
+  la machine. Une command sans front-matter masquant un skill lui retirait ses
+  mots discriminants. Corrigé : à version égale le skill l'emporte, mais une
+  command d'une version plus récente reste gagnante — sinon un skill périmé
+  ressusciterait par-dessus elle. Les deux cas sont testés.

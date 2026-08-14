@@ -489,4 +489,71 @@ final class PluginSnapshotTests: XCTestCase {
         XCTAssertLessThanOrEqual(PluginSnapshot.promptLine(for: long).count,
                                  PluginSnapshot.promptIdentifierCap + 4)
     }
+
+    // MARK: - Le catalogue dit ce qu'il a MONTRÉ (2026-08-14)
+
+    private func catalogue(_ count: Int, descriptionLength: Int = 40,
+                          idPadding: Int = 0) -> PluginSnapshot {
+        PluginSnapshot(installed: [], available: (0..<count).map { index in
+            let bourre = String(repeating: "n", count: idPadding)
+            return AvailablePlugin(id: "p\(index)\(bourre)@mk", name: "p\(index)",
+                                   description: String(repeating: "d", count: descriptionLength),
+                                   marketplace: "mk", version: "1", installCount: count - index)
+        })
+    }
+
+    /// `shownIDs` doit être exactement l'ensemble des identifiants présents dans
+    /// le texte — c'est le contrat de `parse(cliOutput:knownIDs:)`, qui refuse
+    /// tout id que le modèle n'a pas vu.
+    func testLesIdentifiantsRendusSontExactementCeuxDuTexte() {
+        for total in [5, 120, 268] {
+            let catalog = catalogue(total).promptCatalog()
+            for id in catalog.shownIDs {
+                XCTAssertTrue(catalog.text.contains(id), "\(id) annoncé mais absent du texte")
+            }
+            // Et l'inverse : aucun identifiant du texte n'échappe à l'ensemble.
+            let montres = (0..<total).map { "p\($0)@mk" }.filter { catalog.text.contains($0) }
+            XCTAssertEqual(Set(montres), catalog.shownIDs, "total = \(total)")
+        }
+    }
+
+    /// Quand c'est le PLAFOND DE CARACTÈRES qui coupe — et non la limite
+    /// d'entrées — l'ensemble doit suivre la coupe réelle. C'est le cas que
+    /// redériver `availableRanked(limit:)` côté appelant ratait.
+    func testLEnsembleSuitLaCoupeParLePlafondDeCaracteres() {
+        // Des descriptions longues : le plafond de 30 000 caractères mord bien
+        // avant la limite de 120 entrées.
+        // Lignes volontairement longues (id bourré + description au plafond) :
+        // ~320 caractères × 120 entrées dépassent les 30 000 du plafond.
+        let catalog = catalogue(120, descriptionLength: PluginSnapshot.promptDescriptionCap,
+                                idPadding: 80).promptCatalog()
+        XCTAssertLessThan(catalog.shownIDs.count, 120, "le plafond de caractères doit avoir coupé")
+        XCTAssertGreaterThan(catalog.shownIDs.count, 0)
+        XCTAssertLessThanOrEqual(catalog.text.count, PluginSnapshot.promptCharacterCap)
+        for id in catalog.shownIDs { XCTAssertTrue(catalog.text.contains(id)) }
+    }
+
+    /// `summaryForPrompt` reste le même texte : l'extraction n'a rien changé
+    /// pour ses appelants.
+    func testSummaryForPromptRendLeMemeTexteQueLeCatalogue() {
+        let snapshot = catalogue(200)
+        XCTAssertEqual(snapshot.summaryForPrompt(), snapshot.promptCatalog().text)
+    }
+
+    /// Un identifiant TRONQUÉ dans le texte ne doit pas être annoncé comme
+    /// montré : le modèle ne peut pas le citer exactement, et la validation le
+    /// refuserait — autant ne pas prétendre le lui avoir donné.
+    func testUnIdentifiantTronqueNEstPasAnnonceCommeMontre() {
+        let long = String(repeating: "L", count: PluginSnapshot.promptIdentifierCap + 50) + "@mk"
+        let snapshot = PluginSnapshot(installed: [], available: [
+            AvailablePlugin(id: long, name: "long", description: nil,
+                            marketplace: "mk", version: "1", installCount: 1),
+            AvailablePlugin(id: "court@mk", name: "court", description: nil,
+                            marketplace: "mk", version: "1", installCount: 2),
+        ])
+        let catalog = snapshot.promptCatalog()
+        XCTAssertTrue(catalog.shownIDs.contains("court@mk"))
+        XCTAssertFalse(catalog.shownIDs.contains(long), "identifiant tronqué dans le texte")
+        for id in catalog.shownIDs { XCTAssertTrue(catalog.text.contains(id)) }
+    }
 }

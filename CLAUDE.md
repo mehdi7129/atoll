@@ -17,8 +17,25 @@
 > couvertures journalisées AVANT cette date sont gonflées (comparaison de
 > sous-chaîne). Elles restent un MAJORANT — la réalité est pire, pas meilleure.
 >
+> **LES SIX CONSTATS SÉRIEUX DES CAMPAGNES SONT CORRIGÉS** (2026-08-14, APRÈS la
+> v0.16.3 : non publiés, ils partiront avec la prochaine release —
+> `docs/AUDIT-2026-08-14-correctifs.md`, 733 tests). Chaque test de non-régression a
+> été **vérifié par sabotage**. Deux leçons de méthode, plus durables que les
+> correctifs :
+> - **UNE ALERTE D'INTÉGRITÉ SE VÉRIFIE SUR LE DISQUE, JAMAIS SUR LE RÉCIT.** Un agent
+>   de revue a rapporté, en critique, avoir écrasé des fichiers du dépôt. Contrôle fait
+>   d'abord et indépendamment (`git status`, présence des correctifs, suite verte) : le
+>   dépôt était intact, et le réfutateur a montré que la « preuve » était un test
+>   INTERMITTENT, mesuré 20 fois sur 21 comme passant.
+> - **UNE RÉFUTATION PEUT ÊTRE JUSTE SUR SON ARGUMENT ET FAUSSE SUR SA PORTÉE.** La
+>   collision « une command et un skill homonymes du même plugin se disputent un id » a
+>   été réfutée DEUX fois au motif que `CatalogEntry.path` n'a aucun consommateur
+>   d'affichage — exact, et hors sujet : le consommateur est `closestMatch`, la garde
+>   d'antériorité DÉTERMINISTE, qui note sur `"\(id) \(name) \(description)"`. Lire ce
+>   que la réfutation a réellement mesuré, pas son verdict.
+>
 > **AUDIT DU 2026-08-14 — dix-huit défauts corrigés, six API mortes retirées, aucune
-> fonction ajoutée** (`docs/AUDIT-2026-08-14.md`, 691 tests verts). **Trois chemins
+> fonction ajoutée** (`docs/AUDIT-2026-08-14.md`, 691 tests verts à sa clôture). **Trois chemins
 > destructeurs** : (1) `MemoryIndexer.setAsideDatabase` détruisait la base mémoire en
 > DEUX passages — nom de destination fixe + retentative toutes les 30 s, donc le
 > second passage supprimait la copie de sauvetage pour y mettre la base vide créée par

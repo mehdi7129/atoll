@@ -420,7 +420,18 @@ public struct SkillCatalog: Sendable {
     /// catégorie) et le nom reste celui du dossier PARENT du `SKILL.md`.
     private func pluginSkills(enabled: [String: Bool]?) -> [CatalogEntry] {
         // Par id : la meilleure version vue, et « au moins une copie activée ».
-        var best: [String: (entry: CatalogEntry, version: String)] = [:]
+        // `fromCommand` retient d'où sort l'entrée retenue : commands et skills
+        // d'un plugin partagent le MÊME espace de noms (`<plugin>:<nom>`), donc
+        // `commands/deploy.md` et `skills/deploy/SKILL.md` se disputent un seul
+        // id. Sans ce drapeau, les commands étant balayées d'abord, le skill
+        // homonyme disparaissait du catalogue — or lui seul a une description
+        // garantie (`frontMatter` est exigé de lui, optionnel d'une command).
+        // CE QUE COÛTE LA PERTE, et ce n'est pas cosmétique : `closestMatch`
+        // note les propositions sur `"\(id) \(name) \(description)"` (l. 250).
+        // C'est la garde d'antériorité DÉTERMINISTE, celle qui ne dépend pas du
+        // bon vouloir du modèle et qui rattrapait 5 des 6 vrais doublons de la
+        // machine ; une description vidée lui retire ses mots discriminants.
+        var best: [String: (entry: CatalogEntry, version: String, fromCommand: Bool)] = [:]
         var anyEnabled: [String: Bool] = [:]
 
         for marketplace in Self.childDirectories(of: pluginsCacheRoot) {
@@ -440,6 +451,60 @@ public struct SkillCatalog: Sendable {
                         isMatch: { $0 == "SKILL.md" },
                         into: &found
                     )
+
+                    // LES SLASH COMMANDS DU PLUGIN, invocables `<plugin>:<nom>`
+                    // et logées dans le MÊME espace de noms que les skills —
+                    // c'est tout l'argument du piège n° 2. Elles n'étaient pas
+                    // inventoriées : la rétrospective pouvait proposer un skill
+                    // qui refait `pr-review-toolkit:review-pr` sans qu'aucune
+                    // antériorité ne s'affiche. Le piège n'était appliqué qu'aux
+                    // commands de l'UTILISATEUR.
+                    //
+                    // UNIQUEMENT `<version>/commands/`, la disposition standard.
+                    // Chercher `commands/` n'importe où sous la version serait
+                    // pire que de ne rien chercher : MESURÉ sur le cache réel, la
+                    // majorité des dossiers de ce nom sont des GABARITS de dépôt
+                    // (`cli-tool/templates/**/.claude/commands`), qui ne sont pas
+                    // invocables et pollueraient le catalogue d'entrées fausses —
+                    // un catalogue qui invente est pire qu'un catalogue qui rate,
+                    // puisqu'il ferait écarter des propositions légitimes.
+                    var commandHits: [(url: URL, components: [String])] = []
+                    Self.collect(
+                        in: version.appendingPathComponent("commands", isDirectory: true),
+                        prefix: [],
+                        depth: 1,
+                        isMatch: { $0.lowercased().hasSuffix(".md") },
+                        into: &commandHits
+                    )
+                    for hit in commandHits {
+                        // L'id porte le NOM DE FICHIER, pas le dossier
+                        // intermédiaire : `security/audit.md` s'invoque
+                        // `plugin:audit`, jamais `plugin:security:audit`.
+                        guard let file = hit.components.last else { continue }
+                        let name = String(file.dropLast(3))   // « .md »
+                        guard !name.isEmpty else { continue }
+                        let identifier = "\(pluginName):\(name)"
+                        anyEnabled[identifier] = (anyEnabled[identifier] ?? false) || isEnabled
+                        let candidate = CatalogEntry(
+                            id: identifier,
+                            name: name,
+                            // Une command sans front-matter reste invocable :
+                            // l'absence de description ne doit pas la faire
+                            // disparaître de l'inventaire d'antériorité.
+                            description: Self.frontMatter(of: hit.url)?.description ?? "",
+                            kind: .pluginSkill,
+                            origin: pluginName,
+                            isAvailable: isEnabled,
+                            path: hit.url
+                        )
+                        if let current = best[identifier] {
+                            if Self.isVersion(current.version, lowerThan: versionName) {
+                                best[identifier] = (candidate, versionName, true)
+                            }
+                        } else {
+                            best[identifier] = (candidate, versionName, true)
+                        }
+                    }
 
                     for hit in found {
                         // Il faut au moins `<nom>/SKILL.md` : un SKILL.md posé à
@@ -462,12 +527,18 @@ public struct SkillCatalog: Sendable {
                         )
                         if let current = best[identifier] {
                             // Égalité de version → on garde le PREMIER vu
-                            // (parcours trié = déterministe).
-                            if Self.isVersion(current.version, lowerThan: versionName) {
-                                best[identifier] = (candidate, versionName)
+                            // (parcours trié = déterministe), SAUF si le tenant
+                            // est une command homonyme : à version égale ou
+                            // supérieure, le skill la remplace. Une command d'une
+                            // version PLUS RÉCENTE, elle, reste gagnante — sinon
+                            // un vieux skill ressusciterait par-dessus elle.
+                            if Self.isVersion(current.version, lowerThan: versionName)
+                                || (current.fromCommand
+                                    && !Self.isVersion(versionName, lowerThan: current.version)) {
+                                best[identifier] = (candidate, versionName, false)
                             }
                         } else {
-                            best[identifier] = (candidate, versionName)
+                            best[identifier] = (candidate, versionName, false)
                         }
                     }
                 }

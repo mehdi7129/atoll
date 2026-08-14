@@ -124,7 +124,17 @@ enum TerminalJumpService {
         if let errorInfo {
             let code = (errorInfo[NSAppleScript.errorNumber] as? Int) ?? 0
             log.warning("AppleScript \(appName, privacy: .public) erreur \(code)")
-            if code == -1743 { return .needsAutomationPermission(appName: appName) }
+            if code == -1743 {
+                // MÊME repli qu'au préflight `.denied` juste au-dessus : le
+                // refus d'automatisation peut tomber ICI plutôt que là, selon
+                // que TCC a déjà tranché ou non. Le correctif de l'audit du
+                // 2026-07-27 n'avait été posé que sur l'une des deux sorties, et
+                // sur celle-ci le bouton principal du détail de session ne
+                // produisait toujours qu'un avertissement, sans remonter la
+                // fenêtre. `activate` ne demande AUCUNE permission.
+                activateBundle(bundleID)
+                return .needsAutomationPermission(appName: appName)
+            }
             return activateApp(bundleID: bundleID, kind: kind)
         }
         // Aucun onglet ne portait ce tty (onglet fermé, tty recyclé, pane

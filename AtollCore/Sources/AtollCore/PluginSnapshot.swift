@@ -288,28 +288,56 @@ public struct PluginSnapshot: Equatable, Sendable {
     /// `SkillCatalog.summaryForPrompt` pose déjà ce marqueur (audit du
     /// 2026-07-27).
     public func summaryForPrompt(limit: Int = 120) -> String {
+        promptCatalog(limit: limit).text
+    }
+
+    /// Le catalogue tel qu'il part dans le prompt, ET les identifiants qu'il
+    /// contient RÉELLEMENT.
+    ///
+    /// `PluginSearchResult.parse(cliOutput:knownIDs:)` documente que `knownIDs`
+    /// est « les identifiants du catalogue réellement fourni au modèle » — la
+    /// garde qui empêche une hallucination de devenir une commande
+    /// d'installation. L'appelant passait pourtant TOUS les `available` :
+    /// mesuré, 268 identifiants validés pour ~120 montrés, soit près de 150
+    /// acceptés sans avoir jamais été sous les yeux du modèle. Exactement le cas
+    /// que cette garde existe pour couvrir.
+    ///
+    /// Les redériver côté appelant (`availableRanked(limit:)`) ne suffisait pas :
+    /// c'est le plafond de 30 000 caractères, pas la limite d'entrées, qui coupe
+    /// le plus souvent. Une seule fonction décide donc de ce qui est montré, et
+    /// c'est elle qui dit ce qu'elle a montré.
+    public func promptCatalog(limit: Int = 120) -> (text: String, shownIDs: Set<String>) {
         // Deux passes : on rend d'abord tel quel ; s'il manque des entrées, on
         // recommence en RÉSERVANT la place du marqueur. Il compte donc DANS le
         // plafond, il ne s'y ajoute pas — sinon le rendu dépasserait le budget
         // qu'il est justement censé faire respecter.
         let entries = render(limit: limit, reserve: 0)
-        guard available.count > entries.count else { return entries.joined(separator: "\n") }
+        guard available.count > entries.count else {
+            return (entries.map(\.line).joined(separator: "\n"), Set(entries.compactMap(\.id)))
+        }
         let bounded = render(limit: limit, reserve: Self.truncationMarkerReserve)
         let hidden = available.count - bounded.count
-        return (bounded + [Self.truncationMarker(hidden: hidden)]).joined(separator: "\n")
+        let text = (bounded.map(\.line) + [Self.truncationMarker(hidden: hidden)])
+            .joined(separator: "\n")
+        return (text, Set(bounded.compactMap(\.id)))
     }
 
-    private func render(limit: Int, reserve: Int) -> [String] {
-        var lines: [String] = []
+    private func render(limit: Int, reserve: Int) -> [(id: String?, line: String)] {
+        var rendered: [(id: String?, line: String)] = []
         var total = 0
         for plugin in availableRanked(limit: limit) {
             let line = Self.promptLine(for: plugin)
-            let cost = line.count + (lines.isEmpty ? 0 : 1) // le "\n" de jointure
+            let cost = line.count + (rendered.isEmpty ? 0 : 1) // le "\n" de jointure
             if total + cost > Self.promptCharacterCap - reserve { break }
             total += cost
-            lines.append(line)
+            // Un identifiant plus long que `promptIdentifierCap` est TRONQUÉ
+            // dans la ligne : le modèle ne peut alors pas le citer exactement,
+            // et il ne doit pas figurer parmi ceux qu'on dit lui avoir montrés.
+            // L'invariant tenu est donc strict : tout `shownID` apparaît
+            // verbatim dans le texte.
+            rendered.append((line.contains(plugin.id) ? plugin.id : nil, line))
         }
-        return lines
+        return rendered
     }
 
     /// Marqueur de troncature, en français comme le reste des consignes.

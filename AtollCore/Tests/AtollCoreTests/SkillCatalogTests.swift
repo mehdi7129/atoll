@@ -618,4 +618,77 @@ final class SkillCatalogTests: XCTestCase {
             "exclu : une mise à jour n'est pas un doublon d'elle-même"
         )
     }
+
+    // MARK: - Les slash commands des PLUGINS (2026-08-14)
+
+    @discardableResult
+    private func seedPluginCommand(marketplace: String = "mk", plugin: String,
+                                   version: String, relativePath: String,
+                                   description: String = "desc") throws -> URL {
+        let url = pluginsCacheRoot
+            .appendingPathComponent("\(marketplace)/\(plugin)/\(version)/commands/\(relativePath)")
+        try write("""
+        ---
+        description: \(description)
+        ---
+
+        # corps
+        """, to: url)
+        return url
+    }
+
+    /// Elles s'invoquent `<plugin>:<nom>` et occupent le MÊME espace de noms que
+    /// les skills : sans elles, la rétrospective proposait un doublon sans
+    /// qu'aucune antériorité ne s'affiche.
+    func testLesCommandsDePluginSontInventoriees() throws {
+        try seedPluginCommand(plugin: "pr-review-toolkit", version: "1.0.0", relativePath: "review-pr.md")
+        let ids = makeCatalog().entries().map(\.id)
+        XCTAssertTrue(ids.contains("pr-review-toolkit:review-pr"), "ids trouvés : \(ids)")
+    }
+
+    /// L'id porte le NOM DE FICHIER, jamais le dossier intermédiaire.
+    func testLeDossierIntermediaireNEntrePasDansLId() throws {
+        try seedPluginCommand(plugin: "security-pro", version: "1.0.0",
+                              relativePath: "security/security-audit.md")
+        let ids = makeCatalog().entries().map(\.id)
+        XCTAssertTrue(ids.contains("security-pro:security-audit"), "ids trouvés : \(ids)")
+        XCTAssertFalse(ids.contains("security-pro:security:security-audit"))
+    }
+
+    /// Une command SANS front-matter reste invocable : elle doit figurer au
+    /// catalogue, description vide.
+    func testUneCommandSansFrontMatterEstQuandMemeInventoriee() throws {
+        let url = pluginsCacheRoot.appendingPathComponent("mk/outil/1.0.0/commands/nue.md")
+        try write("# juste un corps, aucun front-matter", to: url)
+        let entries = makeCatalog().entries()
+        XCTAssertTrue(entries.contains { $0.id == "outil:nue" }, "ids : \(entries.map { $0.id })")
+    }
+
+    /// COLLISION : `commands/deploy.md` et `skills/deploy/SKILL.md` du même
+    /// plugin réclament l'id `outil:deploy`. Les commands étant balayées les
+    /// premières, le skill homonyme disparaissait — avec sa description, la
+    /// seule garantie (le front-matter est exigé pour un skill, optionnel pour
+    /// une command). À version égale, le skill l'emporte.
+    func testUnSkillLEmporteSurUneCommandHomonyme() throws {
+        try seedPluginCommand(plugin: "outil", version: "1.0.0",
+                              relativePath: "deploy.md", description: "venue de la command")
+        try seedPluginSkill(plugin: "outil", version: "1.0.0", skill: "deploy",
+                            description: "venue du skill")
+        let entries = makeCatalog().entries().filter { $0.id == "outil:deploy" }
+        XCTAssertEqual(entries.count, 1, "un id, une entrée")
+        XCTAssertEqual(entries.first?.description, "venue du skill")
+    }
+
+    /// La contrepartie, qui empêche le correctif d'en devenir un autre : une
+    /// command d'une version PLUS RÉCENTE reste gagnante, sinon un skill
+    /// périmé ressusciterait par-dessus elle.
+    func testUneCommandPlusRecenteResisteAUnSkillPerime() throws {
+        try seedPluginSkill(plugin: "outil", version: "1.0.0", skill: "deploy",
+                            description: "vieux skill")
+        try seedPluginCommand(plugin: "outil", version: "2.0.0",
+                              relativePath: "deploy.md", description: "command récente")
+        let entries = makeCatalog().entries().filter { $0.id == "outil:deploy" }
+        XCTAssertEqual(entries.count, 1)
+        XCTAssertEqual(entries.first?.description, "command récente")
+    }
 }

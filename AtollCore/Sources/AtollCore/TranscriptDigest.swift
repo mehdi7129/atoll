@@ -186,6 +186,19 @@ public enum TranscriptDigest {
                 guard estimatedTotal() > budget else { break }
                 guard keep[index] else { continue }
                 let role = selected[index].role
+                // L'INTENTION UTILISATEUR N'EST PAS TOUCHÉE EN PASSE 0.
+                //
+                // Sans cette ligne, la réserve INVERSAIT la priorité qu'elle est
+                // censée servir : une entrée `.tool` encore dans ses 25 % était
+                // épargnée (`continue`), tandis que les `.user`, sans réserve,
+                // restaient sacrifiables. Dès que les rangs 2 et 4 (assistant,
+                // summary) étaient épuisés, l'élagage attaquait la demande de
+                // l'utilisateur pendant que 40 % du budget restait sanctuarisé
+                // pour des rôles que `sacrificeRank` classe pourtant comme les
+                // PREMIERS à partir. La passe 1, qui n'épargne plus rien,
+                // attaque de toute façon `.tool` avant `.user` — l'ordre annoncé
+                // est donc enfin celui qui s'applique.
+                if pass == 0, role == .user { continue }
                 if pass == 0, let reserve = protectedBudget[role] {
                     // Ce qui est GARDÉ pour ce rôle, recalculé à la volée.
                     let kept = selected.indices
@@ -351,8 +364,13 @@ public enum TranscriptDigest {
     /// secondes évincent intégralement les premières. 25 % du budget suffisent
     /// à faire entrer plusieurs dizaines de commandes réussies, et 15 % pour
     /// les erreurs — l'autre moitié du savoir (« ce qui a raté et comment on
-    /// s'en est sorti »). Les `.user` n'ont pas besoin de réserve : ils sont
-    /// déjà les derniers sacrifiés.
+    /// s'en est sorti »).
+    ///
+    /// Les `.user` n'ont PAS de réserve, et n'en ont pas besoin — mais pas pour
+    /// la raison qui était écrite ici (« ils sont déjà les derniers
+    /// sacrifiés ») : la réserve elle-même cassait cet invariant, puisqu'elle
+    /// épargnait des `.tool` pendant que des `.user` partaient. Ils sont
+    /// protégés explicitement en passe 0, cf. la boucle d'élagage.
     static let reservedShares: [TranscriptLine.Role: Double] = [
         .tool: 0.25,
         .toolResult: 0.15,
