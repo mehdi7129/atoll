@@ -362,12 +362,16 @@ dédup inter-fichiers + récence du recall, tableau de bord des notes. Milestone
 donc **fin de la feuille de route « Atoll 2 »** : la suite est à décider.
 
 ### Phase 13 — « Rendre la main » — ✅ livrée (v0.13.0)
-Atoll savait démarrer et surveiller ; il apprend à rendre la main. Une tâche lancée
-depuis le notch prévient quand elle a fini (notification macOS + résumé d'une ligne
-tiré du hook `Stop`, et une trace dans l'îlot). Deux sons personnalisables — décision
-attendue / tâche terminée — au choix parmi les sons macOS ou les fichiers de
-l'utilisateur, avec reprise RÉVERSIBLE de ses hooks `afplay`. Et une lecture de la
-flotte par ÉTAT (à examiner d'abord), bornée à la hauteur du panneau.
+Atoll savait démarrer et surveiller ; il apprend à rendre la main. Deux sons
+personnalisables — décision attendue / tâche terminée — au choix parmi les sons macOS
+ou les fichiers de l'utilisateur, avec reprise RÉVERSIBLE de ses hooks `afplay` ;
+depuis la v0.15.1 c'est le HELPER qui les joue quand l'app est fermée. Et une lecture
+de la flotte par ÉTAT (à examiner d'abord), bornée à la hauteur du panneau.
+
+⛔️ **Le volet « fin de tâche annoncée » de cette phase est RETIRÉ** (2026-08-03, avec
+le cockpit) : sa seule source était la fenêtre ⌘N, qui n'a jamais lancé une tâche —
+l'annonce n'a donc jamais sonné une seule fois. Plus aucune ligne du dépôt n'importe
+`UserNotifications`. Ce paragraphe l'a décrite au présent onze jours de trop.
 Plan détaillé : `docs/ROADMAP-13-rendre-la-main.md`.
 
 Chaque phase se termine par un build utilisable — tu peux t'arrêter (ou pivoter) à n'importe

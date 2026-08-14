@@ -134,7 +134,7 @@ l'épingle, cliquer ailleurs le referme.
 
 <br>
 
-En fin de session substantielle, et seulement si ta fenêtre de quota a de la marge, une
+En fin de session substantielle, et en tenant compte de ta fenêtre de quota, une
 analyse **en lecture seule** relit la session et en extrait ce qui dure :
 
 - des **notes mémoire**, indexées et citées par les recherches suivantes ;

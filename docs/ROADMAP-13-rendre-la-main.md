@@ -1,5 +1,14 @@
 # Phase 13 — « Rendre la main »
 
+> ⚠️ **DOCUMENT HISTORIQUE — lire l'avertissement avant le plan.** La phase a été
+> livrée en v0.13.0, PUIS son volet **13a « fin de tâche annoncée » a été RETIRÉ**
+> le 2026-08-03 avec le cockpit ⌘N : sa seule source était la fenêtre de lancement,
+> qui n'a jamais lancé une tâche, donc l'annonce n'a jamais sonné. `LaunchedTask`,
+> `TaskCompletionNotifier` et `FleetLauncherWindow` n'existent plus, et plus aucune
+> ligne du dépôt n'importe `UserNotifications`. Tout ce qui suit décrit donc une
+> INTENTION de juillet, pas l'état du code. Les volets sons et flotte-par-état,
+> eux, sont bien vivants.
+>
 > Plan de développement validé avec Mehdi le 2026-07-27.
 > Fil conducteur : **Atoll sait démarrer et surveiller ; il doit apprendre à
 > rendre la main.** Quand une tâche finit, quand une décision est attendue,

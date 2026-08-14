@@ -122,8 +122,9 @@ et `atoll-adversarial-review-workflow-recovery`.
 
 ### Ce qui reste ouvert (non tranché)
 
-- **Recherche de plugin par besoin** : le catalogue public (268 entrées avec leur
-  popularité) est décodé et prêt, mais rien ne s'en sert encore — il manque le geste
-  produit (« trouve-moi un plugin pour X ») et son coût en quota.
+- ~~**Recherche de plugin par besoin**~~ — **LIVRÉE** dans la v0.12.0 elle-même :
+  le geste produit existe (Réglages › Apprentissage, `App/SettingsView.swift`), Haiku
+  compare le besoin au catalogue public et tout identifiant halluciné est écarté.
+  Ce point n'aurait jamais dû rester dans « ce qui reste ouvert ».
 - **Sceller les notes** comme les skills (manifeste + SHA256).
 - **Rendre l'injection du recall proactif visible** dans l'îlot.

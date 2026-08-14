@@ -135,9 +135,18 @@ qui a changé depuis (git), et le nombre de fichiers qui dépendent de celui-ci
   mécanique. Une carte qui se remplirait à chaque `Read` SURESTIMERAIT la
   couverture — elle perdrait la seule propriété qui la rend utile, et mentirait
   dans le sens dangereux.
-- Relevé au 2026-08-14 : **68 fichiers sur 92 jamais relus ligne à ligne, soit
-  12 672 lignes — 53 % du code**. Le reste (21 fichiers, 10 148 lignes) est à jour ;
-  trois fichiers relus le 12 août ont dérivé depuis.
+- Relevé au 2026-08-14, APRÈS les deux campagnes : **93 fichiers, 24 259 lignes,
+  AUCUN jamais relu ligne à ligne (0 %)**. Ce qui reste à surveiller n'est plus la
+  couverture mais la DÉRIVE : deux fichiers relus le 12 août ont changé depuis
+  (`PermissionDecision` +8 lignes, `HookSettingsEditor` +2).
+  Pour mémoire, le chiffre d'AVANT les campagnes, celui qui a fixé leur ordre de
+  passage : 68 fichiers sur 92 jamais relus, 12 672 lignes, 53 % du code.
+  ⚠️ **`check-docs.py` NE contrôle PAS ce relevé**, et ne le peut pas : sa
+  vérification n'AVERTIT que s'il RESTE des fichiers jamais relus — à zéro, elle se
+  tait par construction. C'est un contrôle qui ne se déclenche que dans un sens, et
+  c'est exactement ce qui a laissé la version précédente de cette ligne annoncer
+  53 % pendant que le script en rendait 0. Relancer `Scripts/review-map.py` avant
+  de croire ce paragraphe.
 - `--graph` seul répond à « si je touche ça, qu'est-ce que ça porte ? ».
   Les pivots mesurés : `BridgePaths` (18 dépendants), `SessionStore` (12),
   puis `InteractionCenter`, `ThemeColors`, `IslandGeometry`, `MemoryIndex` et
@@ -212,7 +221,11 @@ Pièges de build appris à la dure :
 - `Bridge/` — helper CLI `atoll-bridge` embarqué dans le bundle (Contents/Helpers) :
   appelé par les hooks Claude Code, enrichit le payload (pid, tty, env) et l'envoie
   au socket Unix de l'app.
-- `docs/research/` — 10 rapports de recherche (hooks, notch, quota, jump-back…).
+- `Shared/` — le peu de code partagé entre l'app et le helper, hors AtollCore parce
+  qu'il appelle des API système (`ProcessInspector` : `sysctl`, `KERN_PROCARGS2`).
+  Y ajouter quelque chose demande de se demander d'abord pourquoi ça ne va pas
+  dans `AtollCore/`, qui est testable.
+- `docs/research/` — 11 rapports de recherche (hooks, notch, quota, jump-back…).
   **Source de vérité technique** : formats JSON exacts, APIs vérifiées, pièges connus.
   Les consulter avant d'implémenter une intégration.
 - `PLAN.md` — plan produit/technique et roadmap par phases (état d'avancement inclus).
@@ -254,8 +267,17 @@ documentation — et un numéro de version faux depuis trois releases.
    EXCEPTION ENCADRÉE (Rockstar) : les règles `permissions.deny` de l'utilisateur
    sont suspendues pendant Rockstar — parquées dans `~/.atoll/rockstar-parked-deny.json`
    (écrit AVANT de toucher settings.json, crash-safe), restaurées à la sortie, au
-   lancement de l'app (réconciliation) et à la désinstallation. C'est le SEUL cas où
-   Atoll touche à des entrées non-Atoll, à la demande explicite de l'utilisateur.
+   lancement de l'app (réconciliation) et à la désinstallation.
+   Il y a **EXACTEMENT DEUX** exceptions à cette règle, et pas une de plus — toutes
+   deux à la demande explicite de l'utilisateur, toutes deux sous le même régime
+   (parking écrit AVANT settings.json, donc crash-safe ; restitution à la sortie, au
+   lancement et à la désinstallation) :
+   1. **Rockstar** — les `permissions.deny` ci-dessus.
+   2. **Les hooks sonores** (`~/.atoll/parked-sound-hooks.json`, Phase 13) — les
+      hooks `afplay` de l'utilisateur sont MONTRÉS puis repris, pour ne pas jouer
+      deux fois le même son.
+   Toute troisième exception se discute AVANT d'être écrite : c'est la règle la plus
+   coûteuse à enfreindre du projet.
 3. **Transcripts JSONL** (`~/.claude/projects/`) : format officiellement interne et
    instable → parsing défensif uniquement, jamais une dépendance dure.
 4. Pas de dépendances lourdes, pas d'Electron, **zéro télémétrie**.
@@ -312,7 +334,11 @@ Les quatre qui comptent :
 - **Un seul instantané de flotte vide annonçait toutes les tâches `--bg`
   terminées**, définitivement (`notified` idempotent), pendant que l'îlot les
   affichait « en cours ». Le store tolérait 2 absences, le journal aucune :
-  deux politiques opposées sur le MÊME instantané (`fleetMissTolerance`).
+  deux politiques opposées sur le MÊME instantané. (Le compteur s'appelle
+  aujourd'hui `AgentSession.missedScans`, seuil `>= 2` dans
+  `SessionStore.applyFleetSnapshot` ; l'ancien nom `fleetMissTolerance` n'existe
+  plus. À ne pas confondre avec `pendingCardFleetTolerance = 50`, qui protège une
+  carte de permission en attente, pas la liveness.)
 - **Archiver/désinstaller un skill détruisait ses ressources jointes**
   (`references/`, `scripts/`) : seul `SKILL.md` était copié, puis le DOSSIER
   entier supprimé. On archive maintenant le dossier complet.
@@ -447,7 +473,9 @@ Mehdi sur la v0.14.1, tous reproduits et mesurés avant d'être corrigés.
     en page. Le corps visible passe de 562 à **600 pt** (mesuré : 565 → 601 px).
   - **Les règles ASCII étaient calibrées sur l'ancienne boîte** : 52 → 68 (SESSIONS,
     qui partage sa rangée avec `[ PROJET ]`/`[ ÉTAT ]`), 72 → 79 (QUOTA,
-    APPRENTISSAGE, TÂCHE TERMINÉE), `rule(56)` → `rule(79)`. Chiffre à retenir :
+    APPRENTISSAGE, et la bannière TÂCHE TERMINÉE — cette dernière a disparu avec le
+    cockpit le 2026-08-03, la largeur reste celle des deux autres), `rule(56)` →
+    `rule(79)`. Chiffre à retenir :
     **l'avance de `AtollFont.mono(11)` vaut 6,7998 pt** (5,5635 pt à 9 pt) — dans une
     boîte de 548 pt, 79 caractères laissent 10,8 pt de mou et **81 débordent**.
   - **`NotchShape.sideInset`** (compact 6 / déployé 0) : sans inset latéral du tout,
@@ -830,7 +858,10 @@ surveiller ; il apprend à rendre la main. Plan : `docs/ROADMAP-13-rendre-la-mai
   puis restitution **JSON-identique** à la sauvegarde.
 - **FLOTTE PAR ÉTAT** (`AtollCore/SessionGrouping`) : bascule `[ PROJET ] / [ ÉTAT ]`
   dans l'îlot, ordre imposé à examiner → en attente de toi → en cours → terminées.
-  BORNÉ à 4 lignes (`IslandRowBudget.rows`, via `ExpandedView.rowBudget`) : le
+  BORNÉ par `IslandRowBudget.rows(bannerShown:)`, via `ExpandedView.rowBudget` :
+  **6 rangées normalement, 4 seulement quand une bannière est affichée** (elle mange
+  ~66 pt) ; la vue par PROJET en coûte une de plus, elle dessine toujours un pied
+  (`projectFooterCost`). Le
   panneau a une hauteur FIXE et
   la vue dépliée poussait le quota hors du cadre (vu en capture) ; le surplus est
   ANNONCÉ (« +N autres »), jamais tronqué en silence.
@@ -938,8 +969,11 @@ route « Atoll 2 ». Trois volets, tous vérifiés en vrai :
   staging → bascule → index. Contradictions JAMAIS tranchées : remontées en
   avertissements dans Réglages › Apprentissage. Vérifié en vrai : 5 notes → 3, doublons
   iCloud/CodeSign fusionnés avec leurs `sources`, contradiction 15 s/30 s signalée,
-  archive complète dans `archive/notes-<stamp>/`. Réglages : « Consolider les notes
-  chaque semaine » (opt-in) + bouton « Curer maintenant ». Debug :
+  archive complète dans `archive/notes-<stamp>/`. Réglages, section « Ranger les
+  notes » : interrupteur « Ranger les notes chaque semaine » (opt-in) + bouton
+  « Ranger maintenant » (« Rangement en cours… » pendant le run). Ces libellés
+  disaient « Consolider… » et « Curer maintenant » jusqu'à la v0.13.2 — le bloc
+  VOCABULAIRE plus bas n'avait pas enregistré CES deux chaînes-là. Debug :
   `notifyutil -p dev.mehdiguiard.atoll.debug.curation`.
 - **RECALL PROACTIF** (`Bridge/ProactiveRecallHook.swift`, `AtollCore/ProactiveRecall`) :
   OPT-IN, OFF par défaut. Le réglage écrit `~/.atoll/proactive-recall.json` (source de

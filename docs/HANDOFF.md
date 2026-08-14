@@ -141,7 +141,7 @@ GPL-3.0, repo PUBLIC `github.com/mehdi7129/atoll`).
 | Quoi | Où |
 |---|---|
 | Version | **v0.16.4** — les six constats sérieux des campagnes corrigés (PUBLIÉE). La v0.16.3, publiée le même jour, portait les correctifs des campagnes elles-mêmes. La v0.16.2 reste la version qui a mis la mémoire SOUS INSTRUMENT — c'est elle qui rend le rendez-vous de septembre possible |
-| Git | `main` poussé, **arbre propre**, et **une seule branche** (`main`) : les deux branches de travail ont été supprimées après fusion. Vérifier d'un coup : `git log --oneline -3 && git status --porcelain` (un hash écrit ici serait périmé dès le commit suivant) |
+| Git | `main` poussé, **arbre propre**, **une seule branche** et **un seul worktree** — trois branches `session/*` (toutes à 0 commit hors de `main`) et un second worktree ont été retirés le 2026-08-14. ⚠️ Cette ligne a déjà été FAUSSE : elle annonçait « une seule branche » alors qu'il y en avait quatre et qu'un worktree traînait. **Ne pas la croire, la vérifier** : `git status --porcelain && git branch && git worktree list` — les trois, car `git status` seul est propre dans un dépôt qui a du travail caché dans un worktree |
 | Tests | **733 verts** (`cd AtollCore && swift test`, ~1,4 s), build **0 warning** |
 | Phases | **1 à 14 livrées**, la **9 RETIRÉE** le 2026-08-03. Feuille de route « Atoll 2 » ÉPUISÉE ; le cadre en vigueur est `docs/VISION-2026-08.md`, décliné en `docs/PLAN-2026-08-court-terme.md` |
 | Build installé | `~/Applications/Atoll.app` = **Release NOTARISÉE v0.16.4** (bundle 29), installée et vérifiée le 2026-08-14 : `spctl : accepted — Notarized Developer ID`, staple validé, `codesign --verify --deep --strict` sans résidu, helper signé, app relancée. Les bundles remplacés sont conservés sous `~/Applications/Atoll-<version>-remplacee-*.app` (0.16.0 et 0.16.2) — à mettre à la corbeille quand la 0.16.4 aura fait ses preuves. Pas de build Debug installé — pour reprendre la boucle de dev, l'installer en `~/Applications/Atoll-dev.app`, jamais `ditto` par-dessus la Release (`ditto` FUSIONNE, un `Atoll.debug.dylib` résiduel casse le sceau) |
@@ -921,7 +921,11 @@ Le chat intégré n'existe plus (retiré le 2026-07-19), mais `RetrospectiveRunn
 
 ### Interactions (Phase 3)
 - **Course terminal ↔ îlot** (issue #12176) : le prompt TUI et le hook bloquant coexistent,
-  premier répondu gagne. On annule la carte sur PostToolUse/Stop/SessionEnd/mort de session.
+  premier répondu gagne. On annule la carte sur Stop / SessionEnd / permissionDenied /
+  userPromptSubmit / mort de session — inconditionnellement, ces quatre-là PROUVENT que la
+  session a avancé. Sur **PostToolUse c'est CONDITIONNEL depuis la v0.16.1** : on ne referme
+  que la carte du MÊME outil, et l'ambiguïté ne referme RIEN. Sans ça, les hooks d'outils d'un
+  sous-agent (qui portent le `session_id` du PARENT) effaçaient la carte du parent.
 - Le `PermissionRequest` hook ne fire PAS dans le panneau d'extension VS Code/Cursor
   (issue #16237) — seulement le terminal intégré (qui, lui, marche). Sessions panneau =
   lecture seule.
