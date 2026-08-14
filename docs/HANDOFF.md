@@ -2,10 +2,38 @@
 
 > Document de continuité pour reprendre le dev après un compactage de conversation.
 > **À lire en premier** avec `CLAUDE.md` (règles) et `PLAN.md` (plan produit).
-> Dernière mise à jour : **2026-08-14**. **AUDIT COMPLET** —
-> `docs/AUDIT-2026-08-14.md` : dix-huit défauts corrigés, six API mortes retirées,
-> aucune fonction ajoutée, 691 tests verts, build sans warning. À savoir en
-> reprenant :
+> Dernière mise à jour : **2026-08-14**. Journée en trois temps : un **audit
+> complet** (`docs/AUDIT-2026-08-14.md`, 18 défauts corrigés dont trois chemins
+> destructeurs), puis **deux outils de continuité**, puis **deux campagnes de
+> relecture** qui ont porté la couverture du dépôt à 100 %. 696 tests, build sans
+> warning, `Scripts/check-docs.py` vert.
+>
+> **DEUX OUTILS À CONNAÎTRE AVANT DE REPRENDRE — ils remplacent de la discipline
+> par de la mécanique :**
+>
+> - **`Scripts/check-docs.py`** confronte au code tout ce qui est vérifiable dans
+>   les documents (12 familles : comptes, listes, versions, symboles, liens,
+>   badges du README, secrets, API morte, registre des relectures…). **Le lancer
+>   AVANT de croire CLAUDE.md ou ce fichier.** `Scripts/release.sh` l'appelle en
+>   préflight : le piège Sparkle qui coûtait huit minutes éclate désormais en une
+>   seconde.
+> - **`Scripts/review-map.py`** dit ce qui n'a jamais été relu ligne à ligne, ce
+>   qui a **dérivé depuis** sa dernière lecture, et combien de fichiers en
+>   dépendent. Sa source est `docs/reviews.json`, qui n'inscrit QUE ce qu'un
+>   document d'audit affirme. Oublier d'y ajouter une campagne fait échouer
+>   `check-docs.py` — ce n'est plus une règle à retenir.
+>
+> **CAMPAGNES DE RELECTURE (2026-08-14)** — `docs/AUDIT-2026-08-14-relectures.md`
+> et `…-vague2.md`. Le dépôt entier (92 fichiers, 23 800 lignes) a été relu au
+> moins une fois en adversaire : **72 constats, 20 sérieux**, dont six corrigés.
+> Les défauts les plus visibles : le **titre IA n'a jamais fonctionné**
+> (`TranscriptTailer` lisait `title`, le CLI écrit `aiTitle` — 571 lignes réelles
+> vérifiées, 0 portant `title`), deux sessions du même projet affichaient
+> « Desktop/Dynamic_Island », et un `"sessionId": null` faisait disparaître une
+> session entière de l'îlot. **Le reste des constats est consigné, pas corrigé** :
+> c'est la première chose à reprendre.
+>
+> À savoir aussi en reprenant :
 >
 > 1. **Le commit d'audit du 12 août n'était PAS dans `main`** — il vivait dans un
 >    worktree (`session/stoic-finch-xf8q`). Fusionné en fast-forward au début de
