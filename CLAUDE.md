@@ -50,12 +50,11 @@
 > septembre garde sa base. C'est le journal lui-même qui a démenti l'estimation
 > théorique du biais.
 >
-> Auparavant **v0.16.1** — sept défauts corrigés, dont **deux chemins
-> destructeurs** (un `settings.json` de zéro octet écrasait la config ; Rockstar
-> survivait à la fermeture d'Atoll) et **deux fonctions écrites, testées et jamais
-> appelées** (`MemoryRanking.byCoverage` sur le recall proactif,
-> `AgentsSnapshot` qui ne distinguait pas « aucune session » de « format inconnu »).
-> Aucune fonction ajoutée. Détail plus bas.
+> **VÉRIFIER AVANT DE CROIRE CE FICHIER** : `Scripts/check-docs.py` confronte au
+> code tout ce qui y est mécaniquement vérifiable (comptes, listes, versions,
+> symboles, liens, badges du README). Il est passé vert au moment où ces lignes
+> ont été écrites — mais un document ne vieillit pas bien : le relancer coûte
+> quelques secondes, `--no-tests` pour la version rapide.
 >
 > Le cadre en vigueur n'est pas une feuille de route de fonctions mais
 > `docs/VISION-2026-08.md` : Anthropic livre nativement de plus en plus de la surface
@@ -63,12 +62,9 @@
 > ce document et son plan court terme — plusieurs idées séduisantes y sont déjà
 > écartées, avec la raison.
 >
-> Auparavant : v0.16.0 (la mémoire répond, et Atoll rend ce qui n'est pas à lui —
-> quatre lots, **−910 lignes nettes**) ;
-> v0.15.1 (le son ne dépend plus de l'app — le helper joue quand elle est
-> fermée) ; v0.15.0, Phase 14 « Arêtes franches » (coins hauts droits, contour au
-> calibrage Apple, ouverture sans contour fantôme, badge « INPUT? » retiré) ;
-> v0.14.1, audit complet — 59 + 25 défauts corrigés, cf. `docs/AUDIT-2026-07-27.md`.
+> Les versions antérieures (v0.16.1 et avant) sont racontées plus bas, section par
+> section, avec leurs pièges — c'est là qu'il faut les lire, pas dans un résumé de
+> tête qui redisait la même chose en moins précis.
 
 Atoll est une app macOS native (Swift/SwiftUI) : une « Dynamic Island » autour du notch,
 esthétique ASCII, pour suivre et piloter les sessions Claude Code. Gratuit, open source,
@@ -85,7 +81,30 @@ xcodebuild -project Atoll.xcodeproj -scheme Atoll \
 ditto "$DD/Build/Products/Debug/Atoll.app" ~/Applications/Atoll.app
 open ~/Applications/Atoll.app                      # lancer LA COPIE, jamais le produit de build
 cd AtollCore && swift test                         # tests de la logique pure
+Scripts/check-docs.py --no-tests                   # les documents mentent-ils ? (quelques secondes)
 ```
+
+**`Scripts/check-docs.py` — À LANCER AVANT DE CROIRE CE FICHIER, et après toute
+modification de docs.** Il confronte au code onze familles d'affirmations
+vérifiables : compte de tests, triggers debug DANS LES DEUX SENS, versions
+(project.yml ↔ README ↔ CLAUDE.md ↔ appcast), collision de `CFBundleVersion`,
+symboles et fichiers cités mais disparus, badges et boutons ASCII du README face
+à `AsciiArt` et `InteractionCardView`, liens et images absents, secrets et
+chemins personnels dans les fichiers suivis, API publique morte, notifications
+orphelines, et — avec `--network` — les URL de l'appcast plus l'égalité entre le
+flux servi par GitHub Pages et le fichier local.
+- Il ne juge QUE le vérifiable. Un arbitrage, une intention, un « pourquoi » ne
+  s'y testent pas : ils se datent et se relisent. C'est justement pour ça qu'il
+  existe — que l'attention humaine aille à ce qui ne peut PAS être automatisé.
+- `Scripts/release.sh` l'appelle en `--preflight` : le piège Sparkle décrit plus
+  bas coûtait huit minutes de build et deux notarisations avant d'éclater ; il
+  éclate maintenant en une seconde. `--preflight` saute le seul contrôle de
+  l'appcast, qui va justement être régénéré — un préflight qui crie à tort est un
+  préflight qu'on contourne.
+- **Validé par sabotage**, comme un correctif : onze dérives réintroduites une à
+  une, onze attrapées. Un contrôle qui ne peut pas échouer est pire qu'aucun
+  contrôle — celui du `CFBundleVersion` lisait l'`Info.plist` de Sparkle au lieu
+  de celui d'Atoll, et en XML alors qu'il est BINAIRE : il passait toujours.
 
 Pièges de build appris à la dure :
 - **DerivedData HORS du Bureau** : ce repo vit sur un Bureau synchronisé iCloud dont le

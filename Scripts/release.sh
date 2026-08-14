@@ -32,6 +32,23 @@ DIST="$ROOT/dist/$VERSION"
 # PERSISTANT entre releases (jamais rm) : generate_appcast y retrouve les
 # archives précédentes → appcast multi-entrées + deltas incrémentaux.
 UPDATES="$ROOT/dist/updates"
+
+# ── PRÉFLIGHT (quelques secondes) — AVANT les ~8 minutes de build et les deux
+# notarisations. C'est là que le piège de la v0.14.0 se serait vu : bouger
+# MARKETING_VERSION sans bouger CURRENT_PROJECT_VERSION fait échouer
+# generate_appcast à la toute fin (« Duplicate updates are not supported »),
+# après tout le travail. CLAUDE.md demandait jusqu'ici de le vérifier À LA MAIN.
+# Le préflight contrôle aussi que le README, CLAUDE.md et l'appcast annoncent
+# bien la version qu'on s'apprête à publier — un dépôt public qui se contredit
+# se remarque, et personne ne relit tout ça au moment de publier.
+echo "── Préflight documentaire"
+if ! python3 "$ROOT/Scripts/check-docs.py" --no-tests --preflight; then
+  echo ""
+  echo "✗ Le dépôt affirme quelque chose que le code contredit — release interrompue."
+  echo "  Corrigez ci-dessus, ou relancez après vérification. (Scripts/check-docs.py)"
+  exit 1
+fi
+
 rm -rf "$DIST"
 mkdir -p "$DIST" "$UPDATES"
 

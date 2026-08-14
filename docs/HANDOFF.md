@@ -796,6 +796,7 @@ ditto "$DD/Build/Products/Debug/Atoll.app" ~/Applications/Atoll.app   # lancer L
 pkill -x Atoll; sleep 1; open ~/Applications/Atoll.app                # relancer
 
 cd AtollCore && swift test              # 691 tests (2026-08-14)
+Scripts/check-docs.py --no-tests        # ce document ment-il ? (quelques secondes)
 
 # Debug runtime
 /usr/bin/log stream --predicate 'subsystem == "dev.mehdiguiard.atoll"' --level debug

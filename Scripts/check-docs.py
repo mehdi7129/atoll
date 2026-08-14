@@ -17,6 +17,10 @@ humaine aille à ce qui ne l'est pas.
     Scripts/check-docs.py              # tout sauf le réseau, tests inclus
     Scripts/check-docs.py --no-tests   # rapide (saute `swift test`)
     Scripts/check-docs.py --network    # + les URL de l'appcast et du README
+    Scripts/check-docs.py --preflight  # avant une release (appcast pas encore régénéré)
+
+`Scripts/release.sh` l'appelle en préflight : quelques secondes AVANT les huit
+minutes de build et les deux notarisations, plutôt qu'un échec à la toute fin.
 
 Sortie 0 = aucune dérive. Sortie 1 = au moins une ERREUR.
 Les AVERTISSEMENTS ne font jamais échouer : ce sont des signaux à regarder, pas
@@ -187,8 +191,15 @@ def check_debug_triggers() -> None:
 
 # ------------------------------------------------------------- 3. les versions
 
-def check_versions() -> None:
-    """project.yml fait autorité ; README, CLAUDE.md et l'appcast doivent suivre."""
+def check_versions(preflight: bool = False) -> None:
+    """project.yml fait autorité ; README, CLAUDE.md et l'appcast doivent suivre.
+
+    `preflight` : appelé AVANT une release, donc avant que `generate_appcast`
+    n'ait produit la nouvelle entrée. Contrôler l'appcast à ce moment-là
+    échouerait à CHAQUE release légitime — et un préflight qui crie à tort est
+    un préflight qu'on contourne. Le reste (README, CLAUDE.md, collision de
+    build) doit en revanche être juste avant de lancer huit minutes de travail.
+    """
     global checked
     project = read("project.yml")
     marketing = re.search(r'MARKETING_VERSION:\s*"([^"]+)"', project)
@@ -209,7 +220,7 @@ def check_versions() -> None:
 
     appcast = read("docs/appcast.xml")
     newest = re.search(r"<sparkle:shortVersionString>([^<]+)</sparkle:shortVersionString>", appcast)
-    if newest and newest.group(1) != version:
+    if newest and newest.group(1) != version and not preflight:
         fail("versions", f"la première entrée de l'appcast est {newest.group(1)}, project.yml dit {version}")
 
     # PIÈGE DE RELEASE payé en v0.14.0 : `generate_appcast` échoue APRÈS le build
@@ -496,11 +507,13 @@ def main() -> int:
     parser.add_argument("--no-tests", action="store_true", help="saute `swift test` (rapide)")
     parser.add_argument("--network", action="store_true", help="vérifie aussi les URL publiques")
     parser.add_argument("--json", action="store_true", help="rapport machine")
+    parser.add_argument("--preflight", action="store_true",
+                        help="avant une release : saute le contrôle de l'appcast, qui va être régénéré")
     args = parser.parse_args()
 
     check_test_count(run_tests=not args.no_tests)
     check_debug_triggers()
-    check_versions()
+    check_versions(preflight=args.preflight)
     check_cited_symbols()
     check_cited_files()
     check_readme_ascii()
