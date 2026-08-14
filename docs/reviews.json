@@ -65,6 +65,22 @@
         "AtollCore/Sources/AtollCore/StatusLineEditor.swift",
         "Bridge/ProactiveRecallHook.swift"
       ]
+    },
+    {
+      "date": "2026-08-14",
+      "document": "docs/AUDIT-2026-08-14-relectures.md",
+      "depth": "line-by-line",
+      "note": "CAMPAGNE, vague 1 — les 8 fichiers que la carte des relectures désignait comme les plus risqués (4 268 lignes, un tiers de tout ce qui n'avait jamais été lu). 6 lots, 31 constats : 8 sérieux, 23 mineurs. La lentille SkillCatalog a confronté ses hypothèses au DISQUE RÉEL, pas seulement au code.",
+      "files": [
+        "AtollCore/Sources/AtollCore/SkillCatalog.swift",
+        "AtollCore/Sources/AtollCore/PluginSnapshot.swift",
+        "AtollCore/Sources/AtollCore/PluginSearchPrompt.swift",
+        "AtollCore/Sources/AtollCore/NotesCuration.swift",
+        "AtollCore/Sources/AtollCore/RetrospectiveReport.swift",
+        "App/PluginInventory.swift",
+        "App/ExpandedView.swift",
+        "App/AppDelegate.swift"
+      ]
     }
   ]
 }

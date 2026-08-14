@@ -314,6 +314,48 @@ final class PluginInventory {
     private(set) var searchMatches: [PluginSearchResult.Match] = []
     private(set) var isSearching = false
 
+    /// Les commandes `claude plugin` en vol — pour les arrêter à la fermeture.
+    ///
+    /// Boîte à verrou plutôt que propriété d'instance : le spawn se fait dans
+    /// une fonction `static`, hors du MainActor, et peut être concurrent d'un
+    /// autre appel (une recherche pendant un « Actualiser »).
+    final class InFlight: @unchecked Sendable {
+        private let lock = NSLock()
+        private var processes: [Process] = []
+
+        func adopt(_ process: Process) {
+            lock.lock(); defer { lock.unlock() }
+            processes.append(process)
+        }
+
+        func release(_ process: Process) {
+            lock.lock(); defer { lock.unlock() }
+            processes.removeAll { $0 === process }
+        }
+
+        /// SIGTERM à tout ce qui tourne, puis SIGKILL une seconde plus tard aux
+        /// survivants — et seulement si le pid vit ENCORE (ne jamais tirer sur
+        /// un pid recyclé, même garde que les deux autres escalades du projet).
+        func terminateAll() {
+            lock.lock()
+            let alive = processes.filter(\.isRunning)
+            lock.unlock()
+            guard !alive.isEmpty else { return }
+            let pids = alive.map(\.processIdentifier)
+            alive.forEach { $0.terminate() }
+            DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 1) {
+                for pid in pids where kill(pid, 0) == 0 { kill(pid, SIGKILL) }
+            }
+        }
+    }
+
+    @ObservationIgnored static let inFlight = InFlight()
+
+    /// Arrête les commandes en vol. Appelé par `applicationWillTerminate` : la
+    /// recherche de plugins est un `claude -p` FACTURÉ, il ne doit pas survivre
+    /// à l'app qui l'a lancé.
+    func cancel() { Self.inFlight.terminateAll() }
+
     /// Compare un besoin exprimé en français au catalogue PUBLIC des plugins.
     ///
     /// Deux gardes qui comptent :
@@ -433,6 +475,15 @@ final class PluginInventory {
         let pid = process.processIdentifier
         SessionStore.shared.registerInternalPid(pid)
         armWatchdog(process, seconds: timeout)
+        // Retenu pour pouvoir l'arrêter à la fermeture d'Atoll : la RECHERCHE
+        // de plugins est un `claude -p` FACTURÉ, au même titre que la
+        // rétrospective et la curation — que `applicationWillTerminate` arrête
+        // toutes deux, avec le commentaire « ne pas le laisser orphelin quand
+        // Atoll s'en va ». Ce troisième émetteur avait été oublié : le motif
+        // « appliqué à une partie seulement de ses points », encore une fois.
+        // Le watchdog bornait la dépense, il ne l'annulait pas.
+        Self.inFlight.adopt(process)
+        defer { Self.inFlight.release(process) }
 
         // Les DEUX pipes drainés EN PARALLÈLE (contrainte n°3). En série, un
         // stderr saturé (~64 Ko de tampon noyau) bloque l'écrivain pour

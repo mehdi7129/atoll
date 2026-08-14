@@ -162,8 +162,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         FleetPoller.shared.stop()
         RetrospectiveRunner.shared.terminateActive()
         // Une curation en vol est un `claude -p` facturé : ne pas le laisser
-        // orphelin quand Atoll s'en va.
+        // orphelin quand Atoll s'en va. La RECHERCHE de plugins l'est aussi —
+        // troisième émetteur, oublié jusqu'au 2026-08-14 alors que le
+        // raisonnement ci-dessus vaut mot pour mot pour elle.
         NotesCurationService.shared.cancel()
+        PluginInventory.shared.cancel()
         bridgeServer?.stop()
     }
 

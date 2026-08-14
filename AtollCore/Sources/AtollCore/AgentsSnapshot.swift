@@ -127,15 +127,32 @@ public enum AgentsSnapshot {
         return infos
     }
 
+    /// Première clé qui porte VRAIMENT une chaîne — le repli entre noms de champ.
+    ///
+    /// À écrire ainsi, et PAS `entry["a"] ?? entry["b"]` : sur un
+    /// `[String: Any]` venu de JSONSerialization, un `"sessionId": null` devient
+    /// `.some(NSNull())`. Le `??` est alors satisfait, la seconde clé n'est
+    /// JAMAIS consultée, le `as? String` échoue et la session disparaît en
+    /// silence du `compactMap` — c'est-à-dire de l'îlot. Le repli était
+    /// neutralisé exactement dans le cas pour lequel il a été écrit.
+    /// (Même correctif appliqué au même motif dans `PluginSnapshot`, le
+    /// 2026-08-14 : une garde ne vaut que si elle couvre TOUS ses points.)
+    private static func firstString(_ entry: [String: Any], _ keys: String...) -> String? {
+        for key in keys {
+            if let value = entry[key] as? String, !value.isEmpty { return value }
+        }
+        return nil
+    }
+
     private static func entries(_ array: [[String: Any]]) -> [AgentSessionInfo] {
         array.compactMap { entry in
             // sessionId ?? id : la seule clé requise (sans identité, inexploitable).
-            guard let sessionID = (entry["sessionId"] ?? entry["id"] ?? entry["session_id"]) as? String,
-                  !sessionID.isEmpty else { return nil }
+            guard let sessionID = firstString(entry, "sessionId", "id", "session_id")
+            else { return nil }
 
             let pid: Int32? = (entry["pid"] as? NSNumber).map { $0.int32Value }
             let cwd = entry["cwd"] as? String
-            let name = (entry["name"] ?? entry["displayName"]) as? String
+            let name = firstString(entry, "name", "displayName")
             // `status` d'abord, `state` en REPLI.
             //
             // Vérifié sur le CLI 2.1.220 : `agents --json` (ce qu'Atoll lance)

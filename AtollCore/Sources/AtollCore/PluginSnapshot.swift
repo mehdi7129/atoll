@@ -218,7 +218,7 @@ public struct PluginSnapshot: Equatable, Sendable {
     private static func decodeInstalled(_ entries: [Any]) -> [InstalledPlugin] {
         entries.compactMap { raw in
             guard let entry = raw as? [String: Any],
-                  let id = nonEmptyString(entry["id"] ?? entry["pluginId"])
+                  let id = firstString(entry, "id", "pluginId")
             else { return nil }
 
             let (derivedName, derivedMarketplace) = splitIdentifier(id)
@@ -239,7 +239,7 @@ public struct PluginSnapshot: Equatable, Sendable {
     private static func decodeAvailable(_ entries: [Any]) -> [AvailablePlugin] {
         entries.compactMap { raw in
             guard let entry = raw as? [String: Any],
-                  let id = nonEmptyString(entry["pluginId"] ?? entry["id"])
+                  let id = firstString(entry, "pluginId", "id")
             else { return nil }
 
             let (derivedName, derivedMarketplace) = splitIdentifier(id)
@@ -326,12 +326,24 @@ public struct PluginSnapshot: Equatable, Sendable {
     /// Plafond d'une description dans ce rendu (caractères, ellipse comprise).
     public static let promptDescriptionCap = 200
 
+    /// Plafond d'un identifiant dans ce rendu. Généreux — les vrais font 20 à
+    /// 45 caractères — mais BORNÉ : c'est du texte venu d'un marketplace tiers.
+    public static let promptIdentifierCap = 120
+
     static func promptLine(for plugin: AvailablePlugin) -> String {
-        var line = "- " + plugin.id
+        // L'identifiant est APLATI et BORNÉ comme la description, alors qu'il
+        // partait verbatim. `nonEmptyString` ne coupe que les blancs de BORD :
+        // un `pluginId` contenant un retour à la ligne survivait intact et
+        // cassait l'invariant « une entrée = une ligne » sur lequel repose tout
+        // le rendu — un identifiant pouvait fabriquer sa propre ligne, y compris
+        // une fausse fin de catalogue. Le catalogue vient de marketplaces tiers
+        // et part dans un prompt : il ne mérite pas plus de confiance que la
+        // description, qui, elle, était déjà traitée.
+        var line = "- " + flattened(plugin.id, cap: promptIdentifierCap)
         if let count = plugin.installCount, count >= 0 {
             line += count == 1 ? " (1 installation)" : " (\(count) installations)"
         }
-        if let description = plugin.description.map(flattened(_:)), !description.isEmpty {
+        if let description = plugin.description.map({ flattened($0) }), !description.isEmpty {
             line += " : " + description
         }
         return line
@@ -354,12 +366,12 @@ public struct PluginSnapshot: Equatable, Sendable {
     }
 
     /// Texte mis à plat (blancs de toute nature réduits à une espace) puis capé.
-    private static func flattened(_ raw: String) -> String {
+    private static func flattened(_ raw: String, cap: Int = promptDescriptionCap) -> String {
         let collapsed = raw
             .split(whereSeparator: { $0.isWhitespace || $0.isNewline })
             .joined(separator: " ")
-        guard collapsed.count > promptDescriptionCap else { return collapsed }
-        return String(collapsed.prefix(promptDescriptionCap - 1)) + "…"
+        guard collapsed.count > cap else { return collapsed }
+        return String(collapsed.prefix(cap - 1)) + "…"
     }
 
     // MARK: Lecture défensive des champs
@@ -369,6 +381,20 @@ public struct PluginSnapshot: Equatable, Sendable {
         guard let value = raw as? String else { return nil }
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
+    }
+
+    /// Première clé qui porte une chaîne exploitable — le repli `id`/`pluginId`.
+    ///
+    /// À écrire ainsi, et PAS `entry["id"] ?? entry["pluginId"]` : sur un
+    /// `[String: Any]`, un JSON `"id": null` devient `.some(NSNull())`, donc le
+    /// `??` est satisfait et ne consulte JAMAIS la seconde clé. Le repli était
+    /// neutralisé exactement dans le cas où il sert — une clé présente mais
+    /// nulle — et l'entrée disparaissait en silence du `compactMap`.
+    private static func firstString(_ entry: [String: Any], _ keys: String...) -> String? {
+        for key in keys {
+            if let value = nonEmptyString(entry[key]) { return value }
+        }
+        return nil
     }
 
     /// Booléen tolérant : `true`, `1`, `"true"`, `"yes"`… Absent ou illisible
