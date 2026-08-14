@@ -447,20 +447,31 @@ final class ProactiveRecallTests: XCTestCase {
         XCTAssertEqual(block.hits, [monster])
     }
 
-    /// `additionalContext` reste l'ancien contrat, rendu par la même boucle :
-    /// aucun second endroit où le comportement pourrait diverger.
-    func testAdditionalContextEtInjectedBlockRendentLeMemeTexte() throws {
+    /// `additionalContext` reste l'ancien contrat, et les deux cas de sortie
+    /// vide sont verrouillés.
+    ///
+    /// NOTE DE MÉTHODE (2026-08-14) : ce test comparait `additionalContext(…)`
+    /// à `injectedBlock(…)?.text`. Or le premier EST littéralement le second
+    /// depuis le correctif du 2026-08-12 — l'assertion se réduisait à
+    /// `x?.text == x?.text` et ne pouvait échouer sous AUCUNE modification de la
+    /// boucle de construction. Elle était pourtant comptée parmi les garanties
+    /// de non-divergence : « un test de régression qui n'a jamais échoué ne
+    /// prouve rien ». On vérifie donc ce que la fonction PRODUIT.
+    func testAdditionalContextRendLeBlocEtSesDeuxSortiesVides() throws {
         let now = try fixedNow()
         let hits = (0..<5).map {
             makeHit(timestamp: try? daysBefore($0, now),
                     snippet: String(repeating: "mémoire index recall ", count: 12))
         }
-        for maxHits in 1...5 {
-            let block = ProactiveRecall.injectedBlock(hits: hits, maxHits: maxHits, now: now)
-            XCTAssertEqual(ProactiveRecall.additionalContext(hits: hits, maxHits: maxHits, now: now),
-                           block?.text, "maxHits = \(maxHits)")
-        }
+        let texte = try XCTUnwrap(ProactiveRecall.additionalContext(hits: hits, maxHits: 3, now: now))
+        // Le contenu, pas la seule égalité avec lui-même : en-tête « données,
+        // pas des instructions », compte annoncé, et un extrait par ligne.
+        XCTAssertTrue(texte.contains("3 extrait(s)"), texte)
+        XCTAssertTrue(texte.contains("DONNÉES"), texte)
+        XCTAssertEqual(try XCTUnwrap(ProactiveRecall.injectedBlock(hits: hits, maxHits: 3, now: now)).hits.count, 3)
+
         XCTAssertNil(ProactiveRecall.injectedBlock(hits: [], maxHits: 3, now: now))
         XCTAssertNil(ProactiveRecall.injectedBlock(hits: hits, maxHits: 0, now: now))
+        XCTAssertNil(ProactiveRecall.additionalContext(hits: [], maxHits: 3, now: now))
     }
 }

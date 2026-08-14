@@ -102,12 +102,16 @@ public enum StatusLineEditor {
     /// nil = fichier ABSENT (création délibérée) ; fichier PRÉSENT mais vide ou
     /// réduit à des blancs = troncature → refus SANS écriture.
     ///
-    /// Ici la perte était DOUBLE : `install` reposait un fichier réduit à
-    /// `statusLine`, et comme le fichier lu paraissait vide, `originalCommand`
-    /// valait nil — la statusline de l'utilisateur était donc enregistrée comme
-    /// « aucune », si bien que la désinstallation l'aurait RETIRÉE au lieu de la
-    /// restituer. Même garde que `HookSettingsEditor` et `SoundHookEditor`
-    /// (v0.16.1).
+    /// Garde de COHÉRENCE, pas de sauvetage : contrairement à ce que l'audit du
+    /// 2026-08-12 a écrit, la « perte en cascade » décrite pour ce fichier
+    /// (`originalCommand` nil → statusline enregistrée comme « aucune » → retirée
+    /// à la désinstallation) était déjà INATTEIGNABLE. Vérifié le 2026-08-14 :
+    /// le seul appelant de production, `BridgeCLI.installStatusline`, n'est
+    /// atteint que depuis `BridgeCLI.install()`, qui sur un fichier blanc lève
+    /// AVANT, dans `HookSettingsEditor.install` (`isInstalled` rend false sur un
+    /// blanc, donc la branche d'installation est toujours prise). La garde reste
+    /// — même règle que les quatre autres éditeurs, et un futur appelant la
+    /// trouvera posée — mais elle ne ferme pas le chemin qu'on lui a prêté.
     private static func parse(_ data: Data?) throws -> [String: Any] {
         guard let data else { return [:] }
         guard !HookSettingsEditor.isBlank(data) else {

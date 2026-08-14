@@ -56,7 +56,6 @@ final class LearningInventoryTests: XCTestCase {
             notesRoot: notesRoot.appendingPathComponent("nexiste-pas", isDirectory: true))
         XCTAssertTrue(absent.notes().isEmpty)
         XCTAssertTrue(absent.projects().isEmpty)
-        XCTAssertEqual(absent.totalCharacterCount(), 0)
     }
 
     func testFichierNonUTF8IgnoreSansPlanter() throws {
@@ -96,7 +95,6 @@ final class LearningInventoryTests: XCTestCase {
         // Le corps SEUL est compté (ni front-matter, ni ligne vide de séparation,
         // ni saut de ligne final).
         XCTAssertEqual(note.characterCount, "Toujours rebaser avant de pousser.".count)
-        XCTAssertEqual(inventory.totalCharacterCount(), note.characterCount)
     }
 
     func testTitreExpliciteGagneSurLeSlug() throws {
@@ -139,7 +137,7 @@ final class LearningInventoryTests: XCTestCase {
     func testValeursQuoteesDequotees() throws {
         // Chemin contenant `:` et `"` → `yamlScalar` le quote et l'échappe au
         // rendu ; l'inventaire doit rendre EXACTEMENT la valeur d'origine.
-        let projet = #"/Users/moi/Val d'Isere: dossier "hiver" \ 2026"#
+        let projet = #"/Users/moi/l'été: dossier "chaud" \ 2026"#
         try seedRenderedNote(slug: "quotee", project: projet)
         let note = try XCTUnwrap(inventory.notes().first)
         XCTAssertEqual(note.project, projet)
@@ -255,12 +253,5 @@ final class LearningInventoryTests: XCTestCase {
         XCTAssertEqual(groupes.map(\.project),
                        ["/Users/moi/Atoll", "", "/Users/moi/Alpha", "/Users/moi/Zenith"])
         XCTAssertEqual(groupes.map(\.count), [3, 2, 1, 1])
-    }
-
-    func testTotalCharacterCountSommeLesCorps() throws {
-        try seedRenderedNote(slug: "un", content: "12345")
-        try seedRenderedNote(slug: "deux", content: "123")
-        try write("# brut", to: "brut.md")
-        XCTAssertEqual(inventory.totalCharacterCount(), 5 + 3 + "# brut".count)
     }
 }

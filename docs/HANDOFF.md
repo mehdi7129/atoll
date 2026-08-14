@@ -2,14 +2,43 @@
 
 > Document de continuité pour reprendre le dev après un compactage de conversation.
 > **À lire en premier** avec `CLAUDE.md` (règles) et `PLAN.md` (plan produit).
-> Dernière mise à jour : **2026-08-11**. Session de VEILLE, aucune ligne de code
-> touchée (gel en vigueur, voir le rendez-vous ci-dessous). Trois choses à savoir en
-> reprenant : (1) **Spotify a publié Xirp le 10 août** — app macOS qui gère des
-> sessions Claude Code en worktrees isolés ; **Mehdi l'a installée et elle lui
-> plaît** ; (2) la mesure de la mémoire donne déjà un signal net — **86 % des
-> extraits injectés n'apparient qu'un ou deux mots** du prompt, pour **110 ms**
-> ajoutés à chaque frappe ; (3) le dépôt est propre : une seule branche, aucun
-> worktree, tags sans écart. Détail en §0.bis.
+> Dernière mise à jour : **2026-08-14**. **AUDIT COMPLET** —
+> `docs/AUDIT-2026-08-14.md` : dix-huit défauts corrigés, six API mortes retirées,
+> aucune fonction ajoutée, 691 tests verts, build sans warning. À savoir en
+> reprenant :
+>
+> 1. **Le commit d'audit du 12 août n'était PAS dans `main`** — il vivait dans un
+>    worktree (`session/stoic-finch-xf8q`). Fusionné en fast-forward au début de
+>    cette session. Vérifier `git worktree list` avant de conclure que le dépôt est
+>    propre : le HANDOFF du 11 août disait « aucun worktree », et c'était vrai ce
+>    jour-là.
+> 2. **Trois chemins destructeurs fermés** : la base mémoire se détruisait elle-même
+>    en deux passages de 30 s ; les suppressions de skills suivaient un `dirName` non
+>    validé (traversée de chemin PROUVÉE par exécution) ; la bascule des notes n'avait
+>    aucune reprise après crash et le run suivant effaçait la dernière copie.
+> 3. **Le son ne tenait plus sa promesse de la v0.15.1** : l'interrupteur général
+>    n'appelait pas le setter qui republie `~/.atoll/sound-settings.json`, donc
+>    « activer le son puis quitter Atoll » laissait le helper muet. Le setter existait,
+>    son seul appelant était un trigger de debug — même motif que `byCoverage` et
+>    `Recall.swift` : le savoir était dans le code, pas dans l'appel.
+> 4. **Trois affirmations du dépôt étaient fausses** et sont corrigées : le README
+>    annonçait « moins de 50 Mo de RAM » (mesuré : **66 Mo**, pic 116) ; la « perte en
+>    cascade » de la statusline racontée le 12 août est inatteignable ; la
+>    justification écrite pour faire refuser `park` est fausse deux fois.
+> 5. **`dist/updates/` avait divergé du publié** (réparé) : le dossier persistant dont
+>    dépend `generate_appcast` s'arrêtait à la 0.16.0, alors que 0.16.1 et 0.16.2 sont
+>    en ligne. La prochaine release suivant la procédure aurait produit un appcast
+>    amputé, sans delta pour les utilisateurs en 0.16.2. Les deux archives ont été
+>    retéléchargées depuis GitHub et vérifiées (builds 26 et 27). Ce dossier n'est pas
+>    versionné : **le vérifier avant chaque release**.
+> 6. **Le gel est respecté** : aucune fonction ajoutée, le comportement du recall
+>    proactif n'a pas bougé. Le rendez-vous du ~9 septembre garde sa base.
+>
+> Auparavant (2026-08-11), session de VEILLE : (1) **Spotify a publié Xirp le
+> 10 août** — app macOS qui gère des sessions Claude Code en worktrees isolés ;
+> **Mehdi l'a installée et elle lui plaît** ; (2) la mesure de la mémoire donne déjà
+> un signal net — **86 % des extraits injectés n'apparient qu'un ou deux mots** du
+> prompt, pour **110 ms** ajoutés à chaque frappe. Détail en §0.bis.
 >
 > Auparavant, app **v0.16.2** — la mémoire est mise SOUS
 > INSTRUMENT. `~/.atoll/recall-journal.jsonl` enregistre chaque passage du hook,
@@ -766,7 +795,7 @@ xcodebuild -project Atoll.xcodeproj -scheme Atoll -configuration Debug -derivedD
 ditto "$DD/Build/Products/Debug/Atoll.app" ~/Applications/Atoll.app   # lancer LA COPIE
 pkill -x Atoll; sleep 1; open ~/Applications/Atoll.app                # relancer
 
-cd AtollCore && swift test              # 644 tests
+cd AtollCore && swift test              # 691 tests (2026-08-14)
 
 # Debug runtime
 /usr/bin/log stream --predicate 'subsystem == "dev.mehdiguiard.atoll"' --level debug

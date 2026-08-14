@@ -115,9 +115,25 @@ final class SettingsBlankFileTests: XCTestCase {
         XCTAssertEqual(permissions["deny"] as? [String], ["Bash(rm:*)"])
     }
 
-    /// `park` était déjà sain (il sort en `nil` sans écrire quand il n'y a rien
-    /// à suspendre) : il doit maintenant REFUSER explicitement, pour que
-    /// `rockstarPark` ne grave pas un backup « pré-Atoll » vide au passage.
+    /// `park` était déjà sain : il sortait en `nil` sans écrire. La garde, posée
+    /// sur le `parse` PARTAGÉ, change donc aussi son comportement — il refuse
+    /// désormais explicitement.
+    ///
+    /// La raison écrite ici le 2026-08-12 (« pour que `rockstarPark` ne grave
+    /// pas un backup pré-Atoll vide au passage ») est FAUSSE sur ses deux
+    /// termes, vérifié le 2026-08-14 : `rockstarPark` sort en 0 dès que `park`
+    /// rend `nil`, AVANT d'atteindre `refreshBackup` ; et `refreshBackup` porte
+    /// lui-même la garde anti-fichier-blanc depuis la v0.16.1.
+    ///
+    /// Le refus est CONSERVÉ pour une autre raison, celle-là vraie : un fichier
+    /// de zéro octet n'est pas du JSON valide, et la règle n° 2 du projet exige
+    /// un refus propre plutôt qu'une lecture optimiste. Lire « aucune règle
+    /// deny » dans une troncature ferait entrer en Rockstar en croyant n'avoir
+    /// rien à suspendre, alors que les vraies règles reviendront dès que
+    /// l'écrivain concurrent aura fini. CONTREPARTIE ASSUMÉE : `syncDenyParking`
+    /// tourne à chaque lancement, donc un utilisateur en Rockstar avec un
+    /// settings.json tronqué verra cette erreur à chaque démarrage — c'est le
+    /// comportement voulu, l'app refuse déjà tout le reste sur ce fichier.
     func testSuspensionRockstarRefuseUnFichierVide() {
         XCTAssertThrowsError(try RockstarPermissionsEditor.park(in: Data()))
     }

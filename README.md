@@ -20,7 +20,7 @@ Atoll met tout ça autour de l'encoche.
 > **Atoll ne fait pas travailler les agents.
 > Il SAIT ce qui se passe sur ta machine, il s'en SOUVIENT, et il t'APPELLE.**
 
-macOS 14+ · Swift/SwiftUI natif · moins de 50 Mo de RAM · zéro télémétrie · zéro compte ·
+macOS 14+ · Swift/SwiftUI natif, pas d'Electron · zéro télémétrie · zéro compte ·
 **gratuit et open source (GPL-3.0-or-later)**
 
 ---

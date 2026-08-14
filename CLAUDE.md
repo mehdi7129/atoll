@@ -9,14 +9,40 @@
 > mois, puis on tranche sur pièces. Ne rien ajouter d'ici là — les points 1 (voir les
 > flottes d'arrière-plan) et 3 (rapport de retour) attendent cette mesure.
 >
+> **AUDIT DU 2026-08-14 — dix-huit défauts corrigés, six API mortes retirées, aucune
+> fonction ajoutée** (`docs/AUDIT-2026-08-14.md`, 691 tests verts). **Trois chemins
+> destructeurs** : (1) `MemoryIndexer.setAsideDatabase` détruisait la base mémoire en
+> DEUX passages — nom de destination fixe + retentative toutes les 30 s, donc le
+> second passage supprimait la copie de sauvetage pour y mettre la base vide créée par
+> le premier ; et un déplacement impossible se soldait par un `removeItem` de la
+> source. (2) Les suppressions de `LearnedSkillStore` suivaient `entry.dirName` lu tel
+> quel dans `installed.json`, le « double verrou » n'étant qu'un `hasPrefix("atoll-")`
+> — MESURÉ : `atoll-../x` ne résout pas, mais `atoll-<dossier existant>/../../x` OUI,
+> et `atoll-recall` existe toujours. (3) La bascule des notes n'avait aucune reprise
+> après crash, et le `sweepStagingLeaks` du run suivant effaçait la seule copie
+> récupérable. S'y ajoutent : l'interrupteur des sons ne republiait JAMAIS
+> `sound-settings.json` (le setter qui publie n'avait qu'un appelant, un trigger de
+> debug — donc « activer le son puis quitter » rendait le helper muet, exactement ce
+> que la v0.15.1 existe pour empêcher), l'adoption des sons se faisait AVANT le
+> parking, et le pid de flotte pilotait la liveness dès qu'un hook arrivait
+> (`isSynthetic` décrit la source de la PHASE, pas celle du pid → `pidIsFleetSupplied`).
+> **TROIS AFFIRMATIONS DU DÉPÔT ÉTAIENT FAUSSES** : le README annonçait « moins de
+> 50 Mo de RAM » (mesuré : **66 Mo**, pic 116) ; la « perte en cascade » de la
+> statusline racontée le 12 août est INATTEIGNABLE ; et la justification écrite pour
+> faire refuser `park` est fausse deux fois (le refus est conservé, mais pour la vraie
+> raison). Voir aussi la leçon de méthode sur les workflows, plus bas.
+>
 > **AUDIT DU 2026-08-12 — trois défauts corrigés, aucune fonction ajoutée**
 > (`docs/AUDIT-2026-08-12.md`, 700 tests verts). Deux étaient des chemins
 > DESTRUCTEURS sur `settings.json` : le correctif « fichier de zéro octet » de la
 > v0.16.1 n'avait couvert que **3 des 5 écrivains** — `RockstarPermissionsEditor`
 > (le pire : il écrit PUIS supprime le parking, la config écrasée n'a plus aucune
-> trace) et `StatusLineEditor` (perte en cascade : `originalCommand` à `nil`, donc
-> la statusline de l'utilisateur passait pour inexistante) étaient restés au
-> `guard let data, !data.isEmpty`. Le troisième : le journal du recall comptait
+> trace) et `StatusLineEditor` étaient restés au
+> `guard let data, !data.isEmpty`. ⚠️ La « perte en cascade » alors attribuée à
+> `StatusLineEditor` (`originalCommand` à `nil` → statusline retirée à la
+> désinstallation) est **inatteignable**, vérifié le 2026-08-14 : `install()` lève
+> avant, dans `HookSettingsEditor.install`. La garde reste, son récit était faux.
+> Le troisième : le journal du recall comptait
 > `significant.prefix(maxHits)` au lieu des extraits RÉELLEMENT partis
 > (`ProactiveRecall.injectedBlock` rend désormais texte et hits depuis la même
 > boucle). **Mesuré sur les vraies données : ce dernier n'avait jamais mordu** —
@@ -172,6 +198,20 @@ retirant UNE ESPACE (`python3 -c'code'` collé produit un token unique qui
 n'égalait aucun drapeau connu) ; le verrou anti-double-spawn de la rétrospective
 bloquait sa propre file ; le filtre de quota masquait des jauges valides. Voir
 `docs/AUDIT-2026-07-27.md`.
+
+**LE BUDGET DE LECTURE EST LE FACTEUR LIMITANT D'UN AUDIT MULTI-AGENTS**
+(mesuré le 2026-08-14). Une première vague de 15 agents à périmètres larges, avec la
+consigne « relis LIGNE À LIGNE », a épuisé la limite de session en 31 minutes et
+**1,29 million de jetons sans produire UN SEUL constat** : les transcripts montrent
+des agents encore en phase de lecture quand ils sont morts. La procédure de
+récupération (`atoll-adversarial-review-workflow-recovery`) n'a rien trouvé à sauver
+— le journal ne portait que des lignes `started`, et les 400 Ko par agent étaient du
+contenu de fichiers, pas des conclusions. La seconde vague, **6 agents**, périmètres
+serrés, plafond d'outils explicite (« ~20 appels, puis ARRÊTE et rends ce que tu
+as ») et obligation de rendre un résultat même partiel, a produit **31 constats en
+9 minutes**. À retenir pour la prochaine fois : borner le nombre d'agents ET leur
+budget de lecture, et faire soi-même par script tout ce qui est déterministe (code
+mort, listes, chiffres, liens, versions) — ça ne coûte rien et c'est exact.
 Les quatre qui comptent :
 - **`&` n'était pas un séparateur de segment dans `AutoAcceptPolicy`** : une
   commande destructrice placée après un `&` était AUTO-APPROUVÉE (seul le
@@ -913,8 +953,9 @@ pour voir les sous-sessions ») : `App/ExpandedView.swift` regroupe par PROJET (
 `.git` via l'enum `ProjectRoot` qui remonte au `.git` — regroupe un dépôt et ses
 sous-dossiers) ; adaptatif : 1 session = ligne directe, ≥2 = dossier pliable
 `▸ Nom · N` (replié par défaut, glyphe d'attention/spinner sur l'en-tête). `@State
-expandedProjects`. VÉRIFIÉ VISUELLEMENT : « ▸ Dynamic_Island · 2 » + « Val d'Isere »
-en ligne = 2 éléments pour 2 projets.
+expandedProjects`. VÉRIFIÉ VISUELLEMENT : « ▸ Dynamic_Island · 2 » + un second projet
+en ligne = 2 éléments pour 2 projets. (Le nom réel du second projet a été retiré le
+2026-08-14 : ce dépôt est PUBLIC, et la règle éditoriale du README l'exigeait déjà.)
 - RESTE de la feuille de route « Atoll 2 » : Milestone B (mémoire approfondie).
   À FAIRE ensuite (demandé par Mehdi) : CLARTÉ de l'affichage des sessions —
   `claude agents --json` liste TOUTE la flotte (tous projets, sessions oubliées,
