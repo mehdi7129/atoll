@@ -95,8 +95,15 @@ qui a changé depuis (git), et le nombre de fichiers qui dépendent de celui-ci
 (graphe des types déclarés au premier niveau) — et en tire un ordre de passage.
 - **`docs/reviews.json` n'enregistre QUE ce qu'un document d'audit affirme.** Un
   fichier absent est réputé JAMAIS RELU : la carte ne peut que SOUS-ESTIMER la
-  couverture, ce qui est le bon sens de l'erreur. Toute campagne de relecture doit
-  y ajouter son entrée, sinon la carte vieillit en silence.
+  couverture, ce qui est le bon sens de l'erreur.
+- **L'oubli est détecté, pas la relecture.** `check-docs.py` ÉCHOUE si un
+  `docs/AUDIT-*.md` n'a pas son entrée dans le registre (ou si une entrée cite un
+  document disparu), et AVERTIT quand un fichier a été réécrit à moitié depuis sa
+  dernière lecture. En revanche l'écriture de l'entrée n'est PAS automatisée, et
+  ne doit pas l'être : « relu ligne à ligne » est un JUGEMENT, pas un événement
+  mécanique. Une carte qui se remplirait à chaque `Read` SURESTIMERAIT la
+  couverture — elle perdrait la seule propriété qui la rend utile, et mentirait
+  dans le sens dangereux.
 - Relevé au 2026-08-14 : **68 fichiers sur 92 jamais relus ligne à ligne, soit
   12 672 lignes — 53 % du code**. Le reste (21 fichiers, 10 148 lignes) est à jour ;
   trois fichiers relus le 12 août ont dérivé depuis.

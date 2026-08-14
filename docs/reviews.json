@@ -15,7 +15,16 @@
     "                   fichiers. Ça compte, mais ça ne vaut pas une lecture.",
     "",
     "À TENIR À JOUR : toute campagne de relecture ajoute une entrée. Sans ça la",
-    "carte vieillit en silence — exactement ce que `check-docs.py` combat ailleurs."
+    "carte vieillit en silence — exactement ce que `check-docs.py` combat ailleurs.",
+    "",
+    "ET CE N'EST PLUS UNE RÈGLE À RETENIR : `check-docs.py` ÉCHOUE si un",
+    "`docs/AUDIT-*.md` n'a pas son entrée ici, ou si une entrée cite un document",
+    "disparu. Il AVERTIT en plus quand un fichier a été réécrit à moitié depuis sa",
+    "dernière lecture. Ce qui n'est PAS automatisé, et ne doit pas l'être : l'écriture",
+    "de l'entrée elle-même. « Ce fichier a été relu ligne à ligne » est un JUGEMENT —",
+    "une lecture attentive, ou un grep ? Une carte qui se remplirait toute seule à",
+    "chaque `Read` mentirait dans le sens dangereux, en SURESTIMANT la couverture,",
+    "et perdrait la seule propriété qui la rend utile."
   ],
   "reviews": [
     {

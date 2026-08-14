@@ -441,6 +441,90 @@ def check_dead_code() -> None:
                 fail("mort", f"`{symbol}` est déclaré public et n'est utilisé nulle part")
 
 
+def check_review_registry() -> None:
+    """Toute campagne de relecture doit avoir laissé son entrée au registre.
+
+    `docs/reviews.json` porte en tête la règle « toute campagne ajoute une
+    entrée ». Une règle qu'on demande à un humain de suivre finit par ne plus
+    être suivie — c'est le constat de départ de ce script. Ici on ne peut PAS
+    automatiser l'écriture : dire « ce fichier a été relu ligne à ligne » est un
+    JUGEMENT (une lecture attentive ? un grep ?), et une carte qui s'auto-remplit
+    à chaque `Read` mentirait dans le sens dangereux — en SURESTIMANT la
+    couverture. On automatise donc la détection de l'oubli, pas le fait lui-même.
+
+    Deux sens, comme toujours : un document d'audit sans entrée (campagne non
+    enregistrée), et une entrée sans document (registre qui cite un fichier
+    disparu).
+    """
+    global checked
+    registry_path = ROOT / "docs" / "reviews.json"
+    if not registry_path.exists():
+        warn("relectures", "docs/reviews.json absent — la carte des relectures n'a plus de source")
+        return
+    try:
+        reviews = json.loads(registry_path.read_text(encoding="utf-8"))["reviews"]
+    except Exception as error:
+        fail("relectures", f"docs/reviews.json illisible : {error}")
+        return
+    checked += 1
+
+    referenced = {review.get("document", "") for review in reviews}
+    for audit in sorted((ROOT / "docs").glob("AUDIT-*.md")):
+        relative = str(audit.relative_to(ROOT))
+        if relative not in referenced:
+            fail(
+                "relectures",
+                f"{relative} existe mais n'a AUCUNE entrée dans docs/reviews.json — "
+                "la campagne n'est pas enregistrée, la carte la croit jamais faite",
+            )
+    for document in sorted(referenced):
+        if document and not (ROOT / document).exists():
+            fail("relectures", f"docs/reviews.json cite {document}, qui n'existe pas")
+
+
+def check_review_staleness() -> None:
+    """Un fichier très réécrit depuis sa relecture mérite d'être relu.
+
+    AVERTISSEMENT, jamais une erreur : ce n'est pas une affirmation fausse, c'est
+    un signal. La carte le sait déjà ; la faire parler ici évite d'avoir à y
+    penser. Le calcul vit dans `review-map.py` et n'est PAS recopié — deux
+    implémentations de la même mesure finissent par diverger, ce que ce script
+    passe justement son temps à débusquer.
+    """
+    global checked
+    mapper = ROOT / "Scripts" / "review-map.py"
+    if not mapper.exists():
+        return
+    out = subprocess.run(
+        [sys.executable, str(mapper), "--json"], cwd=ROOT, capture_output=True, text=True
+    )
+    if out.returncode != 0:
+        warn("relectures", "review-map.py n'a pas pu produire la carte")
+        return
+    try:
+        rows = json.loads(out.stdout)
+    except json.JSONDecodeError:
+        warn("relectures", "carte des relectures illisible")
+        return
+    checked += 1
+
+    never = [r for r in rows if not r["read_date"]]
+    if never:
+        lines = sum(r["lines"] for r in never)
+        warn("relectures", f"{len(never)} fichier(s) jamais relus ligne à ligne ({lines} lignes)")
+    # Seuil assumé : quand la moitié d'un fichier a bougé depuis sa dernière
+    # lecture, ce qu'on en sait ne vaut plus grand-chose.
+    for row in rows:
+        if not row["read_date"] or not row["lines"]:
+            continue
+        if row["churn"] * 2 >= row["lines"]:
+            warn(
+                "relectures",
+                f"{row['file']} : {row['churn']} lignes changées depuis sa relecture "
+                f"du {row['read_date']} (fichier de {row['lines']}) — à relire",
+            )
+
+
 def check_notifications() -> None:
     """Une notification postée sans observateur (ou l'inverse) est un fil coupé."""
     global checked
@@ -521,6 +605,8 @@ def main() -> int:
     check_privacy()
     check_dead_code()
     check_notifications()
+    check_review_registry()
+    check_review_staleness()
     if args.network:
         check_network()
 
