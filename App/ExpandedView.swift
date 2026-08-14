@@ -182,7 +182,10 @@ struct ExpandedView: View {
                 // budget ; ici on n'en consomme aucun.
                 if group.id == bounded.groups.last?.id, bounded.hiddenCount > 0 {
                     Spacer()
-                    Text("+\(bounded.hiddenCount) — voir par projet")
+                    // « non affichées », et pas seulement « +N » : collé au
+                    // compte du dernier groupe, un « +N » nu se lit comme SON
+                    // surplus alors que c'est le total, tous groupes confondus.
+                    Text("+\(bounded.hiddenCount) non affichées — voir par projet")
                         .foregroundStyle(colors.dim)
                 }
                 Spacer()

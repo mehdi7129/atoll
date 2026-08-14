@@ -48,26 +48,40 @@ final class IslandRowPlanTests: XCTestCase {
 
     // MARK: - Le défaut trouvé le 2026-08-14
 
-    /// Un dossier déplié qui ne peut montrer AUCUNE session ne doit pas être
-    /// dessiné : il coûtait une rangée pour afficher exactement ce qu'il affiche
-    /// replié, pendant que cette rangée pouvait porter une vraie session.
-    func testUnDossierNeSOuvrePasSurRien() {
-        // Budget 3 → 2 rangées de contenu. « a » (1 session) en prend une ;
-        // il reste 1 rangée, insuffisante pour ouvrir « b » (en-tête + session).
+    /// Un dossier déplié qui ne peut montrer AUCUNE session est dessiné REPLIÉ :
+    /// son en-tête porte le compte, et rien n'est annoncé comme caché puisque
+    /// rien ne l'est.
+    ///
+    /// ⚠️ CE TEST A ÉTÉ RÉÉCRIT le 2026-08-14 : sa première version bouclait sur
+    /// `plan.rows` pour vérifier « aucun dossier sans enfant », et cette boucle
+    /// ne s'exécutait JAMAIS puisque le plan ne contenait alors aucun dossier.
+    /// Une assertion jamais atteinte, présentée comme la preuve du correctif —
+    /// exactement le défaut corrigé le matin même dans `ProactiveRecallTests`.
+    /// On assert désormais le plan EXACT, ligne par ligne.
+    func testUnDossierSansPlaceEstDessineReplie() {
+        // Budget 3 → 2 rangées de contenu. « a » (1 session) en prend une ; il
+        // reste 1 rangée, insuffisante pour ouvrir « b » (en-tête + session).
         let plan = IslandRowPlan.byProject(
             [group("a", 1), group("b", 4)],
             rowBudget: 3,
             expanded: ["b"]
         )
-        for row in plan.rows {
-            if case .folder(let folder) = row {
-                let enfants = plan.rows.contains { row in
-                    if case .session(_, let indented) = row { return indented } else { return false }
-                }
-                XCTAssertTrue(enfants, "le dossier « \(folder.id) » est dessiné sans une seule session")
-            }
-        }
-        XCTAssertEqual(plan.hiddenCount, 4, "les 4 sessions de « b » sont annoncées comme cachées")
+        XCTAssertEqual(plan.rows.map(\.id), ["s:a-0", "f:b"],
+                       "« b » reste visible, replié — le perdre entièrement serait pire")
+        // Aucune session indentée : le dossier n'a PAS été ouvert.
+        XCTAssertFalse(plan.rows.contains { row in
+            if case .session(_, let indented) = row { return indented } else { return false }
+        })
+        XCTAssertEqual(plan.hiddenCount, 0,
+                       "un dossier replié RÉSUME ses sessions, il ne les cache pas")
+    }
+
+    /// Le projet ne disparaît jamais tant qu'il reste une rangée : c'est la
+    /// régression que la revue adversariale a trouvée dans la première version
+    /// du correctif ci-dessus.
+    func testUnProjetNeDisparaitPasQuandIlResteUneRangee() {
+        let plan = IslandRowPlan.byProject([group("z", 5)], rowBudget: 2, expanded: ["z"])
+        XCTAssertEqual(plan.rows.map(\.id), ["f:z"], "le nom et le compte du projet restent visibles")
     }
 
     /// Le contrôle : dès qu'il y a la place pour l'en-tête ET une session, le

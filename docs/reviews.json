@@ -160,6 +160,20 @@
         "AtollCore/Sources/AtollCore/TranscriptLineSplitter.swift",
         "Shared/ProcessInspector.swift"
       ]
+    },
+    {
+      "date": "2026-08-14",
+      "document": "docs/AUDIT-2026-08-14-correctifs.md",
+      "depth": "line-by-line",
+      "note": "Correctifs des constats sérieux + extraction d'IslandRowPlan. Le diff est passé devant 4 lentilles adversariales avec réfutation (13 allégués → 2 confirmés) : les fichiers touchés ont donc été relus par un tiers, IslandRowPlan.swift compris — il venait d'être écrit et n'avait par construction aucune relecture.",
+      "files": [
+        "AtollCore/Sources/AtollCore/IslandRowPlan.swift",
+        "AtollCore/Sources/AtollCore/MemoryRanking.swift",
+        "AtollCore/Sources/AtollCore/SessionPhase.swift",
+        "AtollCore/Sources/AtollCore/HookEvent.swift",
+        "App/ModelQuotaPoller.swift",
+        "Shared/ProcessInspector.swift"
+      ]
     }
   ]
 }

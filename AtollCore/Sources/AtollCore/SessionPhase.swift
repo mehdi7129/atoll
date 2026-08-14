@@ -35,6 +35,33 @@ public enum SessionPhase: Equatable, Sendable {
 /// Machine à états pure : (phase, événement) → phase.
 /// Mapping validé sur vibe-notch (docs/research/research-followup-session-liveness.md).
 public enum SessionReducer {
+    /// Cet événement autorise-t-il à QUITTER une attente de décision ?
+    ///
+    /// Hors attente de décision, toujours oui — cette garde ne change rien au
+    /// reste de la machine.
+    ///
+    /// LE DISCRIMINANT EST LE NOM D'OUTIL, pas le résumé. `toolSummary` inclut
+    /// les ARGUMENTS (`Bash(git push)`) : comparer des résumés faisait échouer
+    /// TOUTE sortie légitime — deux appels du même outil n'ont jamais le même
+    /// résumé — et la session serait restée en alerte pour toujours. C'est le
+    /// même discriminant que `InteractionCenter.cancelForSession(_:tool:)`,
+    /// cette fois pour de bon : la carte et la phase se ferment ensemble.
+    ///
+    /// Pourquoi cette garde existe : les hooks d'outil d'un SOUS-AGENT portent
+    /// le `session_id` du PARENT. Sans elle, un sous-agent faisait passer
+    /// `.waitingPermission` à `.busy` — et comme `needsAttention` ne regarde que
+    /// la permission, l'îlot cessait d'alerter pendant qu'un helper restait
+    /// bloqué. L'ambiguïté (un nom manquant d'un côté ou de l'autre) ne quitte
+    /// rien, et `permissionDenied` fait exception : il PROUVE la décision.
+    private static func mayLeavePermissionWait(_ phase: SessionPhase, _ event: ParsedHookEvent) -> Bool {
+        guard case .waitingPermission(let pending) = phase else { return true }
+        guard event.kind != .permissionDenied else { return true }
+        guard let pending, !pending.isEmpty,
+              let finished = event.toolName, !finished.isEmpty
+        else { return false }
+        return ParsedHookEvent.toolName(ofSummary: pending) == finished
+    }
+
     public static func reduce(_ phase: SessionPhase, _ event: ParsedHookEvent) -> SessionPhase {
         // ended est terminal : une nouvelle session (nouveau session_id) crée un nouvel état.
         guard phase != .ended else { return .ended }
@@ -45,6 +72,12 @@ public enum SessionReducer {
         case .userPromptSubmit:
             return .busy
         case .preToolUse:
+            // Gardé comme les événements de complétion : `preToolUse` est
+            // l'événement de sous-agent le PLUS fréquent, et il arrive AVANT
+            // `postToolUse`. Le protéger seulement là-bas laissait la faille
+            // grande ouverte — « appliqué à une partie seulement de ses
+            // points », dans le correctif même qui prétendait fermer ce motif.
+            guard mayLeavePermissionWait(phase, event) else { return phase }
             return .toolRunning(tool: event.toolSummary ?? event.toolName)
         case .permissionRequest:
             return .waitingPermission(tool: event.toolSummary ?? event.toolName)
@@ -64,13 +97,7 @@ public enum SessionReducer {
             // nom manquant d'un côté ou de l'autre) ne quitte rien.
             // `permissionDenied` fait exception — il PROUVE que la demande a été
             // tranchée, quel que soit l'outil rapporté.
-            if case .waitingPermission(let pending) = phase, event.kind != .permissionDenied {
-                let finished = event.toolSummary ?? event.toolName
-                guard let finished, !finished.isEmpty,
-                      let pending, !pending.isEmpty,
-                      finished == pending
-                else { return phase }
-            }
+            guard mayLeavePermissionWait(phase, event) else { return phase }
             // Un événement de complétion tardif (outil asynchrone terminé après
             // Stop) ne doit pas ré-afficher un spinner sans porte de sortie.
             return phase == .waitingInput ? .waitingInput : .busy

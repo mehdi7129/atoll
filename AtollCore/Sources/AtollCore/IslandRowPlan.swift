@@ -74,11 +74,21 @@ public enum IslandRowPlan {
     /// COMPRISE (« clique une session… » ou « +N autres ») : la vue par projet
     /// en dessine toujours une, elle est donc déduite ici et non par l'appelant.
     ///
-    /// UN DOSSIER DÉPLIÉ QUI NE PEUT MONTRER AUCUNE SESSION N'EST PAS DESSINÉ.
-    /// Il coûtait une rangée pour afficher exactement ce qu'il affiche replié —
-    /// l'utilisateur le dépliait et ne voyait rien de plus — pendant que cette
-    /// rangée aurait pu porter la session d'un autre projet. Ses sessions
-    /// rejoignent le compte des cachées, qui est annoncé.
+    /// UN DOSSIER DÉPLIÉ QUI NE PEUT MONTRER AUCUNE SESSION EST DESSINÉ REPLIÉ.
+    ///
+    /// Il affichait son en-tête puis rien, et comptait toutes ses sessions comme
+    /// « cachées » : l'utilisateur voyait « ▸ Atoll · 3 » ET « +3 autres », soit
+    /// deux fois la même information, dont une alarmante.
+    ///
+    /// Première correction essayée, puis ABANDONNÉE le jour même sur la revue
+    /// adversariale : ne rien dessiner du tout. C'était pire — le projet
+    /// disparaissait ENTIÈREMENT de l'îlot, son nom, son compte et son glyphe
+    /// d'attention avec lui. Perdre de l'information vaut toujours moins que
+    /// d'en montrer une redondante.
+    ///
+    /// Il est donc traité comme REPLIÉ : l'en-tête porte le compte, et ses
+    /// sessions ne sont pas « cachées » puisqu'elles sont résumées — la même
+    /// règle que tous les autres dossiers repliés.
     public static func byProject(
         _ groups: [ProjectGroup],
         rowBudget: Int,
@@ -100,15 +110,12 @@ public enum IslandRowPlan {
                 remaining -= 1
                 continue
             }
-            guard expanded.contains(group.id) else {
-                // Replié : l'en-tête porte le compte, rien n'est « caché ».
+            // Replié — ou déplié sans la place de montrer une seule session,
+            // auquel cas l'ouvrir ne dirait rien de plus : l'en-tête porte le
+            // compte, rien n'est « caché ».
+            guard expanded.contains(group.id), remaining >= 2 else {
                 rows.append(.folder(group))
                 remaining -= 1
-                continue
-            }
-            // Déplié : il faut la place de l'en-tête ET d'au moins une session.
-            guard remaining >= 2 else {
-                hidden += group.sessions.count
                 continue
             }
             rows.append(.folder(group))

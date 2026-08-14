@@ -138,4 +138,41 @@ final class SessionReducerTests: XCTestCase {
         XCTAssertEqual(SessionReducer.reduce(.waitingInput, event(.postToolUse)), .waitingInput)
         XCTAssertEqual(SessionReducer.reduce(.toolRunning(tool: "Bash"), event(.postToolUse, tool: "Bash")), .busy)
     }
+
+    // MARK: - Les deux fautes que la revue a trouvées DANS le correctif
+
+    /// `preToolUse` est l'événement de sous-agent le PLUS fréquent, et il arrive
+    /// AVANT `postToolUse` : ne garder que la complétion laissait la faille
+    /// grande ouverte.
+    func testUnPreToolUseDeSousAgentNeQuittePasLAttente() {
+        let attente = SessionPhase.waitingPermission(tool: "Bash(git push)")
+        XCTAssertEqual(SessionReducer.reduce(attente, event(.preToolUse, tool: "Read")), attente)
+        XCTAssertEqual(SessionReducer.reduce(attente, event(.preToolUse)), attente)
+        // Le MÊME outil, lui, passe : c'est l'approbation qui a été honorée.
+        XCTAssertEqual(SessionReducer.reduce(attente, event(.preToolUse, tool: "Bash")),
+                       .toolRunning(tool: "Bash"))
+    }
+
+    /// LE DISCRIMINANT EST LE NOM D'OUTIL, PAS LE RÉSUMÉ.
+    ///
+    /// La phase mémorise `toolSummary`, qui inclut les ARGUMENTS
+    /// (« Bash(git push) »). Comparer des résumés faisait échouer TOUTE sortie
+    /// légitime — l'événement de complétion ne porte pas les mêmes arguments —
+    /// et la session serait restée en alerte pour toujours.
+    func testLaSortieCompareLeNomDoutilEtNonLeResume() {
+        let attente = SessionPhase.waitingPermission(tool: "Bash(git push --force)")
+        XCTAssertEqual(SessionReducer.reduce(attente, event(.postToolUse, tool: "Bash")), .busy,
+                       "le même OUTIL doit sortir, quels que soient les arguments mémorisés")
+        XCTAssertEqual(
+            SessionReducer.reduce(attente, event(.postToolUse, tool: "Bash",
+                                                 toolInput: ["command": "git status"])),
+            .busy)
+    }
+
+    /// Le nom porté par un résumé est lu là où il est construit.
+    func testNomDoutilExtraitDunResume() {
+        XCTAssertEqual(ParsedHookEvent.toolName(ofSummary: "Bash(git push)"), "Bash")
+        XCTAssertEqual(ParsedHookEvent.toolName(ofSummary: "Read"), "Read")
+        XCTAssertEqual(ParsedHookEvent.toolName(ofSummary: ""), "")
+    }
 }

@@ -187,4 +187,16 @@ public struct ParsedHookEvent: Equatable, Sendable {
         }
         return "\(toolName)(\(detail))"
     }
+
+    /// Le NOM D'OUTIL porté par un résumé produit par `summarize` : tout ce qui
+    /// précède la première parenthèse (`Bash(git push)` → `Bash`), ou le résumé
+    /// entier s'il n'y a pas de détail.
+    ///
+    /// Défini ICI, collé à `summarize`, pour que construction et lecture ne
+    /// puissent pas diverger — c'est exactement la faute qu'on vient de payer
+    /// ailleurs (`aiTitle` connu du parseur, pas du tailer).
+    public static func toolName(ofSummary summary: String) -> String {
+        guard let parenthesis = summary.firstIndex(of: "(") else { return summary }
+        return String(summary[summary.startIndex..<parenthesis])
+    }
 }
