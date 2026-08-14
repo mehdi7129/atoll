@@ -190,7 +190,10 @@ travail sur les zones citées). Workflow de 234 agents, 18 dimensions, chaque
 défaut vérifié par 2 lentilles adversariales : 108 allégués → 71 confirmés, 30
 contestés, 7 réfutés (59 distincts). **Tous corrigés**, puis une SECONDE revue
 adversariale des corrections elles-mêmes (118 agents) a trouvé **25 régressions**,
-également corrigées. 636 tests verts.
+également corrigées. 628 tests verts à la clôture de cet audit (le chiffre vient de
+son « État de l'arbre » ; ce document annonçait 636, corrigé le 2026-08-14 — deux
+valeurs pour un même relevé, exactement la dérive que `Scripts/check-docs.py`
+existe pour attraper).
 
 **LEÇON GÉNÉRALE** : une correction de sécurité mérite sa propre revue
 adversariale. Le garde-fou des interpréteurs posé le matin se rouvrait en
