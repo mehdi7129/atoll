@@ -1,3 +1,4 @@
+import AtollCore
 import Foundation
 
 /// Suivi des transcripts JSONL (~/.claude/projects/…) en lecture seule.
@@ -141,18 +142,38 @@ final class TranscriptTailer {
                let modelID = message["model"] as? String {
                 model = modelID // le dernier vu = le plus récent
             }
-            if aiTitle == nil, type == "ai-title", let title = line["title"] as? String, !title.isEmpty {
+            // `aiTitle` D'ABORD, `title` en repli — les DEUX graphies, comme le
+            // fait `TranscriptLineParser` depuis toujours. Ce lecteur-ci ne
+            // connaissait que `title`, qui n'existe pas : mesuré sur quatre
+            // transcripts réels, 571 lignes `ai-title`, dont 0 portant `title`
+            // et 571 portant `aiTitle`. La branche était donc MORTE et TOUTE
+            // session retombait sur son premier prompt brut. Le savoir était
+            // dans le parseur, pas dans cet appel — le motif du dépôt.
+            if aiTitle == nil, type == "ai-title",
+               let title = (line["aiTitle"] as? String) ?? (line["title"] as? String),
+               !title.isEmpty {
                 aiTitle = title
             }
             if firstUserText == nil, type == "user", (line["isMeta"] as? Bool) != true,
+               !TranscriptLineParser.isMachineOrigin(line["origin"]),
                let message = line["message"] as? [String: Any] {
+                let raw: String?
                 if let text = message["content"] as? String {
-                    firstUserText = text
+                    raw = text
                 } else if let blocks = message["content"] as? [[String: Any]] {
-                    firstUserText = blocks.lazy
+                    raw = blocks.lazy
                         .filter { ($0["type"] as? String) == "text" }
                         .compactMap { $0["text"] as? String }
                         .first
+                } else {
+                    raw = nil
+                }
+                // Mêmes écarts que le parseur : l'écho d'une slash-command et
+                // les enveloppes machine ne sont pas un titre. Sans eux, une
+                // session ouverte par `/gsd:next` s'intitulait
+                // « <command-name>/gsd:next</command-name>… ».
+                if let raw, !raw.hasPrefix("<command-"), !raw.hasPrefix("<local-command-") {
+                    firstUserText = raw
                 }
             }
         }

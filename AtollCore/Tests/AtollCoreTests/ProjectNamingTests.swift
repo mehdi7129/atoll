@@ -41,4 +41,26 @@ final class ProjectNamingTests: XCTestCase {
             ProjectNaming.displayName(for: "/Users/m/atoll", siblings: ["/Users/m/atoll"]),
             "atoll")
     }
+
+    /// Deux SESSIONS du même projet ne sont pas deux projets homonymes.
+    ///
+    /// `siblings` reçoit une entrée par session : le comptage par occurrences
+    /// allongeait le nom dès qu'on ouvrait une seconde session dans le même
+    /// dossier — le cas ordinaire — alors qu'aucune ambiguïté n'existait.
+    func testDeuxSessionsDuMemeProjetNAllongentPasLeNom() {
+        let projet = "/Users/moi/Desktop/Dynamic_Island"
+        XCTAssertEqual(ProjectNaming.displayNames(for: [projet, projet]),
+                       ["Dynamic_Island", "Dynamic_Island"])
+        XCTAssertEqual(ProjectNaming.displayNames(for: [projet, projet, projet]),
+                       ["Dynamic_Island", "Dynamic_Island", "Dynamic_Island"])
+    }
+
+    /// Contrôle : deux projets RÉELLEMENT homonymes s'allongent toujours.
+    func testDeuxProjetsHomonymesSAllongentToujours() {
+        let noms = ProjectNaming.displayNames(for: [
+            "/Users/moi/Desktop/Dynamic_Island",
+            "/Users/moi/archive/Dynamic_Island",
+        ])
+        XCTAssertEqual(noms, ["Desktop/Dynamic_Island", "archive/Dynamic_Island"])
+    }
 }

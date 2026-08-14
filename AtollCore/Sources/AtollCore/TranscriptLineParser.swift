@@ -128,7 +128,10 @@ public enum TranscriptLineParser {
     /// Décodage DÉFENSIF : `origin` peut être un dictionnaire (`{"kind": …}`),
     /// une chaîne, ou absent. Une forme inattendue n'exclut RIEN — mieux vaut
     /// indexer un peu de bruit que perdre une vraie intention.
-    private static func isMachineOrigin(_ origin: Any?) -> Bool {
+    /// Publique parce que `TranscriptTailer` lit le MÊME format pour titrer une
+    /// session : deux implémentations du même filtre finiraient par diverger,
+    /// et c'est exactement ce qui venait d'arriver au champ du titre IA.
+    public static func isMachineOrigin(_ origin: Any?) -> Bool {
         if let dictionary = origin as? [String: Any],
            let kind = dictionary["kind"] as? String {
             return machineOrigins.contains(kind)

@@ -33,7 +33,13 @@ public enum ProjectNaming {
     public static func displayName(for path: String, siblings: [String]) -> String {
         let base = lastComponent(path)
         guard !base.isEmpty else { return path }
-        let duplicated = siblings.filter { lastComponent($0) == base }.count > 1
+        // Chemins DISTINCTS, pas occurrences : `siblings` reçoit une entrée par
+        // SESSION (`SessionStore` construit `sorted.map { $0.cwd }`), donc deux
+        // sessions ouvertes dans le MÊME projet — le cas ordinaire ici — se
+        // comptaient comme deux projets homonymes. Le nom s'allongeait alors en
+        // « Desktop/Dynamic_Island » sans qu'aucune ambiguïté n'existe, et il
+        // rallongeait dès qu'on ouvrait une seconde session.
+        let duplicated = Set(siblings.filter { lastComponent($0) == base }).count > 1
         guard isGeneric(base) || duplicated else { return base }
         let components = (path as NSString).pathComponents.filter { $0 != "/" }.suffix(2)
         return components.count == 2 ? components.joined(separator: "/") : base
