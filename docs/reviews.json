@@ -1,0 +1,70 @@
+{
+  "_lisez-moi": [
+    "Registre des RELECTURES ADVERSARIALES du code — la matière première de",
+    "`Scripts/review-map.py`, qui en déduit ce qui n'a jamais été lu et ce qui a",
+    "dérivé depuis sa dernière lecture.",
+    "",
+    "RÈGLE : on n'inscrit ici QUE ce qu'un document d'audit affirme noir sur blanc.",
+    "Pas d'extrapolation, pas de « ça a dû être vu au passage ». Un fichier absent",
+    "de ce registre est réputé JAMAIS RELU — c'est le défaut prudent, et c'est ce",
+    "qui rend la carte utile : elle ne peut que sous-estimer la couverture.",
+    "",
+    "`depth` vaut :",
+    "  · line-by-line — le document nomme le fichier et dit l'avoir lu en entier ;",
+    "  · sweep        — balayage par sous-système, sans liste nominative de",
+    "                   fichiers. Ça compte, mais ça ne vaut pas une lecture.",
+    "",
+    "À TENIR À JOUR : toute campagne de relecture ajoute une entrée. Sans ça la",
+    "carte vieillit en silence — exactement ce que `check-docs.py` combat ailleurs."
+  ],
+  "reviews": [
+    {
+      "date": "2026-07-27",
+      "document": "docs/AUDIT-2026-07-27.md",
+      "depth": "sweep",
+      "note": "234 agents, 18 dimensions (une par sous-système), 20,4 M de tokens. Le document ne nomme PAS les fichiers lus : couverture large mais non vérifiable fichier par fichier.",
+      "files": ["**/*.swift"]
+    },
+    {
+      "date": "2026-08-12",
+      "document": "docs/AUDIT-2026-08-12.md",
+      "depth": "line-by-line",
+      "note": "Passe solo. Le document énumère lui-même sa couverture, et dit explicitement que SessionStore, MemoryIndex et RetrospectiveRunner n'ont PAS été relus ligne à ligne.",
+      "files": [
+        "Bridge/*.swift",
+        "AtollCore/Sources/AtollCore/HookSettingsEditor.swift",
+        "AtollCore/Sources/AtollCore/SoundHookEditor.swift",
+        "AtollCore/Sources/AtollCore/StatusLineEditor.swift",
+        "AtollCore/Sources/AtollCore/RockstarPermissionsEditor.swift",
+        "AtollCore/Sources/AtollCore/PermissionDecision.swift",
+        "AtollCore/Sources/AtollCore/RecallJournal.swift",
+        "AtollCore/Sources/AtollCore/ProactiveRecall.swift",
+        "App/InteractionCenter.swift",
+        "App/BridgeServer.swift",
+        "App/ProcessInspector.swift"
+      ]
+    },
+    {
+      "date": "2026-08-14",
+      "document": "docs/AUDIT-2026-08-14.md",
+      "depth": "line-by-line",
+      "note": "Six lentilles, chacune ayant déclaré sa couverture. Seuls les fichiers annoncés « lu intégralement » sont inscrits — les greps ciblés ne comptent pas.",
+      "files": [
+        "App/SettingsView.swift",
+        "App/SoundCenter.swift",
+        "App/SoundSettingsView.swift",
+        "App/NotesCurationService.swift",
+        "App/RetrospectiveRunner.swift",
+        "App/SessionStore.swift",
+        "App/MemoryIndexer.swift",
+        "AtollCore/Sources/AtollCore/LearnedSkillStore.swift",
+        "AtollCore/Sources/AtollCore/LearningGate.swift",
+        "AtollCore/Sources/AtollCore/SessionGrouping.swift",
+        "AtollCore/Sources/AtollCore/MemoryIndex.swift",
+        "AtollCore/Sources/AtollCore/RockstarPermissionsEditor.swift",
+        "AtollCore/Sources/AtollCore/StatusLineEditor.swift",
+        "Bridge/ProactiveRecallHook.swift"
+      ]
+    }
+  ]
+}

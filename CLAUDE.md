@@ -82,7 +82,34 @@ ditto "$DD/Build/Products/Debug/Atoll.app" ~/Applications/Atoll.app
 open ~/Applications/Atoll.app                      # lancer LA COPIE, jamais le produit de build
 cd AtollCore && swift test                         # tests de la logique pure
 Scripts/check-docs.py --no-tests                   # les documents mentent-ils ? (quelques secondes)
+Scripts/review-map.py                              # qu'est-ce qui n'a jamais été relu ?
 ```
+
+**`Scripts/review-map.py` — PAR OÙ COMMENCER un audit.** L'audit du 2026-08-14 a
+trouvé neuf défauts sérieux dans trois fichiers dont le document précédent disait,
+mot pour mot, qu'ils n'avaient « pas été relus ligne à ligne » : l'information
+était écrite, mais noyée dans un paragraphe, sans date et sans comparaison
+possible avec le reste du dépôt. Le script croise trois choses établies SANS juger
+le code — la date de la dernière relecture documentée (`docs/reviews.json`), ce
+qui a changé depuis (git), et le nombre de fichiers qui dépendent de celui-ci
+(graphe des types déclarés au premier niveau) — et en tire un ordre de passage.
+- **`docs/reviews.json` n'enregistre QUE ce qu'un document d'audit affirme.** Un
+  fichier absent est réputé JAMAIS RELU : la carte ne peut que SOUS-ESTIMER la
+  couverture, ce qui est le bon sens de l'erreur. Toute campagne de relecture doit
+  y ajouter son entrée, sinon la carte vieillit en silence.
+- Relevé au 2026-08-14 : **68 fichiers sur 92 jamais relus ligne à ligne, soit
+  12 672 lignes — 53 % du code**. Le reste (21 fichiers, 10 148 lignes) est à jour ;
+  trois fichiers relus le 12 août ont dérivé depuis.
+- `--graph` seul répond à « si je touche ça, qu'est-ce que ça porte ? ».
+  Les pivots mesurés : `BridgePaths` (18 dépendants), `SessionStore` (12),
+  puis `InteractionCenter`, `ThemeColors`, `IslandGeometry`, `MemoryIndex` et
+  `SessionModel` (8 chacun).
+- **Ce que le graphe N'EST PAS** : une connaissance. Il dit ce qui touche quoi,
+  jamais ce qui est vrai ni dangereux — et il est heuristique (Swift n'a pas
+  d'en-têtes). Première version : 30 dépendants attribués à deux fichiers qui n'en
+  ont aucun, parce qu'elle comptait les types IMBRIQUÉS (`Phase`, `State`, `Job`)
+  et les mentions en commentaire. Il ne compte plus que les types déclarés au
+  premier niveau, employés comme du code (`X.`, `: X`, `X(`, `-> X`).
 
 **`Scripts/check-docs.py` — À LANCER AVANT DE CROIRE CE FICHIER, et après toute
 modification de docs.** Il confronte au code onze familles d'affirmations
