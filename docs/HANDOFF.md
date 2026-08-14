@@ -5,8 +5,9 @@
 > Dernière mise à jour : **2026-08-14**. Journée en quatre temps : un **audit
 > complet** (`docs/AUDIT-2026-08-14.md`, 18 défauts corrigés dont trois chemins
 > destructeurs), puis **deux outils de continuité**, puis **deux campagnes de
-> relecture** qui ont porté la couverture du dépôt à 100 %, puis la **v0.16.3
-> publiée** et les **six constats sérieux restants corrigés** (voir plus bas).
+> relecture** qui ont porté la couverture du dépôt à 100 %, puis **deux releases** —
+> la **v0.16.3** (défauts des campagnes) et la **v0.16.4** (les six constats sérieux
+> qui restaient, voir plus bas).
 > 733 tests, build sans warning, `Scripts/check-docs.py` vert.
 >
 > **DEUX OUTILS À CONNAÎTRE AVANT DE REPRENDRE — ils remplacent de la discipline
@@ -33,8 +34,7 @@
 > « Desktop/Dynamic_Island », et un `"sessionId": null` faisait disparaître une
 > session entière de l'îlot.
 >
-> **LES SIX CONSTATS SÉRIEUX RESTANTS SONT CORRIGÉS** (2026-08-14, après la
-> v0.16.3 — donc **non publiés** : ils partiront avec la prochaine release).
+> **LES SIX CONSTATS SÉRIEUX RESTANTS SONT CORRIGÉS**, et publiés en **v0.16.4**.
 > Détail et validation dans `docs/AUDIT-2026-08-14-correctifs.md` : contrat
 > `knownIDs` de la recherche de plugins, bornes du schéma de curation, relecture
 > d'inventaire sautée après `enable`/`disable`, slash commands de plugins jamais
@@ -140,9 +140,9 @@ GPL-3.0, repo PUBLIC `github.com/mehdi7129/atoll`).
 
 | Quoi | Où |
 |---|---|
-| Version | **v0.16.2** — la mémoire sous instrument (PUBLIÉE : release GitHub, DMG et zip notarisés+agrafés, appcast poussé et ses **12 URL vérifiées 200**, GitHub Pages basculé) |
+| Version | **v0.16.4** — les six constats sérieux des campagnes corrigés (PUBLIÉE). La v0.16.3, publiée le même jour, portait les correctifs des campagnes elles-mêmes. La v0.16.2 reste la version qui a mis la mémoire SOUS INSTRUMENT — c'est elle qui rend le rendez-vous de septembre possible |
 | Git | `main` poussé, **arbre propre**, et **une seule branche** (`main`) : les deux branches de travail ont été supprimées après fusion. Vérifier d'un coup : `git log --oneline -3 && git status --porcelain` (un hash écrit ici serait périmé dès le commit suivant) |
-| Tests | **686 verts** (`cd AtollCore && swift test`, ~1 s), build **0 warning** |
+| Tests | **733 verts** (`cd AtollCore && swift test`, ~1,4 s), build **0 warning** |
 | Phases | **1 à 14 livrées**, la **9 RETIRÉE** le 2026-08-03. Feuille de route « Atoll 2 » ÉPUISÉE ; le cadre en vigueur est `docs/VISION-2026-08.md`, décliné en `docs/PLAN-2026-08-court-terme.md` |
 | Build installé | `~/Applications/Atoll.app` = **Release NOTARISÉE v0.16.2** (bundle 27), installée et vérifiée le 2026-08-10 : `spctl : accepted — Notarized Developer ID`, staple validé, helper signé, app relancée. **C'est ce qui rend la mesure d'un mois possible** : la 0.16.0 qui traînait jusque-là n'avait pas l'instrumentation. L'ancien bundle est conservé sous `~/Applications/Atoll-0.16.0-remplacee-*.app`. Pas de build Debug installé — pour reprendre la boucle de dev, l'installer en `~/Applications/Atoll-dev.app`, jamais `ditto` par-dessus la Release (`ditto` FUSIONNE, un `Atoll.debug.dylib` résiduel casse le sceau) |
 | Mesure en cours | `~/.atoll/recall-journal.jsonl` — parti **vierge le 2026-08-10**, **42 passages au 2026-08-11**. Ne pas l'effacer, ne pas toucher au recall d'ici le rendez-vous |

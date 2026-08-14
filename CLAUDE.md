@@ -3,7 +3,9 @@
 > 📌 **REPRISE DE DEV : lire `docs/HANDOFF.md` en premier** — état exact, méthode de
 > travail, et TOUS les pièges appris à la dure.
 >
-> **Version publiée : v0.16.3** — aucune fonction ajoutée, que des correctifs. Le
+> **Version publiée : v0.16.4** — aucune fonction ajoutée, que des correctifs (deux
+> releases le même jour : la v0.16.3 a fermé les défauts des campagnes de relecture,
+> la v0.16.4 les six constats sérieux qui restaient). Sur ces deux versions : le
 > TITRE IA n'avait jamais fonctionné (`TranscriptTailer` lisait `title`, le CLI
 > écrit `aiTitle` : 571 lignes réelles vérifiées, 0 portant `title`), deux sessions
 > d'un même projet s'affichaient « Desktop/Dynamic_Island », le réglage du son
@@ -17,9 +19,13 @@
 > couvertures journalisées AVANT cette date sont gonflées (comparaison de
 > sous-chaîne). Elles restent un MAJORANT — la réalité est pire, pas meilleure.
 >
-> **LES SIX CONSTATS SÉRIEUX DES CAMPAGNES SONT CORRIGÉS** (2026-08-14, APRÈS la
-> v0.16.3 : non publiés, ils partiront avec la prochaine release —
-> `docs/AUDIT-2026-08-14-correctifs.md`, 733 tests). Chaque test de non-régression a
+> **LES SIX CONSTATS SÉRIEUX DES CAMPAGNES SONT CORRIGÉS** et publiés en v0.16.4
+> (`docs/AUDIT-2026-08-14-correctifs.md`, 733 tests) : contrat `knownIDs` de la
+> recherche de plugins, bornes du schéma de curation, relecture d'inventaire sautée
+> après `enable`/`disable`, slash commands de plugins jamais inventoriées (catalogue
+> 117 → 134 entrées), repli de jump-back posé sur une seule des deux sorties, et les
+> parts réservées du condensé qui sacrifiaient l'intention utilisateur avant les
+> sorties d'outils. Chaque test de non-régression a
 > été **vérifié par sabotage**. Deux leçons de méthode, plus durables que les
 > correctifs :
 > - **UNE ALERTE D'INTÉGRITÉ SE VÉRIFIE SUR LE DISQUE, JAMAIS SUR LE RÉCIT.** Un agent
