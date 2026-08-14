@@ -95,7 +95,15 @@ enum ProcessInspector {
         var size = 0
         guard sysctl(&mib, 3, nil, &size, nil, 0) == 0, size > 4 else { return [:] }
         var buffer = [CChar](repeating: 0, count: size)
-        guard sysctl(&mib, 3, &buffer, &size, nil, 0) == 0 else { return [:] }
+        // Le SECOND appel réécrit `size` avec ce qu'il a réellement écrit — la
+        // garde du premier ne vaut donc plus. Sans cette seconde vérification,
+        // un processus qui s'éteint entre les deux appels rend une taille plus
+        // petite, et `4..<Int(size)` plus bas est une plage INVALIDE : piège à
+        // l'exécution, c'est-à-dire un crash de l'app sur le chemin de
+        // réconciliation. `size` ne peut pas non plus dépasser le tampon.
+        let capacity = buffer.count
+        guard sysctl(&mib, 3, &buffer, &size, nil, 0) == 0, size > 4, size <= capacity
+        else { return [:] }
 
         let bytes = buffer.prefix(size)
         var argc: Int32 = 0

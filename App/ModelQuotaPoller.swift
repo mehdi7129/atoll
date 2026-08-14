@@ -19,6 +19,12 @@ final class ModelQuotaPoller {
     static let shared = ModelQuotaPoller()
     static let enabledKey = "perModelQuotaEnabled"
 
+    /// Borne de la lecture du Trousseau. Généreuse — un déverrouillage manuel
+    /// prend quelques secondes — mais FINIE : sans elle, un dialogue laissé
+    /// sans réponse figeait le poller pour toute la durée de vie de l'app.
+    /// `nonisolated` : lue depuis la closure Sendable du watchdog.
+    nonisolated static let keychainTimeout: TimeInterval = 20
+
     private(set) var scopedLimits: [OAuthUsage.ScopedLimit] = []
     private(set) var lastSuccessAt: Date?
     @ObservationIgnored private var task: Task<Void, Never>?
@@ -98,6 +104,22 @@ final class ModelQuotaPoller {
                 } catch {
                     continuation.resume(returning: nil)
                     return
+                }
+                // WATCHDOG — même discipline que partout ailleurs sur ce projet.
+                // `/usr/bin/security` peut ouvrir un dialogue du Trousseau et
+                // attendre INDÉFINIMENT une réponse. La continuation n'est pas
+                // annulable : sans borne, le poller restait figé pour toute la
+                // durée de vie de l'app, sans un mot dans le journal. Le
+                // `terminate` ferme les pipes, donc `readDataToEndOfFile`
+                // retourne et l'appelant reprend la main.
+                let pid = process.processIdentifier
+                DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + Self.keychainTimeout) {
+                    guard process.isRunning else { return }
+                    log.error("lecture du trousseau : délai dépassé, abandon")
+                    process.terminate()
+                    DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 1) {
+                        if kill(pid, 0) == 0 { kill(pid, SIGKILL) }
+                    }
                 }
                 let data = output.fileHandleForReading.readDataToEndOfFile()
                 process.waitUntilExit()

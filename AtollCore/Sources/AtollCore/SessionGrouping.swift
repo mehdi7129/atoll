@@ -169,6 +169,19 @@ public enum SessionGrouping {
     /// qui dort. Un groupe dont il ne resterait que l'en-tête n'est pas ouvert
     /// du tout, et le nombre d'écartées revient à l'appelant pour qu'il le DISE
     /// — une liste tronquée en silence ferait croire à une flotte plus petite.
+    /// ⚠️ LE BUDGET EST INTÉGRALEMENT POUR LE CONTENU — la mention « +N autres »
+    /// NE DOIT PAS y prendre une rangée, et la vue ne doit donc pas lui en
+    /// dessiner une à part (elle la porte sur l'en-tête du dernier groupe, cf.
+    /// `ExpandedView`).
+    ///
+    /// Essayé le 2026-08-14, et ANNULÉ le jour même : réserver ici une rangée
+    /// pour ce pied faisait tomber le budget de 4 à 3, et un budget de 3 ne peut
+    /// plus ouvrir DEUX groupes (un groupe non ouvert coûte 2 rangées). Le
+    /// groupe « en cours » disparaissait alors derrière « +N autres » quand des
+    /// sessions dormantes remplissaient le budget — mot pour mot la régression
+    /// mesurée en v0.16.1, que `allocationPriority` existe pour empêcher. Les
+    /// deux tests qui l'ont attrapée sont `testWorkingSurvivesABudgetFilledBy
+    /// IdleSessions` et `testAwaitingDecisionIsServedFirst`.
     public static func byState(_ sessions: [AgentSession], rowBudget: Int) -> BoundedStateGrouping {
         let full = byState(sessions)
         guard rowBudget > 0, !full.isEmpty else {

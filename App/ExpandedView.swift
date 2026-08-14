@@ -174,6 +174,17 @@ struct ExpandedView: View {
                     .foregroundStyle(group.bucket == .awaitingDecision ? colors.warn : colors.dim)
                 Text("· \(group.sessions.count)")
                     .foregroundStyle(colors.dim)
+                // Le surplus est annoncé SUR CETTE LIGNE, pas sur une rangée à
+                // part : le panneau a une hauteur fixe et `byState` répartit
+                // déjà la TOTALITÉ du budget: en dessiner une de plus poussait
+                // le quota hors du cadre — le défaut même que ce budget existe
+                // pour empêcher. La vue par projet, elle, déduit son pied du
+                // budget ; ici on n'en consomme aucun.
+                if group.id == bounded.groups.last?.id, bounded.hiddenCount > 0 {
+                    Spacer()
+                    Text("+\(bounded.hiddenCount) — voir par projet")
+                        .foregroundStyle(colors.dim)
+                }
                 Spacer()
             }
             .font(AtollFont.mono(10))
@@ -182,13 +193,6 @@ struct ExpandedView: View {
                     viewModel.selectSession(session.id)
                 }
                 .padding(.leading, 16)
-            }
-            if group.id == bounded.groups.last?.id, bounded.hiddenCount > 0 {
-                // Une liste tronquée en silence ferait croire à une flotte plus
-                // petite qu'elle n'est. On le dit.
-                Text("· +\(bounded.hiddenCount) autre\(bounded.hiddenCount > 1 ? "s" : "") — voir par projet")
-                    .font(AtollFont.mono(9))
-                    .foregroundStyle(colors.dim)
             }
         }
     }
@@ -222,55 +226,12 @@ struct ExpandedView: View {
         }
     }
 
-    /// Une rangée effectivement dessinée par la vue « par projet ».
-    private enum ProjectRow: Identifiable {
-        case folder(ProjectGroup)
-        case session(AgentSession, indented: Bool)
-
-        var id: String {
-            switch self {
-            case .folder(let group): return "f:" + group.id
-            case .session(let session, _): return "s:" + session.id
-            }
-        }
-    }
-
-    private struct ProjectRowPlan {
-        let rows: [ProjectRow]
-        /// Sessions qu'on n'a PAS pu dessiner faute de place (les sessions d'un
-        /// dossier replié ne comptent pas : leur nombre est sur l'en-tête).
-        let hiddenCount: Int
-    }
-
-    /// Aplatit les groupes en rangées et s'arrête au budget. Sans ce plan, six
-    /// projets suffisaient à pousser le quota hors du cadre, en silence.
-    private var projectRowPlan: ProjectRowPlan {
-        var rows: [ProjectRow] = []
-        // La ligne de pied (« clique une session… » / « +N autres ») est
-        // TOUJOURS dessinée : elle fait partie du budget.
-        var remaining = rowBudget - IslandRowBudget.projectFooterCost
-        var hidden = 0
-        for group in projectGroups {
-            guard remaining > 0 else {
-                hidden += group.sessions.count
-                continue
-            }
-            if group.sessions.count == 1 {
-                // Un seul projet = une seule session : ligne directe (pas de
-                // dossier inutile).
-                rows.append(.session(group.sessions[0], indented: false))
-                remaining -= 1
-            } else {
-                rows.append(.folder(group))
-                remaining -= 1
-                guard expandedProjects.contains(group.id) else { continue }
-                let shown = group.sessions.prefix(remaining)
-                rows.append(contentsOf: shown.map { .session($0, indented: true) })
-                remaining -= shown.count
-                hidden += group.sessions.count - shown.count
-            }
-        }
-        return ProjectRowPlan(rows: rows, hiddenCount: hidden)
+    /// Le plan de rangées vit dans `AtollCore` (`IslandRowPlan.byProject`) :
+    /// c'est une fonction PURE de (groupes, budget, dossiers dépliés), et elle y
+    /// est testée. Deux des défauts sérieux du 2026-08-14 étaient dans ce calcul
+    /// quand il vivait ici, hors de portée de tout test.
+    private var projectRowPlan: IslandRowPlan.Plan {
+        IslandRowPlan.byProject(projectGroups, rowBudget: rowBudget, expanded: expandedProjects)
     }
 
     /// En-tête d'un dossier de projet : flèche de pliage, nom, nombre, et un
@@ -546,11 +507,7 @@ private struct SessionRow: View {
 }
 
 /// Un groupe de sessions partageant le même projet (racine `.git`).
-private struct ProjectGroup: Identifiable {
-    let id: String              // chemin de la racine du projet (clé de groupe)
-    let name: String            // nom affiché (dernier composant)
-    let sessions: [AgentSession]
-}
+// `ProjectGroup` vit désormais dans AtollCore, avec `IslandRowPlan`.
 
 /// Racine de projet d'une session : le dossier `.git` le plus proche en
 /// remontant depuis son cwd (regroupe ainsi un dépôt et ses sous-dossiers —

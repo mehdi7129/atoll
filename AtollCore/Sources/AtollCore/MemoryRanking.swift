@@ -130,21 +130,59 @@ public enum MemoryRanking {
     /// trois se retrouve devant un extrait qui en partage deux (mesuré :
     /// 5ᵉ position sur 8 avant correction).
     ///
-    /// On compte dans le SNIPPET, où FTS5 encadre chaque terme trouvé de
-    /// `«…»` — c'est donc la liste des mots qui ont RÉELLEMENT matché, pas une
-    /// approximation textuelle. La comparaison est insensible à la casse et aux
-    /// diacritiques, comme l'index (`unicode61 remove_diacritics 2`).
+    /// On compte dans les segments que FTS5 a lui-même ENCADRÉS de `«…»` —
+    /// c'est-à-dire les mots qui ont réellement apparié, pas ceux qui se
+    /// trouvent par hasard dans le texte autour. La comparaison est insensible à
+    /// la casse et aux diacritiques, comme l'index
+    /// (`unicode61 remove_diacritics 2`).
+    ///
+    /// ⚠️ CORRIGÉ LE 2026-08-14, ET ÇA CHANGE UN CHIFFRE QUI DÉCIDE. Le
+    /// commentaire affirmait déjà cette précision, mais le code faisait un
+    /// `contains` sur le snippet ENTIER : un terme présent dans le contexte sans
+    /// avoir apparié comptait quand même, et surtout une sous-chaîne comptait
+    /// pour le mot entier — chercher « recall » était couvert par « recalled »,
+    /// que FTS5 n'apparie pourtant pas (il tokenise, il ne fait pas de
+    /// sous-chaîne). La couverture était donc SURESTIMÉE.
+    ///
+    /// Conséquence pour le rendez-vous du ~2026-09-09 : les lignes de
+    /// `recall-journal.jsonl` antérieures à cette date portent des couvertures
+    /// GONFLÉES. Elles restent exploitables comme MAJORANT — et comme le relevé
+    /// dépassait déjà le seuil (45 % d'extraits n'appariant qu'un mot, pour un
+    /// seuil à ~30 %), la conclusion qu'il soutenait n'en est que renforcée : la
+    /// réalité est pire, pas meilleure.
     public static func coverage(of hit: MemoryIndex.Hit, terms: [String]) -> Int {
         guard !terms.isEmpty else { return 0 }
-        let folded = hit.snippet.folding(options: [.diacriticInsensitive, .caseInsensitive],
-                                         locale: Locale(identifier: "fr_FR"))
+        let matched = matchedSegments(in: hit.snippet)
+        guard !matched.isEmpty else { return 0 }
         var found = 0
         for term in terms where !term.isEmpty {
             let needle = term.folding(options: [.diacriticInsensitive, .caseInsensitive],
                                       locale: Locale(identifier: "fr_FR"))
-            if folded.contains(needle) { found += 1 }
+            if matched.contains(where: { $0.contains(needle) }) { found += 1 }
         }
         return found
+    }
+
+    /// Les fragments encadrés de `«…»` par `snippet(messages_fts, 0, '«', '»', …)`,
+    /// repliés pour la comparaison. Un marqueur ouvrant sans fermant est ignoré :
+    /// le snippet est tronqué à 14 tokens, la coupe peut tomber n'importe où.
+    static func matchedSegments(in snippet: String) -> [String] {
+        var segments: [String] = []
+        var current: String?
+        for character in snippet {
+            if character == "«" {
+                current = ""
+            } else if character == "»" {
+                if let segment = current, !segment.isEmpty {
+                    segments.append(segment.folding(options: [.diacriticInsensitive, .caseInsensitive],
+                                                    locale: Locale(identifier: "fr_FR")))
+                }
+                current = nil
+            } else {
+                current?.append(character)
+            }
+        }
+        return segments
     }
 
     /// Reclasse par couverture DÉCROISSANTE, en préservant l'ordre d'entrée à

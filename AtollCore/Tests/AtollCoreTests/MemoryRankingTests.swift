@@ -163,4 +163,57 @@ final class MemoryRankingTests: XCTestCase {
             ["frais", "vieux"] // poids 1 → récence pure
         )
     }
+
+    // MARK: - Couverture : ce que FTS5 a VRAIMENT apparié (2026-08-14)
+
+    private func hit(snippet: String) -> MemoryIndex.Hit {
+        MemoryIndex.Hit(sessionID: "s", projectPath: nil, projectDir: "d", title: nil,
+                        role: "assistant", timestamp: nil, snippet: snippet, rank: -1)
+    }
+
+    /// Seuls les segments encadrés par FTS5 comptent.
+    ///
+    /// Le défaut : un `contains` sur le snippet entier faisait compter un terme
+    /// présent dans le CONTEXTE, sans qu'il ait apparié. Or c'est ce chiffre qui
+    /// doit trancher l'utilité de la mémoire proactive.
+    func testCouvertureNeCompteQueLesSegmentsMarquesParFTS5() {
+        let h = hit(snippet: "… «recall» \"notch geometrie\" dans l'«index» …")
+        XCTAssertEqual(MemoryRanking.coverage(of: h, terms: ["recall", "index"]), 2)
+        // « notch » et « geometrie » sont dans le snippet mais N'ONT PAS apparié.
+        XCTAssertEqual(MemoryRanking.coverage(of: h, terms: ["notch"]), 0)
+        XCTAssertEqual(MemoryRanking.coverage(of: h, terms: ["recall", "notch", "geometrie"]), 1)
+    }
+
+    /// Le cas qui gonflait le plus : la sous-chaîne. FTS5 tokenise — il apparie
+    /// « recalled » comme un mot entier, jamais comme contenant « recall ».
+    func testUneSousChaineDansLeContexteNeComptePas() {
+        let h = hit(snippet: "il a «reconstruit» le cache, puis recalled les sessions")
+        XCTAssertEqual(MemoryRanking.coverage(of: h, terms: ["recall"]), 0,
+                       "« recalled » dans le contexte n'apparie pas « recall »")
+        XCTAssertEqual(MemoryRanking.coverage(of: h, terms: ["reconstruit"]), 1)
+    }
+
+    /// Insensible à la casse et aux diacritiques, comme l'index.
+    func testCouvertureIgnoreCasseEtAccents() {
+        let h = hit(snippet: "dans l'«Mémoire» du projet")
+        XCTAssertEqual(MemoryRanking.coverage(of: h, terms: ["memoire"]), 1)
+    }
+
+    /// Un snippet sans aucun marqueur ne peut rien couvrir — et ne plante pas.
+    func testSnippetSansMarqueurCouvreZero() {
+        XCTAssertEqual(MemoryRanking.coverage(of: hit(snippet: "aucun marqueur ici"),
+                                              terms: ["marqueur"]), 0)
+        // Marqueur ouvrant sans fermant (snippet tronqué à 14 tokens) : ignoré.
+        XCTAssertEqual(MemoryRanking.coverage(of: hit(snippet: "coupé au «mil"),
+                                              terms: ["mil"]), 0)
+    }
+
+    /// Le tri par couverture suit la nouvelle mesure.
+    func testByCoverageClasseSurLesSegmentsMarques() {
+        let faible = hit(snippet: "«un» seul terme, mais deux autres en clair : index recall")
+        let fort = hit(snippet: "«index» et «recall» tous deux appariés")
+        let classés = MemoryRanking.byCoverage([faible, fort], terms: ["index", "recall"])
+        XCTAssertEqual(classés.first?.snippet, fort.snippet,
+                       "celui qui a VRAIMENT apparié deux termes passe devant")
+    }
 }

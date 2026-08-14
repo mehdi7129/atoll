@@ -92,4 +92,50 @@ final class SessionReducerTests: XCTestCase {
         XCTAssertEqual(SessionPhase.ended.uiStatus, .done)
         XCTAssertFalse(SessionPhase.ended.isAlive)
     }
+
+    // MARK: - L'attente de décision ne se quitte pas sur n'importe quoi (2026-08-14)
+
+    /// Les hooks d'outil d'un SOUS-AGENT portent le `session_id` du PARENT.
+    /// La v0.16.1 a protégé la CARTE d'être effacée par eux, mais pas la PHASE :
+    /// l'îlot cessait d'alerter pendant qu'un helper restait bloqué.
+    func testUnSousAgentNeQuittePasLAttenteDeDecision() {
+        let attente = SessionPhase.waitingPermission(tool: "Bash")
+        for kind in [ParsedHookEvent.Kind.subagentStart, .subagentStop] {
+            XCTAssertEqual(SessionReducer.reduce(attente, event(kind)), attente,
+                           "\(kind) ne prouve rien sur la session parente")
+        }
+        // Un outil DIFFÉRENT ne prouve rien non plus : c'est le sous-agent.
+        XCTAssertEqual(SessionReducer.reduce(attente, event(.postToolUse, tool: "Read")), attente)
+        // Ni un événement sans nom d'outil exploitable — l'ambiguïté ne quitte rien.
+        XCTAssertEqual(SessionReducer.reduce(attente, event(.postToolUse)), attente)
+    }
+
+    /// Le MÊME outil, lui, prouve que la demande a été tranchée ailleurs.
+    func testLeMemeOutilQuitteLAttente() {
+        let attente = SessionPhase.waitingPermission(tool: "Bash")
+        XCTAssertEqual(SessionReducer.reduce(attente, event(.postToolUse, tool: "Bash")), .busy)
+    }
+
+    /// `permissionDenied` PROUVE la décision, quel que soit l'outil rapporté.
+    func testUnRefusQuitteToujoursLAttente() {
+        let attente = SessionPhase.waitingPermission(tool: "Bash")
+        XCTAssertEqual(SessionReducer.reduce(attente, event(.permissionDenied)), .busy)
+        XCTAssertEqual(SessionReducer.reduce(attente, event(.permissionDenied, tool: "Read")), .busy)
+    }
+
+    /// Les quatre événements qui prouvent que la session a avancé continuent de
+    /// sortir de l'attente — le correctif ne doit rien bloquer.
+    func testLesEvenementsDeProgresSortentToujours() {
+        let attente = SessionPhase.waitingPermission(tool: "Bash")
+        XCTAssertEqual(SessionReducer.reduce(attente, event(.stop)), .waitingInput)
+        XCTAssertEqual(SessionReducer.reduce(attente, event(.userPromptSubmit)), .busy)
+        XCTAssertEqual(SessionReducer.reduce(attente, event(.sessionEnd)), .ended)
+    }
+
+    /// Hors attente de décision, rien ne change.
+    func testHorsAttenteLeComportementEstInchange() {
+        XCTAssertEqual(SessionReducer.reduce(.busy, event(.subagentStop)), .busy)
+        XCTAssertEqual(SessionReducer.reduce(.waitingInput, event(.postToolUse)), .waitingInput)
+        XCTAssertEqual(SessionReducer.reduce(.toolRunning(tool: "Bash"), event(.postToolUse, tool: "Bash")), .busy)
+    }
 }

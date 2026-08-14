@@ -49,6 +49,28 @@ public enum SessionReducer {
         case .permissionRequest:
             return .waitingPermission(tool: event.toolSummary ?? event.toolName)
         case .postToolUse, .postToolUseFailure, .permissionDenied, .subagentStart, .subagentStop:
+            // UNE ATTENTE DE DÉCISION NE SE QUITTE PAS SUR N'IMPORTE QUOI.
+            //
+            // La v0.16.1 a protégé la CARTE d'être effacée par un sous-agent —
+            // les hooks d'outil d'un sous-agent portent le `session_id` du
+            // PARENT — mais le correctif n'a pas été appliqué à la PHASE. La
+            // carte restait donc affichée pendant que la phase repassait en
+            // `.busy`, et comme `needsAttention` ne regarde QUE la permission,
+            // l'îlot cessait d'alerter alors qu'un helper était toujours bloqué.
+            // Le motif « appliqué à une partie seulement de ses points ».
+            //
+            // Même discriminant que `InteractionCenter.cancelForSession(_:tool:)` :
+            // on ne quitte l'attente que pour le MÊME outil, et l'ambiguïté (un
+            // nom manquant d'un côté ou de l'autre) ne quitte rien.
+            // `permissionDenied` fait exception — il PROUVE que la demande a été
+            // tranchée, quel que soit l'outil rapporté.
+            if case .waitingPermission(let pending) = phase, event.kind != .permissionDenied {
+                let finished = event.toolSummary ?? event.toolName
+                guard let finished, !finished.isEmpty,
+                      let pending, !pending.isEmpty,
+                      finished == pending
+                else { return phase }
+            }
             // Un événement de complétion tardif (outil asynchrone terminé après
             // Stop) ne doit pas ré-afficher un spinner sans porte de sortie.
             return phase == .waitingInput ? .waitingInput : .busy
