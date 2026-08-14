@@ -125,7 +125,7 @@ Claude Code — après t'avoir montré ce qu'elle va écrire.
 Atoll vit dans la barre de menus et autour de l'encoche. Survoler l'îlot l'étend, cliquer
 l'épingle, cliquer ailleurs le referme.
 
-**Version courante : v0.16.2.**
+**Version courante : v0.16.3.**
 
 ---
 

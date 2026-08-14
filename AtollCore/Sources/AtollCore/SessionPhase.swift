@@ -51,15 +51,40 @@ public enum SessionReducer {
     /// le `session_id` du PARENT. Sans elle, un sous-agent faisait passer
     /// `.waitingPermission` à `.busy` — et comme `needsAttention` ne regarde que
     /// la permission, l'îlot cessait d'alerter pendant qu'un helper restait
-    /// bloqué. L'ambiguïté (un nom manquant d'un côté ou de l'autre) ne quitte
-    /// rien, et `permissionDenied` fait exception : il PROUVE la décision.
+    /// bloqué. `permissionDenied` fait exception : il PROUVE la décision.
+    ///
+    /// ON NE BLOQUE QUE SUR PREUVE POSITIVE — deux noms d'outil présents et
+    /// DIFFÉRENTS. Un événement sans nom exploitable laisse passer.
+    ///
+    /// C'est l'inverse du défaut de la carte (`cancelForSession(_:tool:)`, qui
+    /// n'annule rien sans nom), et l'asymétrie est VOULUE parce que les deux
+    /// erreurs ne coûtent pas la même chose : refermer une carte à tort perd une
+    /// décision que l'utilisateur n'a jamais prise, alors que retenir une alerte
+    /// à tort ne fait que du bruit. La documentation de terrain
+    /// (`docs/research/research-claude-integration.md` l. 15) range `tool_name`
+    /// parmi les champs de `PreToolUse`/`PermissionRequest` et n'attribue à
+    /// `PostToolUse` que `tool_response` : si un `PostToolUse` réel arrivait sans
+    /// nom d'outil, bloquer par défaut aurait retenu l'alerte jusqu'au `Stop`
+    /// suivant — une régression visible, sur une hypothèse non mesurée. La
+    /// défense contre le SOUS-AGENT, elle, ne dépend pas de ce choix : ses
+    /// événements portent bien un nom d'outil, et il est différent.
     private static func mayLeavePermissionWait(_ phase: SessionPhase, _ event: ParsedHookEvent) -> Bool {
         guard case .waitingPermission(let pending) = phase else { return true }
-        guard event.kind != .permissionDenied else { return true }
-        guard let pending, !pending.isEmpty,
-              let finished = event.toolName, !finished.isEmpty
-        else { return false }
-        return ParsedHookEvent.toolName(ofSummary: pending) == finished
+        switch event.kind {
+        case .permissionDenied:
+            // La demande a été tranchée : ça sort, quel que soit l'outil.
+            return true
+        case .subagentStart, .subagentStop:
+            // Ils ne portent pas de nom d'outil — mais ils NOMMENT leur nature :
+            // un sous-agent ne dit rien de ce que la session PARENTE attend.
+            // C'est une preuve positive, pas une ambiguïté.
+            return false
+        default:
+            guard let pending, !pending.isEmpty,
+                  let finished = event.toolName, !finished.isEmpty
+            else { return true }
+            return ParsedHookEvent.toolName(ofSummary: pending) == finished
+        }
     }
 
     public static func reduce(_ phase: SessionPhase, _ event: ParsedHookEvent) -> SessionPhase {

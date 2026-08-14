@@ -106,8 +106,10 @@ final class SessionReducerTests: XCTestCase {
         }
         // Un outil DIFFÉRENT ne prouve rien non plus : c'est le sous-agent.
         XCTAssertEqual(SessionReducer.reduce(attente, event(.postToolUse, tool: "Read")), attente)
-        // Ni un événement sans nom d'outil exploitable — l'ambiguïté ne quitte rien.
-        XCTAssertEqual(SessionReducer.reduce(attente, event(.postToolUse)), attente)
+        // En revanche un événement SANS nom d'outil laisse passer : on ne bloque
+        // que sur preuve positive (cf. `mayLeavePermissionWait`). Retenir une
+        // alerte sur une hypothèse non mesurée coûterait plus que ça ne protège.
+        XCTAssertEqual(SessionReducer.reduce(attente, event(.postToolUse)), .busy)
     }
 
     /// Le MÊME outil, lui, prouve que la demande a été tranchée ailleurs.
@@ -147,7 +149,7 @@ final class SessionReducerTests: XCTestCase {
     func testUnPreToolUseDeSousAgentNeQuittePasLAttente() {
         let attente = SessionPhase.waitingPermission(tool: "Bash(git push)")
         XCTAssertEqual(SessionReducer.reduce(attente, event(.preToolUse, tool: "Read")), attente)
-        XCTAssertEqual(SessionReducer.reduce(attente, event(.preToolUse)), attente)
+        XCTAssertEqual(SessionReducer.reduce(attente, event(.preToolUse)), .toolRunning(tool: nil))
         // Le MÊME outil, lui, passe : c'est l'approbation qui a été honorée.
         XCTAssertEqual(SessionReducer.reduce(attente, event(.preToolUse, tool: "Bash")),
                        .toolRunning(tool: "Bash"))

@@ -3,11 +3,19 @@
 > 📌 **REPRISE DE DEV : lire `docs/HANDOFF.md` en premier** — état exact, méthode de
 > travail, et TOUS les pièges appris à la dure.
 >
-> **Version publiée : v0.16.2** — la mémoire est mise SOUS INSTRUMENT, pour pouvoir
-> être supprimée si elle ne sert pas. Journal des injections **et des refus**
-> (`atoll-bridge recall-stats`). **RENDEZ-VOUS ≈ 2026-09-09** : Mehdi utilise l'app un
-> mois, puis on tranche sur pièces. Ne rien ajouter d'ici là — les points 1 (voir les
-> flottes d'arrière-plan) et 3 (rapport de retour) attendent cette mesure.
+> **Version publiée : v0.16.3** — aucune fonction ajoutée, que des correctifs. Le
+> TITRE IA n'avait jamais fonctionné (`TranscriptTailer` lisait `title`, le CLI
+> écrit `aiTitle` : 571 lignes réelles vérifiées, 0 portant `title`), deux sessions
+> d'un même projet s'affichaient « Desktop/Dynamic_Island », le réglage du son
+> n'atteignait pas le helper, une session vivante pouvait être déclarée morte, et
+> trois chemins DESTRUCTEURS étaient ouverts (settings.json, base mémoire, notes).
+> Tout le dépôt a été relu en adversaire pour la première fois — voir la carte des
+> relectures. **RENDEZ-VOUS ≈ 2026-09-09** : Mehdi utilise l'app un mois, puis on
+> tranche sur pièces. Ne rien ajouter d'ici là — les points 1 (voir les flottes
+> d'arrière-plan) et 3 (rapport de retour) attendent cette mesure.
+> ⚠️ La mesure de COUVERTURE du recall a été corrigée le 2026-08-14 : les
+> couvertures journalisées AVANT cette date sont gonflées (comparaison de
+> sous-chaîne). Elles restent un MAJORANT — la réalité est pire, pas meilleure.
 >
 > **AUDIT DU 2026-08-14 — dix-huit défauts corrigés, six API mortes retirées, aucune
 > fonction ajoutée** (`docs/AUDIT-2026-08-14.md`, 691 tests verts). **Trois chemins
