@@ -107,12 +107,6 @@ public enum TaskCompletion {
         return truncate(flattened, maxLength: maxLength)
     }
 
-    /// Titre de la notification : le projet, pour distinguer deux tâches
-    /// terminées à la même minute dans des dossiers différents.
-    public static func notificationTitle(projectName: String) -> String {
-        projectName.isEmpty ? "Tâche terminée" : "Tâche terminée · \(projectName)"
-    }
-
     // MARK: - Outils
 
     /// Espaces, tabulations et retours à la ligne → une seule espace.

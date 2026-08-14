@@ -125,12 +125,6 @@ public struct LearningInventory {
             .sorted { $0.count == $1.count ? $0.project < $1.project : $0.count > $1.count }
     }
 
-    /// Volume total de connaissance écrite (somme des corps), pour l'entête du
-    /// tableau de bord.
-    public func totalCharacterCount() -> Int {
-        notes().reduce(0) { $0 + $1.characterCount }
-    }
-
     // MARK: - Tri
 
     /// Date décroissante (sans date = en dernier), puis nom de fichier croissant.

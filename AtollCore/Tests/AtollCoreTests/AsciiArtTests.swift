@@ -63,18 +63,6 @@ final class AsciiArtTests: XCTestCase {
         XCTAssertEqual(seen.count, AsciiArt.spinnerFrames.count)
     }
 
-    // MARK: - sparkline
-
-    func testSparkline() {
-        XCTAssertEqual(AsciiArt.sparkline([0, 0.5, 1]), "▁▅█")
-        XCTAssertEqual(AsciiArt.sparkline([]), "")
-    }
-
-    func testSparklineClampsAndSurvivesNonFinite() {
-        XCTAssertEqual(AsciiArt.sparkline([-1, 2]), "▁█")
-        XCTAssertEqual(AsciiArt.sparkline([.nan, .infinity]), "▁▁")
-    }
-
     func testSpinnerFrameNegativeDate() {
         // Une date antérieure à la référence ne doit ni planter ni sortir des bornes.
         let past = Date(timeIntervalSinceReferenceDate: -12345.678)

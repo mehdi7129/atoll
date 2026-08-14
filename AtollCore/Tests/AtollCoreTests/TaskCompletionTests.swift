@@ -150,14 +150,6 @@ final class TaskCompletionTests: XCTestCase {
         XCTAssertEqual(summary, "ligne 1 ligne 2")
     }
 
-    // MARK: - Titre
-
-    func testNotificationTitleNamesTheProject() {
-        XCTAssertEqual(TaskCompletion.notificationTitle(projectName: "Atoll"),
-                       "Tâche terminée · Atoll")
-        XCTAssertEqual(TaskCompletion.notificationTitle(projectName: ""), "Tâche terminée")
-    }
-
     /// Deux comparaisons dans une phrase ont la forme d'une balise à attributs.
     /// « i<n et j>0 » devenait « i 0 » : le résumé disait le CONTRAIRE du vrai,
     /// en notification macOS (audit du 2026-07-27).

@@ -25,13 +25,6 @@ public enum RockstarPermissionsEditor {
         case unparseableSettings
     }
 
-    /// Règles deny actuellement présentes (lecture seule, pour l'UI/diagnostic).
-    public static func denyRules(in data: Data?) -> [String] {
-        guard let settings = try? parse(data),
-              let permissions = settings["permissions"] as? [String: Any] else { return [] }
-        return permissions["deny"] as? [String] ?? []
-    }
-
     /// Retire toutes les règles `permissions.deny`. Renvoie nil si rien à faire
     /// (aucune règle) — aucune écriture dans ce cas. `permissions` ou `deny`
     /// d'un type inattendu → erreur SANS écriture (jamais d'écrasement aveugle).

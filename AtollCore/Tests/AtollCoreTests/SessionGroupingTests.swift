@@ -59,58 +59,6 @@ final class SessionGroupingTests: XCTestCase {
         XCTAssertEqual(regrouped.count, sessions.count)
     }
 
-    // MARK: - Bornage (hauteur fixe du panneau)
-
-    /// Ce qui saute quand ça ne tient pas, c'est ce qui DORT — jamais ce qui
-    /// attend une décision.
-    func testLimitDropsLeastUrgentFirst() {
-        let bounded = SessionGrouping.byState([
-            session("p", .awaitingPermission(tool: "Bash")),
-            session("w1", .working(tool: nil)),
-            session("w2", .working(tool: nil)),
-            session("d", .done),
-        ], limit: 2)
-        XCTAssertEqual(bounded.groups.flatMap(\.sessions).map(\.projectName), ["p", "w1"])
-        XCTAssertEqual(bounded.hiddenCount, 2)
-    }
-
-    /// Un groupe entièrement coupé ne doit pas laisser un en-tête tout seul.
-    func testLimitDropsEmptiedGroupHeaders() {
-        let bounded = SessionGrouping.byState([
-            session("p", .awaitingPermission(tool: "Bash")),
-            session("w", .working(tool: nil)),
-        ], limit: 1)
-        XCTAssertEqual(bounded.groups.map(\.bucket), [.awaitingDecision])
-    }
-
-    func testLimitAboveCountHidesNothing() {
-        let bounded = SessionGrouping.byState([session("w", .working(tool: nil))], limit: 10)
-        XCTAssertEqual(bounded.hiddenCount, 0)
-        XCTAssertEqual(bounded.groups.flatMap(\.sessions).count, 1)
-    }
-
-    func testZeroLimitHidesEverything() {
-        let bounded = SessionGrouping.byState([session("w", .working(tool: nil))], limit: 0)
-        XCTAssertTrue(bounded.groups.isEmpty)
-        XCTAssertEqual(bounded.hiddenCount, 1)
-    }
-
-    func testHiddenCountIsExactAcrossManyGroups() {
-        let sessions = (0..<12).map { index -> AgentSession in
-            switch index % 3 {
-            case 0: return session("p\(index)", .awaitingPermission(tool: "Bash"))
-            case 1: return session("w\(index)", .working(tool: nil))
-            default: return session("i\(index)", .awaitingInput)
-            }
-        }
-        for limit in 1...12 {
-            let bounded = SessionGrouping.byState(sessions, limit: limit)
-            let shown = bounded.groups.flatMap(\.sessions).count
-            XCTAssertEqual(shown, min(limit, 12), "limit=\(limit)")
-            XCTAssertEqual(shown + bounded.hiddenCount, 12, "limit=\(limit)")
-        }
-    }
-
     // MARK: - Budget en RANGÉES DESSINÉES (audit du 2026-07-27)
 
     /// Le bug : `limit:` compte des sessions, mais chaque groupe dessine EN PLUS

@@ -446,28 +446,4 @@ final class PluginSnapshotTests: XCTestCase {
         XCTAssertEqual(PluginDetails.alwaysOnTokens(from: "Always-on:   ~688 tok   added to every session"), 688)
     }
 
-    func testComponentCountsFromRealOutput() {
-        let counts = PluginDetails.componentCounts(from: detailsText)
-        XCTAssertEqual(counts["Skills"], 12)
-        XCTAssertEqual(counts["Agents"], 0)
-        XCTAssertEqual(counts["Hooks"], 1)
-        XCTAssertEqual(counts["MCP servers"], 0)
-        XCTAssertEqual(counts["LSP servers"], 1)
-        // `Per-component (rounded)` : parenthèse non numérique → ignorée.
-        XCTAssertNil(counts["Per-component"])
-        XCTAssertEqual(counts.count, 5)
-    }
-
-    func testComponentCountsIgnoresNoise() {
-        XCTAssertTrue(PluginDetails.componentCounts(from: "").isEmpty)
-        XCTAssertTrue(PluginDetails.componentCounts(from: "aucune parenthese ici").isEmpty)
-        XCTAssertTrue(PluginDetails.componentCounts(from: "(3)").isEmpty)        // étiquette vide
-        XCTAssertTrue(PluginDetails.componentCounts(from: "Skills (12").isEmpty) // parenthèse ouverte
-        XCTAssertTrue(PluginDetails.componentCounts(from: "Skills (1.5)").isEmpty)
-    }
-
-    func testComponentCountsKeepsFirstOccurrence() {
-        let counts = PluginDetails.componentCounts(from: "  Skills (12)  a, b\n  Skills (3)")
-        XCTAssertEqual(counts["Skills"], 12)
-    }
 }

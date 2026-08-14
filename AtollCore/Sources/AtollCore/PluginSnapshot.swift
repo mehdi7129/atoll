@@ -486,22 +486,6 @@ public enum PluginDetails {
         return nil
     }
 
-    /// L'inventaire des composants : `Skills (12)`, `Hooks (4)`,
-    /// `LSP servers (0)`… → `["Skills": 12, "Hooks": 4, "LSP servers": 0]`.
-    ///
-    /// Une ligne compte si elle est de la forme `<étiquette> (<entier>)` — tout
-    /// ce qui suit la parenthèse (la liste des composants) est ignoré, et une
-    /// parenthèse non numérique (`Per-component (rounded)`) ne produit rien.
-    /// Étiquette répétée : la PREMIÈRE gagne.
-    public static func componentCounts(from text: String) -> [String: Int] {
-        var counts: [String: Int] = [:]
-        for line in text.split(separator: "\n", omittingEmptySubsequences: false) {
-            guard let (label, count) = labelledCount(in: line) else { continue }
-            if counts[label] == nil { counts[label] = count }
-        }
-        return counts
-    }
-
     // MARK: Lecture au caractère
 
     /// Premier entier trouvé entre `start` et la fin de SA ligne.
@@ -546,19 +530,4 @@ public enum PluginDetails {
             || character == "\u{202F}" || character == "\u{2009}"
     }
 
-    /// `  Skills (12)  a, b, c` → `("Skills", 12)`. nil si la ligne n'a pas la
-    /// forme attendue.
-    private static func labelledCount(in line: Substring) -> (label: String, count: Int)? {
-        guard let open = line.firstIndex(of: "("),
-              let close = line[open...].firstIndex(of: ")")
-        else { return nil }
-
-        let digits = line[line.index(after: open)..<close]
-        guard !digits.isEmpty, digits.allSatisfy(\.isNumber), let count = Int(digits) else { return nil }
-
-        let label = line[line.startIndex..<open]
-            .trimmingCharacters(in: CharacterSet(charactersIn: " \t-•:"))
-        guard !label.isEmpty else { return nil }
-        return (label, count)
-    }
 }

@@ -141,10 +141,4 @@ final class RockstarPermissionsEditorTests: XCTestCase {
         XCTAssertNil(RockstarPermissionsEditor.decodeParked(Data("{}".utf8)))
         XCTAssertNil(RockstarPermissionsEditor.decodeParked(Data("nope".utf8)))
     }
-
-    func testDenyRulesReadsCurrentRules() {
-        let settings = json(["permissions": ["deny": ["Bash(sudo *)"]]])
-        XCTAssertEqual(RockstarPermissionsEditor.denyRules(in: settings), ["Bash(sudo *)"])
-        XCTAssertEqual(RockstarPermissionsEditor.denyRules(in: nil), [])
-    }
 }

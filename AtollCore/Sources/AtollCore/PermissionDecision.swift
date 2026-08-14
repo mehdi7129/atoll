@@ -41,8 +41,12 @@ public enum PermissionDecision {
     }
 
     /// Réponses « par défaut » pour le mode rockstar : la PREMIÈRE option de
-    /// chaque question (les modèles listent en général l'option recommandée en
-    /// premier). Questions sans option → ignorées (rien à choisir).
+    /// chaque question. Choix ARBITRAIRE assumé — l'hypothèse « les modèles
+    /// listent l'option recommandée en premier » a été MESURÉE FAUSSE le
+    /// 2026-08-04 (la première option ne coïncide avec le choix de Mehdi que
+    /// ~54 % du temps, hasard à 37 % — cf. HANDOFF §1.C). Il faut bien répondre
+    /// quelque chose ; « la première » est le seul choix qui ne prétend rien.
+    /// Questions sans option → ignorées (rien à choisir).
     public static func defaultAnswers(for questions: [ParsedHookEvent.AskQuestion]) -> [String: String] {
         var answers: [String: String] = [:]
         for question in questions {

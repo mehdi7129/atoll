@@ -43,7 +43,7 @@ final class HookSettingsEditorTests: XCTestCase {
 
         let settings = try parse(result)
         let hooks = try XCTUnwrap(settings["hooks"] as? [String: Any])
-        XCTAssertEqual(Set(hooks.keys), Set(HookSettingsEditor.managedEventNames))
+        XCTAssertEqual(Set(hooks.keys), Set(HookSettingsEditor.managedEvents.map(\.name)))
 
         // Les événements d'état sont async avec timeout court (fail-open).
         let stops = try XCTUnwrap(hooks["Stop"] as? [[String: Any]])

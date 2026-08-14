@@ -153,37 +153,22 @@ public enum SessionGrouping {
         }
     }
 
-    /// Même regroupement, borné à `limit` sessions affichées.
+    /// Regroupement borné en RANGÉES DESSINÉES — en-têtes de groupe compris.
+    ///
+    /// ⛔️ Une variante `limit:` a existé, qui comptait des SESSIONS. Elle a été
+    /// remplacée par celle-ci (audit du 2026-07-27 : chaque groupe ajoute une
+    /// ligne d'en-tête, donc quatre sessions sur quatre états font huit rangées,
+    /// le double du budget — le quota sortait du cadre), puis SUPPRIMÉE le
+    /// 2026-08-14 : elle n'avait plus aucun appelant hors de ses propres tests,
+    /// et elle coupait dans l'ordre d'AFFICHAGE sans consulter
+    /// `allocationPriority`. La réutiliser aurait réintroduit mot pour mot la
+    /// régression mesurée en v0.16.1 — la seule session qui travaille reléguée
+    /// derrière « +1 autre ». Une API morte que ses tests font paraître sûre.
     ///
     /// La coupe se fait dans l'ordre d'urgence : ce qui saute est toujours ce
-    /// qui dort. Un groupe vidé par la coupe disparaît (pas d'en-tête orphelin),
-    /// et le nombre d'écartées revient à l'appelant pour qu'il le DISE — une
-    /// liste tronquée en silence ferait croire à une flotte plus petite.
-    public static func byState(_ sessions: [AgentSession], limit: Int) -> BoundedStateGrouping {
-        let full = byState(sessions)
-        guard limit > 0 else {
-            return BoundedStateGrouping(groups: [], hiddenCount: sessions.count)
-        }
-        var remaining = limit
-        var kept: [SessionStateGroup] = []
-        for group in full {
-            guard remaining > 0 else { break }
-            let slice = Array(group.sessions.prefix(remaining))
-            remaining -= slice.count
-            kept.append(SessionStateGroup(bucket: group.bucket, sessions: slice))
-        }
-        let shown = kept.reduce(0) { $0 + $1.sessions.count }
-        return BoundedStateGrouping(groups: kept, hiddenCount: max(0, sessions.count - shown))
-    }
-
-    /// Même regroupement, borné en RANGÉES DESSINÉES — en-têtes de groupe
-    /// compris.
-    ///
-    /// Pourquoi pas `limit:` : ce dernier compte des sessions, or chaque groupe
-    /// ajoute une ligne d'en-tête que le panneau doit dessiner. Quatre sessions
-    /// réparties sur quatre états, c'est huit rangées, soit le double du budget
-    /// — et le quota sortait du cadre (audit du 2026-07-27). Un groupe dont il
-    /// ne resterait que l'en-tête n'est pas ouvert du tout.
+    /// qui dort. Un groupe dont il ne resterait que l'en-tête n'est pas ouvert
+    /// du tout, et le nombre d'écartées revient à l'appelant pour qu'il le DISE
+    /// — une liste tronquée en silence ferait croire à une flotte plus petite.
     public static func byState(_ sessions: [AgentSession], rowBudget: Int) -> BoundedStateGrouping {
         let full = byState(sessions)
         guard rowBudget > 0, !full.isEmpty else {

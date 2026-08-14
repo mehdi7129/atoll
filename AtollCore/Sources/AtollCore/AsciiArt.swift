@@ -40,20 +40,6 @@ public enum AsciiArt {
         return bar
     }
 
-    // MARK: - Sparkline
-
-    static let sparkBlocks = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"]
-
-    /// Sparkline : une valeur 0…1 par colonne.
-    public static func sparkline(_ values: [Double]) -> String {
-        values.map { value in
-            guard value.isFinite else { return sparkBlocks[0] }
-            let clamped = min(max(value, 0), 1)
-            let index = min(Int(clamped * 8), 7)
-            return sparkBlocks[index]
-        }.joined()
-    }
-
     // MARK: - Badges d'état
 
     /// Badge d'état d'une session, ou `nil` quand il n'y a RIEN à annoncer.

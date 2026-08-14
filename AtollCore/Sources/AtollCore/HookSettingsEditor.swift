@@ -55,8 +55,6 @@ public enum HookSettingsEditor {
         ]
     }
 
-    public static var managedEventNames: [String] { managedEvents.map(\.name) }
-
     public enum EditorError: Error, Equatable {
         /// Le fichier existe mais n'est pas un objet JSON valide (JSONC ? corrompu ?).
         /// On refuse d'y toucher plutôt que de risquer de le corrompre.
