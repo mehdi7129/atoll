@@ -130,59 +130,58 @@ public enum MemoryRanking {
     /// trois se retrouve devant un extrait qui en partage deux (mesuré :
     /// 5ᵉ position sur 8 avant correction).
     ///
-    /// On compte dans les segments que FTS5 a lui-même ENCADRÉS de `«…»` —
-    /// c'est-à-dire les mots qui ont réellement apparié, pas ceux qui se
-    /// trouvent par hasard dans le texte autour. La comparaison est insensible à
-    /// la casse et aux diacritiques, comme l'index
-    /// (`unicode61 remove_diacritics 2`).
+    /// Un terme compte s'il apparaît dans le snippet COMME UN MOT ENTIER —
+    /// bordé par autre chose qu'une lettre ou un chiffre. Insensible à la casse
+    /// et aux diacritiques, comme l'index (`unicode61 remove_diacritics 2`).
     ///
-    /// ⚠️ CORRIGÉ LE 2026-08-14, ET ÇA CHANGE UN CHIFFRE QUI DÉCIDE. Le
-    /// commentaire affirmait déjà cette précision, mais le code faisait un
-    /// `contains` sur le snippet ENTIER : un terme présent dans le contexte sans
-    /// avoir apparié comptait quand même, et surtout une sous-chaîne comptait
-    /// pour le mot entier — chercher « recall » était couvert par « recalled »,
-    /// que FTS5 n'apparie pourtant pas (il tokenise, il ne fait pas de
-    /// sous-chaîne). La couverture était donc SURESTIMÉE.
+    /// ⚠️ CORRIGÉ LE 2026-08-14, ET ÇA CHANGE UN CHIFFRE QUI DÉCIDE. Le code
+    /// faisait un `contains` de SOUS-CHAÎNE : chercher « recall » était couvert
+    /// par « recalled », que l'index n'apparie pourtant pas — il tokenise, et
+    /// `sanitizedMatchQuery` cite chaque terme, donc l'appariement est exact au
+    /// token près. La couverture était SURESTIMÉE, et c'est elle qui doit
+    /// trancher l'utilité de la mémoire proactive au ~2026-09-09.
     ///
-    /// Conséquence pour le rendez-vous du ~2026-09-09 : les lignes de
-    /// `recall-journal.jsonl` antérieures à cette date portent des couvertures
-    /// GONFLÉES. Elles restent exploitables comme MAJORANT — et comme le relevé
-    /// dépassait déjà le seuil (45 % d'extraits n'appariant qu'un mot, pour un
-    /// seuil à ~30 %), la conclusion qu'il soutenait n'en est que renforcée : la
-    /// réalité est pire, pas meilleure.
+    /// POURQUOI PAS LES MARQUEURS `«…»` de FTS5, qui seraient pourtant la
+    /// vérité de l'appariement ? Écrit, puis ABANDONNÉ le même jour, sur mesure :
+    /// ce projet est francophone et `«` `»` sont des GUILLEMETS. Relevé sur la
+    /// vraie base — **2 502 messages sur 45 302, soit 5,5 %, en contiennent
+    /// naturellement**. Les marqueurs de FTS5 y sont indiscernables du texte, et
+    /// s'y fier aurait remplacé une erreur par une autre. Le mot entier ne
+    /// dépend, lui, d'aucune convention de rendu.
+    ///
+    /// Conséquence pour septembre : les lignes de `recall-journal.jsonl`
+    /// antérieures portent des couvertures GONFLÉES. Elles restent exploitables
+    /// comme MAJORANT — et comme le relevé dépassait déjà le seuil (45 %
+    /// d'extraits n'appariant qu'un mot, pour un seuil à ~30 %), la conclusion
+    /// qu'il soutenait n'en est que renforcée : la réalité est pire.
     public static func coverage(of hit: MemoryIndex.Hit, terms: [String]) -> Int {
         guard !terms.isEmpty else { return 0 }
-        let matched = matchedSegments(in: hit.snippet)
-        guard !matched.isEmpty else { return 0 }
+        let haystack = Array(hit.snippet.folding(options: [.diacriticInsensitive, .caseInsensitive],
+                                                 locale: Locale(identifier: "fr_FR")))
         var found = 0
         for term in terms where !term.isEmpty {
-            let needle = term.folding(options: [.diacriticInsensitive, .caseInsensitive],
-                                      locale: Locale(identifier: "fr_FR"))
-            if matched.contains(where: { $0.contains(needle) }) { found += 1 }
+            let needle = Array(term.folding(options: [.diacriticInsensitive, .caseInsensitive],
+                                            locale: Locale(identifier: "fr_FR")))
+            if containsWord(needle, in: haystack) { found += 1 }
         }
         return found
     }
 
-    /// Les fragments encadrés de `«…»` par `snippet(messages_fts, 0, '«', '»', …)`,
-    /// repliés pour la comparaison. Un marqueur ouvrant sans fermant est ignoré :
-    /// le snippet est tronqué à 14 tokens, la coupe peut tomber n'importe où.
-    static func matchedSegments(in snippet: String) -> [String] {
-        var segments: [String] = []
-        var current: String?
-        for character in snippet {
-            if character == "«" {
-                current = ""
-            } else if character == "»" {
-                if let segment = current, !segment.isEmpty {
-                    segments.append(segment.folding(options: [.diacriticInsensitive, .caseInsensitive],
-                                                    locale: Locale(identifier: "fr_FR")))
-                }
-                current = nil
-            } else {
-                current?.append(character)
-            }
+    /// `needle` apparaît-il dans `haystack` bordé par des non-alphanumériques ?
+    ///
+    /// Les guillemets, tirets et ponctuations qui entourent un mot n'empêchent
+    /// donc pas de le reconnaître — seule une lettre ou un chiffre collé le fait,
+    /// ce qui est exactement la différence entre « recall » et « recalled ».
+    static func containsWord(_ needle: [Character], in haystack: [Character]) -> Bool {
+        guard !needle.isEmpty, haystack.count >= needle.count else { return false }
+        func isWord(_ character: Character) -> Bool { character.isLetter || character.isNumber }
+        for start in 0...(haystack.count - needle.count) {
+            guard Array(haystack[start..<(start + needle.count)]) == needle else { continue }
+            let before = start == 0 || !isWord(haystack[start - 1])
+            let after = start + needle.count == haystack.count || !isWord(haystack[start + needle.count])
+            if before, after { return true }
         }
-        return segments
+        return false
     }
 
     /// Reclasse par couverture DÉCROISSANTE, en préservant l'ordre d'entrée à
