@@ -3,12 +3,27 @@
     <channel>
         <title>Atoll</title>
         <item>
+            <title>0.16.4</title>
+            <pubDate>Fri, 14 Aug 2026 14:52:36 +0200</pubDate>
+            <sparkle:version>29</sparkle:version>
+            <sparkle:shortVersionString>0.16.4</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/mehdi7129/atoll/releases/download/v0.16.4/Atoll-0.16.4.zip" length="5933038" type="application/octet-stream" sparkle:edSignature="A31OHcmmfnmC1jHadJ/uChsCi5Cc6iZKS27JYpOM8nggwW0QaaJnhQgFtmDB5COjK1ax3de92iXK48wMKIOsBQ=="/>
+            <sparkle:deltas>
+                <enclosure url="https://github.com/mehdi7129/atoll/releases/download/v0.16.4/Atoll29-28.delta" sparkle:deltaFrom="28" length="518754" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="6P1rOvtB7ggSrlkgmH0sT9/K/VIVGcuW7EjGNP73+8MV6oRcJFBPoRO9wU20S1D/8Ba+9scpMy7gxOdsNya9Ag=="/>
+                <enclosure url="https://github.com/mehdi7129/atoll/releases/download/v0.16.4/Atoll29-27.delta" sparkle:deltaFrom="27" length="908146" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="rO9A3jyrHn5VyDZZ8s1Cb07QA4w/hcIVRMEQpMHR2E8RveUer0PAD4O5cL48d/NVwtBi+83TSWQGZxwe++G4BA=="/>
+                <enclosure url="https://github.com/mehdi7129/atoll/releases/download/v0.16.4/Atoll29-26.delta" sparkle:deltaFrom="26" length="1035570" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="4s96kJJJdypcCll6kwAqbOikGODRCpygVbapR03G/IF8aMJEu0U18LrTiV53RNb6fwLkZ1RBOmI5O7WxQ4lqAQ=="/>
+                <enclosure url="https://github.com/mehdi7129/atoll/releases/download/v0.16.4/Atoll29-25.delta" sparkle:deltaFrom="25" length="1120618" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="ZvqHCSHNk81FAw5hINCTTIHrAqskxkiA2NqRBTZVODMlGdQuER9yq/9nGOfYDYiWYpip3RlP12G4AvKceQBPBQ=="/>
+                <enclosure url="https://github.com/mehdi7129/atoll/releases/download/v0.16.4/Atoll29-24.delta" sparkle:deltaFrom="24" length="1220682" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="17tvgMNiKbntzB787s1V8s24/ZrGu5irO+hwqQzVD0fIHS+7+nfbG0gp9om/OaJfYI6RNh4agGcCO6YOcwaEDw=="/>
+            </sparkle:deltas>
+        </item>
+        <item>
             <title>0.16.3</title>
             <pubDate>Fri, 14 Aug 2026 14:13:32 +0200</pubDate>
             <sparkle:version>28</sparkle:version>
             <sparkle:shortVersionString>0.16.3</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/mehdi7129/atoll/releases/download/v0.16.3/Atoll-0.16.3.zip" length="5918723" type="application/octet-stream" sparkle:edSignature="kLq0DMhwsvmBP5pvQ2hOHI56n4HoWjgnZG3c5BK1Hrwa6DRxS/c5PJVXMsEVNfIHVMAn3r2fp2JAW6VQ0MeLDQ=="/>
+            <enclosure url="https://github.com/mehdi7129/atoll/releases/download/v0.16.4/Atoll-0.16.3.zip" length="5918723" type="application/octet-stream" sparkle:edSignature="kLq0DMhwsvmBP5pvQ2hOHI56n4HoWjgnZG3c5BK1Hrwa6DRxS/c5PJVXMsEVNfIHVMAn3r2fp2JAW6VQ0MeLDQ=="/>
             <sparkle:deltas>
                 <enclosure url="https://github.com/mehdi7129/atoll/releases/download/v0.16.3/Atoll28-27.delta" sparkle:deltaFrom="27" length="860658" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="jEfkoLDU81hK1Vus4SQ6Q5etfWWt8Z5iZ4H1KLg9LEA+78kwTkWduI58dEAcD2O/Fyp1OVQS1IG1+ZAyFOUDCw=="/>
                 <enclosure url="https://github.com/mehdi7129/atoll/releases/download/v0.16.3/Atoll28-26.delta" sparkle:deltaFrom="26" length="1002874" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="i5fgRajgnGU0D4xZeyMHbWEdfE2UjcR8MWal7M7FT73/F/Kcq29t6Of3MQ5iXcoeMubg14yt/H3XaYPwZLrQDQ=="/>
@@ -23,15 +38,7 @@
             <sparkle:version>27</sparkle:version>
             <sparkle:shortVersionString>0.16.2</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/mehdi7129/atoll/releases/download/v0.16.3/Atoll-0.16.2.zip" length="5886005" type="application/octet-stream" sparkle:edSignature="fh33D6JiEKNeLg9gdw5TvZq1TzT+yu1tIGyWMscEHvHP2oA0ISfowdA/G9mFdwpvajvGr2cWeG2FdrT3m0QyDw=="/>
-        </item>
-        <item>
-            <title>0.16.1</title>
-            <pubDate>Fri, 14 Aug 2026 10:42:50 +0200</pubDate>
-            <sparkle:version>26</sparkle:version>
-            <sparkle:shortVersionString>0.16.1</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/mehdi7129/atoll/releases/download/v0.16.3/Atoll-0.16.1.zip" length="5760044" type="application/octet-stream" sparkle:edSignature="DzsOtpfP/F4ZqZfMRX8riAXys+kXHNl6dw+HOdnDLkeOg5zTq9pliDb3prlPfMocLydj6g2buDctFQPxJf2UDA=="/>
+            <enclosure url="https://github.com/mehdi7129/atoll/releases/download/v0.16.4/Atoll-0.16.2.zip" length="5886005" type="application/octet-stream" sparkle:edSignature="fh33D6JiEKNeLg9gdw5TvZq1TzT+yu1tIGyWMscEHvHP2oA0ISfowdA/G9mFdwpvajvGr2cWeG2FdrT3m0QyDw=="/>
         </item>
     </channel>
 </rss>
