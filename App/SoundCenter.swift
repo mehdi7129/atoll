@@ -127,7 +127,18 @@ final class SoundCenter {
             atPath: BridgePaths.soundsDirectory.path)) ?? [])
             .filter { SoundImport.allowedExtensions.contains(URL(fileURLWithPath: $0).pathExtension.lowercased()) }
             .sorted()
-        detectedHooks = SoundHookEditor.soundHooks(in: try? Data(contentsOf: BridgePaths.claudeSettingsURL))
+        // Un settings.json PRÉSENT mais illisible ne doit pas passer pour
+        // « aucun hook sonore » : `reconcile()` renoncerait sur son garde
+        // `!detectedHooks.isEmpty`, or l'état qu'il répare (parking écrit,
+        // hooks pas encore retirés) est précisément celui où tout sonne en
+        // double. On garde alors la dernière lecture réussie plutôt que de la
+        // remplacer par du vide. Lecture par `readSettings()`, donc sur le
+        // chemin RÉSOLU — le même que toutes les écritures.
+        do {
+            detectedHooks = SoundHookEditor.soundHooks(in: try Self.readSettings())
+        } catch {
+            log.error("settings.json illisible : hooks sonores détectés inchangés (\(error.localizedDescription, privacy: .public))")
+        }
         switch parkingState() {
         case .none: isParked = false; isParkingUnreadable = false
         case .parked: isParked = true; isParkingUnreadable = false
@@ -329,8 +340,11 @@ final class SoundCenter {
     /// Renvoie (sons REPRIS de la configuration de l'utilisateur, replis posés
     /// faute de fichier). Les compter ensemble faisait annoncer « 2 sons
     /// repris » quand rien ne l'avait été (revue des corrections).
+    /// `hooks` : l'instantané à adopter. L'appelant le capture AVANT de parquer
+    /// (le parking rafraîchit `detectedHooks`, qui devient alors vide).
     @discardableResult
-    func adoptDetectedSounds() -> (adopted: Int, fallbacks: Int) {
+    func adoptDetectedSounds(from hooks: [SoundHookEditor.ParkedHook]? = nil) -> (adopted: Int, fallbacks: Int) {
+        let detectedHooks = hooks ?? self.detectedHooks
         var adopted = 0
         var fallbacks = 0
         // Deux hooks peuvent viser le MÊME événement Atoll (`Stop` et

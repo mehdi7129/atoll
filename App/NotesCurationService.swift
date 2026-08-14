@@ -156,6 +156,9 @@ final class NotesCurationService {
     // MARK: - Cycle
 
     private func run(manual: Bool) async {
+        // AVANT le balayage : le staging est la pièce à conviction d'une
+        // bascule interrompue, et `sweepStagingLeaks` le détruit.
+        Self.repairInterruptedSwap()
         Self.sweepStagingLeaks() // débris d'un run interrompu
         let notes = Self.readNotes()
         guard notes.count >= 2 else {
@@ -306,8 +309,20 @@ final class NotesCurationService {
             // déclenche une RESTAURATION depuis l'archive qu'on vient de
             // vérifier. Les fichiers non-.md éventuels sont laissés.
             swapStarted = true
+            // On ne retient que les suppressions RÉUSSIES : c'est cette liste
+            // qui part à `forgetFile` en (4). Dérivée de `previous`, elle
+            // faisait oublier de l'index une note dont la suppression avait
+            // échoué — le fichier restait sur le disque, mais devenait
+            // invisible au recall, donc perdu sans l'être.
+            var deleted: [String] = []
             for note in previous {
-                try? fm.removeItem(at: notesDirectory.appendingPathComponent(note.name))
+                let url = notesDirectory.appendingPathComponent(note.name)
+                do {
+                    try fm.removeItem(at: url)
+                    deleted.append(url.path)
+                } catch {
+                    log.error("note non supprimée, conservée dans l'index : \(note.name, privacy: .public)")
+                }
             }
             for note in plan.newNotes {
                 let destination = notesDirectory.appendingPathComponent(note.fileName)
@@ -330,8 +345,7 @@ final class NotesCurationService {
 
             // (4) INDEX : oublier les anciens fichiers (sinon recall continue
             // de remonter des notes qui n'existent plus) et indexer les neufs.
-            let forgotten = previous.map { notesDirectory.appendingPathComponent($0.name).path }
-            onNotesReplaced?(forgotten, written)
+            onNotesReplaced?(deleted, written)
 
             warnings = plan.warnings
             let summary = "\(previous.count) note(s) → \(plan.newNotes.count)"
@@ -433,6 +447,69 @@ final class NotesCurationService {
             return doubtful
         }
         return nil
+    }
+
+    /// Rattrapage d'une bascule interrompue par un ARRÊT BRUTAL (SIGKILL,
+    /// panne) — l'équivalent de `LearnedSkillStore.finishIncompleteMoves`, qui
+    /// manquait ici.
+    ///
+    /// `apply()` restaure depuis l'archive quand une erreur est LEVÉE, mais
+    /// rien ne rattrapait un processus tué entre la boucle de suppression et la
+    /// fin des déplacements : `notes/` restait vide ou partiel. Et le run
+    /// suivant commençait par balayer le staging — qui contenait les notes
+    /// neuves déjà écrites — sans le regarder : les DEUX générations
+    /// disparaissaient, et l'utilisateur lisait « rien à consolider (0 note) ».
+    ///
+    /// Signature du crash : un staging traîne ET `notes/` contient MOINS de
+    /// fichiers que la dernière archive. Un run avorté AVANT la bascule laisse
+    /// aussi un staging, mais `notes/` y est intact — d'où la comparaison,
+    /// plutôt que la seule présence du staging.
+    ///
+    /// On restaure l'état PRÉ-bascule depuis l'archive (vérifiée octet à octet
+    /// avant la suppression) : c'est terminer l'annulation que le crash a
+    /// interrompue. On ne « finit » PAS la bascule vers les notes neuves — ce
+    /// serait acter un plan que rien n'a validé.
+    private static func repairInterruptedSwap() {
+        let fm = FileManager.default
+        let notesDirectory = BridgePaths.learningNotesDirectory
+        func markdown(in directory: URL) -> [String] {
+            ((try? fm.contentsOfDirectory(atPath: directory.path)) ?? [])
+                .filter { $0.hasSuffix(".md") }
+        }
+        // Le staging doit contenir des notes ENCORE À DÉPLACER. Un run réussi
+        // vide le staging (chaque `moveItem` en sort un fichier) avant même que
+        // le `defer` ne supprime le dossier : exiger un staging NON VIDE écarte
+        // le cas où ce `defer` a échoué après une curation parfaitement normale.
+        // Sans cette condition, une curation réussie qui réduit le corpus
+        // (5 notes → 3, le cas NOMINAL) satisfaisait la comparaison de comptes
+        // ci-dessous et faisait ressusciter les notes que l'utilisateur venait
+        // justement de faire consolider.
+        let staged = ((try? fm.contentsOfDirectory(at: BridgePaths.learningDirectory,
+                                                   includingPropertiesForKeys: nil)) ?? [])
+            .filter { $0.lastPathComponent.hasPrefix(".notes-staging-") }
+            .filter { !markdown(in: $0).isEmpty }
+        guard !staged.isEmpty else { return }
+        // Le nom porte l'horodatage UTC : l'ordre lexicographique EST l'ordre
+        // chronologique (même convention que `pruneArchives`).
+        guard let archive = ((try? fm.contentsOfDirectory(at: BridgePaths.learningArchiveDirectory,
+                                                          includingPropertiesForKeys: nil)) ?? [])
+            .filter({ $0.lastPathComponent.hasPrefix("notes-") })
+            .max(by: { $0.lastPathComponent < $1.lastPathComponent })
+        else { return }
+
+        let archived = markdown(in: archive)
+        guard markdown(in: notesDirectory).count < archived.count else { return }
+
+        try? fm.createDirectory(at: notesDirectory, withIntermediateDirectories: true)
+        var restored = 0
+        for name in archived {
+            let destination = notesDirectory.appendingPathComponent(name)
+            guard !fm.fileExists(atPath: destination.path) else { continue }
+            if (try? fm.copyItem(at: archive.appendingPathComponent(name), to: destination)) != nil {
+                restored += 1
+            }
+        }
+        log.error("bascule de notes interrompue détectée — \(restored, privacy: .public) note(s) restaurée(s) depuis \(archive.lastPathComponent, privacy: .public)")
     }
 
     /// Balaye les stagings orphelins (`.notes-staging-<uuid>`) laissés par un

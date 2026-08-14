@@ -26,7 +26,18 @@ struct AlertsPane: View {
     var body: some View {
         Form {
             Section("Sons") {
-                Toggle("Jouer des sons", isOn: $soundsEnabled)
+                // L'écriture passe par le setter de SoundCenter, PAS par
+                // `$soundsEnabled` : lui seul republie ~/.atoll/sound-settings.json,
+                // le fichier que le helper lit pour sonner quand l'app est
+                // fermée. Écrit directement, le réglage n'atteignait le helper
+                // qu'au lancement suivant d'Atoll — donc « activer le son puis
+                // quitter » rendait muet exactement le cas que ce dispositif
+                // existe pour couvrir. La lecture reste en @AppStorage : c'est
+                // elle qui redessine la vue.
+                Toggle("Jouer des sons", isOn: Binding(
+                    get: { soundsEnabled },
+                    set: { center.soundsEnabled = $0 }
+                ))
                 Text("""
                 Atoll se signale à l'oreille à deux moments : quand une décision \
                 t'attend, et quand une session a fini de travailler. Deux sons \
@@ -199,10 +210,25 @@ struct AlertsPane: View {
     // MARK: - Actions
 
     private func adoptHooks() {
-        let (adopted, fallbacks) = center.adoptDetectedSounds()
+        // ORDRE IMPÉRATIF : parquer D'ABORD, adopter ENSUITE.
+        //
+        // L'adoption est persistante (elle copie des fichiers dans
+        // ~/.atoll/sounds et réaffecte les deux choix) et le parking est la
+        // seule des deux opérations qui peut échouer. Dans l'ordre inverse, un
+        // parking en échec laissait les `afplay` de l'utilisateur en place
+        // ALORS que les sons d'Atoll venaient d'être armés : si l'interrupteur
+        // général était déjà actif, tout sonnait en double — l'invariant « un
+        // seul des deux sonne » rompu — et le message d'erreur annonçait
+        // pourtant que rien n'avait été modifié.
+        //
+        // `parkUserSoundHooks` se termine par `refreshLibraries()`, qui vide
+        // `detectedHooks` (les hooks ne sont plus dans settings.json) : il faut
+        // donc capturer l'instantané AVANT, sinon il n'y a plus rien à adopter.
+        let detected = center.detectedHooks
         do {
             try center.parkUserSoundHooks()
-            soundsEnabled = true
+            let (adopted, fallbacks) = center.adoptDetectedSounds(from: detected)
+            center.soundsEnabled = true
             revision += 1
             isError = false
             // Un repli n'est PAS une reprise : annoncer « 2 sons repris » quand

@@ -26,6 +26,20 @@ final class SessionStore {
         var title: String?
         var terminalHint: String?
         var isSynthetic: Bool
+        /// Le `pid` vient-il de `agents --json` plutôt que d'un hook ?
+        ///
+        /// Un pid de flotte peut désigner un processus-hôte TRANSITOIRE du
+        /// daemon : il ne prouve rien sur la vie de la session, dont la
+        /// liveness est la présence dans le snapshot. Ce drapeau est distinct
+        /// d'`isSynthetic`, qui décrit la source de la PHASE : le premier hook
+        /// reçu met `isSynthetic = false` mais ne remplace le pid que si
+        /// l'enveloppe en porte un — or `claudePid` est nil dès que le bridge
+        /// ne retrouve pas d'ancêtre `claude` (npm/node non reconnu). La
+        /// session gardait alors le pid du daemon ET perdait sa protection :
+        /// deux passes de reconcile suffisaient à la déclarer morte, avec
+        /// rétrospective payante et carte rendue au terminal, alors qu'elle
+        /// figurait dans chaque snapshot.
+        var pidIsFleetSupplied = false
         var firstSeenAt: Date
         var lastEventAt: Date
         var missedScans = 0
@@ -333,6 +347,11 @@ final class SessionStore {
                     tailer.stopWatching(synthetic.id)
                     idleTimers[synthetic.id]?.cancel()
                     idleTimers[synthetic.id] = nil
+                    // Ce retrait ne passe PAS par `markEnded`, seul autre endroit
+                    // qui purge ce compteur : sans cette ligne, une entrée par
+                    // session de flotte remplacée restait pour la durée de vie
+                    // du processus.
+                    fleetMissed[synthetic.id] = nil
                 }
                 sessions.removeAll { $0.isSynthetic && $0.pid == pid }
             }
@@ -393,6 +412,7 @@ final class SessionStore {
         }
         if let pid = event.claudePid, session.pid != pid {
             session.pid = pid
+            session.pidIsFleetSupplied = false   // pid d'un hook : il ancre bien un processus claude
             armExitWatch(pid: pid)
         }
 
@@ -611,7 +631,7 @@ final class SessionStore {
             // Sessions de flotte : leur liveness est pilotée par `agents --json`
             // (présence dans le snapshot), pas par un pid — qui peut être un
             // processus-hôte transitoire du daemon. On ne les GC pas ici.
-            if fleetAvailable, sessions[index].isSynthetic { continue }
+            if fleetAvailable, sessions[index].isSynthetic || sessions[index].pidIsFleetSupplied { continue }
             guard let pid = sessions[index].pid else {
                 // Session hook SANS pid : rien ne l'ancre à un processus vivant
                 // (enveloppe forgée, ancêtre claude introuvable — ex. hook lancé
@@ -865,7 +885,11 @@ final class SessionStore {
         if sessions[index].cwd == nil, let cwd = info.cwd { sessions[index].cwd = cwd; changed = true }
         // Pid renseigné pour l'enrichissement/jump-back, mais PAS d'exit-watch :
         // la liveness d'une session de flotte vient du JSON, pas du pid.
-        if sessions[index].pid == nil, let pid = info.pid { sessions[index].pid = pid; changed = true }
+        if sessions[index].pid == nil, let pid = info.pid {
+            sessions[index].pid = pid
+            sessions[index].pidIsFleetSupplied = true
+            changed = true
+        }
         // Statut terminal du JSON : vaut pour TOUTES les sessions (hook comprises —
         // `claude stop`, échec — le SessionEnd du hook peut ne pas venir).
         if info.status.isTerminal {
@@ -898,6 +922,7 @@ final class SessionStore {
             title: info.name.map { Self.condense($0) },
             terminalHint: nil,
             isSynthetic: true,
+            pidIsFleetSupplied: info.pid != nil,
             firstSeenAt: info.startedAt ?? now,
             lastEventAt: now
         )

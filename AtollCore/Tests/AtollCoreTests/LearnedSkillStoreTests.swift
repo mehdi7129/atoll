@@ -332,4 +332,112 @@ final class LearnedSkillStoreTests: XCTestCase {
         let dossier = try XCTUnwrap(archives.first)
         XCTAssertTrue(fm.fileExists(atPath: dossier.appendingPathComponent("reference.md").path))
     }
+
+    // MARK: - Audit du 2026-08-14 : ce qui pilote une SUPPRESSION
+
+    /// Écrit un manifeste à la main : c'est le seul moyen d'y mettre un
+    /// `dirName` que le code n'aurait jamais produit lui-même.
+    private func writeRawManifest(slug: String, dirName: String) throws {
+        let json = """
+        { "v": 1, "skills": [ { "slug": "\(slug)", "dirName": "\(dirName)",
+          "installedAt": "2026-02-02T00:00:00Z", "skillSHA256": "x" } ] }
+        """
+        try fm.createDirectory(at: learningRoot, withIntermediateDirectories: true)
+        try Data(json.utf8).write(to: learningRoot.appendingPathComponent("installed.json"))
+        XCTAssertNotNil(InstalledSkillsManifest.decode(Data(json.utf8)),
+                        "prérequis du test : le manifeste écrit à la main doit être décodable")
+    }
+
+    /// Plante la cible hors de `skillsRoot` et le maillon qui permet d'y aller.
+    ///
+    /// MESURÉ : `atoll-../cible` ne résout PAS (le composant `atoll-..` est un
+    /// nom littéral) — mais `atoll-<dossier existant>/../../cible` résout et
+    /// supprime, parce que le maillon intermédiaire, lui, existe. Or il existe
+    /// toujours : `atoll-recall` est l'infrastructure d'Atoll. C'est cette
+    /// forme-là qu'il faut tester, pas la forme naïve.
+    @discardableResult
+    private func plantTraversalTarget(_ name: String) throws -> URL {
+        let cible = root.appendingPathComponent(name, isDirectory: true)
+        try fm.createDirectory(at: cible, withIntermediateDirectories: true)
+        try Data("# précieux".utf8).write(to: cible.appendingPathComponent("SKILL.md"))
+        try fm.createDirectory(at: skillsRoot.appendingPathComponent("atoll-maillon", isDirectory: true),
+                               withIntermediateDirectories: true)
+        return cible
+    }
+
+    /// Le « double verrou » annoncé était `hasPrefix("atoll-")`, que cette
+    /// forme satisfait tout en sortant de `skillsRoot`. Le dossier est
+    /// désormais RECALCULÉ depuis le slug validé.
+    func testDesinstallationIgnoreUnDirNameQuiSortDeSkillsRoot() throws {
+        let victime = try plantTraversalTarget("victime")
+        try writeRawManifest(slug: "victime", dirName: "atoll-maillon/../../victime")
+        let report = try store.uninstallAll()
+
+        XCTAssertTrue(fm.fileExists(atPath: victime.appendingPathComponent("SKILL.md").path),
+                      "un dirName sortant de skillsRoot ne doit RIEN supprimer")
+        XCTAssertTrue(report.removed.isEmpty)
+        // L'entrée reste au manifeste : l'oublier laisserait un résidu que plus
+        // rien ne rattacherait à Atoll.
+        XCTAssertEqual(store.installedSkills().map(\.slug), ["victime"])
+    }
+
+    /// Même garde sur l'autre chemin destructeur (archivage d'un seul skill).
+    func testArchiveInstalledIgnoreUnDirNameQuiSortDeSkillsRoot() throws {
+        let victime = try plantTraversalTarget("victime2")
+        try writeRawManifest(slug: "victime2", dirName: "atoll-maillon/../../victime2")
+        try store.archiveInstalled(slug: "victime2")
+
+        XCTAssertTrue(fm.fileExists(atPath: victime.appendingPathComponent("SKILL.md").path),
+                      "archiveInstalled ne doit pas suivre un dirName non validable")
+    }
+
+    /// `skillsRoot` momentanément absent ne doit pas vider le manifeste : les
+    /// skills deviendraient `unmanaged` pour toujours (uninstallAll n'énumère
+    /// que le manifeste, une mise à jour lèverait une collision).
+    func testReconcileNePurgePasQuandSkillsRootEstAbsent() throws {
+        try seedProposal(slug: "durable")
+        let proposal = try XCTUnwrap(store.discoverProposals().first)
+        _ = try store.approve(proposal)
+        XCTAssertEqual(store.installedSkills().count, 1)
+
+        try fm.removeItem(at: skillsRoot)          // volume non monté, ménage…
+        let report = store.reconcile()
+
+        XCTAssertEqual(store.installedSkills().map(\.slug), ["durable"],
+                       "le manifeste doit survivre à l'absence de skillsRoot")
+        XCTAssertTrue(report.removedFromManifest.isEmpty)
+    }
+
+    /// Une suppression impossible ne doit pas emporter la boucle NI le
+    /// manifeste : l'entrée du skill resté sur disque y demeure.
+    func testUninstallAllPoursuitEtGardeCeQuiNaPasPuEtreRetire() throws {
+        for slug in ["un", "deux"] {
+            try seedProposal(slug: slug)
+            let proposal = try XCTUnwrap(store.discoverProposals().first { $0.slug == slug })
+            _ = try store.approve(proposal)
+        }
+        // SEUL « deux » devient irretirable, sinon le cas PARTIEL — celui que le
+        // correctif vise — n'est jamais joué. Mettre `skillsRoot` en lecture
+        // seule bloquerait les DEUX (première version de ce test, prise en
+        // défaut par la revue : elle affirmait « le bilan n'est pas perdu » en
+        // assertant un bilan VIDE). On verrouille donc un sous-dossier de
+        // « deux » : la suppression récursive bute dessus, celle de « un »
+        // aboutit.
+        let bloque = skillsRoot.appendingPathComponent("atoll-deux", isDirectory: true)
+        let verrou = bloque.appendingPathComponent("verrou", isDirectory: true)
+        try fm.createDirectory(at: verrou, withIntermediateDirectories: true)
+        try Data("x".utf8).write(to: verrou.appendingPathComponent("dedans.md"))
+        try fm.setAttributes([.posixPermissions: 0o500], ofItemAtPath: verrou.path)
+        defer { try? fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: verrou.path) }
+
+        let report = try store.uninstallAll()
+
+        XCTAssertTrue(fm.fileExists(atPath: bloque.path), "prérequis du test : « deux » a bien résisté")
+        XCTAssertFalse(fm.fileExists(atPath: skillsRoot.appendingPathComponent("atoll-un").path),
+                       "prérequis du test : « un » devait, lui, partir")
+        // Le bilan de ce qui a RÉELLEMENT été supprimé n'est pas perdu…
+        XCTAssertEqual(report.removed, ["un"])
+        // …et seule l'entrée dont le dossier est encore là reste au manifeste.
+        XCTAssertEqual(store.installedSkills().map(\.slug), ["deux"])
+    }
 }

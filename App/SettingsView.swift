@@ -623,7 +623,7 @@ private struct ClaudeCodePane: View {
         hooksInstalled = HookInstaller.isInstalled
         // Le parking suit la disponibilité des hooks : désinstaller restaure les
         // règles (fait par le helper), réinstaller en Rockstar les reparque.
-        let level = AutonomyLevel(rawValue: UserDefaults.standard.string(forKey: InteractionCenter.autonomyKey) ?? "") ?? .manual
+        let level = AutonomyLevel.resolve(UserDefaults.standard.string(forKey: InteractionCenter.autonomyKey))
         denyParkingError = HookInstaller.syncDenyParking(level: level)
     }
 }
@@ -884,7 +884,7 @@ private struct LearningPane: View {
         return parts.isEmpty ? note.fileName : parts.joined(separator: " · ")
     }
 
-    /// « Dynamic_Island 12 · Val d'Isere 3 » (3 premiers projets).
+    /// « Dynamic_Island 12 · site-vitrine 3 » (3 premiers projets).
     private var projectsSummary: String {
         noteProjects.prefix(3).map { entry in
             let name = entry.project.isEmpty

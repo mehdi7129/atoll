@@ -48,6 +48,10 @@ final class RetrospectiveRunner {
     /// qui se terminait pendant cette fenêtre déclenchait un SECOND `claude -p`
     /// payant en parallèle (audit du 2026-07-27).
     @ObservationIgnored private var preparing = false
+    /// La session du run en cours est-elle repartie PENDANT la préparation ?
+    /// `sessionResumed` n'a alors ni job en file ni processus à arrêter : c'est
+    /// le seul moyen d'annuler avant le spawn. Remis à false à chaque run.
+    @ObservationIgnored private var resumedDuringPreparation = false
     private var isBusy: Bool { process != nil || preparing }
 
     private static let startDelaySeconds: TimeInterval = 15 // fenêtre résurrection 8 s + dernière statusline
@@ -81,6 +85,13 @@ final class RetrospectiveRunner {
         }
         if case .running(let running) = phase, running == sessionID {
             log.info("session \(sessionID, privacy: .public) ressuscitée pendant sa rétrospective — arrêt")
+            // Pendant la PRÉPARATION (condensé + inventaire, jusqu'à quelques
+            // secondes sur un transcript de 47 Mo), `process` est encore nil :
+            // ce `terminate()` ne portait sur rien et le `claude -p` partait
+            // ensuite, à ~0,87 $, sur une session qui venait de repartir. Pire,
+            // `recordProcessed` la marquait « traitée », donc sa VRAIE fin de
+            // session ne serait plus analysée. Le drapeau est lu après l'await.
+            resumedDuringPreparation = true
             process?.terminate()
         }
     }
@@ -297,13 +308,23 @@ final class RetrospectiveRunner {
             scheduleNext()
             return
         }
+        // Verrou RÉEL, avant tout effet : les deux triggers debug testent
+        // `!isBusy` de façon synchrone puis lancent `Task { await run(…) }`.
+        // Deux notifications enfilées sur la queue principale passaient donc
+        // toutes deux la garde avant que le corps de la première Task ne pose
+        // `preparing`. Deux `claude -p` payants partaient, `self.process`
+        // écrasait la référence du premier (que le kill-switch ne pouvait plus
+        // tuer) et `timeoutTask` perdait son watchdog.
+        guard !preparing, process == nil else {
+            log.error("run() appelé alors qu'une rétrospective est déjà en vol — ignoré")
+            return
+        }
         // La TENTATIVE compte pour le plafond (persistée AVANT le spawn) :
         // un claude en panne ne peut pas boucler.
         recordAttempt()
         phase = .running(job.snapshot.id)
-        // Verrou posé AVANT le seul await : pendant la préparation du condensé,
-        // `process` est encore nil et le runner paraissait libre.
         preparing = true
+        resumedDuringPreparation = false
         defer { preparing = false }
 
         // CONDENSÉ (v0.12.0) : Atoll lit le transcript lui-même, hors MainActor,
@@ -319,6 +340,17 @@ final class RetrospectiveRunner {
         // L'utilisateur a pu couper l'apprentissage PENDANT la préparation :
         // `disable()` n'avait alors rien à annuler (ni processus, ni délai) et
         // le `claude -p` partait quand même, après l'arrêt explicite.
+        // Même fenêtre, autre cause : la session a pu REPARTIR pendant la
+        // préparation. `sessionResumed` ne pouvait alors rien annuler (le job
+        // était déjà dépilé, `process` encore nil) — c'est ce drapeau qui porte
+        // l'annulation. `transcriptBytes: 0` : ne pas marquer la session
+        // « traitée » à sa taille de l'instant, sinon sa vraie fin de session
+        // deviendrait inéligible jusqu'à +50 Ko de croissance.
+        guard job.forced || !resumedDuringPreparation else {
+            log.info("session ressuscitée pendant la préparation — rien n'est lancé")
+            finish(job, outcome: "failed(resumed)", transcriptBytes: 0)
+            return
+        }
         guard job.forced || LearningSettings.shared.isEnabled else {
             log.info("apprentissage coupé pendant la préparation — rien n'est lancé")
             finish(job, outcome: "failed(disabled)", transcriptBytes: 0)
@@ -386,6 +418,7 @@ final class RetrospectiveRunner {
         SessionStore.shared.registerInternalPid(pid)
         log.info("rétrospective lancée (pid \(pid)) pour \(job.snapshot.id, privacy: .public)")
 
+        timeoutTask?.cancel()   // jamais réaffecter sans annuler (même hygiène qu'à la fin d'un run)
         timeoutTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(Self.timeoutSeconds))
             guard !Task.isCancelled else { return }
@@ -393,7 +426,11 @@ final class RetrospectiveRunner {
             self?.process?.terminate()
             try? await Task.sleep(for: .seconds(5))
             guard !Task.isCancelled else { return }
-            kill(pid, SIGKILL)
+            // `kill(pid, 0) == 0` ⟺ le pid vit encore : ne pas tirer sur un pid
+            // recyclé entre-temps. L'escalade jumelle (`terminateWithEscalation`)
+            // porte cette garde depuis l'audit du 2026-07-27 ; celle-ci ne
+            // l'avait pas.
+            if kill(pid, 0) == 0 { kill(pid, SIGKILL) }
         }
 
         // Lectures BLOQUANTES sur des tâches détachées (readabilityHandler est
@@ -535,7 +572,13 @@ final class RetrospectiveRunner {
         // session cassée neutralisait la rétrospective pendant 5 h pour toutes
         // les autres — d'autant plus grave que le mode « quota inconnu »
         // n'accorde qu'UN créneau (revue).
-        if ["failed(digest)", "failed(spawn)", "failed(disabled)"].contains(outcome) {
+        // `failed(resumed)` en fait partie : l'annulation « la session est
+        // repartie pendant la préparation » ne lance AUCUN `claude -p`. Oublier
+        // de l'inscrire ici lui faisait consommer un créneau de la fenêtre de
+        // 5 h pour rien — d'autant plus grave que le mode « quota inconnu »
+        // n'en accorde qu'UN (revue adversariale du 2026-08-14, sur le lot qui
+        // a introduit ce chemin).
+        if ["failed(digest)", "failed(spawn)", "failed(disabled)", "failed(resumed)"].contains(outcome) {
             refundAttempt()
         }
         if var attempt = pendingAttempt {

@@ -195,7 +195,14 @@ public struct LearnedSkillStore {
                 // ressources jointes entre les deux tentatives disparaissaient
                 // sans copie — quatrième chemin destructeur, oublié par la
                 // correction initiale (revue des corrections).
-                _ = try? archiveDirectory(target, category: "uninstalled", slug: slug, stamp: stamp)
+                //
+                // `try`, pas `try?` : en best-effort, une copie qui échoue
+                // laissait la suppression s'exécuter quand même — donc
+                // exactement la perte que cette ligne existe pour empêcher. La
+                // branche jumelle ci-dessus propage déjà ; l'utilisateur a
+                // demandé une APPROBATION, pas une suppression, et échouer ici
+                // laisse tout en place pour `reconcile()`.
+                try archiveDirectory(target, category: "uninstalled", slug: slug, stamp: stamp)
             } else {
                 // Contenu différent = vrai dossier étranger : on n'y touche pas.
                 throw LearnedSkillError.collisionWithUnmanagedDirectory(dirName)
@@ -287,10 +294,17 @@ public struct LearnedSkillStore {
         var manifest = try readManifestOrThrow()
         guard let index = manifest.skills.firstIndex(where: { $0.slug == slug }) else { return }
         let entry = manifest.skills[index]
-        let target = skillsRoot.appendingPathComponent(entry.dirName, isDirectory: true)
 
-        // Double verrou avant toute suppression : préfixe géré ET manifeste.
-        if entry.dirName.hasPrefix(SkillSlug.managedPrefix), fm.fileExists(atPath: target.path) {
+        // Double verrou avant toute suppression : dossier recalculé depuis le
+        // slug validé ET entrée du manifeste (cf. `managedDirectory`).
+        guard let target = managedDirectory(for: entry) else {
+            // Entrée non validable : on n'a pas touché au disque, on ne la
+            // retire donc PAS du manifeste — même politique qu'`uninstallAll`.
+            // L'oublier laisserait sur place un dossier que plus rien ne
+            // rattacherait à Atoll.
+            return
+        }
+        if fm.fileExists(atPath: target.path) {
             _ = try? archiveDirectory(target, category: "uninstalled", slug: slug, stamp: timestamp())
             try fm.removeItem(at: target)
         }
@@ -330,11 +344,23 @@ public struct LearnedSkillStore {
             .flatMap(InstalledSkillsManifest.decode)
 
         if var manifest {
+            // `skillsRoot` absent le temps d'un lancement (volume non monté,
+            // ménage en cours) ferait conclure « aucun dossier » pour TOUTES
+            // les entrées, donc vider le manifeste. Rien ne serait détruit,
+            // mais les skills deviendraient `unmanaged` pour toujours :
+            // `uninstallAll` n'énumère que le manifeste, et une mise à jour
+            // lèverait `collisionWithUnmanagedDirectory`. L'autorité unique
+            // mentirait définitivement, sans réparation possible autrement
+            // qu'à la main. On ne purge donc que si le parent est prouvé là.
+            let rootPresent = fm.fileExists(atPath: skillsRoot.path)
             var kept: [InstalledSkill] = []
             for entry in manifest.skills {
-                let dir = skillsRoot.appendingPathComponent(entry.dirName, isDirectory: true)
+                guard let dir = managedDirectory(for: entry) else {
+                    kept.append(entry)   // entrée non validable : on n'y touche pas
+                    continue
+                }
                 guard fm.fileExists(atPath: dir.path) else {
-                    removedFromManifest.append(entry.slug)
+                    if rootPresent { removedFromManifest.append(entry.slug) } else { kept.append(entry) }
                     continue
                 }
                 kept.append(entry)
@@ -457,12 +483,24 @@ public struct LearnedSkillStore {
 
         var removed: [String] = []
         var archived: [String] = []
+        // Entrées qui restent au manifeste : celles dont la suppression a
+        // ÉCHOUÉ. Sortir par `throw` sur le 2ᵉ skill de 5 laissait les suivants
+        // en place, ne réécrivait jamais le manifeste et perdait le bilan de ce
+        // qui venait d'être supprimé — le motif inverse du `try?` de l'archive
+        // ci-dessous, dont le commentaire explique justement qu'un seul skill
+        // abîmé ne doit pas rendre tous les autres irretirables.
+        var remaining: [InstalledSkill] = []
         let stamp = timestamp()
 
         for entry in manifest.skills {
-            // Double verrou : préfixe géré ET entrée du manifeste.
-            guard entry.dirName.hasPrefix(SkillSlug.managedPrefix) else { continue }
-            let dir = skillsRoot.appendingPathComponent(entry.dirName, isDirectory: true)
+            // Double verrou : dossier recalculé depuis le slug validé ET entrée
+            // du manifeste (cf. `managedDirectory`). Une entrée non validable
+            // reste au manifeste : on ne sait pas où est son dossier, l'oublier
+            // laisserait un résidu que plus rien ne rattacherait à Atoll.
+            guard let dir = managedDirectory(for: entry) else {
+                remaining.append(entry)
+                continue
+            }
             guard fm.fileExists(atPath: dir.path) else { continue }
 
             let diskMD = try? String(
@@ -482,15 +520,39 @@ public struct LearnedSkillStore {
             if let diskMD, InstalledSkillsManifest.sha256(diskMD) != entry.skillSHA256 {
                 archived.append(entry.slug)
             }
-            try fm.removeItem(at: dir)
-            removed.append(entry.slug)
+            do {
+                try fm.removeItem(at: dir)
+                removed.append(entry.slug)
+            } catch {
+                // Même politique que l'archive juste au-dessus : un dossier
+                // qu'on n'arrive pas à retirer ne doit pas emporter la boucle.
+                // L'entrée reste au manifeste — elle décrit un dossier qui est
+                // encore là, et c'est le manifeste qui pilote toute reprise.
+                remaining.append(entry)
+            }
         }
 
-        try writeManifest(InstalledSkillsManifest())
+        try writeManifest(InstalledSkillsManifest(skills: remaining))
         return UninstallReport(removed: removed, archived: archived)
     }
 
     // MARK: - Aides privées
+
+    /// Dossier d'une entrée du manifeste, RECALCULÉ depuis son slug validé —
+    /// `nil` si les deux ne coïncident pas, auquel cas l'entrée est ignorée.
+    ///
+    /// `dirName` est lu tel quel dans `installed.json` (que `decode` ne valide
+    /// pas, champ par champ) puis concaténé à un chemin qui pilote des
+    /// `removeItem`. Le « double verrou » annoncé était `hasPrefix("atoll-")` :
+    /// `atoll-../../quelque-chose` le satisfait et sort de `skillsRoot`. On ne
+    /// fait donc pas confiance au champ — on refait le calcul de l'ÉCRITURE
+    /// (`SkillSlug.dirName(for:)` sur un slug validé, seule garde
+    /// anti-traversée du projet) et on exige l'égalité.
+    private func managedDirectory(for entry: InstalledSkill) -> URL? {
+        guard let slug = SkillSlug.validate(entry.slug),
+              SkillSlug.dirName(for: slug) == entry.dirName else { return nil }
+        return skillsRoot.appendingPathComponent(entry.dirName, isDirectory: true)
+    }
 
     /// Manifeste absent = vide ; présent mais illisible = fail-closed.
     private func readManifestOrThrow() throws -> InstalledSkillsManifest {

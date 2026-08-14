@@ -421,9 +421,13 @@ private actor MemoryIndexWorker {
 
     private func destroyFiles() {
         let base = BridgePaths.memoryDatabaseURL.path
-        // La copie mise de côté part AUSSI : « Reconstruire l'index » et la
+        // Les copies mises de côté partent AUSSI : « Reconstruire l'index » et la
         // désactivation doivent vraiment tout rendre (revue des corrections).
-        for suffix in ["", "-wal", "-shm", ".illisible", ".illisible-wal", ".illisible-shm"] {
+        // LES DEUX noms, depuis que `setAsideDatabase` en utilise un second —
+        // en oublier un rendrait le nettoyage partiel, en silence.
+        for suffix in ["", "-wal", "-shm",
+                       ".illisible", ".illisible-wal", ".illisible-shm",
+                       ".illisible-recent", ".illisible-recent-wal", ".illisible-recent-shm"] {
             try? FileManager.default.removeItem(atPath: base + suffix)
         }
     }
@@ -434,17 +438,39 @@ private actor MemoryIndexWorker {
     /// daté empilait une copie de ~24 Mo par corruption — et, sur un échec
     /// d'ouverture PERSISTANT (disque plein), une nouvelle toutes les 30 s
     /// (revue des corrections, 2026-07-27).
+    ///
+    /// MAIS le nom fixe rendait le filet AUTODESTRUCTEUR, par ce même échec
+    /// persistant : l'ouverture est retentée toutes les 30 s, et chaque passage
+    /// commençait par supprimer la copie de sauvetage pour y mettre ce qui
+    /// occupait alors `memory.db` — c'est-à-dire la base VIDE que la tentative
+    /// précédente venait de créer. Deux passages suffisaient à remplacer les
+    /// vraies données par du vide.
+    ///
+    /// DEUX noms fixes, donc, et pas un : `.illisible` garde la PREMIÈRE mise de
+    /// côté — celle d'avant la panne, la seule qui contienne les messages des
+    /// transcripts que Claude Code a purgés — et n'est plus jamais écrasée ;
+    /// `.illisible-recent` reçoit les suivantes. Se contenter de sortir quand
+    /// `.illisible` existe (première version de ce correctif, prise en défaut
+    /// par la revue adversariale) désarmait le filet DÉFINITIVEMENT : après une
+    /// première corruption réparée, une seconde laissait `memory.db` corrompu en
+    /// place, la réouverture échouait sur le même fichier et l'indexation
+    /// mourait en silence. Le compte de copies reste borné à deux.
     nonisolated static func setAsideDatabase() {
         let fm = FileManager.default
         let base = BridgePaths.memoryDatabaseURL.path
+        let keepFirst = !fm.fileExists(atPath: base + ".illisible")
+        let tag = keepFirst ? ".illisible" : ".illisible-recent"
         for suffix in ["", "-wal", "-shm"] {
             let source = base + suffix
             guard fm.fileExists(atPath: source) else { continue }
-            let destination = "\(base).illisible\(suffix)"
-            try? fm.removeItem(atPath: destination)   // ne garder QUE la dernière
-            if (try? fm.moveItem(atPath: source, toPath: destination)) == nil {
-                try? fm.removeItem(atPath: source)    // déplacement impossible : on nettoie
-            }
+            let destination = "\(base)\(tag)\(suffix)"
+            try? fm.removeItem(atPath: destination)
+            // Un déplacement impossible ne se solde JAMAIS par une suppression :
+            // l'ouverture continuera d'échouer et le journal le dira à chaque
+            // passage — un échec bruyant vaut mieux qu'une perte muette. Les
+            // messages des transcripts purgés à 30 jours ne se reconstruisent
+            // pas, et « Reconstruire l'index » reste la sortie explicite.
+            try? fm.moveItem(atPath: source, toPath: destination)
         }
     }
 }
