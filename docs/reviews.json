@@ -52,7 +52,7 @@
         "AtollCore/Sources/AtollCore/ProactiveRecall.swift",
         "App/InteractionCenter.swift",
         "App/BridgeServer.swift",
-        "App/ProcessInspector.swift"
+        "Shared/ProcessInspector.swift"
       ]
     },
     {
@@ -187,16 +187,6 @@
         "AtollCore/Sources/AtollCore/TranscriptDigest.swift",
         "App/PluginInventory.swift",
         "App/TerminalJumpService.swift"
-      ]
-    },
-    {
-      "date": "2026-08-16",
-      "document": "docs/HANDOFF.md",
-      "depth": "line-by-line",
-      "note": "Commands de PROJET ajoutées au catalogue d'antériorité (SkillCatalog(projectDirectory:) + point d'appel RetrospectiveRunner). Les deux fichiers touchés ont été relus ligne à ligne en écrivant le correctif, et les tests sont vérifiés par sabotage DANS LES DEUX SENS : balayage neutralisé (4 échecs) et préséance de collision inversée (1 échec).",
-      "files": [
-        "AtollCore/Sources/AtollCore/SkillCatalog.swift",
-        "App/RetrospectiveRunner.swift"
       ]
     }
   ]

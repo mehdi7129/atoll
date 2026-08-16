@@ -305,7 +305,7 @@ documentation — et un numéro de version faux depuis trois releases.
       toucherait moins à son fichier.
 
    ⚠️ **CE COMPTE A DÉJÀ ÉTÉ FAUX** : ce paragraphe a annoncé « EXACTEMENT DEUX,
-   et pas une de plus » le 2026-08-16, en oubliant la statusline — alors même
+   et pas une de plus » le 2026-08-14, en oubliant la statusline — alors même
    qu'elle est nommée deux lignes plus haut (« l'utilisateur a des hooks GSD + sons
    + statusline custom »). Avant d'écrire un compte ici, RECENSER les écrivains :
    `HookSettingsEditor`, `SoundHookEditor`, `RockstarPermissionsEditor`,
@@ -1315,4 +1315,10 @@ Debug des interactions (Phase 3) : `notifyutil -p dev.mehdiguiard.atoll.debug.al
 (ou `.deny`) résout la première carte en attente via les mêmes chemins que les boutons ;
 `state.json` liste `pendingInteractions`. Tester le vrai helper :
 `echo '{"hook_event_name":"PermissionRequest","session_id":"t","tool_name":"Bash","tool_input":{"command":"ls"}}' | ~/.atoll/bin/atoll-bridge` bloque jusqu'à la décision (stdout = JSON de décision, vide = rendu au terminal).
-Le hook PermissionRequest est BLOQUANT (async:false, timeout 86400) — tout le reste est async.
+**DEUX hooks peuvent être BLOQUANTS, pas un** : `PermissionRequest` toujours
+(`async:false`, timeout 86400), et `UserPromptSubmit` **dès que le recall proactif est
+activé** (`async:false`, timeout 5 — `HookSettingsEditor.managedEvents`). C'est
+délibéré et c'est la seule façon que ça marche : un hook `async` est fire-and-forget,
+sa sortie n'est JAMAIS lue, donc le bloc de souvenirs ne serait jamais injecté. Tout
+le reste est async. Compter ces hooks de mémoire a déjà produit un « tout le reste est
+async » faux ; la source est `managedEvents`, pas ce paragraphe.

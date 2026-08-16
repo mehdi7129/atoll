@@ -61,11 +61,13 @@
 > script en rendait **0 %** ; la **règle critique n° 2** affirmait que Rockstar était
 > le SEUL cas où Atoll touche à des entrées non-Atoll alors qu'il y en a **TROIS**
 > — les hooks sonores ET la statusline (dont le wrapper remplace la commande de
-> l'utilisateur en la chaînant). ⚠️ La correction du 16 août a d'abord annoncé
-> « EXACTEMENT DEUX » : elle oubliait la statusline, nommée deux lignes plus haut
-> dans la règle elle-même. Recorrigée le jour même, en RECENSANT les écrivains de
-> `settings.json` au lieu de compter de mémoire — c'est le seul procédé qui marche
-> pour ce genre d'affirmation.
+> l'utilisateur en la chaînant). ⚠️ La correction fautive (`405c8de`, **14 août
+> 21h30**) avait annoncé « EXACTEMENT DEUX » : elle oubliait la statusline, nommée
+> deux lignes plus haut dans la règle elle-même. Elle n'a été recorrigée que
+> **deux jours plus tard** (`2786829`, 16 août 18h37) : une affirmation fausse
+> dans la règle la plus coûteuse du projet a tenu 45 heures. Le procédé qui l'a
+> réglée : RECENSER les écrivains de `settings.json` au lieu de compter de
+> mémoire — c'est le seul qui marche pour ce genre d'affirmation.
 > Ensuite : l'îlot n'est pas « borné à
 > 4 lignes » mais à **6** (4 seulement avec bannière) ; et `PLAN.md` vendait encore
 > la notification de fin de tâche, retirée le 3 août — le README avait été corrigé
@@ -118,8 +120,11 @@
 > sujet. Le plus grave était PUBLIC : le README promettait qu'au premier lancement
 > la fenêtre de bienvenue montre « ce qu'elle va écrire » — `OnboardingView` fait
 > 180 lignes et n'affiche AUCUN aperçu, juste un paragraphe sur les garanties puis
-> un bouton qui appelle `HookInstaller.install()`. Le seul écran du dépôt qui
-> montre avant d'agir est l'adoption des hooks sonores. Promesse remplacée par
+> un bouton qui appelle `HookInstaller.install()`. Deux écrans du dépôt montrent
+> pourtant bien avant d'agir — l'adoption des hooks sonores, et la revue des
+> skills proposés, dont l'en-tête de section dit littéralement « SKILL.MD
+> (installé tel quel) » au-dessus du contenu intégral et du bouton APPROUVER.
+> L'onboarding, lui, ne montre rien. Promesse remplacée par
 > trois faits vérifiés dans le code (hooks préservés, backup avant première
 > écriture, désinstallation qui restitue).
 > Les cinq autres : trois DATES fausses (la première passe et le ménage git
