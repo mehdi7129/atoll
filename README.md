@@ -125,7 +125,7 @@ Claude Code — après t'avoir montré ce qu'elle va écrire.
 Atoll vit dans la barre de menus et autour de l'encoche. Survoler l'îlot l'étend, cliquer
 l'épingle, cliquer ailleurs le referme.
 
-**Version courante : v0.16.4.**
+**Version courante : v0.16.5.**
 
 ---
 
@@ -177,10 +177,12 @@ plutôt que gardée par habitude.
 Rockstar suspend les règles de refus de permissions que tu as écrites toi-même, le temps
 d'une session où tu veux avancer sans être interrompu, puis les restitue.
 
-C'est le seul endroit où Atoll touche à une configuration qui n'est pas la sienne, et il le
-fait avec un filet : tes règles sont mises de côté dans un fichier **avant** toute
-modification, et restituées à la sortie du mode, au lancement suivant de l'app, à la
-désinstallation — et par le helper lui-même si l'app se ferme ou plante en cours de route.
+C'est l'un des trois seuls endroits où Atoll touche à une configuration qui n'est pas la
+sienne — avec la reprise de tes hooks sonores, et la statusline, qu'il enveloppe pour lire
+ton quota sans rien retirer à la tienne. Chaque fois avec le même filet : ce qui existait
+est mis de côté dans un fichier **avant** toute modification, et restitué à la sortie du
+mode, au lancement suivant de l'app, à la désinstallation — et par le helper lui-même si
+l'app se ferme ou plante en cours de route.
 
 Tant que Rockstar est actif, l'îlot reste visible en permanence : on ne désarme pas une
 machine en silence.

@@ -8,7 +8,7 @@
 > 18 défauts corrigés dont trois chemins destructeurs), **deux outils de continuité**,
 > **deux campagnes de relecture** qui ont porté la couverture du dépôt à 100 %, puis
 > **deux releases** — la **v0.16.3** (défauts des campagnes) et la **v0.16.4** (les
-> six constats sérieux qui restaient, voir plus bas).
+> six constats sérieux qui restaient, voir plus bas). Puis la **v0.16.5** le 16 août.
 > Le **16 août** : une passe de relecture des DOCUMENTS contre le code
 > (12 affirmations fausses corrigées), le ménage git, et un arbitrage rendu sur
 > spec-kit — puis, en fin de journée, le seul correctif de CODE du jour : les
@@ -96,7 +96,7 @@
 > PLATEFORME, jamais à la structure de fichiers d'un tiers. C'est déjà pourquoi la
 > découverte des sessions passe par `claude agents --json`.
 >
-> **CORRIGÉ le 2026-08-16 (non publié)** : le détour par spec-kit avait montré que
+> **CORRIGÉ le 2026-08-16, publié en v0.16.5** : le détour par spec-kit avait montré que
 > `SkillCatalog.commandsRoot` était figé sur `~/.claude/commands` — **les commands
 > de PROJET (`<dépôt>/.claude/commands/`) n'étaient pas inventoriées**. Adopter
 > spec-kit, ou tout outil qui en installe, rendait le bilan de session capable de
@@ -120,10 +120,11 @@
 > donc publier aurait produit un binaire identique et envoyé à tous les utilisateurs
 > une proposition de mise à jour sans changement fonctionnel. Les documents sont
 > publics dès le push ; ils partent avec la prochaine release portant du code.
-> ⚠️ **CE N'EST PLUS LE CAS** : `fe245c2` (commands de projet au catalogue
-> d'antériorité) a changé du CODE. `git diff --stat v0.16.4..HEAD` le dit — c'est
-> la commande à lancer avant de décider, pas ce paragraphe. **IL Y A DONC
-> AUJOURD'HUI UN CORRECTIF FONCTIONNEL NON PUBLIÉ.**
+> ⚠️ **LA RÈGLE NE DIT PAS « NE JAMAIS PUBLIER »** : dès qu'un correctif de CODE
+> attend, il faut publier. C'est ce qui s'est passé — `fe245c2` (commands de projet
+> au catalogue d'antériorité) est parti en **v0.16.5**. La commande qui tranche est
+> `git diff --stat <dernier tag>..HEAD`, pas ce paragraphe : lui se périme, elle non.
+> (Il s'est périmé en huit minutes la première fois qu'il a été écrit.)
 >
 > À savoir aussi en reprenant :
 >
@@ -225,7 +226,7 @@ GPL-3.0, repo PUBLIC `github.com/mehdi7129/atoll`).
 
 | Quoi | Où |
 |---|---|
-| Version | **v0.16.4** — les six constats sérieux des campagnes corrigés (PUBLIÉE). La v0.16.3, publiée le même jour, portait les correctifs des campagnes elles-mêmes. La v0.16.2 reste la version qui a mis la mémoire SOUS INSTRUMENT — c'est elle qui rend le rendez-vous de septembre possible |
+| Version | **v0.16.5** — le trou d'antériorité sur les slash commands de PROJET fermé (`SkillCatalog(projectDirectory:)`). Trois releases en deux jours : v0.16.3 (défauts des campagnes de relecture), v0.16.4 (les six constats sérieux), v0.16.5 (ce correctif). La v0.16.2 reste celle qui a mis la mémoire SOUS INSTRUMENT — c'est elle qui rend le rendez-vous de septembre possible |
 | Git | `main` poussé, **arbre propre**, **une seule branche** et **un seul worktree** — trois branches `session/*` (toutes à 0 commit hors de `main`) et un second worktree ont été retirés le 2026-08-14. ⚠️ Cette ligne a déjà été FAUSSE : elle annonçait « une seule branche » alors qu'il y en avait quatre et qu'un worktree traînait. **Ne pas la croire, la vérifier** : `git status --porcelain && git branch && git worktree list` — les trois, car `git status` seul est propre dans un dépôt qui a du travail caché dans un worktree |
 | Tests | **737 verts** (`cd AtollCore && swift test`, ~1,2 s), build **0 warning** |
 | Phases | **1 à 14 livrées**, la **9 RETIRÉE** le 2026-08-03. Feuille de route « Atoll 2 » ÉPUISÉE ; le cadre en vigueur est `docs/VISION-2026-08.md`, décliné en `docs/PLAN-2026-08-court-terme.md` |

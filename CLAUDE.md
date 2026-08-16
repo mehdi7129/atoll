@@ -3,9 +3,10 @@
 > 📌 **REPRISE DE DEV : lire `docs/HANDOFF.md` en premier** — état exact, méthode de
 > travail, et TOUS les pièges appris à la dure.
 >
-> **Version publiée : v0.16.4** — aucune fonction ajoutée, que des correctifs (deux
-> releases le même jour : la v0.16.3 a fermé les défauts des campagnes de relecture,
-> la v0.16.4 les six constats sérieux qui restaient). Sur ces deux versions : le
+> **Version publiée : v0.16.5** — aucune fonction ajoutée, que des correctifs. Trois
+> releases en deux jours : la v0.16.3 a fermé les défauts des campagnes de relecture,
+> la v0.16.4 les six constats sérieux qui restaient, la v0.16.5 le trou d'antériorité
+> sur les slash commands de PROJET (`SkillCatalog(projectDirectory:)`). Sur ces deux versions : le
 > TITRE IA n'avait jamais fonctionné (`TranscriptTailer` lisait `title`, le CLI
 > écrit `aiTitle` : 571 lignes réelles vérifiées, 0 portant `title`), deux sessions
 > d'un même projet s'affichaient « Desktop/Dynamic_Island », le réglage du son
@@ -972,7 +973,7 @@ skill. Diagnostic chiffré (agents) : **1 seule rétrospective lancée en 7 jour
   **LES COMMANDS VIVENT À TROIS ENDROITS, pas un** — et n'en connaître qu'un est un
   trou d'antériorité : `~/.claude/commands` (utilisateur), `<version>/commands/` d'un
   plugin (ajouté en v0.16.4, catalogue 117 → 134 entrées), et
-  `<projet>/.claude/commands` (ajouté le 2026-08-16, `SkillCatalog(projectDirectory:)`,
+  `<projet>/.claude/commands` (ajouté en v0.16.5, `SkillCatalog(projectDirectory:)`,
   origine distincte « command (projet) »). Ce dernier est celui qu'un outil comme
   `github/spec-kit` installe — une dizaine de commands DANS le dépôt. Le catalogue
   remonte au `.claude/commands` le plus proche du `cwd` de la session, **borné à 12
