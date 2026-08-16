@@ -162,14 +162,24 @@ qui a changé depuis (git), et le nombre de fichiers qui dépendent de celui-ci
   premier niveau, employés comme du code (`X.`, `: X`, `X(`, `-> X`).
 
 **`Scripts/check-docs.py` — À LANCER AVANT DE CROIRE CE FICHIER, et après toute
-modification de docs.** Il confronte au code onze familles d'affirmations
-vérifiables : compte de tests, triggers debug DANS LES DEUX SENS, versions
-(project.yml ↔ README ↔ CLAUDE.md ↔ appcast), collision de `CFBundleVersion`,
-symboles et fichiers cités mais disparus, badges et boutons ASCII du README face
-à `AsciiArt` et `InteractionCardView`, liens et images absents, secrets et
-chemins personnels dans les fichiers suivis, API publique morte, notifications
-orphelines, et — avec `--network` — les URL de l'appcast plus l'égalité entre le
-flux servi par GitHub Pages et le fichier local.
+modification de docs.** Il confronte au code **douze familles** d'affirmations
+vérifiables — **treize avec `--network`**, et **onze avec `--no-tests`**, puisque
+le compteur qu'il imprime en tête ne compte que les familles RÉELLEMENT exécutées.
+C'est ce compteur qui fait foi, pas cette liste :
+1. compte de tests ; 2. triggers debug DANS LES DEUX SENS ; 3. versions
+(project.yml ↔ README ↔ CLAUDE.md ↔ appcast) **et** collision de `CFBundleVersion`,
+qui sont UNE seule famille ; 4. symboles `Type.membre` cités mais disparus ;
+5. fichiers cités mais disparus ; 6. badges et boutons ASCII du README face à
+`AsciiArt` et `InteractionCardView` ; 7. liens et images absents ; 8. secrets et
+chemins personnels dans les fichiers suivis ; 9. API publique morte ;
+10. notifications orphelines ; 11. **registre des relectures** (un `docs/AUDIT-*.md`
+sans entrée, ou une entrée citant un document disparu) ; 12. **dérive depuis la
+dernière relecture** ; 13. avec `--network`, les URL de l'appcast plus l'égalité
+entre le flux servi par GitHub Pages et le fichier local.
+⚠️ Ce paragraphe a annoncé **onze** familles en omettant les deux du registre des
+relectures — celles-là mêmes qu'il vante trois paragraphes plus bas. Une liste qui
+se dit exhaustive est à confronter au code, pas à relire : ici
+`grep -nE '^\s+check_[a-z_]+\(' Scripts/check-docs.py`.
 - Il ne juge QUE le vérifiable. Un arbitrage, une intention, un « pourquoi » ne
   s'y testent pas : ils se datent et se relisent. C'est justement pour ça qu'il
   existe — que l'attention humaine aille à ce qui ne peut PAS être automatisé.
