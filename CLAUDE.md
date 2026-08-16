@@ -137,8 +137,10 @@ qui a changé depuis (git), et le nombre de fichiers qui dépendent de celui-ci
   dans le sens dangereux.
 - Relevé au 2026-08-14, APRÈS les deux campagnes : **93 fichiers, 24 259 lignes,
   AUCUN jamais relu ligne à ligne (0 %)**. Ce qui reste à surveiller n'est plus la
-  couverture mais la DÉRIVE : deux fichiers relus le 12 août ont changé depuis
-  (`PermissionDecision` +8 lignes, `HookSettingsEditor` +2).
+  couverture mais la DÉRIVE : trois fichiers relus le 12 août ont changé depuis
+  (`ProactiveRecall` +43 lignes, `PermissionDecision` +8, `HookSettingsEditor` +2),
+  tous par le commit `dc6f1a2`. Ce chiffre bouge à chaque commit — c'est le seul
+  du fichier qui se périme tout seul, d'où l'avertissement ci-dessous.
   Pour mémoire, le chiffre d'AVANT les campagnes, celui qui a fixé leur ordre de
   passage : 68 fichiers sur 92 jamais relus, 12 672 lignes, 53 % du code.
   ⚠️ **`check-docs.py` NE contrôle PAS ce relevé**, et ne le peut pas : sa
@@ -940,6 +942,20 @@ skill. Diagnostic chiffré (agents) : **1 seule rétrospective lancée en 7 jour
   les commands ne sont pas des skills mais occupent le même espace de noms, plusieurs
   versions d'un plugin coexistent (`unknown` perdant), un plugin désactivé n'est pas
   invocable.
+  **LES COMMANDS VIVENT À TROIS ENDROITS, pas un** — et n'en connaître qu'un est un
+  trou d'antériorité : `~/.claude/commands` (utilisateur), `<version>/commands/` d'un
+  plugin (ajouté en v0.16.4, catalogue 117 → 134 entrées), et
+  `<projet>/.claude/commands` (ajouté le 2026-08-16, `SkillCatalog(projectDirectory:)`,
+  origine distincte « command (projet) »). Ce dernier est celui qu'un outil comme
+  `github/spec-kit` installe — une dizaine de commands DANS le dépôt. Le catalogue
+  remonte au `.claude/commands` le plus proche du `cwd` de la session, **borné à 12
+  niveaux et arrêté AVANT le home** (sinon une session lancée depuis `~` recompterait
+  les commands de l'utilisateur comme « de projet »). Collision d'id : l'utilisateur
+  gagne, arbitrairement et sans conséquence — pour une antériorité, ce qui compte est
+  que l'id soit PRIS, pas laquelle des deux définitions le prend.
+  ⚠️ **Un ajout au catalogue ne sert à rien si le POINT D'APPEL ne suit pas** : c'est
+  `RetrospectiveRunner` qui doit passer le `cwd`. Même panne que `byCoverage` en
+  v0.16.1, branchée sur le recall manuel et pas sur le proactif.
 - **12c PLUGINS** : `App/PluginInventory` pilote `claude plugin` (list, details,
   enable/disable/install) — watchdog par commande (8 s / 20 s réseau / 90 s install),
   pipes drainés en parallèle, spawn shell de login, process marqué

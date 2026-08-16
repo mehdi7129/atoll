@@ -30,6 +30,13 @@ import Foundation
 //    Proposer un skill qui refait `gsd:plan-phase` serait un doublon, même si
 //    techniquement ce n'est pas « un skill ». Elles sont donc dans le catalogue,
 //    avec un `kind` distinct.
+//    IL Y A DEUX EMPLACEMENTS, et n'en connaître qu'un est un trou : celles de
+//    l'UTILISATEUR (`~/.claude/commands`) et celles du DÉPÔT
+//    (`<projet>/.claude/commands`, `origin` distincte). Seules les premières
+//    étaient inventoriées jusqu'au 2026-08-16 — un outil comme `github/spec-kit`,
+//    qui installe une dizaine de commands DANS le dépôt, rendait donc le bilan
+//    de session capable de proposer un skill refaisant `/speckit.plan` sans que
+//    `closestMatch` (la garde DÉTERMINISTE) puisse le rattraper.
 //
 // 3. PLUSIEURS VERSIONS DU MÊME PLUGIN COEXISTENT DANS LE CACHE.
 //    `plugins/cache/<marketplace>/<plugin>/<version>/skills/<nom>/SKILL.md` :
@@ -129,6 +136,11 @@ public struct SkillCatalog: Sendable {
     public static let userSkillOrigin = "utilisateur"
     /// `origin` des slash commands de `~/.claude/commands`.
     public static let commandOrigin = "command"
+    /// `origin` des slash commands portées par le DÉPÔT de la session
+    /// (`<projet>/.claude/commands`). Distinct de `commandOrigin` parce que la
+    /// portée l'est : celles-ci n'existent que dans ce projet, et le prompt
+    /// d'antériorité doit pouvoir le dire.
+    public static let projectCommandOrigin = "command (projet)"
     /// Version littérale posée par Claude Code quand il l'ignore (piège n° 3).
     public static let unknownVersion = "unknown"
     /// Plafond DUR du rendu de `summaryForPrompt` : au-delà, on ne rend plus un
@@ -143,6 +155,9 @@ public struct SkillCatalog: Sendable {
     /// Les hiérarchies réelles font 1 à 2 niveaux ; la borne existe pour qu'un
     /// dossier pathologique (ou un lien) ne puisse pas faire durer un scan.
     private static let maxScanDepth = 6
+    /// Niveaux remontés depuis le `cwd` d'une session pour trouver son
+    /// `.claude/commands`. Les dépôts réels tiennent largement dedans.
+    private static let maxProjectWalk = 12
     /// Octets lus en tête de chaque fichier : le front-matter vit au début, et
     /// un `SKILL.md` de 40 Mo ne doit pas coûter une lecture complète.
     private static let headByteCap = 64 * 1024
@@ -153,6 +168,14 @@ public struct SkillCatalog: Sendable {
 
     public let skillsRoot: URL
     public let commandsRoot: URL
+    /// Dossier de travail de la session pour laquelle on dresse l'inventaire, ou
+    /// `nil` quand il n'y a pas de session (revue des skills proposés, tests).
+    ///
+    /// Sert à trouver les slash commands portées par le DÉPÔT — voir
+    /// `projectCommandsDirectory()`. On prend le `cwd` brut, pas une racine git
+    /// déjà calculée : ce qu'on cherche est le `.claude/commands` le plus proche,
+    /// et il peut vivre au-dessus ou au-dessous d'un `.git`.
+    public let projectDirectory: URL?
     public let pluginsCacheRoot: URL
     public let settingsURL: URL
 
@@ -164,12 +187,14 @@ public struct SkillCatalog: Sendable {
             .appendingPathComponent(".claude/commands", isDirectory: true),
         pluginsCacheRoot: URL = BridgePaths.homeDirectory
             .appendingPathComponent(".claude/plugins/cache", isDirectory: true),
-        settingsURL: URL = BridgePaths.claudeSettingsURL
+        settingsURL: URL = BridgePaths.claudeSettingsURL,
+        projectDirectory: URL? = nil
     ) {
         self.skillsRoot = skillsRoot
         self.commandsRoot = commandsRoot
         self.pluginsCacheRoot = pluginsCacheRoot
         self.settingsURL = settingsURL
+        self.projectDirectory = projectDirectory
     }
 
     // MARK: - Lecture
@@ -380,10 +405,55 @@ public struct SkillCatalog: Sendable {
     /// `~/.claude/commands/<cmd>.md` → id `<cmd>`. Les niveaux plus profonds
     /// sont joints de la même façon (`a:b:cmd`), sans hypothèse sur le nombre
     /// de niveaux.
+    /// Les commands de l'utilisateur, PUIS celles du dépôt de la session.
+    ///
+    /// L'ordre porte la règle de collision : un id revendiqué par les deux ne
+    /// garde que l'entrée UTILISATEUR. Le choix est arbitraire et il est sans
+    /// conséquence — pour une antériorité, ce qui compte est que l'id soit PRIS,
+    /// pas laquelle des deux définitions le prend. On ne prétend donc PAS savoir
+    /// laquelle Claude Code invoquerait : ce serait une affirmation non vérifiée
+    /// de plus, et le catalogue n'en a pas besoin.
     private func commands() -> [CatalogEntry] {
+        var result = scanCommands(in: commandsRoot, origin: Self.commandOrigin)
+        guard let projectCommands = projectCommandsDirectory() else { return result }
+        let taken = Set(result.map(\.id))
+        result += scanCommands(in: projectCommands, origin: Self.projectCommandOrigin)
+            .filter { !taken.contains($0.id) }
+        return result
+    }
+
+    /// Le `.claude/commands` le plus proche EN REMONTANT depuis le dossier de la
+    /// session, ou `nil`.
+    ///
+    /// Deux gardes, et chacune évite un faux inventaire :
+    /// - **on s'arrête AVANT le home**, sinon une session lancée depuis `~`
+    ///   présenterait `~/.claude/commands` comme des commands « de projet »,
+    ///   c'est-à-dire les mêmes entrées deux fois sous deux origines ;
+    /// - **la remontée est BORNÉE** (`maxProjectWalk`) : un `cwd` pathologique
+    ///   ou un lien ne doit pas faire durer un inventaire qui bloque la
+    ///   préparation d'une rétrospective.
+    private func projectCommandsDirectory() -> URL? {
+        guard var directory = projectDirectory?.standardizedFileURL else { return nil }
+        let home = BridgePaths.homeDirectory.standardizedFileURL
+        let fm = FileManager.default
+        for _ in 0..<Self.maxProjectWalk {
+            if directory.path == home.path { return nil }
+            let candidate = directory.appendingPathComponent(".claude/commands", isDirectory: true)
+            var isDirectory: ObjCBool = false
+            if fm.fileExists(atPath: candidate.path, isDirectory: &isDirectory), isDirectory.boolValue {
+                return candidate
+            }
+            let parent = directory.deletingLastPathComponent().standardizedFileURL
+            if parent.path == directory.path { return nil }
+            directory = parent
+        }
+        return nil
+    }
+
+    private func scanCommands(in root: URL, origin: String) -> [CatalogEntry] {
         var found: [(url: URL, components: [String])] = []
         Self.collect(
-            in: commandsRoot,
+            in: root,
             prefix: [],
             depth: 1,
             isMatch: { $0.lowercased().hasSuffix(".md") },
@@ -402,7 +472,7 @@ public struct SkillCatalog: Sendable {
                 name: name,
                 description: front?.description ?? "",
                 kind: .command,
-                origin: Self.commandOrigin,
+                origin: origin,
                 isAvailable: true,
                 path: hit.url
             )

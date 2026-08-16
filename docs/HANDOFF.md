@@ -88,14 +88,23 @@
 > PLATEFORME, jamais à la structure de fichiers d'un tiers. C'est déjà pourquoi la
 > découverte des sessions passe par `claude agents --json`.
 >
-> **PROPOSÉ, PAS CODÉ (gel de septembre)** : le détour par spec-kit a montré que
-> `SkillCatalog.commandsRoot` est figé sur `~/.claude/commands` — **les commands de
-> PROJET (`<dépôt>/.claude/commands/`) ne sont pas inventoriées**. Adopter spec-kit
-> ou tout outil qui en installe rendrait le bilan capable de proposer un skill qui
-> refait `/speckit.plan`, sans que `closestMatch` (la garde DÉTERMINISTE) le
-> rattrape. Même classe que le défaut « commands de plugins » corrigé en v0.16.4.
-> Latent aujourd'hui : aucune command de projet sur la machine, vérifié. Le point
-> d'appel (`RetrospectiveRunner`) a déjà le dossier de la session sous la main.
+> **CORRIGÉ le 2026-08-16 (non publié)** : le détour par spec-kit avait montré que
+> `SkillCatalog.commandsRoot` était figé sur `~/.claude/commands` — **les commands
+> de PROJET (`<dépôt>/.claude/commands/`) n'étaient pas inventoriées**. Adopter
+> spec-kit, ou tout outil qui en installe, rendait le bilan de session capable de
+> proposer un skill refaisant `/speckit.plan` sans que `closestMatch` (la garde
+> DÉTERMINISTE) puisse le rattraper. Même classe que le défaut « commands de
+> plugins » corrigé en v0.16.4 — et même leçon qu'en v0.16.1 avec `byCoverage` :
+> **le correctif ne vaut que si le POINT D'APPEL suit**, d'où le `cwd` de la
+> session désormais passé par `RetrospectiveRunner`.
+> Mise en œuvre : `SkillCatalog(projectDirectory:)` remonte au `.claude/commands`
+> le plus proche (borné à 12 niveaux, **s'arrête avant le home** — sinon les
+> commands de l'utilisateur seraient recomptées comme « de projet »). Collision
+> d'id : l'entrée UTILISATEUR gagne, arbitrairement et sans conséquence — pour une
+> antériorité, ce qui compte est que l'id soit PRIS. On ne prétend PAS savoir
+> laquelle Claude Code invoquerait : ce serait une affirmation non vérifiée de plus.
+> 737 tests, chacun **vérifié par sabotage dans les DEUX sens** (le balayage
+> neutralisé → 4 échecs ; la préséance inversée → 1 échec).
 >
 > **PAS DE RELEASE POUR DES CORRECTIONS DOCUMENTAIRES** (décidé le 16 août avec
 > Mehdi). Depuis la v0.16.4, **zéro fichier de code** a changé : publier une v0.16.5

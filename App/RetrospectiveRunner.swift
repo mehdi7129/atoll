@@ -333,9 +333,17 @@ final class RetrospectiveRunner {
         // que ~8 %. Ici, il reçoit tout ce qui compte, borné et gratuit.
         // Condensé ET inventaire hors MainActor : l'inventaire parcourt le
         // cache des plugins (~70 ms à chaud, bien plus à froid).
+        // Le `cwd` de la session sert à inventorier AUSSI les slash commands que
+        // porte son dépôt (`<projet>/.claude/commands`). Sans lui, l'antériorité
+        // ignore tout ce qu'un outil comme spec-kit installe dans le projet — et
+        // le catalogue le mieux écrit ne sert à rien si son APPEL l'ampute, c'est
+        // exactement la panne de `byCoverage` en v0.16.1.
+        let sessionDirectory = job.snapshot.cwd.flatMap { path -> URL? in
+            path.isEmpty ? nil : URL(fileURLWithPath: path, isDirectory: true)
+        }
         let prepared = await Task.detached(priority: .utility) {
             (digest: Self.digest(ofTranscriptAt: transcriptPath),
-             capabilities: SkillCatalog().summaryForPrompt())
+             capabilities: SkillCatalog(projectDirectory: sessionDirectory).summaryForPrompt())
         }.value
         // L'utilisateur a pu couper l'apprentissage PENDANT la préparation :
         // `disable()` n'avait alors rien à annuler (ni processus, ni délai) et

@@ -679,6 +679,76 @@ final class SkillCatalogTests: XCTestCase {
         XCTAssertEqual(entries.first?.description, "venue du skill")
     }
 
+    // MARK: - Les slash commands du DÉPÔT (2026-08-16)
+
+    /// `<projet>/.claude/commands/<cmd>.md`, avec le catalogue construit pour une
+    /// session dont le `cwd` est `<projet>/<sousDossier>`.
+    private func seedProjectCommand(_ relativePath: String, in project: URL,
+                                    description: String = "desc") throws {
+        try write("""
+        ---
+        description: \(description)
+        ---
+
+        # corps
+        """, to: project.appendingPathComponent(".claude/commands/\(relativePath)"))
+    }
+
+    /// LE TROU : un dépôt qui installe ses propres slash commands (spec-kit en
+    /// pose une dizaine) était invisible à l'antériorité. Le bilan pouvait donc
+    /// proposer un skill refaisant une command déjà invocable dans ce projet.
+    func testLesCommandsDuDepotSontInventoriees() throws {
+        let project = root.appendingPathComponent("depot", isDirectory: true)
+        try seedProjectCommand("speckit.plan.md", in: project, description: "planifie depuis la spec")
+        let catalog = SkillCatalog(
+            skillsRoot: skillsRoot, commandsRoot: commandsRoot,
+            pluginsCacheRoot: pluginsCacheRoot, settingsURL: settingsURL,
+            projectDirectory: project)
+        let entry = catalog.entries().first { $0.id == "speckit.plan" }
+        XCTAssertNotNil(entry, "ids : \(catalog.entries().map(\.id))")
+        XCTAssertEqual(entry?.origin, SkillCatalog.projectCommandOrigin)
+        XCTAssertEqual(entry?.description, "planifie depuis la spec")
+    }
+
+    /// On REMONTE depuis le `cwd` : une session travaille presque toujours dans
+    /// un sous-dossier, pas à la racine du dépôt.
+    func testLeDossierDeCommandsEstCherchéEnRemontant() throws {
+        let project = root.appendingPathComponent("depot", isDirectory: true)
+        try seedProjectCommand("deploy.md", in: project)
+        let cwd = project.appendingPathComponent("src/app/vues", isDirectory: true)
+        try FileManager.default.createDirectory(at: cwd, withIntermediateDirectories: true)
+        let catalog = SkillCatalog(
+            skillsRoot: skillsRoot, commandsRoot: commandsRoot,
+            pluginsCacheRoot: pluginsCacheRoot, settingsURL: settingsURL,
+            projectDirectory: cwd)
+        XCTAssertTrue(catalog.entries().contains { $0.id == "deploy" },
+                      "ids : \(catalog.entries().map(\.id))")
+    }
+
+    /// Collision : l'entrée UTILISATEUR gagne, et il n'en reste qu'UNE. Le choix
+    /// est arbitraire, l'unicité ne l'est pas — un id compte une fois.
+    func testUneCommandUtilisateurLEmporteSurUneCommandDeDepotHomonyme() throws {
+        try write("---\ndescription: venue de l'utilisateur\n---\n",
+                  to: commandsRoot.appendingPathComponent("deploy.md"))
+        let project = root.appendingPathComponent("depot", isDirectory: true)
+        try seedProjectCommand("deploy.md", in: project, description: "venue du dépôt")
+        let catalog = SkillCatalog(
+            skillsRoot: skillsRoot, commandsRoot: commandsRoot,
+            pluginsCacheRoot: pluginsCacheRoot, settingsURL: settingsURL,
+            projectDirectory: project)
+        let matches = catalog.entries().filter { $0.id == "deploy" }
+        XCTAssertEqual(matches.count, 1, "un id, une entrée")
+        XCTAssertEqual(matches.first?.origin, SkillCatalog.commandOrigin)
+    }
+
+    /// GARDE : sans dossier de session, rien ne change — c'est le cas de la
+    /// fenêtre de revue des skills, et de tout le reste du dépôt.
+    func testSansDossierDeSessionRienNEstInventorieEnPlus() throws {
+        let project = root.appendingPathComponent("depot", isDirectory: true)
+        try seedProjectCommand("speckit.plan.md", in: project)
+        XCTAssertFalse(makeCatalog().entries().contains { $0.id == "speckit.plan" })
+    }
+
     /// La contrepartie, qui empêche le correctif d'en devenir un autre : une
     /// command d'une version PLUS RÉCENTE reste gagnante, sinon un skill
     /// périmé ressusciterait par-dessus elle.
