@@ -270,16 +270,37 @@ documentation — et un numéro de version faux depuis trois releases.
    sont suspendues pendant Rockstar — parquées dans `~/.atoll/rockstar-parked-deny.json`
    (écrit AVANT de toucher settings.json, crash-safe), restaurées à la sortie, au
    lancement de l'app (réconciliation) et à la désinstallation.
-   Il y a **EXACTEMENT DEUX** exceptions à cette règle, et pas une de plus — toutes
-   deux à la demande explicite de l'utilisateur, toutes deux sous le même régime
-   (parking écrit AVANT settings.json, donc crash-safe ; restitution à la sortie, au
-   lancement et à la désinstallation) :
-   1. **Rockstar** — les `permissions.deny` ci-dessus.
-   2. **Les hooks sonores** (`~/.atoll/parked-sound-hooks.json`, Phase 13) — les
+   Il y a **TROIS** entrées non-Atoll qu'Atoll modifie, et pas une de plus. Toutes
+   les trois partagent la MÊME discipline crash-safe — la valeur d'origine est
+   écrite sur disque AVANT `settings.json`, et restituée à la désinstallation —
+   mais elles ne sont pas de même NATURE, et c'est la distinction qui compte :
+
+   **Elles SUSPENDENT un comportement de l'utilisateur** (donc : à sa demande
+   explicite, réversibles, et réconciliées au lancement de l'app) —
+   1. **Rockstar** : les `permissions.deny` ci-dessus
+      (`~/.atoll/rockstar-parked-deny.json`).
+   2. **Les hooks sonores** (`~/.atoll/parked-sound-hooks.json`, Phase 13) : les
       hooks `afplay` de l'utilisateur sont MONTRÉS puis repris, pour ne pas jouer
       deux fois le même son.
-   Toute troisième exception se discute AVANT d'être écrite : c'est la règle la plus
-   coûteuse à enfreindre du projet.
+
+   **Elle CHAÎNE sans rien suspendre** —
+   3. **La statusline** (`StatusLineEditor`, installée par `Bridge/main.swift`) :
+      `statusLine.command` est remplacée par le tee-wrapper d'Atoll, qui APPELLE
+      la commande d'origine (passthrough vérifié identique, +0,02 s). L'originale
+      est mémorisée dans `~/.atoll/statusline-original`, écrite AVANT les settings.
+      Un `refreshInterval` est posé s'il MANQUE — une valeur de l'utilisateur est
+      respectée. Le comportement de l'utilisateur n'est donc jamais retiré, il est
+      enveloppé : c'est ce qui la distingue des deux autres, pas le fait qu'elle
+      toucherait moins à son fichier.
+
+   ⚠️ **CE COMPTE A DÉJÀ ÉTÉ FAUX** : ce paragraphe a annoncé « EXACTEMENT DEUX,
+   et pas une de plus » le 2026-08-16, en oubliant la statusline — alors même
+   qu'elle est nommée deux lignes plus haut (« l'utilisateur a des hooks GSD + sons
+   + statusline custom »). Avant d'écrire un compte ici, RECENSER les écrivains :
+   `HookSettingsEditor`, `SoundHookEditor`, `RockstarPermissionsEditor`,
+   `StatusLineEditor` — seul le premier n'écrit QUE des entrées Atoll.
+   Toute quatrième exception se discute AVANT d'être écrite : c'est la règle la
+   plus coûteuse à enfreindre du projet.
 3. **Transcripts JSONL** (`~/.claude/projects/`) : format officiellement interne et
    instable → parsing défensif uniquement, jamais une dépendance dure.
 4. Pas de dépendances lourdes, pas d'Electron, **zéro télémétrie**.

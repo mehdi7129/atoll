@@ -56,8 +56,14 @@
 > **18 allégués → 12 confirmés**, tous corrigés (commit `405c8de`). Les plus
 > graves : le relevé de couverture annonçait « 53 % du code jamais relu » quand le
 > script en rendait **0 %** ; la **règle critique n° 2** affirmait que Rockstar était
-> le SEUL cas où Atoll touche à des entrées non-Atoll alors qu'il y en a **deux**
-> (les hooks sonores, documentés 570 lignes plus bas) ; l'îlot n'est pas « borné à
+> le SEUL cas où Atoll touche à des entrées non-Atoll alors qu'il y en a **TROIS**
+> — les hooks sonores ET la statusline (dont le wrapper remplace la commande de
+> l'utilisateur en la chaînant). ⚠️ La correction du 16 août a d'abord annoncé
+> « EXACTEMENT DEUX » : elle oubliait la statusline, nommée deux lignes plus haut
+> dans la règle elle-même. Recorrigée le jour même, en RECENSANT les écrivains de
+> `settings.json` au lieu de compter de mémoire — c'est le seul procédé qui marche
+> pour ce genre d'affirmation.
+> Ensuite : l'îlot n'est pas « borné à
 > 4 lignes » mais à **6** (4 seulement avec bannière) ; et `PLAN.md` vendait encore
 > la notification de fin de tâche, retirée le 3 août — le README avait été corrigé
 > de ce défaut en v0.16.0, `PLAN.md` avait été oublié.
