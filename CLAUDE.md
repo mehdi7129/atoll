@@ -956,6 +956,12 @@ skill. Diagnostic chiffré (agents) : **1 seule rétrospective lancée en 7 jour
   ⚠️ **Un ajout au catalogue ne sert à rien si le POINT D'APPEL ne suit pas** : c'est
   `RetrospectiveRunner` qui doit passer le `cwd`. Même panne que `byCoverage` en
   v0.16.1, branchée sur le recall manuel et pas sur le proactif.
+  **RAFFINEMENT DE LA RÈGLE DU SABOTAGE, appris ici** : il faut saboter CHAQUE
+  propriété qu'un test prétend garder, pas le correctif en bloc. Le test de collision
+  d'id passait aussi quand le balayage du projet était mort — il ne prouvait donc rien
+  tout seul. Il a fallu un SECOND sabotage, la préséance inversée, pour qu'il rougisse.
+  Un test qui survit au sabotage n'est pas forcément inutile : il garde peut-être une
+  AUTRE propriété, et c'est celle-là qu'il faut saboter à son tour.
 - **12c PLUGINS** : `App/PluginInventory` pilote `claude plugin` (list, details,
   enable/disable/install) — watchdog par commande (8 s / 20 s réseau / 90 s install),
   pipes drainés en parallèle, spawn shell de login, process marqué

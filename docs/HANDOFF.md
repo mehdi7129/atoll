@@ -11,9 +11,11 @@
 > six constats sérieux qui restaient, voir plus bas).
 > Le **16 août** : une passe de relecture des DOCUMENTS contre le code
 > (12 affirmations fausses corrigées), le ménage git, et un arbitrage rendu sur
-> spec-kit. Aucune ligne de code n'a bougé ce jour-là.
-> 733 tests, build sans warning, `Scripts/check-docs.py` vert (13 familles
-> avec `--network`).
+> spec-kit — puis, en fin de journée, le seul correctif de CODE du jour : les
+> slash commands de PROJET entrent au catalogue d'antériorité (`fe245c2`).
+> 737 tests, build sans warning, `Scripts/check-docs.py` vert (13 familles
+> avec `--network`). **Rien de tout cela ne touche au recall** : le gel de
+> septembre est intact.
 >
 > **DEUX OUTILS À CONNAÎTRE AVANT DE REPRENDRE — ils remplacent de la discipline
 > par de la mécanique :**
@@ -213,7 +215,7 @@ GPL-3.0, repo PUBLIC `github.com/mehdi7129/atoll`).
 |---|---|
 | Version | **v0.16.4** — les six constats sérieux des campagnes corrigés (PUBLIÉE). La v0.16.3, publiée le même jour, portait les correctifs des campagnes elles-mêmes. La v0.16.2 reste la version qui a mis la mémoire SOUS INSTRUMENT — c'est elle qui rend le rendez-vous de septembre possible |
 | Git | `main` poussé, **arbre propre**, **une seule branche** et **un seul worktree** — trois branches `session/*` (toutes à 0 commit hors de `main`) et un second worktree ont été retirés le 2026-08-14. ⚠️ Cette ligne a déjà été FAUSSE : elle annonçait « une seule branche » alors qu'il y en avait quatre et qu'un worktree traînait. **Ne pas la croire, la vérifier** : `git status --porcelain && git branch && git worktree list` — les trois, car `git status` seul est propre dans un dépôt qui a du travail caché dans un worktree |
-| Tests | **733 verts** (`cd AtollCore && swift test`, ~1,4 s), build **0 warning** |
+| Tests | **737 verts** (`cd AtollCore && swift test`, ~1,2 s), build **0 warning** |
 | Phases | **1 à 14 livrées**, la **9 RETIRÉE** le 2026-08-03. Feuille de route « Atoll 2 » ÉPUISÉE ; le cadre en vigueur est `docs/VISION-2026-08.md`, décliné en `docs/PLAN-2026-08-court-terme.md` |
 | Build installé | `~/Applications/Atoll.app` = **Release NOTARISÉE v0.16.4** (bundle 29), installée et vérifiée le 2026-08-14 : `spctl : accepted — Notarized Developer ID`, staple validé, `codesign --verify --deep --strict` sans résidu, helper signé, app relancée. Les bundles remplacés sont conservés sous `~/Applications/Atoll-<version>-remplacee-*.app` (0.16.0 et 0.16.2) — à mettre à la corbeille quand la 0.16.4 aura fait ses preuves. Pas de build Debug installé — pour reprendre la boucle de dev, l'installer en `~/Applications/Atoll-dev.app`, jamais `ditto` par-dessus la Release (`ditto` FUSIONNE, un `Atoll.debug.dylib` résiduel casse le sceau) |
 | Helper après MAJ | `~/.atoll/bin/atoll-bridge` est un **wrapper shell**, pas une copie : il `exec` le binaire du bundle. Sa date de fichier reste donc VIEILLE (3 août) après une mise à jour, et ce n'est pas un défaut — il pointe déjà sur le nouveau binaire. Vérifier par l'empreinte de la cible, jamais par la date du wrapper. Fail-open : bundle absent → `exit 0`, les hooks ne cassent pas |
@@ -906,7 +908,7 @@ xcodebuild -project Atoll.xcodeproj -scheme Atoll -configuration Debug -derivedD
 ditto "$DD/Build/Products/Debug/Atoll.app" ~/Applications/Atoll.app   # lancer LA COPIE
 pkill -x Atoll; sleep 1; open ~/Applications/Atoll.app                # relancer
 
-cd AtollCore && swift test              # 733 tests (2026-08-14, après les six correctifs)
+cd AtollCore && swift test              # 737 tests (2026-08-16)
 Scripts/check-docs.py --no-tests        # ce document ment-il ? (quelques secondes)
 
 # Debug runtime
