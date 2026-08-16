@@ -4,15 +4,18 @@
 > **À lire en premier** avec `CLAUDE.md` (règles) et `PLAN.md` (plan produit).
 > Dernière mise à jour : **2026-08-16**.
 >
-> Le **14 août** en quatre temps : un **audit complet** (`docs/AUDIT-2026-08-14.md`,
-> 18 défauts corrigés dont trois chemins destructeurs), **deux outils de continuité**,
-> **deux campagnes de relecture** qui ont porté la couverture du dépôt à 100 %, puis
-> **deux releases** — la **v0.16.3** (défauts des campagnes) et la **v0.16.4** (les
-> six constats sérieux qui restaient, voir plus bas). Puis la **v0.16.5** le 16 août.
-> Le **16 août** : une passe de relecture des DOCUMENTS contre le code
-> (12 affirmations fausses corrigées), le ménage git, et un arbitrage rendu sur
-> spec-kit — puis, en fin de journée, le seul correctif de CODE du jour : les
-> slash commands de PROJET entrent au catalogue d'antériorité (`fe245c2`).
+> Le **14 août** : un **audit complet** (`docs/AUDIT-2026-08-14.md`, 18 défauts
+> corrigés dont trois chemins destructeurs), **deux outils de continuité**, **deux
+> campagnes de relecture** qui ont porté la couverture du dépôt à 100 %, **deux
+> releases** — la **v0.16.3** (défauts des campagnes) et la **v0.16.4** (les six
+> constats sérieux qui restaient) — puis, le soir, la **première passe de relecture
+> des DOCUMENTS** contre le code (12 affirmations fausses corrigées, `405c8de`) et
+> le **ménage git**.
+> Le **16 août** : l'arbitrage spec-kit, le correctif des slash commands de PROJET
+> au catalogue d'antériorité (`fe245c2`), les **deuxième et troisième passes** de
+> relecture documentaire, et la **v0.16.5** qui publie ce correctif.
+> ⚠️ Les dates de ce résumé ont été FAUSSES : la première passe et le ménage git y
+> étaient attribués au 16. Redatés sur `git log`, pas sur le souvenir.
 > 737 tests, build sans warning, `Scripts/check-docs.py` vert (13 familles
 > avec `--network`). **Rien de tout cela ne touche au recall** : le gel de
 > septembre est intact.
@@ -51,7 +54,7 @@
 > non-régression a été **vérifié par sabotage**. Ce qui reste des campagnes n'est
 > que du mineur, consigné dans les deux documents de relecture.
 >
-> **LES DOCUMENTS ONT ÉTÉ RELUS CONTRE LE CODE (2026-08-16)** — la part que
+> **LES DOCUMENTS ONT ÉTÉ RELUS CONTRE LE CODE (2026-08-14, au soir)** — la part que
 > `check-docs.py` ne peut PAS juger. 6 périmètres, un réfutateur par constat :
 > **18 allégués → 12 confirmés**, tous corrigés (commit `405c8de`). Les plus
 > graves : le relevé de couverture annonçait « 53 % du code jamais relu » quand le
@@ -83,12 +86,12 @@
 >   Repris à la main : **cinq tenaient**, un seul était faux. Séparer toujours
 >   « réfuté » de « pas de verdict ».
 >
-> **SECONDE PASSE DE RELECTURE, le même jour** — parce qu'une passe qui corrige
+> **SECONDE PASSE DE RELECTURE (2026-08-16)** — parce qu'une passe qui corrige
 > douze affirmations en écrit douze nouvelles, non relues. **14 allégués →
 > 5 confirmés, 9 réfutés, ZÉRO sans verdict** (le script sépare désormais « réfuté »
 > de « pas de verdict » : à la passe précédente, six réfutateurs morts sur la limite
 > de session avaient été rangés avec les réfutés, et **cinq y tenaient**).
-> **TROIS DES CINQ ÉTAIENT MES CORRECTIONS DU MATIN**, ce qui est le résultat le
+> **TROIS DES CINQ ÉTAIENT LES CORRECTIONS DE LA PREMIÈRE PASSE**, ce qui est le résultat le
 > plus utile de la passe :
 > - le compteur de tolérance de flotte n'est pas `missedScans` mais
 >   `SessionStore.fleetMissed`. Mon `grep` avait trouvé le seuil `>= 2` — dans
@@ -107,6 +110,26 @@
 > rapport est daté : il est **ANNOTÉ, pas réécrit**, avec la forme réelle et le
 > renvoi à `PermissionDecision.swift`. Enfin le bandeau de `PLAN.md` annonçait
 > « v0.12.0 publiée, phases 1 à 12 » et un §5 « tenu à jour » qui s'arrête à la 13.
+>
+> **TROISIÈME PASSE (2026-08-16)** — **9 allégués → 6 confirmés, 3 réfutés, zéro
+> sans verdict**. Et **CINQ DES SIX ÉTAIENT ENCORE DES CORRECTIONS DE LA PASSE
+> PRÉCÉDENTE**. Le taux ne baisse pas parce qu'on corrige : chaque correction est
+> du texte NEUF, non relu, écrit par quelqu'un qui vient de se tromper sur le même
+> sujet. Le plus grave était PUBLIC : le README promettait qu'au premier lancement
+> la fenêtre de bienvenue montre « ce qu'elle va écrire » — `OnboardingView` fait
+> 180 lignes et n'affiche AUCUN aperçu, juste un paragraphe sur les garanties puis
+> un bouton qui appelle `HookInstaller.install()`. Le seul écran du dépôt qui
+> montre avant d'agir est l'adoption des hooks sonores. Promesse remplacée par
+> trois faits vérifiés dans le code (hooks préservés, backup avant première
+> écriture, désinstallation qui restitue).
+> Les cinq autres : trois DATES fausses (la première passe et le ménage git
+> attribués au 16 alors que `405c8de` est du 14 à 21h30) et deux affirmations de
+> mes propres annotations de `PLAN.md` — la version courante y était déjà périmée
+> par la release que je venais de faire, et j'y affirmais que §5 ne porte pas le
+> retrait du cockpit alors que le titre de la Phase 9 le porte.
+> **CE QU'IL FAUT EN RETENIR** : une passe de relecture ne converge pas toute
+> seule. Redater sur `git log`, jamais sur le souvenir — surtout quand la date du
+> jour a changé pendant la session.
 >
 > **UN CHIFFRE REPRIS D'UN CONCURRENT N'EST PAS UNE MESURE DE SOI.** `PLAN.md`
 > justifiait encore le choix Swift par « < 50 MB RAM » — mesuré sur Atoll : **66 Mo,
@@ -166,9 +189,10 @@
 >    l'erreur qu'il décrit — il a annoncé « une seule branche, arbre propre » alors
 >    que quatre branches et ce worktree subsistaient (les trois
 >    branches `session/*`, toutes à 0 commit hors de `main`, et le worktree, propre,
->    ont été retirés le **2026-08-14**, comme le dit le tableau d'état — l'en-tête a
->    un temps daté ce même geste du 16, deux dates pour un seul retrait). `git status` seul est PROPRE dans un dépôt qui cache du
->    travail ailleurs : il faut les trois commandes.
+>    ont été retirés le **2026-08-14**). Ce geste a un temps été daté du 16 dans
+>    l'en-tête et du 14 dans le tableau : deux dates pour un seul retrait, corrigé
+>    sur `git log`. `git status` seul est PROPRE dans un dépôt qui cache du travail
+>    ailleurs : il faut les trois commandes.
 > 2. **Trois chemins destructeurs fermés** : la base mémoire se détruisait elle-même
 >    en deux passages de 30 s ; les suppressions de skills suivaient un `dirName` non
 >    validé (traversée de chemin PROUVÉE par exécution) ; la bascule des notes n'avait

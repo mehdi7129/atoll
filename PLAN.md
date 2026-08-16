@@ -1,15 +1,17 @@
 # ATOLL — Plan détaillé
 
 > ⚠️ **Document HISTORIQUE (plan initial du 2026-07-18).** L'app est livrée et publiée
-> — version courante **v0.16.4** (2026-08-14). Les phases 1 à 14 sont faites.
+> — version courante **v0.16.5** (2026-08-16). Les phases 1 à 14 sont faites.
 > **§5 N'EST PAS TENU À JOUR** (il l'a longtemps prétendu) : il s'arrête à la
-> Phase 13, dans un ordre qui n'est pas le sien, et ne porte ni la Phase 14
-> « Arêtes franches » (v0.15.0) ni le RETRAIT de la v0.16.0. Pour l'état réel des
-> phases, l'autorité est `CLAUDE.md` § « État des phases » — pas ce fichier.
+> Phase 13, dans un ordre qui n'est pas le sien, et ne porte pas la Phase 14
+> « Arêtes franches » (v0.15.0). Il porte en revanche bien le RETRAIT du cockpit
+> (titre de la Phase 9). Pour l'état réel des phases, l'autorité est `CLAUDE.md`
+> § « État des phases » — pas ce fichier.
 > Deux écarts avec le plan d'origine, décidés en cours de route : le **chat intégré
 > (ex-Phase 6) et la dictée vocale ont été RETIRÉS** (Mehdi préfère Cursor), d'où le
-> décalage de numérotation ; les phases 7 à 12 ont été ajoutées après coup (mémoire,
-> robustesse, cockpit, verre, mémoire vive, boucle fermée). Les sections 1 à 4 décrivent l'intention
+> décalage de numérotation ; le plan d'origine s'arrêtait à la Phase 7, donc **tout ce
+> qui va de la 7 à la 14 a été ajouté après coup** (mémoire, robustesse, cockpit, verre,
+> mémoire vive, boucle fermée, rendre la main, arêtes franches). Les sections 1 à 4 décrivent l'intention
 > initiale et n'ont PAS été réécrites : pour l'état à jour du code, voir
 > `docs/HANDOFF.md`, `CLAUDE.md` et le README.
 

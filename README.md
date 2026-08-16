@@ -120,7 +120,8 @@ Télécharge le dernier `Atoll-x.y.z.dmg` depuis les
 
 L'app est signée Developer ID et notarisée par Apple ; les mises à jour arrivent ensuite
 toutes seules (Sparkle). Au premier lancement, une fenêtre de bienvenue installe les hooks
-Claude Code — après t'avoir montré ce qu'elle va écrire.
+Claude Code en un clic : tes hooks existants sont préservés, `~/.claude/settings.json` est
+sauvegardé avant la première écriture, et la désinstallation restitue tout.
 
 Atoll vit dans la barre de menus et autour de l'encoche. Survoler l'îlot l'étend, cliquer
 l'épingle, cliquer ailleurs le referme.
