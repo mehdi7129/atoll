@@ -83,6 +83,38 @@
 >   Repris à la main : **cinq tenaient**, un seul était faux. Séparer toujours
 >   « réfuté » de « pas de verdict ».
 >
+> **SECONDE PASSE DE RELECTURE, le même jour** — parce qu'une passe qui corrige
+> douze affirmations en écrit douze nouvelles, non relues. **14 allégués →
+> 5 confirmés, 9 réfutés, ZÉRO sans verdict** (le script sépare désormais « réfuté »
+> de « pas de verdict » : à la passe précédente, six réfutateurs morts sur la limite
+> de session avaient été rangés avec les réfutés, et **cinq y tenaient**).
+> **TROIS DES CINQ ÉTAIENT MES CORRECTIONS DU MATIN**, ce qui est le résultat le
+> plus utile de la passe :
+> - le compteur de tolérance de flotte n'est pas `missedScans` mais
+>   `SessionStore.fleetMissed`. Mon `grep` avait trouvé le seuil `>= 2` — dans
+>   `reconcile()`, pas dans `applyFleetSnapshot`, qui documente justement qu'elle
+>   **NE teste PAS le pid**. **LEÇON : trouver le bon LITTÉRAL ne prouve pas qu'on
+>   est dans la bonne fonction.**
+> - « depuis la v0.16.4, zéro fichier de code a changé » : vrai à l'écriture, faux
+>   huit minutes plus tard, dans le paragraphe qui porte la DÉCISION de release.
+> - le ménage git daté du 14 dans le tableau et du 16 dans l'en-tête.
+>
+> Et deux ailleurs, dont un sérieux : **`docs/research/research-claude-integration.md`
+> donnait une forme de réponse FAUSSE pour le hook `PermissionRequest`**
+> (`hookSpecificOutput.permissionDecision` au lieu de l'objet `decision` clé sur
+> `behavior`) — la mécanique même des cartes, dans le dossier que `CLAUDE.md`
+> présente comme la source de vérité technique à consulter avant d'implémenter. Le
+> rapport est daté : il est **ANNOTÉ, pas réécrit**, avec la forme réelle et le
+> renvoi à `PermissionDecision.swift`. Enfin le bandeau de `PLAN.md` annonçait
+> « v0.12.0 publiée, phases 1 à 12 » et un §5 « tenu à jour » qui s'arrête à la 13.
+>
+> **UN CHIFFRE REPRIS D'UN CONCURRENT N'EST PAS UNE MESURE DE SOI.** `PLAN.md`
+> justifiait encore le choix Swift par « < 50 MB RAM » — mesuré sur Atoll : **66 Mo,
+> pic 116**. Le chiffre venait des pages marketing des concurrents, avait migré
+> jusqu'au README PUBLIC, en avait été retiré le 14 août… et survivait dans le
+> document qui SERT DE JUSTIFICATION au choix. Corriger la vitrine sans corriger la
+> source laisse la source prête à réalimenter la vitrine.
+>
 > **ARBITRAGE RENDU LE 2026-08-16 — spec-kit n'est PAS intégrable, et la raison est
 > générale.** Mehdi a demandé si `github/spec-kit` (MIT, 128 k étoiles, publié par
 > GitHub) pouvait être intégré à Atoll et comment le maintenir. Réponse : **non**,
