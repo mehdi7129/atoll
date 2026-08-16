@@ -58,7 +58,7 @@ est une extension v2, pas une fondation.
 
 | Décision | Choix | Pourquoi |
 |---|---|---|
-| Langage / UI | Swift + SwiftUI, AppKit pour la fenêtre | Natif, < 50 MB RAM (standard de la catégorie) |
+| Langage / UI | Swift + SwiftUI, AppKit pour la fenêtre | Natif, pas d'Electron ⚠️ voir la note sous le tableau |
 | Projet | Xcode project (app) + package SPM local (logique) | Info.plist, entitlements, notarisation impossibles en pur SPM |
 | Cible minimale | macOS 14.0 (Sonoma) | `@Observable`, `SettingsLink`, MenuBarExtra — tout ce qu'il faut ; couvre Sonoma→Tahoe |
 | Type d'app | Menu-bar only (`LSUIElement`) + panneau notch | Pas d'icône Dock ; `MenuBarExtra(.window)` pour les réglages rapides |
@@ -67,6 +67,16 @@ est une extension v2, pas une fondation.
 | Updates | Sparkle 2.8 (SPM), appcast sur GitHub Pages | À intégrer dès le début (le retrofit est pénible) |
 | Distribution | DMG notarisé + stapled (Developer ID) | macOS 15+ a supprimé le bypass clic-droit → app non signée = quasi morte |
 | Dépendances | Minimales : Sparkle, (option) KeyboardShortcuts, Defaults | Zéro Electron, zéro télémétrie (reproche récurrent envers vibe-notch/Mixpanel) |
+
+> ⚠️ **« < 50 MB RAM » a été RETIRÉ de cette ligne le 2026-08-16 : c'était faux.**
+> Mesuré sur la v0.16.2 publiée (build 27), `footprint` : **66 Mo** d'empreinte
+> physique, **pic 116 Mo**, dont 45 Mo de `MALLOC_SMALL`. Le chiffre venait des
+> pages marketing des concurrents (voir `docs/research/research-vibeisland.md`),
+> jamais d'une mesure d'Atoll — et il avait migré jusqu'au README PUBLIC, où
+> n'importe quel lecteur le démentait en cinq secondes dans le Moniteur
+> d'activité. Retiré du README lors de l'audit du 14 août, il survivait ici.
+> **LEÇON** : un chiffre repris d'un concurrent n'est pas une mesure de soi. Ce
+> que la ligne voulait dire — natif, pas d'Electron — se défend sans chiffre.
 
 **Licences à respecter** : boring.notch est GPL-3.0 → on s'inspire de l'architecture, on ne copie
 pas le code. DynamicNotchKit / NotchDrop sont MIT. SF Mono ne peut pas être embarqué (licence
