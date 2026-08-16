@@ -2,13 +2,18 @@
 
 > Document de continuité pour reprendre le dev après un compactage de conversation.
 > **À lire en premier** avec `CLAUDE.md` (règles) et `PLAN.md` (plan produit).
-> Dernière mise à jour : **2026-08-14**. Journée en quatre temps : un **audit
-> complet** (`docs/AUDIT-2026-08-14.md`, 18 défauts corrigés dont trois chemins
-> destructeurs), puis **deux outils de continuité**, puis **deux campagnes de
-> relecture** qui ont porté la couverture du dépôt à 100 %, puis **deux releases** —
-> la **v0.16.3** (défauts des campagnes) et la **v0.16.4** (les six constats sérieux
-> qui restaient, voir plus bas).
-> 733 tests, build sans warning, `Scripts/check-docs.py` vert.
+> Dernière mise à jour : **2026-08-16**.
+>
+> Le **14 août** en quatre temps : un **audit complet** (`docs/AUDIT-2026-08-14.md`,
+> 18 défauts corrigés dont trois chemins destructeurs), **deux outils de continuité**,
+> **deux campagnes de relecture** qui ont porté la couverture du dépôt à 100 %, puis
+> **deux releases** — la **v0.16.3** (défauts des campagnes) et la **v0.16.4** (les
+> six constats sérieux qui restaient, voir plus bas).
+> Le **16 août** : une passe de relecture des DOCUMENTS contre le code
+> (12 affirmations fausses corrigées), le ménage git, et un arbitrage rendu sur
+> spec-kit. Aucune ligne de code n'a bougé ce jour-là.
+> 733 tests, build sans warning, `Scripts/check-docs.py` vert (13 familles
+> avec `--network`).
 >
 > **DEUX OUTILS À CONNAÎTRE AVANT DE REPRENDRE — ils remplacent de la discipline
 > par de la mécanique :**
@@ -44,13 +49,70 @@
 > non-régression a été **vérifié par sabotage**. Ce qui reste des campagnes n'est
 > que du mineur, consigné dans les deux documents de relecture.
 >
+> **LES DOCUMENTS ONT ÉTÉ RELUS CONTRE LE CODE (2026-08-16)** — la part que
+> `check-docs.py` ne peut PAS juger. 6 périmètres, un réfutateur par constat :
+> **18 allégués → 12 confirmés**, tous corrigés (commit `405c8de`). Les plus
+> graves : le relevé de couverture annonçait « 53 % du code jamais relu » quand le
+> script en rendait **0 %** ; la **règle critique n° 2** affirmait que Rockstar était
+> le SEUL cas où Atoll touche à des entrées non-Atoll alors qu'il y en a **deux**
+> (les hooks sonores, documentés 570 lignes plus bas) ; l'îlot n'est pas « borné à
+> 4 lignes » mais à **6** (4 seulement avec bannière) ; et `PLAN.md` vendait encore
+> la notification de fin de tâche, retirée le 3 août — le README avait été corrigé
+> de ce défaut en v0.16.0, `PLAN.md` avait été oublié.
+>
+> **TROIS LEÇONS DE MÉTHODE, plus durables que les corrections :**
+> - **Un document dérive en HEURES.** Le constat le plus grave avait été écrit le
+>   matin même et était déjà faux en l'écrivant : les campagnes du jour l'ont
+>   périmé avant le soir. Écrire un chiffre puis faire ce qui le change dans la
+>   même session est le cas le plus fréquent et le moins soupçonné.
+> - **UN CONTRÔLE QUI NE SE DÉCLENCHE QUE DANS UN SENS DONNE UNE FAUSSE ASSURANCE.**
+>   La vérification des relectures n'AVERTIT que s'il RESTE des fichiers jamais
+>   relus : à zéro, elle se tait par construction — elle ne pouvait donc pas voir le
+>   « 53 % ». Quand on écrit un garde-fou, se demander QUELLES VALEURS le font
+>   échouer. C'est le pendant de « valider un correctif par sabotage ».
+> - **NE JAMAIS COMPTER UN CONSTAT NON VÉRIFIÉ COMME RÉFUTÉ.** Six réfutateurs sont
+>   morts sur la limite de session et le script les a rangés avec les réfutés.
+>   Repris à la main : **cinq tenaient**, un seul était faux. Séparer toujours
+>   « réfuté » de « pas de verdict ».
+>
+> **ARBITRAGE RENDU LE 2026-08-16 — spec-kit n'est PAS intégrable, et la raison est
+> générale.** Mehdi a demandé si `github/spec-kit` (MIT, 128 k étoiles, publié par
+> GitHub) pouvait être intégré à Atoll et comment le maintenir. Réponse : **non**,
+> parce qu'il n'y a aucune surface. Spec-kit est du SCAFFOLDING de méthode — un CLI
+> Python qui écrit des gabarits markdown (`.specify/`, `.claude/commands/`) puis ne
+> s'exécute plus jamais ; aucun démon, aucune API. Atoll observe un RUNTIME. Les
+> deux ne touchent aucun objet commun. Mesuré au passage : **10 releases en 21
+> jours**, pré-1.0, avec ruptures assumées — vendorer ou épingler rendrait un fork
+> périmé en une semaine.
+> **LA RÈGLE À RETENIR, qui vaut pour tout tiers** : se coupler au CONTRAT DE LA
+> PLATEFORME, jamais à la structure de fichiers d'un tiers. C'est déjà pourquoi la
+> découverte des sessions passe par `claude agents --json`.
+>
+> **PROPOSÉ, PAS CODÉ (gel de septembre)** : le détour par spec-kit a montré que
+> `SkillCatalog.commandsRoot` est figé sur `~/.claude/commands` — **les commands de
+> PROJET (`<dépôt>/.claude/commands/`) ne sont pas inventoriées**. Adopter spec-kit
+> ou tout outil qui en installe rendrait le bilan capable de proposer un skill qui
+> refait `/speckit.plan`, sans que `closestMatch` (la garde DÉTERMINISTE) le
+> rattrape. Même classe que le défaut « commands de plugins » corrigé en v0.16.4.
+> Latent aujourd'hui : aucune command de projet sur la machine, vérifié. Le point
+> d'appel (`RetrospectiveRunner`) a déjà le dossier de la session sous la main.
+>
+> **PAS DE RELEASE POUR DES CORRECTIONS DOCUMENTAIRES** (décidé le 16 août avec
+> Mehdi). Depuis la v0.16.4, **zéro fichier de code** a changé : publier une v0.16.5
+> aurait produit un binaire identique et envoyé à tous les utilisateurs une
+> proposition de mise à jour sans changement fonctionnel. Les corrections sont déjà
+> publiques dès le push. Elles partiront avec la prochaine release portant du code.
+>
 > À savoir aussi en reprenant :
 >
-> 1. **Le commit d'audit du 12 août n'était PAS dans `main`** — il vivait dans un
->    worktree (`session/stoic-finch-xf8q`). Fusionné en fast-forward au début de
->    cette session. Vérifier `git worktree list` avant de conclure que le dépôt est
->    propre : le HANDOFF du 11 août disait « aucun worktree », et c'était vrai ce
->    jour-là.
+> 1. **VÉRIFIER `git worktree list` AVANT DE CONCLURE QU'UN DÉPÔT EST PROPRE.** Le
+>    commit d'audit du 12 août n'était PAS dans `main` : il vivait dans un worktree
+>    (`session/stoic-finch-xf8q`), fusionné depuis. Ce fichier a ensuite commis
+>    l'erreur qu'il décrit — il a annoncé « une seule branche, arbre propre » alors
+>    que quatre branches et ce worktree subsistaient (corrigé le 16 août : les trois
+>    branches `session/*`, toutes à 0 commit hors de `main`, et le worktree, propre,
+>    ont été retirés). `git status` seul est PROPRE dans un dépôt qui cache du
+>    travail ailleurs : il faut les trois commandes.
 > 2. **Trois chemins destructeurs fermés** : la base mémoire se détruisait elle-même
 >    en deux passages de 30 s ; les suppressions de skills suivaient un `dirName` non
 >    validé (traversée de chemin PROUVÉE par exécution) ; la bascule des notes n'avait
