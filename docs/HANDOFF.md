@@ -115,10 +115,15 @@
 > neutralisé → 4 échecs ; la préséance inversée → 1 échec).
 >
 > **PAS DE RELEASE POUR DES CORRECTIONS DOCUMENTAIRES** (décidé le 16 août avec
-> Mehdi). Depuis la v0.16.4, **zéro fichier de code** a changé : publier une v0.16.5
-> aurait produit un binaire identique et envoyé à tous les utilisateurs une
-> proposition de mise à jour sans changement fonctionnel. Les corrections sont déjà
-> publiques dès le push. Elles partiront avec la prochaine release portant du code.
+> Mehdi). La question s'est posée quand les 12 corrections documentaires étaient
+> seules en attente : **zéro fichier de code** avait alors changé depuis la v0.16.4,
+> donc publier aurait produit un binaire identique et envoyé à tous les utilisateurs
+> une proposition de mise à jour sans changement fonctionnel. Les documents sont
+> publics dès le push ; ils partent avec la prochaine release portant du code.
+> ⚠️ **CE N'EST PLUS LE CAS** : `fe245c2` (commands de projet au catalogue
+> d'antériorité) a changé du CODE. `git diff --stat v0.16.4..HEAD` le dit — c'est
+> la commande à lancer avant de décider, pas ce paragraphe. **IL Y A DONC
+> AUJOURD'HUI UN CORRECTIF FONCTIONNEL NON PUBLIÉ.**
 >
 > À savoir aussi en reprenant :
 >
@@ -126,9 +131,10 @@
 >    commit d'audit du 12 août n'était PAS dans `main` : il vivait dans un worktree
 >    (`session/stoic-finch-xf8q`), fusionné depuis. Ce fichier a ensuite commis
 >    l'erreur qu'il décrit — il a annoncé « une seule branche, arbre propre » alors
->    que quatre branches et ce worktree subsistaient (corrigé le 16 août : les trois
+>    que quatre branches et ce worktree subsistaient (les trois
 >    branches `session/*`, toutes à 0 commit hors de `main`, et le worktree, propre,
->    ont été retirés). `git status` seul est PROPRE dans un dépôt qui cache du
+>    ont été retirés le **2026-08-14**, comme le dit le tableau d'état — l'en-tête a
+>    un temps daté ce même geste du 16, deux dates pour un seul retrait). `git status` seul est PROPRE dans un dépôt qui cache du
 >    travail ailleurs : il faut les trois commandes.
 > 2. **Trois chemins destructeurs fermés** : la base mémoire se détruisait elle-même
 >    en deux passages de 30 s ; les suppressions de skills suivaient un `dirName` non

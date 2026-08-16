@@ -358,10 +358,16 @@ Les quatre qui comptent :
   terminées**, définitivement (`notified` idempotent), pendant que l'îlot les
   affichait « en cours ». Le store tolérait 2 absences, le journal aucune :
   deux politiques opposées sur le MÊME instantané. (Le compteur s'appelle
-  aujourd'hui `AgentSession.missedScans`, seuil `>= 2` dans
-  `SessionStore.applyFleetSnapshot` ; l'ancien nom `fleetMissTolerance` n'existe
-  plus. À ne pas confondre avec `pendingCardFleetTolerance = 50`, qui protège une
-  carte de permission en attente, pas la liveness.)
+  aujourd'hui `SessionStore.fleetMissed`, un dictionnaire privé par session ;
+  seuil `>= 2` dans `applyFleetSnapshot`, qui documente au passage qu'il **NE
+  teste PAS le pid** — celui d'une session bg survit à l'arrêt. L'ancien nom
+  `fleetMissTolerance` n'existe plus. DEUX voisins à ne pas confondre :
+  `pendingCardFleetTolerance = 50`, qui borne le MÊME compteur mais pour protéger
+  une carte de permission en attente ; et `Tracked.missedScans`, qui compte tout
+  autre chose — les absences du PID dans `reconcile()`.
+  ⚠️ Cette parenthèse a d'abord nommé `missedScans`, à tort : un `grep` avait
+  trouvé le seuil `>= 2`, mais dans `reconcile()`, pas dans la fonction citée.
+  **Trouver le bon LITTÉRAL ne prouve pas qu'on est dans la bonne fonction.**)
 - **Archiver/désinstaller un skill détruisait ses ressources jointes**
   (`references/`, `scripts/`) : seul `SKILL.md` était copié, puis le DOSSIER
   entier supprimé. On archive maintenant le dossier complet.

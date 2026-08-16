@@ -1,7 +1,11 @@
 # ATOLL — Plan détaillé
 
 > ⚠️ **Document HISTORIQUE (plan initial du 2026-07-18).** L'app est livrée et publiée
-> (**v0.12.0**, 2026-07-27) : les phases 1 à 12 sont faites — voir §5, tenu à jour.
+> — version courante **v0.16.4** (2026-08-14). Les phases 1 à 14 sont faites.
+> **§5 N'EST PAS TENU À JOUR** (il l'a longtemps prétendu) : il s'arrête à la
+> Phase 13, dans un ordre qui n'est pas le sien, et ne porte ni la Phase 14
+> « Arêtes franches » (v0.15.0) ni le RETRAIT de la v0.16.0. Pour l'état réel des
+> phases, l'autorité est `CLAUDE.md` § « État des phases » — pas ce fichier.
 > Deux écarts avec le plan d'origine, décidés en cours de route : le **chat intégré
 > (ex-Phase 6) et la dictée vocale ont été RETIRÉS** (Mehdi préfère Cursor), d'où le
 > décalage de numérotation ; les phases 7 à 12 ont été ajoutées après coup (mémoire,

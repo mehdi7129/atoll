@@ -22,6 +22,27 @@ A native macOS app has four integration surfaces with Claude Code (verified loca
 - CONCURRENCY LIMITATION (documented verbatim in sessions doc): 'If you resume the same session in two terminals without forking, messages from both interleave into one transcript.' There is no lock and no supported IPC to inject a prompt into another client's RUNNING interactive session. For a GUI: either (a) observe foreign sessions read-only via hooks + transcript tailing, (b) fork before prompting a session that may be active elsewhere, or (c) own the session exclusively in a persistent stream-json stdin process.
 
 ## Recommendations
+
+> ⚠️ **CORRECTIONS APPORTÉES PAR L'IMPLÉMENTATION (relevé le 2026-08-16).** Ce
+> rapport date du 2026-07-18 et `CLAUDE.md` invite à le consulter comme source de
+> vérité technique AVANT d'implémenter une intégration. Deux de ses
+> recommandations ci-dessous ont été démenties en écrivant le code — elles sont
+> gardées telles quelles (c'est un document daté), mais NE PAS LES SUIVRE :
+>
+> 1. **La forme de réponse à un hook `PermissionRequest` n'est PAS
+>    `hookSpecificOutput.permissionDecision`.** Le CLI attend un OBJET `decision`
+>    imbriqué, clé sur `behavior` :
+>    `{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"allow"}}}`,
+>    et `{"behavior":"deny","message":"…","interrupt":false}` pour refuser ; rendre
+>    la main au terminal = AUCUNE sortie. C'est la mécanique même des cartes de
+>    permission : l'autorité est `AtollCore/PermissionDecision.swift`, dont la forme
+>    a été vérifiée empiriquement (voir `research-followup-gui-answering-mechanics.md`,
+>    postérieur à ce rapport).
+> 2. **Le handler de hook `{"type":"http"}` n'a jamais été utilisé.** Atoll passe
+>    par `command` + le helper `atoll-bridge` et un socket Unix — un serveur HTTP
+>    local aurait ouvert un port sur la machine pour rien. Voir aussi la règle
+>    critique n° 8 : `NWListener` sur socket Unix est CASSÉ (macOS 26), d'où des
+>    BSD sockets.
 - For the live-events feed into the macOS app (menu bar / Dynamic Island style UI): install global hooks in ~/.claude/settings.json for SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Notification, Stop, SubagentStop, SessionEnd using the native {"type":"http","url":"http://127.0.0.1:<port>/claude-event"} handler (or command+curl with async:true as fallback); correlate events by session_id and use transcript_path+cwd from the payload to attach richer context. This covers every session on the machine, including ones started in Cursor's or any other terminal.
 - Keep event hooks async/non-blocking except where the app should act as a permission UI — there use a synchronous PreToolUse or PermissionRequest hook (HTTP type) and answer with hookSpecificOutput.permissionDecision allow/deny/ask within the timeout.
 - To render full conversation history and live-tail activity, watch ~/.claude/projects/ with FSEvents and parse the JSONL defensively (unknown line types and fields must be ignored; the schema is officially internal and changes between releases); prefer hook payloads for real-time triggers and JSONL only for display.
