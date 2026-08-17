@@ -84,11 +84,27 @@ def churn_since(dates: set[str]) -> dict[str, dict[str, int]]:
 
     Un appel `git log` par DATE distincte, pas par fichier : le dépôt a 143
     fichiers source et trois dates de relecture.
+
+    ⚠️ `--since=2026-08-14` SEUL est un piège : git le lit comme « le 14 août À
+    L'HEURE QU'IL EST », donc la mesure change au fil de la journée. MESURÉ le
+    2026-08-17 : la même carte, sur un dépôt inchangé, annonçait **3 fichiers
+    dérivés à 18h20 et 35 le lendemain à 10h58** — un facteur douze, produit par
+    l'horloge et non par le code. On ancre donc à MINUIT.
+    Le choix de minuit (plutôt que l'heure réelle de la relecture, inconnue)
+    compte les commits du jour de la relecture qui l'ont peut-être précédée :
+    il SURESTIME la dérive. C'est le bon sens de l'erreur, le même que celui du
+    registre — mieux vaut relire un fichier pour rien que le croire à jour.
+
+    CE QUI RESTE DÉPENDANT, et qu'il ne faut pas prétendre avoir réglé : minuit
+    est minuit DANS LE FUSEAU LOCAL. Mesuré en forçant `TZ` : 35 fichiers en
+    Europe/Paris, 18 en Pacific/Midway. La dérive est donc une notion de
+    calendrier local, comme les dates du registre elles-mêmes — comparer deux
+    relevés faits sur deux machines de fuseaux différents n'a pas de sens.
     """
     result: dict[str, dict[str, int]] = {}
     for when in dates:
         out = subprocess.run(
-            ["git", "log", f"--since={when}", "--numstat", "--format="],
+            ["git", "log", f"--since={when}T00:00:00", "--numstat", "--format="],
             cwd=ROOT, capture_output=True, text=True,
         ).stdout
         per_file: dict[str, int] = {}

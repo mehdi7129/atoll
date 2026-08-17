@@ -283,7 +283,7 @@
 Atoll est une « Dynamic Island » ASCII pour Claude Code sur macOS (Swift/SwiftUI,
 GPL-3.0, repo PUBLIC `github.com/mehdi7129/atoll`).
 
-### État EXACT au 2026-08-11 (fin de session)
+### État EXACT au 2026-08-16 (dernier commit du dépôt)
 
 | Quoi | Où |
 |---|---|
@@ -293,7 +293,7 @@ GPL-3.0, repo PUBLIC `github.com/mehdi7129/atoll`).
 | Phases | **1 à 14 livrées**, la **9 RETIRÉE** le 2026-08-03. Feuille de route « Atoll 2 » ÉPUISÉE ; le cadre en vigueur est `docs/VISION-2026-08.md`, décliné en `docs/PLAN-2026-08-court-terme.md` |
 | Build installé | `~/Applications/Atoll.app` = **Release NOTARISÉE v0.16.5** (bundle 30), installée et vérifiée le 2026-08-16 : `spctl : accepted — Notarized Developer ID`, staple validé, `codesign --verify --deep --strict` sans résidu, app relancée, chaîne de hook testée (exit 0, stdout vide) et journal du recall intact. Les bundles remplacés sont conservés sous `~/Applications/Atoll-<version>-remplacee-*.app` (0.16.0, 0.16.2, 0.16.4) — à mettre à la corbeille quand la 0.16.5 aura fait ses preuves. Pas de build Debug installé — pour reprendre la boucle de dev, l'installer en `~/Applications/Atoll-dev.app`, jamais `ditto` par-dessus la Release (`ditto` FUSIONNE, un `Atoll.debug.dylib` résiduel casse le sceau) |
 | Helper après MAJ | `~/.atoll/bin/atoll-bridge` est un **wrapper shell**, pas une copie : il `exec` le binaire du bundle. Sa date de fichier reste donc VIEILLE (3 août) après une mise à jour, et ce n'est pas un défaut — il pointe déjà sur le nouveau binaire. Vérifier par l'empreinte de la cible, jamais par la date du wrapper. Fail-open : bundle absent → `exit 0`, les hooks ne cassent pas |
-| Mesure en cours | `~/.atoll/recall-journal.jsonl` — parti **vierge le 2026-08-10**, **42 passages au 2026-08-11**. Ne pas l'effacer, ne pas toucher au recall d'ici le rendez-vous |
+| Mesure en cours | `~/.atoll/recall-journal.jsonl` — parti **vierge le 2026-08-10**, **42 passages relevés le 2026-08-11**, chiffre NON remesuré depuis — le relire avec `atoll-bridge recall-stats`, ne pas le recopier. Ne pas l'effacer, ne pas toucher au recall d'ici le rendez-vous |
 
 **Rien n'est en cours, rien n'est à moitié fait** — sauf UNE chose qui court toute
 seule : la mesure de la mémoire (voir juste dessous).

@@ -41,7 +41,7 @@
 >   d'antériorité DÉTERMINISTE, qui note sur `"\(id) \(name) \(description)"`. Lire ce
 >   que la réfutation a réellement mesuré, pas son verdict.
 >
-> **AUDIT DU 2026-08-14 — dix-huit défauts corrigés, six API mortes retirées, aucune
+> **AUDIT DU 2026-08-14 — dix-huit défauts corrigés, sept API mortes retirées, aucune
 > fonction ajoutée** (`docs/AUDIT-2026-08-14.md`, 691 tests verts à sa clôture). **Trois chemins
 > destructeurs** : (1) `MemoryIndexer.setAsideDatabase` détruisait la base mémoire en
 > DEUX passages — nom de destination fixe + retentative toutes les 30 s, donc le
@@ -138,10 +138,17 @@ qui a changé depuis (git), et le nombre de fichiers qui dépendent de celui-ci
   dans le sens dangereux.
 - Relevé au 2026-08-14, APRÈS les deux campagnes : **93 fichiers, 24 259 lignes,
   AUCUN jamais relu ligne à ligne (0 %)**. Ce qui reste à surveiller n'est plus la
-  couverture mais la DÉRIVE : trois fichiers relus le 12 août ont changé depuis
-  (`ProactiveRecall` +43 lignes, `PermissionDecision` +8, `HookSettingsEditor` +2),
-  tous par le commit `dc6f1a2`. Ce chiffre bouge à chaque commit — c'est le seul
-  du fichier qui se périme tout seul, d'où l'avertissement ci-dessous.
+  couverture mais la DÉRIVE : **35 fichiers ont changé depuis leur dernière
+  relecture** (relevé du 2026-08-17), les plus touchés étant `SkillCatalog` +157
+  lignes, `IslandRowPlan` +154, `MemoryRanking` +135, `PluginSnapshot` +113.
+  **NE RECOPIE PAS CE CHIFFRE : relance le script.** Il bouge à chaque commit,
+  c'est le seul du fichier qui se périme tout seul.
+  ⚠️ Il a annoncé « trois fichiers » pendant deux jours, et l'écart n'était pas
+  documentaire : `churn_since` passait `--since=<date>` à git, que git lit comme
+  « cette date À L'HEURE QU'IL EST ». MESURÉ : **3 fichiers dérivés à 18h20, 35 le
+  lendemain à 10h58**, sur un dépôt inchangé. L'instrument est ancré à minuit
+  depuis le 2026-08-17. Il reste dépendant du FUSEAU (35 à Paris, 18 à Midway) :
+  la dérive est une notion de calendrier local, comme les dates du registre.
   Pour mémoire, le chiffre d'AVANT les campagnes, celui qui a fixé leur ordre de
   passage : 68 fichiers sur 92 jamais relus, 12 672 lignes, 53 % du code.
   ⚠️ **`check-docs.py` NE contrôle PAS ce relevé**, et ne le peut pas : sa
