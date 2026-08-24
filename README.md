@@ -126,7 +126,7 @@ sauvegardé avant la première écriture, et la désinstallation restitue tout.
 Atoll vit dans la barre de menus et autour de l'encoche. Survoler l'îlot l'étend, cliquer
 l'épingle, cliquer ailleurs le referme.
 
-**Version courante : v0.16.5.**
+**Version courante : v0.16.6.**
 
 ---
 

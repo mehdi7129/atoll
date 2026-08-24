@@ -3,7 +3,38 @@
 > 📌 **REPRISE DE DEV : lire `docs/HANDOFF.md` en premier** — état exact, méthode de
 > travail, et TOUS les pièges appris à la dure.
 >
-> **Version publiée : v0.16.5** — aucune fonction ajoutée, que des correctifs. Trois
+> **Version publiée : v0.16.6** — un seul défaut fermé, aucune fonction ajoutée,
+> mais il rendait MUETTES les deux seules dépenses de quota du projet.
+> `NotesCurationService` et `RetrospectiveRunner` lançaient
+> `zsh -l -c "… exec claude …"` en comptant sur le PATH du shell — et leur
+> commentaire l'AFFIRMAIT, mot pour mot : « `claude` est résolu par le PATH du
+> shell ». C'est FAUX : `zsh -l -c` est un shell de login NON INTERACTIF, il ne
+> lit donc JAMAIS `~/.zshrc` — or c'est là que l'installeur natif de Claude Code
+> fait ajouter `~/.local/bin`. MESURÉ le 2026-08-24 sur la machine de Mehdi :
+> `env -i zsh -l -c 'command -v claude'` → introuvable, et « Ranger maintenant »
+> rendait « l'analyse a échoué (exit 127) — zsh:1: command not found: claude ».
+> ⚠️ **NE PAS DIAGNOSTIQUER CE GENRE DE PANNE DEPUIS UN TERMINAL** : le shell y
+> hérite déjà d'un PATH enrichi, donc il ne reproduit RIEN. `env -i` est
+> l'instrument, comme `screencapture -v` l'est pour une animation.
+> `FleetPoller`, `FleetLauncher` et `PluginInventory` portaient DÉJÀ la
+> résolution correcte : encore « le savoir est dans le code, pas dans l'appel »,
+> comme `byCoverage` en v0.16.1 et le `cwd` de `SkillCatalog` en v0.16.5.
+> Correctif : `App/ClaudeExecutable.swift` — chemin ABSOLU vérifié, shell de
+> login CONSERVÉ (il source le profil, dont dépend l'auth par souscription :
+> c'est le nom nu qu'on remplace, pas le shell).
+> ⚠️ **LA REVUE DU CORRECTIF A TROUVÉ UNE RÉGRESSION DANS LE CORRECTIF** : le
+> nouvel outcome n'était pas inscrit dans la liste de `refundAttempt()`, alors
+> qu'il désigne un échec AVANT toute dépense. Chaque fin de session aurait brûlé
+> un créneau de la fenêtre de 5 h — or le mode « quota inconnu » n'en accorde
+> qu'UN. Le commentaire de `finish` met en garde contre exactement ça, six lignes
+> au-dessus de la ligne fautive. D'où `failed(claude)`, inscrit dans la liste.
+> ⚠️ **DÉFAUT PRÉEXISTANT, NON corrigé et ASSUMÉ** : côté curation, `finish`
+> avance `lastRunAt` même sur échec — un « claude introuvable » repousse donc le
+> rangement AUTOMATIQUE d'une semaine. Le bouton « Ranger maintenant » reste
+> disponible (il ne consulte pas l'intervalle). Élargir le correctif à ce chemin
+> dépassait le périmètre demandé ; à trancher hors gel.
+>
+> **v0.16.5 et avant** — aucune fonction ajoutée, que des correctifs. Trois
 > releases en deux jours : la v0.16.3 a fermé les défauts des campagnes de relecture,
 > la v0.16.4 les six constats sérieux qui restaient, la v0.16.5 le trou d'antériorité
 > sur les slash commands de PROJET (`SkillCatalog(projectDirectory:)`). Sur ces deux versions : le

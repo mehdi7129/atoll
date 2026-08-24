@@ -283,11 +283,11 @@
 Atoll est une « Dynamic Island » ASCII pour Claude Code sur macOS (Swift/SwiftUI,
 GPL-3.0, repo PUBLIC `github.com/mehdi7129/atoll`).
 
-### État EXACT au 2026-08-16 (dernier commit du dépôt)
+### État EXACT au 2026-08-24 (dernier commit du dépôt)
 
 | Quoi | Où |
 |---|---|
-| Version | **v0.16.5** — le trou d'antériorité sur les slash commands de PROJET fermé (`SkillCatalog(projectDirectory:)`). Trois releases en deux jours : v0.16.3 (défauts des campagnes de relecture), v0.16.4 (les six constats sérieux), v0.16.5 (ce correctif). La v0.16.2 reste celle qui a mis la mémoire SOUS INSTRUMENT — c'est elle qui rend le rendez-vous de septembre possible |
+| Version | **v0.16.6** — les deux lanceurs qui dépensent du quota (bilan de session, rangement des notes) passaient `exec claude` à un `zsh -l -c`, qui NE LIT PAS `~/.zshrc` : `claude` introuvable, exit 127, les deux fonctions muettes. Corrigé par `App/ClaudeExecutable.swift` (chemin absolu vérifié). La revue du correctif a trouvé une régression DANS le correctif (créneau de quota non remboursé). Avant elle, le trou d'antériorité sur les slash commands de PROJET fermé en v0.16.5 (`SkillCatalog(projectDirectory:)`). Trois releases en deux jours : v0.16.3 (défauts des campagnes de relecture), v0.16.4 (les six constats sérieux), v0.16.5 (ce correctif). La v0.16.2 reste celle qui a mis la mémoire SOUS INSTRUMENT — c'est elle qui rend le rendez-vous de septembre possible |
 | Git | `main` poussé, **arbre propre**, **une seule branche** et **un seul worktree** — trois branches `session/*` (toutes à 0 commit hors de `main`) et un second worktree ont été retirés le 2026-08-14. ⚠️ Cette ligne a déjà été FAUSSE : elle annonçait « une seule branche » alors qu'il y en avait quatre et qu'un worktree traînait. **Ne pas la croire, la vérifier** : `git status --porcelain && git branch && git worktree list` — les trois, car `git status` seul est propre dans un dépôt qui a du travail caché dans un worktree |
 | Tests | **737 verts** (`cd AtollCore && swift test`, ~1,2 s), build **0 warning** |
 | Phases | **1 à 14 livrées**, la **9 RETIRÉE** le 2026-08-03. Feuille de route « Atoll 2 » ÉPUISÉE ; le cadre en vigueur est `docs/VISION-2026-08.md`, décliné en `docs/PLAN-2026-08-court-terme.md` |

@@ -395,9 +395,17 @@ final class RetrospectiveRunner {
         ) + [userPrompt]
 
         // Spawn via un shell de LOGIN (sinon le process est muet depuis une app
-        // GUI — piège vécu) ; `claude` est résolu par le PATH du shell.
-        // L'unset APRÈS le sourcing du profil garantit l'auth par souscription.
-        let shellCommand = "unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN; exec claude "
+        // GUI — piège vécu). L'unset APRÈS le sourcing du profil garantit
+        // l'auth par souscription. En revanche `claude` n'est PAS résolu par le
+        // PATH de ce shell — il est NON INTERACTIF, donc ~/.zshrc n'est jamais
+        // lu (exit 127 mesuré le 2026-08-24) : on lui passe un chemin absolu.
+        guard let claude = await ClaudeExecutable.resolve() else {
+            log.error("spawn rétrospective impossible : claude introuvable")
+            finish(job, outcome: "failed(claude)", transcriptBytes: 0)
+            return
+        }
+        let shellCommand = "unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN; exec "
+            + FleetLaunch.shellQuote(claude) + " "
             + arguments.map(FleetLaunch.shellQuote).joined(separator: " ")
 
         let process = Process()
@@ -586,7 +594,7 @@ final class RetrospectiveRunner {
         // 5 h pour rien — d'autant plus grave que le mode « quota inconnu »
         // n'en accorde qu'UN (revue adversariale du 2026-08-14, sur le lot qui
         // a introduit ce chemin).
-        if ["failed(digest)", "failed(spawn)", "failed(disabled)", "failed(resumed)"].contains(outcome) {
+        if ["failed(digest)", "failed(spawn)", "failed(claude)", "failed(disabled)", "failed(resumed)"].contains(outcome) {
             refundAttempt()
         }
         if var attempt = pendingAttempt {

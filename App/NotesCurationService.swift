@@ -563,7 +563,16 @@ final class NotesCurationService {
     /// depuis une app GUI — piège vécu), sortie bornée, lecture sur des tâches
     /// détachées (readabilityHandler est inopérant en LSUIElement).
     private func spawnClaude(arguments: [String]) async -> Data? {
-        let shellCommand = "unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN; exec claude "
+        // Chemin ABSOLU, jamais le nom nu : `zsh -l -c` est un shell de login
+        // NON INTERACTIF, il ne lit pas ~/.zshrc — où vit ~/.local/bin.
+        // Mesuré le 2026-08-24 : « exit 127 — command not found: claude ».
+        guard let claude = await ClaudeExecutable.resolve() else {
+            log.error("curation impossible : claude introuvable")
+            spawnFailure = ClaudeExecutable.notFoundMessage
+            return nil
+        }
+        let shellCommand = "unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN; exec "
+            + FleetLaunch.shellQuote(claude) + " "
             + arguments.map(FleetLaunch.shellQuote).joined(separator: " ")
 
         let process = Process()
