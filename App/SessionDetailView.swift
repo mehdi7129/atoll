@@ -12,6 +12,37 @@ struct SessionDetailView: View {
     @State private var needsPermissionApp: String?
     @State private var confirmingStop = false
     @State private var stopMessage: String?
+    @State private var handoffMessage: String?
+    @State private var preparingHandoff = false
+
+    /// Le relais vers Codex est proposé quand la bascule est armée, que `codex`
+    /// est réellement installé, et pour une session Claude — reprendre une
+    /// session Codex dans Codex n'a pas de sens.
+    ///
+    /// Il n'est PAS conditionné à un quota Claude épuisé : le geste est utile
+    /// avant la panne (préparer la reprise) autant qu'après. Ce qui suit le
+    /// quota, c'est le BANDEAU d'alerte, pas le bouton — un bouton qui apparaît
+    /// au moment où l'on en a besoin est un bouton qu'on ne trouve pas.
+    private var canHandOffToCodex: Bool {
+        session.provider == .claude
+            && LearningSettings.shared.isFailoverEnabled
+            && CodexExecutable.resolveCheap() != nil
+    }
+
+    /// Le quota Claude est-il épuisé au sens de la bascule ? Sert UNIQUEMENT à
+    /// afficher un bandeau : la décision de dépense, elle, est prise par
+    /// `ProviderFailover` avec les mêmes faits.
+    private var claudeIsExhausted: Bool {
+        let facts = LearningGate.QuotaFacts(
+            usedFraction: store.realQuota?.fiveHour.usedFraction,
+            receivedAt: store.rawQuotaReceivedAt,
+            resetsAt: store.realQuota?.fiveHour.resetsAt
+        )
+        let decision = ProviderFailover.choose(
+            claude: facts, codex: CodexService.shared.quota,
+            config: LearningSettings.shared.failoverConfig)
+        return decision.reason == .claudeExhausted || decision.reason == .bothExhausted
+    }
 
     /// `claude stop` ne peut agir que sur une session gérée par le daemon.
     /// Un simple `stat` sur un chemin : assez peu coûteux pour un `body`, et le
@@ -118,11 +149,26 @@ struct SessionDetailView: View {
                 // …et SEULEMENT si le daemon a un job à arrêter : sans dossier
                 // dans ~/.claude/jobs, `claude stop` sort en 1 (« No job
                 // matching »). C'est le cas de toute session interactive.
+                if canHandOffToCodex {
+                    AsciiButton(label: preparingHandoff ? "PRÉPARATION…" : "CONTINUER DANS CODEX",
+                                color: claudeIsExhausted ? colors.warn : colors.dim,
+                                shortcut: nil) {
+                        performHandoff()
+                    }
+                    .disabled(preparingHandoff)
+                }
                 if session.status != .done, canStop {
                     AsciiButton(label: "ARRÊTER", color: colors.warn, shortcut: nil) {
                         confirmingStop = true
                     }
                 }
+            }
+            if canHandOffToCodex, claudeIsExhausted {
+                Text("Quota Claude épuisé — Codex peut prendre le relais.")
+                    .font(AtollFont.mono(9)).foregroundStyle(colors.warn)
+            }
+            if let handoffMessage {
+                Text(handoffMessage).font(AtollFont.mono(9)).foregroundStyle(colors.dim)
             }
             if let stopMessage {
                 Text(stopMessage).font(AtollFont.mono(9)).foregroundStyle(colors.warn)
@@ -170,6 +216,35 @@ struct SessionDetailView: View {
                 needsPermissionApp = appName
             case .failed(let reason):
                 jumpMessage = reason
+            }
+        }
+    }
+
+    /// Prépare la reprise sur Codex : condensé HORS du fil principal (lire et
+    /// parser un JSONL de plusieurs dizaines de Mo n'a rien à faire sur le
+    /// MainActor), puis écriture des fichiers et ouverture du terminal.
+    private func performHandoff() {
+        guard !preparingHandoff else { return } // garde de ré-entrance (double-clic)
+        preparingHandoff = true
+        handoffMessage = nil
+        let transcript = store.transcriptPath(for: session.id)
+        let session = session
+        Task {
+            // Budget RÉDUIT à dessein : c'est une reprise, pas une analyse. Les
+            // 150 000 caractères du bilan seraient payés au premier tour Codex.
+            let digest = await Task.detached(priority: .userInitiated) {
+                transcript.flatMap {
+                    RetrospectiveRunner.digest(ofTranscriptAt: $0, budget: 40_000)
+                }?.text ?? ""
+            }.value
+            preparingHandoff = false
+            switch CodexHandoffService.start(session: session, digest: digest) {
+            case .opened:
+                handoffMessage = digest.isEmpty
+                    ? "Codex ouvert — transcript illisible, aucun contexte joint."
+                    : "Codex ouvert dans un terminal, contexte joint."
+            case .failed(let reason):
+                handoffMessage = reason
             }
         }
     }

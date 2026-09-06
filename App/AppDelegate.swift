@@ -305,6 +305,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         debugTokens.append(retroBigToken)
 
+        // MÊME run, sur l'abonnement CODEX : prouve le chemin complet
+        // `codex exec` → schéma → fichier de sortie → revalidation Swift, sans
+        // attendre que le quota Claude soit réellement épuisé. Le gate est
+        // court-circuité ; le quota Codex, lui, ne l'est pas — un compte plein
+        // rendra `failed(exit 1)`, ce qui est l'information qu'on cherche.
+        var retroCodexToken: Int32 = 0
+        notify_register_dispatch("dev.mehdiguiard.atoll.debug.retroCodex", &retroCodexToken, DispatchQueue.main) { _ in
+            MainActor.assumeIsolated {
+                RetrospectiveRunner.shared.debugRunOnLargestTranscript(
+                    projectDirectory: "-Users-mehdiguiard-Desktop-Dynamic-Island",
+                    provider: .codex)
+            }
+        }
+        debugTokens.append(retroCodexToken)
+
         // Inventaire des plugins : rafraîchit et journalise ce que la CLI rend
         // (vérification du chemin complet spawn → décodage → état observable).
         var pluginsToken: Int32 = 0

@@ -1,5 +1,33 @@
 # CLAUDE.md — instructions projet Atoll
 
+> Une intégration Codex expérimentale est en revue sur la branche
+> `codex/codex-support-dual-quotas`. Sur cette branche, lire d'abord
+> [`codex/HANDOFF-CLAUDE.md`](codex/HANDOFF-CLAUDE.md), puis
+> [`docs/CODEX-INTEGRATION.md`](docs/CODEX-INTEGRATION.md), puis
+> [`docs/CODEX-FAILOVER.md`](docs/CODEX-FAILOVER.md) — la BASCULE empilée
+> par-dessus (2026-09-06), demandée par Mehdi : « si je n'ai plus de quota sur
+> Claude, j'aimerais que ça passe sur mon compte Codex ». Ne pas fusionner la
+> PR #1 ni toucher à l'app stable ou au journal recall sans accord de Mehdi.
+>
+> ⚠️ **CE QUI BASCULE N'EST PAS LE TRAVAIL DE MEHDI.** Atoll OBSERVE le CLI
+> `claude`, il ne le pilote pas : aucun hook, aucun réglage ne transforme une
+> session interactive en cours en session Codex. Ce qui bascule, ce sont les
+> DEUX dépenses d'Atoll lui-même (bilan de fin de session, rangement des notes).
+> Pour sa session à lui, le bouton « CONTINUER DANS CODEX » PRÉPARE la reprise —
+> un condensé sur disque et un terminal ouvert au bon endroit — et le geste
+> reste le sien. Ne pas laisser le mot « bascule » promettre l'inverse.
+>
+> Le format de `hooks.json` de la PR #1 est VALIDÉ SUR PIÈCES depuis le
+> 2026-09-06, ce que son handoff listait comme non fait : soumis au RPC
+> `hooks/list` d'un `codex app-server` lancé sur un `CODEX_HOME` jetable, ses
+> 10 événements sont tous reconnus par `codex-cli 0.153.4`, et un événement
+> INCONNU y est ignoré sans invalider le fichier — donc un renommage côté OpenAI
+> ne casserait pas la configuration Codex de l'utilisateur.
+> ⚠️ **`codex exec` LIT STDIN même quand le prompt est en argument** : sans
+> `/dev/null`, il attend EOF, soit dix minutes de watchdog par run (mesuré).
+> Les deux lanceurs posent `standardInput = .nullDevice` — ne pas le retirer en
+> croyant que « le prompt est déjà passé en argument ».
+
 > 📌 **REPRISE DE DEV : lire `docs/HANDOFF.md` en premier** — état exact, méthode de
 > travail, et TOUS les pièges appris à la dure.
 >
@@ -1340,6 +1368,9 @@ tenue à jour avec `App/AppDelegate.swift` :
   `settings`, `onboarding`, `retro` (rétrospective sur la dernière session terminée),
   `retroBig` (rétrospective sur le PLUS GROS transcript du projet, sans passer par
   le gate — ~0,87 $ le run ; c'est LUI qui a prouvé la boucle d'apprentissage),
+  `retroCodex` (LE MÊME run, mais payé par l'abonnement Codex : prouve le chemin
+  `codex exec` → schéma → fichier de sortie → revalidation, sans attendre que le
+  quota Claude soit réellement épuisé),
   `curation` (curation des notes),
   `plugins` (inventaire réel via `claude plugin list --json`, catégorie de log
   `plugins`) / `pluginSearch` (recherche d'un plugin — consomme du quota),

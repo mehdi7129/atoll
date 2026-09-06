@@ -89,6 +89,33 @@ final class LearningSettings {
                             maxPerWindow: maxPerWindow)
     }
 
+    // MARK: - Bascule vers Codex
+
+    static let failoverEnabledKey = "codexFailoverEnabled"
+    static let failoverThresholdKey = "codexFailoverThreshold"
+
+    /// OFF par défaut : dépenser un SECOND abonnement est un choix explicite.
+    var isFailoverEnabled: Bool {
+        UserDefaults.standard.bool(forKey: Self.failoverEnabledKey)
+    }
+
+    /// Fraction du quota Claude à partir de laquelle on le tient pour épuisé.
+    ///
+    /// VOLONTAIREMENT distincte de `quotaThreshold` (le seuil du gate, 70 % par
+    /// défaut). Celui-ci dit « pas assez de marge pour me permettre ça », et
+    /// c'est une politique de prudence sur le compte de l'utilisateur ; celui-là
+    /// dit « il n'y a plus rien ». Basculer au premier ferait payer Codex alors
+    /// que Claude peut encore servir Mehdi pour son propre travail.
+    var failoverThreshold: Double {
+        let raw = UserDefaults.standard.object(forKey: Self.failoverThresholdKey) as? Double ?? 0.95
+        return min(max(raw, 0.50), 1.0)
+    }
+
+    var failoverConfig: ProviderFailover.Config {
+        ProviderFailover.Config(enabled: isFailoverEnabled,
+                                claudeExhaustedAt: failoverThreshold)
+    }
+
     /// La curation hebdomadaire est-elle armée ? (indépendante de la
     /// rétrospective : on peut vouloir consolider des notes déjà accumulées
     /// sans continuer d'en produire.)

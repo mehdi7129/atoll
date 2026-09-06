@@ -7,7 +7,7 @@ import AtollCore
 final class CodexService {
     static let shared = CodexService()
     static let quotaEnabledKey = "codexQuotaEnabled"
-    static let executableKey = "codexExecutablePath"
+    static var executableKey: String { CodexExecutable.overrideKey }
 
     private(set) var sessions: [AgentSession] = []
     private(set) var quota: CodexQuota?
@@ -95,22 +95,9 @@ final class CodexService {
         }
     }
 
-    private func resolveExecutable() -> URL? {
-        let fm = FileManager.default
-        let custom = UserDefaults.standard.string(forKey: Self.executableKey) ?? ""
-        let candidates: [String]
-        if !custom.isEmpty {
-            candidates = [(custom as NSString).expandingTildeInPath]
-        } else {
-            candidates = [fm.homeDirectoryForCurrentUser.appendingPathComponent(".local/bin/codex").path,
-                          "/opt/homebrew/bin/codex", "/usr/local/bin/codex"]
-                + (ProcessInfo.processInfo.environment["PATH"] ?? "").split(separator: ":")
-                    .filter { $0.hasPrefix("/") }.map { "\($0)/codex" }
-        }
-        return candidates.first { path in
-            var directory: ObjCBool = false
-            return path.hasPrefix("/") && fm.fileExists(atPath: path, isDirectory: &directory)
-                && !directory.boolValue && fm.isExecutableFile(atPath: path)
-        }.map { URL(fileURLWithPath: $0) }
-    }
+    /// UNE seule résolution pour toute l'app — celle de `CodexExecutable`. Deux
+    /// copies auraient divergé, et la version précédente de ce fichier en
+    /// portait déjà une seconde (leçon `byCoverage`, v0.16.1).
+    private func resolveExecutable() -> URL? { CodexExecutable.resolveCheap() }
 }
+

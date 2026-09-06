@@ -169,8 +169,35 @@ public struct RetrospectiveReport: Equatable, Sendable {
         guard let payload = structuredPayload(of: root) else {
             return .failure(.noStructuredPayload)
         }
+        return validate(payload: payload, envelope: root)
+    }
 
-        // (4) Revalidation Swift complète — indépendante du --json-schema du CLI.
+    /// Rapport rendu par `codex exec --output-last-message` : le fichier contient
+    /// le payload structuré NU, sans enveloppe de CLI.
+    ///
+    /// Les étapes (1) à (3) de `parse(cliOutput:)` décodent une enveloppe
+    /// Anthropic qui n'existe pas ici ; l'étape (4) — la revalidation Swift, la
+    /// seule qui protège vraiment — est partagée. Ne pas la dupliquer est le
+    /// point : c'est elle qui borne les tailles, filtre les slugs et rejette un
+    /// rapport vide, et deux copies auraient divergé.
+    ///
+    /// Ni coût ni ventilation par modèle : un abonnement ChatGPT ne facture pas
+    /// à l'appel. Le journal d'apprentissage affichera donc une dépense vide
+    /// pour ces runs — c'est exact, pas une donnée manquante.
+    public static func parse(codexOutput: Data) -> Result<RetrospectiveReport, ParseError> {
+        let text = String(decoding: codexOutput, as: UTF8.self)
+        let stripped = strippedCodeFences(text)
+        guard !stripped.isEmpty,
+              let object = try? JSONSerialization.jsonObject(with: Data(stripped.utf8)),
+              let payload = object as? [String: Any] else {
+            return .failure(.notJSON)
+        }
+        return validate(payload: payload, envelope: [:])
+    }
+
+    /// (4) Revalidation Swift complète — indépendante du schéma demandé au CLI.
+    private static func validate(payload: [String: Any],
+                                 envelope root: [String: Any]) -> Result<RetrospectiveReport, ParseError> {
         let summary = truncated(payload["session_summary"] as? String ?? "", to: Limit.sessionSummary)
         let nothingLearned = (payload["nothing_learned"] as? Bool) ?? false
         let notes = validatedNotes(payload["notes"])
