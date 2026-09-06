@@ -21,6 +21,9 @@ final class NotchViewModel {
     var isPinned = false
     /// Session ouverte en vue détaillée (clic sur une ligne). nil = liste.
     var selectedSessionID: String?
+    /// Populated only by the isolated visual preview, never persisted.
+    var previewSessions: [AgentSession]?
+    var previewUsage: UsageSnapshot?
 
     /// Un seul écran (l'écran principal) pilote l'ouverture auto et le focus
     /// clavier des cartes interactives, pour que les panneaux ne se disputent
@@ -84,11 +87,18 @@ final class NotchViewModel {
         }
     }
 
-    var sessions: [AgentSession] { store.uiSessions }
-    var usage: UsageSnapshot { store.displayQuota }
+    var sessions: [AgentSession] {
+        if let previewSessions { return previewSessions }
+        return (store.uiSessions + CodexService.shared.sessions).sorted {
+            if $0.needsAttention != $1.needsAttention { return $0.needsAttention }
+            if $0.isActive != $1.isActive { return $0.isActive }
+            return $0.startedAt > $1.startedAt
+        }
+    }
+    var usage: UsageSnapshot { previewUsage ?? store.displayQuota }
     var quotaResets: (five: Date?, seven: Date?) { store.quotaResets }
-    var hasRealQuota: Bool { store.hasRealQuota }
-    var hasFreshFiveHour: Bool { store.hasFreshFiveHour }
+    var hasRealQuota: Bool { previewUsage != nil || store.hasRealQuota }
+    var hasFreshFiveHour: Bool { previewUsage != nil || store.hasFreshFiveHour }
     var quotaReceivedAt: Date? { store.quotaReceivedAt }
 
     var selectedSession: AgentSession? {

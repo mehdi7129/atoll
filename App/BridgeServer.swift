@@ -13,6 +13,7 @@ private let log = Logger(subsystem: "dev.mehdiguiard.atoll", category: "bridge-s
 /// newConnectionHandler, constaté sur macOS 26).
 final class BridgeServer: @unchecked Sendable {
     private let queue = DispatchQueue(label: "dev.mehdiguiard.atoll.bridge-server")
+    private let socketPath: String
     private var listenFD: Int32 = -1
     /// (device, inode) du socket créé par CETTE instance — voir `stop()`.
     private var boundNode: (dev_t, ino_t)?
@@ -26,16 +27,21 @@ final class BridgeServer: @unchecked Sendable {
     /// attente de décision via reply()/cancelPending().
     private let onEvent: (ParsedHookEvent, _ requestID: String?) -> Void
     private let onStatusline: (Data) -> Void
+    private let onCodexEvent: (CodexHookEvent) -> Void
     private let onStateChange: (Bool) -> Void
 
     init(
         onEvent: @escaping (ParsedHookEvent, String?) -> Void,
         onStatusline: @escaping (Data) -> Void,
-        onStateChange: @escaping (Bool) -> Void
+        onStateChange: @escaping (Bool) -> Void,
+        onCodexEvent: @escaping (CodexHookEvent) -> Void = { _ in },
+        socketPath: String = BridgePaths.socketPath
     ) {
         self.onEvent = onEvent
         self.onStatusline = onStatusline
         self.onStateChange = onStateChange
+        self.onCodexEvent = onCodexEvent
+        self.socketPath = socketPath
     }
 
     // MARK: - Réponses aux PermissionRequest
@@ -82,7 +88,7 @@ final class BridgeServer: @unchecked Sendable {
     }
 
     func start() throws {
-        let path = BridgePaths.socketPath
+        let path = socketPath
         unlink(path)
 
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
@@ -162,9 +168,9 @@ final class BridgeServer: @unchecked Sendable {
         // autre instance a pu le remplacer entre-temps, et le lui supprimer la
         // rendrait sourde définitivement, sans qu'elle puisse le détecter.
         var info = stat()
-        if let boundNode, stat(BridgePaths.socketPath, &info) == 0,
+        if let boundNode, stat(socketPath, &info) == 0,
            info.st_dev == boundNode.0, info.st_ino == boundNode.1 {
-            unlink(BridgePaths.socketPath)
+            unlink(socketPath)
         }
         boundNode = nil
         DispatchQueue.main.async { self.onStateChange(false) }
@@ -242,6 +248,23 @@ final class BridgeServer: @unchecked Sendable {
         let envelope = (parse && !entry.buffer.isEmpty)
             ? (try? JSONSerialization.jsonObject(with: entry.buffer)) as? [String: Any]
             : nil
+
+        if socketPath == CodexPaths.socketPath, envelope?["provider"] as? String != "codex" {
+            entry.source.cancel()
+            close(fd)
+            return
+        }
+
+        // Dispatch foreign providers BEFORE either Claude input path. Codex
+        // permissions are never registered in InteractionCenter (Rockstar).
+        if let envelope, let provider = envelope["provider"], provider as? String != "claude" {
+            entry.source.cancel()
+            close(fd)
+            if let event = CodexHookEvent(envelope: envelope) {
+                DispatchQueue.main.async { self.onCodexEvent(event) }
+            }
+            return
+        }
 
         if let envelope, envelope["statusline"] != nil {
             entry.source.cancel()

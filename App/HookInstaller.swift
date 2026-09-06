@@ -31,6 +31,10 @@ enum HookInstaller {
         try runHelper("install")
     }
 
+    static func configureCodex(install: Bool) throws {
+        try runHelper(install ? "install-codex" : "uninstall-codex")
+    }
+
     static func uninstall() throws {
         // Rendre d'abord ses hooks sonores à l'utilisateur : une fois les hooks
         // Atoll retirés, l'app ne verrait plus passer les événements et plus

@@ -804,6 +804,13 @@ enum BridgeCLI {
 signal(SIGPIPE, SIG_IGN)
 
 switch CommandLine.arguments.dropFirst().first {
+case "codex-hook":
+    CodexBridge.forward()
+    exit(0)
+case "install-codex":
+    exit(CodexBridge.configure(install: true))
+case "uninstall-codex":
+    exit(CodexBridge.configure(install: false))
 case "install":
     exit(BridgeCLI.install())
 case "uninstall":

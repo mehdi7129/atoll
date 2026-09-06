@@ -9,9 +9,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var rebuildTask: Task<Void, Never>?
     private var lastScreenSignature = ""
     private var bridgeServer: BridgeServer?
+    private var codexBridgeServer: BridgeServer?
     private var debugTokens: [Int32] = []
     private var onboardingController: OnboardingWindowController?
     private var skillReviewController: SkillReviewWindowController?
+    private var codexPreviewWindow: NSWindow?
 
     /// Affiche la fenêtre de revue des skills — recréée à neuf (comme l'onboarding).
     func showSkillReview() {
@@ -31,6 +33,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if CodexPreview.enabled {
+            codexPreviewWindow = CodexPreview.makeWindow()
+            return
+        }
         ThemeManager.applyStored()
         InteractionCenter.migrateAutonomyIfNeeded()
 
@@ -103,6 +109,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         InteractionCenter.shared.server = server
         try? server.start()
         store.start()
+        CodexService.shared.start()
+        let codexServer = BridgeServer(onEvent: { _, _ in }, onStatusline: { _ in },
+                                      onStateChange: { _ in }, onCodexEvent: { event in
+            Task { @MainActor in CodexService.shared.apply(event) }
+        }, socketPath: CodexPaths.socketPath)
+        codexBridgeServer = codexServer
+        try? codexServer.start()
 
         // Découverte de la flotte sur interface SUPPORTÉE (`claude agents --json`) :
         // autorité de découverte des sessions, le scan de processus n'est plus
@@ -159,6 +172,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        guard !CodexPreview.enabled else { return }
+        CodexService.shared.stop()
         FleetPoller.shared.stop()
         RetrospectiveRunner.shared.terminateActive()
         // Une curation en vol est un `claude -p` facturé : ne pas le laisser
@@ -168,6 +183,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NotesCurationService.shared.cancel()
         PluginInventory.shared.cancel()
         bridgeServer?.stop()
+        codexBridgeServer?.stop()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

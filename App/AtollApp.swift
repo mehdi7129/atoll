@@ -25,13 +25,21 @@ struct AtollApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MenuBarMenu(model: updaterModel)
+            if CodexPreview.enabled {
+                Button("Quitter l'aperçu") { NSApp.terminate(nil) }
+            } else {
+                MenuBarMenu(model: updaterModel)
+            }
         } label: {
             Image(systemName: "water.waves")
         }
 
         Settings {
-            SettingsView(updaterModel: updaterModel)
+            if CodexPreview.enabled {
+                Text("Aperçu isolé : réglages désactivés.").padding()
+            } else {
+                SettingsView(updaterModel: updaterModel)
+            }
         }
         // Une scène `Settings` est en `.contentSize` par défaut : macOS colle
         // la fenêtre à la taille du contenu et REFUSE tout redimensionnement,

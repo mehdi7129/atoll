@@ -90,6 +90,9 @@ public struct ParsedHookEvent: Equatable, Sendable {
     }
 
     public init?(envelope: [String: Any]) {
+        // Legacy envelopes are Claude. Explicit foreign providers must NEVER
+        // enter Claude's auto-approval or memory machinery.
+        if let provider = envelope["provider"], provider as? String != "claude" { return nil }
         guard let payload = envelope["payload"] as? [String: Any],
               let eventName = payload["hook_event_name"] as? String,
               let kind = Kind(rawValue: eventName),

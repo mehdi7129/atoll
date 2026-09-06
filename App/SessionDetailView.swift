@@ -17,7 +17,7 @@ struct SessionDetailView: View {
     /// Un simple `stat` sur un chemin : assez peu coûteux pour un `body`, et le
     /// détail n'affiche qu'une session à la fois.
     private var canStop: Bool {
-        FleetLaunch.hasJobDirectory(for: session.id, jobsRoot: BridgePaths.claudeJobsURL)
+        session.provider == .claude && FleetLaunch.hasJobDirectory(for: session.id, jobsRoot: BridgePaths.claudeJobsURL)
     }
 
     private var store: SessionStore { .shared }
@@ -102,10 +102,15 @@ struct SessionDetailView: View {
     /// Terminal) + retours (permission, échec).
     private var jumpBar: some View {
         VStack(alignment: .leading, spacing: 4) {
+            if session.provider == .codex {
+                Text(session.needsAttention ? "Autorisation à traiter dans Codex (pas dans Atoll)." : "Suivi Codex par hooks · retourne dans ton client Codex pour interagir.")
+                    .font(AtollFont.mono(9)).foregroundStyle(colors.dim)
+            }
             HStack(spacing: 12) {
                 AsciiButton(label: openLabel, color: colors.accent, shortcut: nil) {
                     performJump()
                 }
+                .disabled(session.provider == .codex)
                 Spacer()
                 // Kill-switch par session (`claude stop`). CONFIRMATION obligatoire :
                 // le bouton s'affiche pour toute session vivante, y compris la tienne
@@ -171,6 +176,7 @@ struct SessionDetailView: View {
 
     private var grid: some View {
         VStack(alignment: .leading, spacing: 3) {
+            row("agent", session.provider.label)
             row("modèle", session.model.map { ModelName.display($0) } ?? "—")
             row("branche", session.gitBranch ?? "—")
             row("sous-agents", session.subagentCount > 0 ? "\(session.subagentCount) actifs" : "—")

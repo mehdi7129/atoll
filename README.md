@@ -9,6 +9,10 @@
 
 **Une Dynamic Island pour Claude Code, dans l'encoche de ton MacBook.**
 
+> Sur cette branche : intégration **Codex expérimentale**, avec suivi par hooks et
+> quotas Claude/Codex séparés. Pas encore une release. Voir le
+> [plan, les limites et l'aperçu sans installation](docs/CODEX-INTEGRATION.md).
+
 Trois `claude` tournent : un dans un onglet Cursor, un dans un iTerm passé derrière le
 navigateur, un en arrière-plan lancé il y a vingt minutes. L'un des trois est bloqué depuis
 huit minutes sur une demande de permission — tu ne sais pas lequel. Tu ne sais pas non plus

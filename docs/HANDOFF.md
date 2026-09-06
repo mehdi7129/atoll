@@ -1,5 +1,12 @@
 # HANDOFF — reprise du développement d'Atoll
 
+> **Ajout 2026-09-06 — branche expérimentale Codex en cours de revue.**
+> À la demande de Mehdi, `codex/codex-support-dual-quotas` ajoute un adaptateur
+> Codex séparé et les quotas des deux fournisseurs. `main` et le bundle stable
+> ne sont pas remplacés. Plan et tests : [CODEX-INTEGRATION.md](CODEX-INTEGRATION.md).
+> Les états « une seule branche / rien en cours » ci-dessous sont des relevés
+> historiques, pas l'état de cette branche. Le gel de la mesure recall est préservé.
+
 > Document de continuité pour reprendre le dev après un compactage de conversation.
 > **À lire en premier** avec `CLAUDE.md` (règles) et `PLAN.md` (plan produit).
 > Dernière mise à jour : **2026-08-16**.

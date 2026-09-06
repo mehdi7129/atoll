@@ -7,7 +7,7 @@ struct ExpandedView: View {
     let colors: ThemeColors
 
     @AppStorage(InteractionCenter.autonomyKey) private var autonomyRaw = AutonomyLevel.manual.rawValue
-    private var level: AutonomyLevel { AutonomyLevel(rawValue: autonomyRaw) ?? .manual }
+    private var level: AutonomyLevel { CodexPreview.enabled ? .manual : (AutonomyLevel(rawValue: autonomyRaw) ?? .manual) }
 
     /// Projets dépliés (racines de projet). Les dossiers multi-sessions sont
     /// repliés par défaut : on voit un dossier par projet, on déplie pour voir
@@ -47,7 +47,7 @@ struct ExpandedView: View {
                 Spacer(minLength: 0)
                 // Bannière passive : jamais par-dessus une carte de permission
                 // (branche else uniquement), aucune ouverture forcée.
-                if SkillReviewCenter.shared.pendingCount > 0 {
+                if !CodexPreview.enabled && SkillReviewCenter.shared.pendingCount > 0 {
                     learningBanner
                         .layoutPriority(1)
                 }
@@ -79,7 +79,7 @@ struct ExpandedView: View {
                 .foregroundStyle(colors.fg)
             switch level {
             case .rockstar:
-                Text("[ ROCKSTAR ]")
+                Text("[ CLAUDE ROCKSTAR ]")
                     .foregroundStyle(Color(hex: 0xFF3B30))
             case .manual:
                 EmptyView()
@@ -110,7 +110,7 @@ struct ExpandedView: View {
             }
 
             if viewModel.sessions.isEmpty {
-                Text("· aucune session — lance `claude` dans un terminal")
+                Text("· aucune session — lance Claude ou Codex avec les hooks Atoll")
                     .foregroundStyle(colors.dim)
             } else if groupByState {
                 stateGroupedList
@@ -208,7 +208,7 @@ struct ExpandedView: View {
 
     /// Rangées DESSINABLES sans pousser le quota hors du cadre. Les deux modes
     /// d'affichage partagent ce budget : la vue par projet n'en avait aucun.
-    private var rowBudget: Int { IslandRowBudget.rows(bannerShown: bannerShown) }
+    private var rowBudget: Int { max(1, IslandRowBudget.rows(bannerShown: bannerShown) - 2) }
 
     /// Sessions regroupées par PROJET (racine `.git`), ordre de première apparition
     /// préservé.
@@ -302,7 +302,7 @@ struct ExpandedView: View {
 
     private var footerBody: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(AsciiArt.sectionHeader("QUOTA", width: 79))
+            Text(AsciiArt.sectionHeader("QUOTAS · CLAUDE", width: 79))
                 .lineLimit(1)
                 .foregroundStyle(colors.dim)
 
@@ -331,9 +331,34 @@ struct ExpandedView: View {
                     QuotaAgeLabel(receivedAt: receivedAt, colors: colors)
                 }
             } else {
-                Text("quota indisponible — ouvre une session Claude pour l'alimenter")
+                Text("Claude : quota indisponible — ouvre une session pour l'alimenter")
                     .font(AtollFont.mono(9))
                     .foregroundStyle(colors.dim)
+            }
+            codexQuotaRow
+        }
+    }
+
+    private var codexQuotaRow: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            if let quota = CodexService.shared.quota, quota.isFresh(at: Date()),
+               let bucket = quota.primaryBucket {
+                HStack(spacing: 12) {
+                    Text(bucket.id == "codex" ? "Codex" : "Codex · \(bucket.label)")
+                        .foregroundStyle(colors.dim).lineLimit(1)
+                    ForEach(bucket.windows) { window in
+                        if window.isCurrent(at: Date()) {
+                            quotaGauge(label: window.label, fraction: window.usedFraction, resetsAt: window.resetsAt)
+                        } else {
+                            Text("\(window.label) : actualisation…").foregroundStyle(colors.dim)
+                        }
+                    }
+                }
+                Text("Codex · actualisé il y a \(max(0, Int(Date().timeIntervalSince(quota.receivedAt) / 60))) min · tous les quotas dans les réglages")
+                    .font(AtollFont.mono(9)).foregroundStyle(colors.dim).lineLimit(1)
+            } else {
+                Text("Codex : \(CodexService.shared.quota == nil ? CodexService.shared.status : "données périmées · actualisation…")")
+                    .font(AtollFont.mono(9)).foregroundStyle(colors.dim).lineLimit(2)
             }
         }
     }
@@ -457,13 +482,19 @@ private struct SessionRow: View {
     }
 
     private var title: String {
-        var parts = [session.projectName]
+        var parts = [session.provider.label, session.projectName]
         if let branch = session.gitBranch { parts.append(branch) }
         if let model = session.model { parts.append(ModelName.display(model)) }
         return parts.joined(separator: " · ")
     }
 
     private var detail: String? {
+        if session.provider == .codex, !session.stateConfirmedByHook {
+            return "état non confirmé · aucun hook récent"
+        }
+        if session.provider == .codex, session.needsAttention {
+            return "à autoriser dans Codex · \(session.subtitle ?? "")"
+        }
         // Badges d'enrichissement (sous-agents / MCP) quand présents.
         var badges: [String] = []
         if session.subagentCount > 0 { badges.append("⑂\(session.subagentCount)") }
