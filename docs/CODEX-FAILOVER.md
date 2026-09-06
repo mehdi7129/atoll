@@ -65,6 +65,28 @@ d'une ligne dans la porte suivante.
 - **La fenêtre Codex retenue est la PLUS CONTRAIGNANTE** (`max`), jamais la
   moyenne ni la plus favorable — voir la mesure ci-dessous, qui l'a tranché.
 
+## Trois comportements hérités, assumés et nommés
+
+1. **`lastSpendAt` de la curation est PARTAGÉ entre les deux abonnements.** Une
+   dépense Claude il y a deux heures bloque donc une dépense Codex dans la même
+   fenêtre, même si le compte Codex est vierge. C'est conservateur, et sans
+   effet pratique : le rangement des notes est hebdomadaire. À revoir seulement
+   si un troisième consommateur apparaît.
+2. **Côté curation, `finish` avance `lastRunAt` même sur échec** — donc un
+   « codex introuvable » repousse le rangement automatique d'une semaine, comme
+   le fait déjà un « claude introuvable ». Ce n'est pas un oubli : le
+   commentaire de `finish` le veut ainsi, pour ne pas relancer un cycle toutes
+   les six heures sur une panne de configuration. Le bouton « Ranger
+   maintenant » reste disponible. Défaut préexistant, déjà signalé dans
+   `CLAUDE.md` comme à trancher hors gel ; ce lot ne l'élargit pas au-delà de
+   son chemin jumeau.
+3. **La fenêtre de 5 h est supposée commune.** `quotaRefusal` borne la dépense
+   sur `LearningGate.runWindowSeconds` (5 h, la fenêtre Anthropic) ; la fenêtre
+   principale de Codex mesure 300 min, soit la même durée. C'est une COÏNCIDENCE
+   vérifiée le 2026-09-06, pas un contrat : si Codex change de fenêtre, c'est
+   `ProviderFailover.quotaFacts(of:)` qui portera la vérité (il lit `resetsAt`
+   du serveur), mais le plafond par fenêtre, lui, restera calé sur 5 h.
+
 ## Ce qui a été mesuré, et ce qui reste à mesurer
 
 ### Mesuré le 2026-09-06
@@ -91,7 +113,7 @@ d'une ligne dans la porte suivante.
   `/dev/null`, il imprime « Reading additional input from stdin... » et attend
   EOF — soit, depuis Atoll, dix minutes de watchdog par run. Les deux lanceurs
   posent `standardInput = .nullDevice` ; le commentaire est au point de spawn.
-- **798 tests verts** (761 avant ce lot), 1 test réseau ignoré par défaut.
+- **799 tests verts** (761 avant ce lot), 1 test réseau ignoré par défaut.
   Les propriétés de `ProviderFailover` ont été **vérifiées par sabotage**, une à
   une : l'ignorance qui bascule, `min` au lieu de `max`, le seuil rendu
   exclusif, la fenêtre expirée toujours crue. Quatre sabotages, quatre échecs.
