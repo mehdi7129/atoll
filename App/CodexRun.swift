@@ -41,6 +41,12 @@ enum CodexRun {
             log.error("codex introuvable — \(CodexExecutable.notFoundMessage, privacy: .public)")
             return nil
         }
+        // Le schéma d'Atoll est écrit pour Anthropic ; OpenAI le refuse en l'état
+        // (mesuré : HTTP 400 `invalid_json_schema`). Traduction obligatoire.
+        guard let strictSchema = CodexExecPlan.openAISchema(from: schema) else {
+            log.error("schéma non convertible pour Codex — run abandonné")
+            return nil
+        }
         let workspace = FileManager.default.temporaryDirectory
             .appendingPathComponent("atoll-codex-\(label)-\(UUID().uuidString)", isDirectory: true)
         let schemaFile = workspace.appendingPathComponent("schema.json")
@@ -51,7 +57,7 @@ enum CodexRun {
             try FileManager.default.createDirectory(
                 at: workspace, withIntermediateDirectories: true,
                 attributes: [.posixPermissions: 0o700])
-            try schema.write(to: schemaFile, atomically: true, encoding: .utf8)
+            try strictSchema.write(to: schemaFile, atomically: true, encoding: .utf8)
         } catch {
             log.error("préparation du run Codex impossible : \(error.localizedDescription, privacy: .public)")
             try? FileManager.default.removeItem(at: workspace)

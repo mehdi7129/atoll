@@ -17,6 +17,27 @@
 > un condensé sur disque et un terminal ouvert au bon endroit — et le geste
 > reste le sien. Ne pas laisser le mot « bascule » promettre l'inverse.
 >
+> ⚠️ **LE SCHÉMA JSON D'ATOLL EST REFUSÉ PAR OPENAI**, mesuré le 2026-09-07 au
+> premier vrai `codex exec` : HTTP 400 `invalid_json_schema` — « 'required' is
+> required to be supplied and to be an array including every key in properties.
+> Missing 'confidence' ». Anthropic tolère un `required` partiel, OpenAI
+> l'interdit (et refuse aussi `pattern`, `maxLength`, `maxItems`). Le lot de
+> bascule ne produisait donc RIEN, et **aucun test unitaire ne pouvait le dire** :
+> il fallait l'appel réel. D'où `CodexExecPlan.openAISchema(from:)`. Retirer ces
+> bornes est sans danger parce que `RetrospectiveReport` et `NotesCurationOutput`
+> revalident tout en Swift « indépendamment du `--json-schema` du CLI » — le
+> schéma guide le modèle, il n'a jamais été ce qui protège Atoll. Après
+> correctif : bilan **exit 0 en 7 s**, curation **exit 0**, les deux rapports
+> réels figés verbatim en test.
+>
+> Les PAYLOADS de hooks Codex sont eux aussi validés sur pièces (capture dans un
+> `CODEX_HOME` jetable) : `cwd`, `turn_id`, `model`, `prompt`, `tool_name`,
+> `tool_input`, `session_id` sont tous présents, six événements dans un run
+> simple. ⚠️ **Les strings du binaire ne le disaient PAS** — on n'y trouve ni
+> `cwd` ni `turn_id` près des champs de hook, et j'en avais déduit un risque qui
+> n'existait pas. Fouiller un binaire ORIENTE une hypothèse, il ne la tranche
+> jamais : c'est la capture qui décide.
+>
 > Le format de `hooks.json` de la PR #1 est VALIDÉ SUR PIÈCES depuis le
 > 2026-09-06, ce que son handoff listait comme non fait : soumis au RPC
 > `hooks/list` d'un `codex app-server` lancé sur un `CODEX_HOME` jetable, ses

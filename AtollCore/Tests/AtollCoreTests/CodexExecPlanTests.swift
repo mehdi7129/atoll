@@ -119,6 +119,109 @@ final class CodexExecPlanTests: XCTestCase {
         XCTAssertEqual(report.skills.first?.slug, "release-pipeline")
     }
 
+    // MARK: - Schéma strict OpenAI
+
+    /// LE DÉFAUT QUI A BLOQUÉ LE LOT, mesuré le 2026-09-07 : envoyé tel quel, le
+    /// schéma du bilan est refusé par l'API — « 'required' is required to be
+    /// supplied and to be an array including every key in properties. Missing
+    /// 'confidence' » (HTTP 400, aucun fichier produit).
+    func testEveryPropertyEndsUpRequired() throws {
+        let json = try XCTUnwrap(CodexExecPlan.openAISchema(from: RetrospectivePrompt.jsonSchema))
+        try assertRequiredCoversProperties(in: json)
+        let curation = try XCTUnwrap(CodexExecPlan.openAISchema(from: NotesCurationPrompt.jsonSchema))
+        try assertRequiredCoversProperties(in: curation)
+    }
+
+    /// Rendre `similar_existing` obligatoire forcerait le modèle à INVENTER une
+    /// capacité existante que sa proposition recoupe — exactement ce que
+    /// l'antériorité sert à éviter. Il devient donc nullable, pas requis-non-nul.
+    func testPreviouslyOptionalFieldsBecomeNullable() throws {
+        let json = try XCTUnwrap(CodexExecPlan.openAISchema(from: RetrospectivePrompt.jsonSchema))
+        let root = try XCTUnwrap((try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: Any])
+        let skills = try XCTUnwrap(((root["properties"] as? [String: Any])?["skills"] as? [String: Any]))
+        let item = try XCTUnwrap(skills["items"] as? [String: Any])
+        let properties = try XCTUnwrap(item["properties"] as? [String: Any])
+        let similar = try XCTUnwrap(properties["similar_existing"] as? [String: Any])
+        XCTAssertEqual(similar["type"] as? [String], ["string", "null"])
+        // `slug` était déjà requis : il ne devient PAS nullable.
+        let slug = try XCTUnwrap(properties["slug"] as? [String: Any])
+        XCTAssertEqual(slug["type"] as? String, "string")
+    }
+
+    /// Un enum rendu nullable doit accepter `null`, sinon la valeur qu'on vient
+    /// d'autoriser n'est valide pour aucune branche.
+    func testNullableEnumAcceptsNull() throws {
+        let json = try XCTUnwrap(CodexExecPlan.openAISchema(from: RetrospectivePrompt.jsonSchema))
+        let root = try XCTUnwrap((try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: Any])
+        let notes = try XCTUnwrap(((root["properties"] as? [String: Any])?["notes"] as? [String: Any]))
+        let item = try XCTUnwrap(notes["items"] as? [String: Any])
+        let confidence = try XCTUnwrap((item["properties"] as? [String: Any])?["confidence"] as? [String: Any])
+        let options = try XCTUnwrap(confidence["enum"] as? [Any])
+        XCTAssertTrue(options.contains { $0 is NSNull })
+    }
+
+    /// Mots-clés refusés par le mode strict. Les retirer est SANS DANGER : les
+    /// bornes sont réappliquées en Swift, « indépendamment du schéma du CLI ».
+    func testUnsupportedKeywordsAreStripped() throws {
+        let json = try XCTUnwrap(CodexExecPlan.openAISchema(from: RetrospectivePrompt.jsonSchema))
+        for keyword in ["pattern", "maxLength", "maxItems", "minLength"] {
+            XCTAssertFalse(json.contains("\"\(keyword)\""), "\(keyword) subsiste")
+        }
+        // `additionalProperties: false` est EXIGÉ, lui : il doit survivre.
+        XCTAssertTrue(json.contains("\"additionalProperties\":false"))
+    }
+
+    func testMalformedSchemaYieldsNilInsteadOfGarbage() {
+        XCTAssertNil(CodexExecPlan.openAISchema(from: "pas du json"))
+        XCTAssertNil(CodexExecPlan.openAISchema(from: "[1,2,3]"))
+    }
+
+    // MARK: - Rapports RÉELS produits par Codex
+
+    /// Sortie VERBATIM de `codex exec` le 2026-09-07 (exit 0, 7 s), avec le
+    /// schéma converti. C'est la seule preuve qui compte : un test sur un
+    /// payload fabriqué à la main n'aurait pas vu le refus du schéma.
+    func testRealCodexRetrospectiveIsParsed() throws {
+        let real = #"""
+        {"notes":[{"category":"pitfall","confidence":"high","content":"Le build a échoué avec « missing Metal Toolchain ». Dans cette session, la commande `xcodebuild -downloadComponent MetalToolchain` a réussi et le build est redevenu vert après le téléchargement du composant.","slug":"missing-metal-toolchain"}],"nothing_learned":false,"session_summary":"L’échec du build lié à la Metal Toolchain manquante a été résolu en téléchargeant le composant via xcodebuild.","skills":[]}
+        """#
+        guard case .success(let report) = RetrospectiveReport.parse(codexOutput: Data(real.utf8))
+        else { return XCTFail("rapport Codex RÉEL refusé par le parseur") }
+        XCTAssertEqual(report.notes.count, 1)
+        XCTAssertEqual(report.notes.first?.slug, "missing-metal-toolchain")
+        XCTAssertEqual(report.notes.first?.confidence, "high")
+        XCTAssertFalse(report.nothingLearned)
+        XCTAssertTrue(report.skills.isEmpty)
+    }
+
+    /// Idem pour la curation — même run, même jour.
+    func testRealCodexCurationIsParsed() throws {
+        let real = #"""
+        {"contradictions":[],"notes":[{"content":"Depuis Xcode 26, la Metal Toolchain est un composant à télécharger séparément avec `xcodebuild -downloadComponent MetalToolchain`.","sources":["build-metal","metal-again"],"title":"Téléchargement de la Metal Toolchain"}]}
+        """#
+        let output = try XCTUnwrap(NotesCurationOutput.parse(codexOutput: Data(real.utf8)))
+        XCTAssertEqual(output.notes.count, 1)
+        XCTAssertEqual(output.notes.first?.sources, ["build-metal", "metal-again"])
+        XCTAssertTrue(output.contradictions.isEmpty)
+    }
+
+    private func assertRequiredCoversProperties(in json: String, file: StaticString = #filePath,
+                                                line: UInt = #line) throws {
+        let root = try XCTUnwrap((try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: Any])
+        func walk(_ node: [String: Any], path: String) {
+            if let properties = node["properties"] as? [String: Any] {
+                let required = Set(node["required"] as? [String] ?? [])
+                XCTAssertEqual(required, Set(properties.keys),
+                               "required incomplet en \(path)", file: file, line: line)
+                for (key, value) in properties {
+                    if let child = value as? [String: Any] { walk(child, path: "\(path).\(key)") }
+                }
+            }
+            if let items = node["items"] as? [String: Any] { walk(items, path: "\(path)[]") }
+        }
+        walk(root, path: "$")
+    }
+
     // MARK: - Curation
 
     func testCurationBarePayloadIsAccepted() {

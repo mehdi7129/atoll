@@ -67,6 +67,104 @@ public enum CodexExecPlan {
         return arguments
     }
 
+    // MARK: - Schéma
+
+    /// Traduit un JSON Schema écrit pour Anthropic vers ce qu'OpenAI accepte en
+    /// sortie structurée stricte.
+    ///
+    /// ⚠️ MESURÉ LE 2026-09-07, ET C'ÉTAIT BLOQUANT. Le schéma du bilan, envoyé
+    /// tel quel, a été REFUSÉ par l'API : « 'required' is required to be
+    /// supplied and to be an array including every key in properties. Missing
+    /// 'confidence'. » — HTTP 400, `invalid_json_schema`, aucun fichier produit.
+    /// Anthropic tolère un `required` partiel ; OpenAI l'interdit. Le lot de
+    /// bascule ne pouvait donc RIEN produire avant ce correctif, et aucun test
+    /// unitaire ne l'aurait dit : il fallait le vrai appel.
+    ///
+    /// Trois transformations, toutes exigées par le mode strict :
+    /// 1. `required` liste TOUTES les clés de `properties` ;
+    /// 2. une clé qui n'était pas requise devient NULLABLE (`["string","null"]`)
+    ///    — sinon on forcerait le modèle à remplir `similar_existing`, c'est-à-dire
+    ///    à INVENTER une capacité existante que sa proposition recouperait, ce
+    ///    qui est exactement ce que l'antériorité sert à éviter ;
+    /// 3. les mots-clés de validation non supportés (`pattern`, `maxLength`,
+    ///    `maxItems`…) sont retirés.
+    ///
+    /// LE POINT 3 EST SANS DANGER, et c'est une propriété du code existant, pas
+    /// un pari : `RetrospectiveReport` et `NotesCurationOutput` revalident tout
+    /// en Swift — bornes, slugs, énumérations —, « indépendamment du
+    /// `--json-schema` du CLI », dit leur commentaire. Le schéma sert à guider
+    /// le modèle ; il n'a jamais été ce qui protège Atoll.
+    ///
+    /// Une seule source de vérité : le schéma Anthropic. Écrire un second
+    /// schéma à la main l'aurait fait diverger au premier changement.
+    public static func openAISchema(from json: String) -> String? {
+        guard let data = json.data(using: .utf8),
+              let root = try? JSONSerialization.jsonObject(with: data),
+              let object = root as? [String: Any] else { return nil }
+        let converted = convert(object)
+        guard let out = try? JSONSerialization.data(withJSONObject: converted,
+                                                    options: [.sortedKeys, .withoutEscapingSlashes])
+        else { return nil }
+        return String(decoding: out, as: UTF8.self)
+    }
+
+    /// Mots-clés de validation qu'OpenAI refuse en mode strict. Retirés partout,
+    /// y compris là où ils sont inoffensifs : une liste d'exceptions serait un
+    /// second endroit à tenir à jour.
+    private static let unsupportedKeywords: Set<String> = [
+        "pattern", "maxLength", "minLength", "format",
+        "maxItems", "minItems", "uniqueItems",
+        "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "multipleOf",
+        "maxProperties", "minProperties", "default", "examples",
+    ]
+
+    private static func convert(_ node: [String: Any]) -> [String: Any] {
+        var result: [String: Any] = [:]
+        for (key, value) in node where !unsupportedKeywords.contains(key) {
+            switch value {
+            case let child as [String: Any]:
+                result[key] = key == "properties"
+                    ? child.mapValues { ($0 as? [String: Any]).map(convert) ?? $0 }
+                    : convert(child)
+            case let array as [Any]:
+                result[key] = array.map { ($0 as? [String: Any]).map(convert) ?? $0 }
+            default:
+                result[key] = value
+            }
+        }
+        guard let properties = result["properties"] as? [String: Any] else { return result }
+
+        // Les clés absentes de `required` deviennent nullables AVANT d'y être
+        // ajoutées : c'est ce qui préserve leur caractère facultatif.
+        let previouslyRequired = Set(result["required"] as? [String] ?? [])
+        var updated = properties
+        for (name, value) in properties where !previouslyRequired.contains(name) {
+            guard var field = value as? [String: Any] else { continue }
+            field["type"] = nullable(field["type"])
+            // Un enum doit accepter `null`, sinon la valeur nullable qu'on vient
+            // d'autoriser ne serait valide pour aucune branche.
+            if var options = field["enum"] as? [Any] {
+                options.append(NSNull())
+                field["enum"] = options
+            }
+            updated[name] = field
+        }
+        result["properties"] = updated
+        result["required"] = properties.keys.sorted()
+        return result
+    }
+
+    private static func nullable(_ type: Any?) -> Any {
+        switch type {
+        case let single as String:
+            return single == "null" ? single : [single, "null"]
+        case let many as [String]:
+            return many.contains("null") ? many : many + ["null"]
+        default:
+            return ["string", "null"]
+        }
+    }
+
     /// Instructions système + tâche, dans un seul prompt.
     ///
     /// La séparation est EXPLICITE et nommée : sans elle, un condensé de

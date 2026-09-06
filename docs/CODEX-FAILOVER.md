@@ -113,23 +113,75 @@ d'une ligne dans la porte suivante.
   `/dev/null`, il imprime « Reading additional input from stdin... » et attend
   EOF — soit, depuis Atoll, dix minutes de watchdog par run. Les deux lanceurs
   posent `standardInput = .nullDevice` ; le commentaire est au point de spawn.
-- **799 tests verts** (761 avant ce lot), 1 test réseau ignoré par défaut.
+- **806 tests verts** (761 avant ce lot), 1 test réseau ignoré par défaut.
   Les propriétés de `ProviderFailover` ont été **vérifiées par sabotage**, une à
   une : l'ignorance qui bascule, `min` au lieu de `max`, le seuil rendu
   exclusif, la fenêtre expirée toujours crue. Quatre sabotages, quatre échecs.
 
+### Mesuré le 2026-09-07 — les deux points bloquants
+
+**1. LE SCHÉMA D'ATOLL EST REFUSÉ PAR OPENAI.** Premier vrai `codex exec` :
+HTTP 400, `invalid_json_schema`, aucun fichier produit —
+
+> `'required' is required to be supplied and to be an array including every key
+> in properties. Missing 'confidence'.`
+
+Anthropic tolère un `required` partiel ; OpenAI l'interdit en sortie structurée
+stricte, et refuse aussi `pattern`, `maxLength`, `maxItems`. **Le lot A ne
+pouvait donc RIEN produire**, et aucun test unitaire ne l'aurait dit : il fallait
+le vrai appel. D'où `CodexExecPlan.openAISchema(from:)`, qui traduit le schéma
+Anthropic — `required` complet, champs jadis facultatifs rendus **nullables**
+(forcer `similar_existing` pousserait le modèle à inventer une antériorité, soit
+l'inverse du but), mots-clés non supportés retirés.
+
+Retirer ces bornes est **sans danger, et c'est une propriété du code existant** :
+`RetrospectiveReport` et `NotesCurationOutput` revalident tout en Swift
+« indépendamment du `--json-schema` du CLI ». Le schéma guide le modèle ; il n'a
+jamais été ce qui protège Atoll. Cinq sabotages de la conversion, cinq échecs.
+
+**Après correctif — la chaîne complète tourne** :
+
+| Run | Résultat |
+|---|---|
+| Bilan (`retro.json`) | **exit 0, 7 s**, rapport conforme dans le fichier de sortie |
+| Rangement des notes (`curation.json`) | **exit 0**, deux notes fusionnées avec leurs `sources` |
+
+Les deux rapports RÉELS sont figés verbatim dans `CodexExecPlanTests` : un test
+sur un payload fabriqué à la main n'aurait pas vu le refus du schéma.
+
+**2. LES PAYLOADS DE HOOKS CODEX SONT CONFORMES À CE QUE LIT LA PR #1.** Capture
+des payloads bruts dans un `CODEX_HOME` jetable (hooks factices,
+`--dangerously-bypass-hook-trust`, aucune config personnelle touchée). Six
+événements dans un run simple, la chaîne entière :
+
+```
+SessionStart    cwd hook_event_name model permission_mode session_id source transcript_path
+UserPromptSubmit  … prompt turn_id
+PreToolUse        … tool_input tool_name tool_use_id turn_id
+PostToolUse       … tool_response …
+Stop              … last_assistant_message stop_hook_active turn_id
+SessionEnd      cwd hook_event_name reason session_id transcript_path
+```
+
+`cwd`, `turn_id`, `model`, `prompt`, `tool_name`, `tool_input`, `session_id`
+sont tous là : `CodexIntegration` nommera bien le projet et filtrera bien les
+événements d'un tour périmé. **Les strings du binaire ne le disaient pas** — on
+n'y trouvait ni `cwd` ni `turn_id` près des champs de hook, et j'en avais déduit
+à tort un risque. C'est la capture qui tranche, pas l'inspection.
+
+Note : `SessionEnd` ne porte PAS de `turn_id`. Sans effet — `CodexSessions.apply`
+traite ce cas en premier, avant le garde de tour.
+
 ### À mesurer avant de fusionner
 
-1. **Un `codex exec` qui va au bout, avec `--output-schema`.** Le seul essai
-   réel s'est arrêté sur le quota épuisé : le chemin est prouvé jusqu'à l'appel,
-   **pas au-delà**. Il reste à vérifier que Codex écrit bien un JSON conforme
-   dans le fichier de `--output-last-message`, et que
-   `RetrospectiveReport.parse(codexOutput:)` le lit. Tant que ce n'est pas fait,
-   ne pas annoncer le lot A comme fonctionnel.
-2. **Un handoff réel** : le bouton « CONTINUER DANS CODEX », le `.command`
+1. **Un handoff réel** : le bouton « CONTINUER DANS CODEX », le `.command`
    ouvert par Terminal.app, et Codex qui lit `contexte.md`.
-3. **Le parcours de hooks réel** de la PR #1, toujours en attente (approbation
-   dans `/hooks`, puis une vraie session).
+2. **Le parcours de hooks de bout en bout dans l'app** : hooks installés depuis
+   les Réglages, approuvés dans `/hooks`, et les sessions qui apparaissent
+   vraiment dans l'îlot. Les payloads sont prouvés ; le trajet
+   helper → socket → `CodexService` ne l'est pas encore.
+3. **Un run déclenché par l'app elle-même** (trigger `retroCodex`), et non par
+   un `codex exec` lancé à la main.
 
 ## Ce qui n'a PAS été touché
 
