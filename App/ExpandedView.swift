@@ -208,7 +208,23 @@ struct ExpandedView: View {
 
     /// Rangées DESSINABLES sans pousser le quota hors du cadre. Les deux modes
     /// d'affichage partagent ce budget : la vue par projet n'en avait aucun.
-    private var rowBudget: Int { max(1, IslandRowBudget.rows(bannerShown: bannerShown) - 2) }
+    /// Le pied Codex n'est dessiné que si sa lecture est activée : sans cela,
+    /// on retirerait une rangée de sessions à tous ceux qui n'ont pas Codex.
+    private var codexQuotaShown: Bool {
+        UserDefaults.standard.bool(forKey: CodexService.quotaEnabledKey)
+    }
+
+    /// ⚠️ LE PLANCHER EST À DEUX, PAS À UN, et ça n'est pas de la prudence :
+    /// MESURÉ le 2026-09-08, un budget de 1 rend `byState` **entièrement vide**
+    /// — 0 groupe, 0 session, toutes annoncées « cachées ». Un groupe coûte son
+    /// en-tête PLUS sa première session ; à une rangée, il n'est pas dessinable
+    /// et disparaît en bloc. Le `max(1, …)` d'origine ne protégeait que du zéro
+    /// et du négatif, ce qui ne suffisait pas dès qu'un coût s'ajoutait
+    /// (bannière + quota Codex tombaient ensemble à 1).
+    private var rowBudget: Int {
+        max(2, IslandRowBudget.rows(bannerShown: bannerShown,
+                                    codexQuotaShown: codexQuotaShown) - 2)
+    }
 
     /// Sessions regroupées par PROJET (racine `.git`), ordre de première apparition
     /// préservé.
@@ -353,9 +369,12 @@ struct ExpandedView: View {
                             Text("\(window.label) : actualisation…").foregroundStyle(colors.dim)
                         }
                     }
+                    // L'ÂGE sur la même ligne, pas sur une seconde : le panneau
+                    // est clippé, une ligne de plus chassait le quota Claude.
+                    Text("· \(max(0, Int(Date().timeIntervalSince(quota.receivedAt) / 60))) min")
+                        .foregroundStyle(colors.dim).lineLimit(1)
+                    Spacer()
                 }
-                Text("Codex · actualisé il y a \(max(0, Int(Date().timeIntervalSince(quota.receivedAt) / 60))) min · tous les quotas dans les réglages")
-                    .font(AtollFont.mono(9)).foregroundStyle(colors.dim).lineLimit(1)
             } else {
                 Text("Codex : \(CodexService.shared.quota == nil ? CodexService.shared.status : "données périmées · actualisation…")")
                     .font(AtollFont.mono(9)).foregroundStyle(colors.dim).lineLimit(2)

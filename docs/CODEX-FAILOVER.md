@@ -113,7 +113,7 @@ d'une ligne dans la porte suivante.
   `/dev/null`, il imprime « Reading additional input from stdin... » et attend
   EOF — soit, depuis Atoll, dix minutes de watchdog par run. Les deux lanceurs
   posent `standardInput = .nullDevice` ; le commentaire est au point de spawn.
-- **806 tests verts** (761 avant ce lot), 1 test réseau ignoré par défaut.
+- **808 tests verts** (761 avant ce lot), 1 test réseau ignoré par défaut.
   Les propriétés de `ProviderFailover` ont été **vérifiées par sabotage**, une à
   une : l'ignorance qui bascule, `min` au lieu de `max`, le seuil rendu
   exclusif, la fenêtre expirée toujours crue. Quatre sabotages, quatre échecs.
@@ -172,16 +172,61 @@ n'y trouvait ni `cwd` ni `turn_id` près des champs de hook, et j'en avais dédu
 Note : `SessionEnd` ne porte PAS de `turn_id`. Sans effet — `CodexSessions.apply`
 traite ce cas en premier, avant le garde de tour.
 
+### Mesuré le 2026-09-08 — essai réel dans l'app
+
+Build de test lancé à la place de l'app stable (protocole de la PR #1), puis
+restitution complète.
+
+**LE LOT A FONCTIONNE DE BOUT EN BOUT.** Trigger `retroCodex` sur le plus gros
+transcript du projet (**84 Mo**, condensé à 149 813 caractères en 4 s) :
+`codex exec` lancé par l'app avec les arguments attendus, **2 min de run**,
+`success(8n/1s)` — huit notes et un skill (`animation-video-frame-analysis`)
+écrits par Atoll dans ses répertoires après revalidation Swift. Coût nul :
+c'est l'abonnement qui paie.
+
+**LE SUIVI DES SESSIONS FONCTIONNE.** Payload réel rejoué dans le trajet complet
+(wrapper → socket → `CodexService` → îlot) : helper **exit 0, stdout VIDE**
+(stdout est le canal de réponse d'un hook), et l'îlot affiche
+`Codex · Dynamic_Island · Gpt 6.astra · [ WORKING ]` avec le prompt en
+sous-titre. Le détail de session dit « Suivi Codex par hooks · retourne dans ton
+client Codex pour interagir » et désactive le bouton terminal.
+
+**LE `.command` DU HANDOFF FONCTIONNE** : Terminal.app exécute le script, le `cd`
+atteint le dossier du projet et `codex` est résolu — **sans aucune permission
+d'automatisation**, là où le jump-back en exige une.
+
+#### Deux défauts d'affichage trouvés par la capture, et corrigés
+
+1. **Activer le quota Codex poussait le quota CLAUDE hors du panneau.** Le pied
+   gagnait deux lignes dans un panneau à hauteur FIXE et `.clipShape`é — « tout
+   ce qui dépasse disparaît SANS le dire », dit `IslandRowBudget`. On ne voyait
+   plus que l'en-tête « QUOTAS · CLAUDE » et un fragment de barre orange sous le
+   bord : l'information principale effacée au profit de la secondaire. Correctif :
+   `codexQuotaCost` dans le budget, **et** pied Codex ramené à UNE ligne (l'âge
+   rejoint la ligne de jauges).
+2. **RÉGRESSION DANS LE CORRECTIF, trouvée en le vérifiant** : bannière + quota
+   Codex faisaient tomber le budget à 1, et à une rangée `byState` ne dessine
+   **RIEN** — 0 groupe, 0 session, toutes annoncées « cachées ». Un groupe coûte
+   son en-tête PLUS sa première session. Le `max(1, …)` d'origine ne protégeait
+   que du zéro. Plancher relevé à 2, mesuré avant/après.
+
+   C'est la troisième fois dans ce dossier qu'un correctif introduit son propre
+   défaut (après `failed(codex)` absent de `refundAttempt`). La leçon du projet
+   tient : **une correction mérite sa propre vérification, et la capture est le
+   seul juge d'un défaut visuel.**
+
 ### À mesurer avant de fusionner
 
-1. **Un handoff réel** : le bouton « CONTINUER DANS CODEX », le `.command`
-   ouvert par Terminal.app, et Codex qui lit `contexte.md`.
-2. **Le parcours de hooks de bout en bout dans l'app** : hooks installés depuis
-   les Réglages, approuvés dans `/hooks`, et les sessions qui apparaissent
-   vraiment dans l'îlot. Les payloads sont prouvés ; le trajet
-   helper → socket → `CodexService` ne l'est pas encore.
-3. **Un run déclenché par l'app elle-même** (trigger `retroCodex`), et non par
-   un `codex exec` lancé à la main.
+1. **Le bouton « CONTINUER DANS CODEX » cliqué pour de vrai.** Le mécanisme
+   `.command` est prouvé et la logique est testée, mais le bouton lui-même n'a
+   pas été vu à l'écran : le trigger `select` ouvre la première session, qui
+   était la session Codex — or le bouton est réservé aux sessions Claude. Il
+   faut un clic humain.
+2. **Une VRAIE session Codex**, hooks approuvés dans `/hooks` par Mehdi. Le
+   trajet est prouvé avec un payload rejoué ; l'approbation de confiance et
+   l'émission par le CLI lui-même ne le sont pas.
+3. **Une bascule déclenchée par le quota**, et non forcée par le trigger : il
+   faudrait attendre que le quota Claude passe réellement le seuil.
 
 ## Ce qui n'a PAS été touché
 

@@ -243,8 +243,19 @@ public enum IslandRowBudget {
     public static let projectFooterCost = 1
     /// Avec une bannière (tâche terminée, ou skill proposé) : elle mange ~66 pt.
     public static let withBanner = 4
+    /// Le pied gagne une ligne quand le quota CODEX est affiché à côté de celui
+    /// de Claude.
+    ///
+    /// MESURÉ EN CAPTURE le 2026-09-08, et le défaut était exactement celui que
+    /// ce type existe pour empêcher : activer la lecture du quota Codex
+    /// poussait les jauges CLAUDE hors du cadre — on ne voyait plus que
+    /// l'en-tête « QUOTAS · CLAUDE » et un fragment de barre orange dépassant
+    /// sous le bord. L'information principale du panneau disparaissait en
+    /// silence pour faire place à la secondaire.
+    public static let codexQuotaCost = 1
 
-    public static func rows(bannerShown: Bool) -> Int {
-        bannerShown ? withBanner : plain
+    public static func rows(bannerShown: Bool, codexQuotaShown: Bool = false) -> Int {
+        let base = bannerShown ? withBanner : plain
+        return base - (codexQuotaShown ? codexQuotaCost : 0)
     }
 }
