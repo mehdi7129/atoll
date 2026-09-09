@@ -12,7 +12,25 @@ enum CodexBridge {
         guard data.count <= 8_388_608,
               let payload = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
         else { return }
-        let envelope: [String: Any] = ["v": 1, "provider": "codex", "payload": payload]
+        // MÊME enrichissement que le chemin Claude, et pour la même raison :
+        // sans lui, `terminalAnchor` ne connaît aucune session Codex et le
+        // jump-back reste mort — alors que le mécanisme (`cursor -r <cwd>`) est
+        // parfaitement agnostique au fournisseur. C'est ce qui rend le passage
+        // de Claude Code à Codex transparent (demande de Mehdi, 2026-09-09).
+        //
+        // Toujours AUCUNE réponse, aucune décision : on enrichit ce qu'on
+        // observe, on ne prend pas la main sur Codex.
+        var enrich: [String: Any] = [:]
+        if let tty = ProcessInspector.tty(of: getpid()) { enrich["tty"] = tty }
+        let environment = ProcessInfo.processInfo.environment
+        if let hint = environment["__CFBundleIdentifier"] ?? environment["TERM_PROGRAM"] {
+            enrich["terminalHint"] = hint
+        }
+        let subset = TerminalAnchor.capture(from: environment)
+        if !subset.isEmpty { enrich["env"] = subset }
+
+        var envelope: [String: Any] = ["v": 1, "provider": "codex", "payload": payload]
+        if !enrich.isEmpty { envelope["enrich"] = enrich }
         guard CodexHookEvent(envelope: envelope) != nil,
               let encoded = try? JSONSerialization.data(withJSONObject: envelope) else { return }
         // Observation ONLY: no reply, no sounds/recall/Claude safety-rule edits.

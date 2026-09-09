@@ -22,6 +22,18 @@ public struct CodexHookEvent: Sendable {
     public let model: String?
     public let prompt: String?
     public let tool: String?
+    /// Ancre terminal, si le helper l'a capturée.
+    ///
+    /// POURQUOI ELLE EXISTE ICI. Mehdi a tranché le 2026-09-09 : Codex tourne
+    /// TOUJOURS dans un Cursor, comme Claude Code, et passer de l'un à l'autre
+    /// doit être transparent. Or `TerminalJumpService.focusIDE` n'utilise que
+    /// `cwd` et `bundleID` — rien de spécifique à Claude. Le seul obstacle au
+    /// jump-back Codex n'était donc PAS le fournisseur, c'était que cette
+    /// enveloppe ne portait pas l'environnement du hook. VÉRIFIÉ : un processus
+    /// lancé dans le terminal de Cursor hérite bien de
+    /// `__CFBundleIdentifier = com.todesktop.230313mzl4w4u92`, que
+    /// `TerminalTarget.resolve` reconnaît comme `vscodeFamily(cli: "cursor")`.
+    public let anchor: TerminalAnchor?
 
     public init?(envelope: [String: Any]) {
         guard envelope["provider"] as? String == "codex",
@@ -39,6 +51,25 @@ public struct CodexHookEvent: Sendable {
         prompt = (payload["prompt"] as? String).map { String($0.prefix(200)) }
         tool = ParsedHookEvent.summarize(toolName: payload["tool_name"] as? String,
                                          input: payload["tool_input"] as? [String: Any])
+
+        let enrich = envelope["enrich"] as? [String: Any] ?? [:]
+        let environment = enrich["env"] as? [String: String] ?? [:]
+        let hint = enrich["terminalHint"] as? String
+        // Une ancre sans AUCUN moyen d'identifier le terminal ne sert à rien :
+        // on ne la fabrique pas pour rien (le bouton resterait mort, ce que la
+        // leçon du bouton ARRÊTER interdit — n'afficher que ce qui peut agir).
+        if cwd != nil, hint != nil || !environment.isEmpty {
+            anchor = TerminalAnchor(
+                cwd: cwd,
+                tty: enrich["tty"] as? String,
+                bundleID: environment["__CFBundleIdentifier"] ?? hint,
+                termProgram: environment["TERM_PROGRAM"],
+                entrypoint: nil, // propre à Claude Code
+                env: environment
+            )
+        } else {
+            anchor = nil
+        }
     }
 }
 
@@ -48,9 +79,19 @@ public struct CodexSessions: Sendable {
         var session: AgentSession
         var turnID: String?
         var lastEvent: Date
+        /// Dernière ancre connue. CONSERVÉE quand un événement n'en porte pas :
+        /// tous les hooks n'ont pas le même environnement, et perdre l'ancre
+        /// éteindrait le bouton au milieu d'une session vivante.
+        var anchor: TerminalAnchor?
     }
     private var entries: [String: Entry] = [:]
     public init() {}
+
+    /// Ancre terminal d'une session Codex — le pendant de
+    /// `SessionStore.terminalAnchor(for:)` côté Claude.
+    public func anchor(for sessionID: String) -> TerminalAnchor? {
+        entries[sessionID]?.anchor
+    }
 
     public mutating func apply(_ event: CodexHookEvent, now: Date = Date()) {
         if event.kind == .sessionEnd { entries.removeValue(forKey: event.sessionID); return }
@@ -68,6 +109,7 @@ public struct CodexSessions: Sendable {
             entry.session.projectName = URL(fileURLWithPath: cwd).lastPathComponent
         }
         if let model = event.model { entry.session.model = model }
+        if let anchor = event.anchor { entry.anchor = anchor }
         entry.lastEvent = now
         entry.session.stateConfirmedByHook = true
         switch event.kind {

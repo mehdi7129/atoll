@@ -153,16 +153,9 @@ func forwardHookEvent() {
     if let entrypoint = environment["CLAUDE_CODE_ENTRYPOINT"] {
         enrich["entrypoint"] = entrypoint
     }
-    // Instantané d'environnement pour le jump-back (Phase 4).
-    var subset: [String: String] = [:]
-    for key in [
-        "TERM_PROGRAM", "TERM_PROGRAM_VERSION", "ITERM_SESSION_ID", "TMUX", "TMUX_PANE",
-        "KITTY_WINDOW_ID", "KITTY_LISTEN_ON", "WEZTERM_PANE", "GHOSTTY_RESOURCES_DIR",
-        "ALACRITTY_WINDOW_ID", "VSCODE_INJECTION", "CURSOR_TRACE_ID", "WARP_SESSION_ID",
-        "__CFBundleIdentifier", "CLAUDE_CODE_ENTRYPOINT",
-    ] {
-        if let value = environment[key] { subset[key] = value }
-    }
+    // Instantané d'environnement pour le jump-back (Phase 4). La liste vit dans
+    // `TerminalAnchor` : le helper Codex consomme la MÊME.
+    let subset = TerminalAnchor.capture(from: environment)
     if !subset.isEmpty { enrich["env"] = subset }
 
     let eventName = payload["hook_event_name"] as? String

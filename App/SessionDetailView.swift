@@ -53,6 +53,21 @@ struct SessionDetailView: View {
 
     private var store: SessionStore { .shared }
 
+    /// L'ancre terminal, quel que soit le fournisseur.
+    ///
+    /// C'EST TOUT CE QUI SÉPARAIT CODEX DU JUMP-BACK. `focusIDE` n'utilise que
+    /// `cwd` et `bundleID` ; la PR #1 avait désactivé le bouton par prudence,
+    /// faute de savoir où Codex tournait. Mehdi a tranché le 2026-09-09 : Codex
+    /// tourne toujours dans un Cursor, comme Claude Code, et passer de l'un à
+    /// l'autre doit être transparent. Les deux fournisseurs partagent donc le
+    /// même geste — seule la SOURCE de l'ancre diffère, parce que les sessions
+    /// Codex ne vivent pas dans `SessionStore`.
+    private var anchor: TerminalAnchor? {
+        session.provider == .codex
+            ? CodexService.shared.anchor(for: session.id)
+            : store.terminalAnchor(for: session.id)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             // En-tête cliquable pour revenir à la liste.
@@ -134,14 +149,22 @@ struct SessionDetailView: View {
     private var jumpBar: some View {
         VStack(alignment: .leading, spacing: 4) {
             if session.provider == .codex {
-                Text(session.needsAttention ? "Autorisation à traiter dans Codex (pas dans Atoll)." : "Suivi Codex par hooks · retourne dans ton client Codex pour interagir.")
+                // Ce qui reste VRAI et propre à Codex : la décision d'une
+                // autorisation appartient à son client. Le reste — ouvrir la
+                // fenêtre où la session vit — est identique aux deux.
+                Text(session.needsAttention
+                     ? "Autorisation à traiter dans Codex (pas dans Atoll)."
+                     : "Suivi Codex par hooks.")
                     .font(AtollFont.mono(9)).foregroundStyle(colors.dim)
             }
             HStack(spacing: 12) {
                 AsciiButton(label: openLabel, color: colors.accent, shortcut: nil) {
                     performJump()
                 }
-                .disabled(session.provider == .codex)
+                // Désactivé par CAPACITÉ, plus par fournisseur : sans ancre il
+                // n'y a rien à ouvrir, et un bouton qui ne peut rien faire ne
+                // doit pas s'afficher actif (leçon du bouton ARRÊTER, v0.16.1).
+                .disabled(anchor == nil)
                 Spacer()
                 // Kill-switch par session (`claude stop`). CONFIRMATION obligatoire :
                 // le bouton s'affiche pour toute session vivante, y compris la tienne
@@ -194,16 +217,14 @@ struct SessionDetailView: View {
     /// CURSOR »), sinon générique. C'est l'action principale du détail — ouvrir
     /// la fenêtre où la session vit pour y travailler.
     private var openLabel: String {
-        guard let anchor = store.terminalAnchor(for: session.id) else {
-            return "ALLER AU TERMINAL ↵"
-        }
+        guard let anchor else { return "ALLER AU TERMINAL ↵" }
         return "OUVRIR DANS \(TerminalResolver.resolve(anchor).displayName.uppercased()) ↵"
     }
 
     private func performJump() {
         jumpMessage = "…"
         needsPermissionApp = nil
-        guard let anchor = store.terminalAnchor(for: session.id) else {
+        guard let anchor else {
             jumpMessage = "ancrage terminal indisponible"
             return
         }

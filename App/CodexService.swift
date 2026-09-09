@@ -30,6 +30,13 @@ final class CodexService {
         syncQuotaSettings()
     }
 
+    /// Ancre terminal d'une session Codex — pendant de
+    /// `SessionStore.terminalAnchor(for:)`. Sans elle, le jump-back reste mort
+    /// pour Codex alors que son mécanisme est agnostique au fournisseur.
+    func anchor(for sessionID: String) -> TerminalAnchor? {
+        observed.anchor(for: sessionID)
+    }
+
     func apply(_ event: CodexHookEvent) {
         observed.apply(event)
         sessions = observed.sessions()
