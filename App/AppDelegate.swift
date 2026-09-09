@@ -320,6 +320,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         debugTokens.append(retroCodexToken)
 
+        // Bilan forcé sur le PLUS GROS ROLLOUT CODEX : prouve la chaîne
+        // complète rollout → parseur Codex → condensé → analyse → notes, sans
+        // attendre qu'une vraie session Codex longue se termine.
+        var retroCodexRolloutToken: Int32 = 0
+        notify_register_dispatch("dev.mehdiguiard.atoll.debug.retroCodexRollout",
+                                 &retroCodexRolloutToken, DispatchQueue.main) { _ in
+            MainActor.assumeIsolated { RetrospectiveRunner.shared.debugRunOnLargestCodexRollout() }
+        }
+        debugTokens.append(retroCodexRolloutToken)
+
         // Inventaire des plugins : rafraîchit et journalise ce que la CLI rend
         // (vérification du chemin complet spawn → décodage → état observable).
         var pluginsToken: Int32 = 0

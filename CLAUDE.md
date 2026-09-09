@@ -1392,6 +1392,9 @@ tenue à jour avec `App/AppDelegate.swift` :
   `retroCodex` (LE MÊME run, mais payé par l'abonnement Codex : prouve le chemin
   `codex exec` → schéma → fichier de sortie → revalidation, sans attendre que le
   quota Claude soit réellement épuisé),
+  `retroCodexRollout` (bilan sur le plus gros ROLLOUT Codex : prouve l'autre
+  moitié — rollout → parseur Codex → condensé → notes —, sans attendre qu'une
+  vraie session Codex longue se termine),
   `curation` (curation des notes),
   `plugins` (inventaire réel via `claude plugin list --json`, catégorie de log
   `plugins`) / `pluginSearch` (recherche d'un plugin — consomme du quota),

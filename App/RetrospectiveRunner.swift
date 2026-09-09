@@ -175,6 +175,54 @@ final class RetrospectiveRunner {
     /// qu'on veut pouvoir forcer pour prouver le chemin Codex sans attendre
     /// qu'une vraie session substantielle se termine. Même rôle que `retroBig`
     /// en Phase 12 : c'est LUI qui avait prouvé la boucle d'apprentissage.
+    /// Trigger debug : bilan forcé sur le PLUS GROS ROLLOUT CODEX de la machine,
+    /// sans passer par le gate. C'est le pendant de `retroBig` — l'outil qui
+    /// avait prouvé la boucle d'apprentissage en Phase 12 — et il existe pour la
+    /// même raison : sans lui, il faudrait attendre qu'une vraie session Codex
+    /// longue se termine pour savoir si la chaîne produit quelque chose.
+    func debugRunOnLargestCodexRollout() {
+        guard !isBusy, pendingDelay == nil else {
+            log.error("debug retro : un run ou une attente est déjà en cours")
+            return
+        }
+        let fm = FileManager.default
+        var largest: (url: URL, size: Int)?
+        if let walker = fm.enumerator(at: BridgePaths.codexSessionsURL,
+                                      includingPropertiesForKeys: [.fileSizeKey],
+                                      options: [.skipsHiddenFiles]) {
+            for case let file as URL in walker where file.pathExtension == "jsonl" {
+                let size = (try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+                if size > (largest?.size ?? 0) { largest = (file, size) }
+            }
+        }
+        guard let largest else {
+            log.error("debug retro Codex : aucun rollout trouvé")
+            return
+        }
+        log.info("debug retro CODEX sur \(largest.url.lastPathComponent, privacy: .public) (\(largest.size) octets)")
+
+        // Le `cwd` vient du rollout lui-même : c'est lui qui donne au catalogue
+        // d'antériorité les slash commands du PROJET (leçon de la v0.16.5).
+        let cwd = (try? String(contentsOf: largest.url, encoding: .utf8))
+            .flatMap { $0.split(separator: "\n").first }
+            .flatMap { CodexTranscriptParser.parse(Data($0.utf8))?.cwd }
+
+        pendingAttempt = AttemptRecord(
+            sessionID: "codex:" + CodexRollout.sessionID(fromFileName: largest.url.lastPathComponent),
+            decidedAt: Date(), decision: "run(debug)", outcome: nil,
+            transcriptBytes: largest.size,
+            quotaFraction: SessionStore.shared.realQuota?.fiveHour.usedFraction,
+            quotaAgeSeconds: SessionStore.shared.realQuota
+                .map { Date().timeIntervalSince($0.receivedAt) })
+        var snapshot = SessionStore.Tracked(
+            id: "codex:" + CodexRollout.sessionID(fromFileName: largest.url.lastPathComponent),
+            cwd: cwd, transcriptPath: largest.url.path, phase: .ended, isSynthetic: false,
+            firstSeenAt: Date().addingTimeInterval(-3_600), lastEventAt: Date())
+        snapshot.userPromptCount = 5
+        Task { await run(Job(snapshot: snapshot, endedAt: Date(), forced: true,
+                             transcriptProvider: .codex)) }
+    }
+
     func debugRunOnLargestTranscript(projectDirectory: String,
                                      provider: AgentProvider = .claude) {
         guard !isBusy, pendingDelay == nil else {
