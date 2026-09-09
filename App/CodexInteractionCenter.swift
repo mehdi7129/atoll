@@ -37,6 +37,12 @@ final class CodexInteractionCenter {
         /// encore : l'EOF ne vaut rien ici, le helper faisant un half-close
         /// normal après son envoi (mesuré le 2026-09-09).
         let helperPid: pid_t
+        /// ⚠️ UN PID SEUL N'EST PAS UNE IDENTITÉ DE PROCESSUS. Réutilisé avant
+        /// le passage du timer, `kill(pid, 0)` validerait un processus
+        /// ÉTRANGER et la carte survivrait à son helper. Le couple
+        /// `(pid, startTime)` est l'identité ; le projet composait déjà ce
+        /// couple ailleurs. Constat de Codex en revue.
+        let helperStartTime: Double?
     }
 
     private(set) var pending: [Pending] = []
@@ -54,7 +60,8 @@ final class CodexInteractionCenter {
             projectName: event.cwd.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "Codex",
             tool: event.tool ?? "Codex",
             receivedAt: Date(),
-            helperPid: helperPid)
+            helperPid: helperPid,
+            helperStartTime: helperPid > 0 ? ProcessInspector.startTime(of: helperPid) : nil)
         pending.append(card)
         log.info("carte Codex \(requestID, privacy: .public) — \(card.tool, privacy: .public)")
     }
@@ -94,7 +101,7 @@ final class CodexInteractionCenter {
         pending.removeAll { $0.sessionID == sessionID }
     }
 
-    /// Retire les cartes dont le helper est MORT.
+    /// Retire les cartes dont plus personne n'attend la réponse.
     ///
     /// Sans cela, tuer une session Codex sans qu'elle émette `SessionEnd`
     /// (terminal fermé d'un coup, `SIGKILL`) laissait une CARTE FANTÔME
@@ -102,12 +109,26 @@ final class CodexInteractionCenter {
     /// envoyait une décision dans le vide. Trouvé en mesurant la matrice de
     /// fautes, pas en relisant.
     ///
-    /// `kill(pid, 0)` ne tue rien : il teste l'existence du processus.
-    func dropCardsOfDeadHelpers() {
-        let dead = pending.filter { $0.helperPid > 0 && kill($0.helperPid, 0) != 0 }
-        for card in dead {
-            log.info("helper \(card.helperPid) disparu — carte \(card.id, privacy: .public) retirée")
-            handBack(card.id)
+    /// LE JUGEMENT LUI-MÊME VIT DANS `CodexCardReaper`, testé : ses trois
+    /// branches — pid inconnu, PID recyclé, filet absolu — ont chacune été un
+    /// défaut réel, et aucune n'était vérifiable tant qu'elles étaient écrites
+    /// ici, contre `kill(2)`. Cette méthode ne fait plus que fournir la sonde.
+    func dropCardsOfDeadHelpers(now: Date = Date()) {
+        let cards = pending.map {
+            CodexCardReaper.Card(id: $0.id, helperPid: $0.helperPid,
+                                 helperStartTime: $0.helperStartTime,
+                                 receivedAt: $0.receivedAt)
+        }
+        let expired = CodexCardReaper.expired(cards, now: now) { pid in
+            // `isAlive` ne tue rien et distingue ESRCH (disparu) d'EPERM
+            // (existe, autre compte) — la nuance qui évite de retirer une carte
+            // vivante.
+            .init(isAlive: ProcessInspector.isAlive(pid),
+                  startTime: ProcessInspector.startTime(of: pid))
+        }
+        for id in expired {
+            log.info("plus personne n'attend — carte \(id, privacy: .public) retirée")
+            handBack(id)
         }
     }
 

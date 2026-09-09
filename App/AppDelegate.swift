@@ -109,6 +109,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         InteractionCenter.shared.server = server
         try? server.start()
         store.start()
+
+        // LE LANCEUR DES HOOKS CODEX EST REMIS EN ACCORD AVEC CETTE VERSION.
+        //
+        // Deux pannes que rien ne signale : un correctif du wrapper n'atteignait
+        // jamais un poste déjà installé (celui du superviseur, le 2026-09-09,
+        // serait resté un `exec` chez tout le monde) ; et une app DÉPLACÉE
+        // laissait l'intégration morte en silence, le wrapper portant le chemin
+        // absolu de l'ancien bundle. Idempotent : sans différence réelle, rien
+        // n'est écrit, et rien n'est posé si les hooks ne sont pas installés.
+        do {
+            let refresh = try CodexHookInstallation.refreshWrapper(
+                settingsURL: CodexPaths.hooksURL,
+                binDirectory: BridgePaths.binDirectory,
+                helperURL: HookInstaller.helperURL)
+            if case .rewritten = refresh {
+                Logger(subsystem: "dev.mehdiguiard.atoll", category: "codex")
+                    .info("lanceur de hooks Codex remis à jour")
+            }
+        } catch {
+            // Fail-open (règle n° 1) : un lanceur qu'on n'a pas pu réécrire
+            // reste celui d'avant — Atoll ne doit pas refuser de démarrer pour
+            // ça.
+            Logger(subsystem: "dev.mehdiguiard.atoll", category: "codex")
+                .error("lanceur Codex non mis à jour: \(error.localizedDescription, privacy: .public)")
+        }
+
         CodexService.shared.start()
         let codexServer = BridgeServer(onEvent: { _, _ in }, onStatusline: { _ in },
                                       onStateChange: { _ in }, onCodexEvent: { event, requestID, helperPid in
@@ -122,6 +148,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                                           helperPid: helperPid)
                 }
             }
+        }, onPendingExpired: { requestID in
+            // L'attente a expiré côté serveur : la carte n'a plus personne
+            // derrière elle. Sans ce rappel elle restait affichée, et un clic
+            // envoyait une décision dans le vide (constat de Codex en revue).
+            Task { @MainActor in CodexInteractionCenter.shared.handBack(requestID) }
         }, socketPath: CodexPaths.socketPath)
         codexBridgeServer = codexServer
         CodexInteractionCenter.shared.server = codexServer

@@ -25,7 +25,7 @@ struct CodexSettingsPane: View {
                     } catch { message = error.localizedDescription }
                 }
                 if let message { Text(message).font(.caption).textSelection(.enabled) }
-                Text("Installation séparée de Claude, avec sauvegarde unique hooks.json.atoll-backup. Ni config.toml ni les choix de confiance ne sont modifiés. Si l'app a été déplacée, retire puis réinstalle ces hooks.")
+                Text("Installation séparée de Claude, avec sauvegarde unique hooks.json.atoll-backup. Ni config.toml ni les choix de confiance ne sont modifiés. Si l'app est déplacée, le lanceur est corrigé tout seul au démarrage suivant.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Quota de l'abonnement ChatGPT / Codex") {

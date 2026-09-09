@@ -66,8 +66,80 @@ continue à dépendre de la statusline ; sans données récentes, elle peut manq
 - Merge idempotent, backup unique `hooks.json.atoll-backup`, liens symboliques
   conservés. JSON illisible/invalide → erreur, aucune reconstruction destructive.
   Détection des modifications concurrentes avant écriture (best effort, pas un CAS).
-- Wrapper propre `~/.atoll/bin/atoll-codex-bridge`. Retenu après désinstallation
+- Lanceur propre `~/.atoll/bin/atoll-codex-bridge`. Retenu après désinstallation
   pour les clients déjà ouverts ; bundle manquant → sortie silencieuse.
+- **C'est un SUPERVISEUR, et sa forme exacte a été mesurée, pas devinée**
+  (2026-09-09). Il lance le worker en arrière-plan, lui rend stdin par un
+  descripteur explicite, attend, et sort toujours 0 :
+
+  ```sh
+  exec 3<&0
+  "$BIN" codex-hook <&3 &
+  wait $! 2>/dev/null
+  exit 0
+  ```
+
+  Chaque ligne répond à un essai qui a ÉCHOUÉ en mesure :
+  - `exec "$BIN"` (la forme évidente) fait remplacer le shell par le worker :
+    tuer le worker devient la mort du hook, que Codex affiche comme un ÉCHEC au
+    lieu d'une abstention. Sans superviseur, plus personne ne peut convertir
+    cette mort en « exit 0, stdout vide ».
+  - en avant-plan, le shell annonce la mort du worker sur SON stderr
+    (« line 4: 47645 Terminated: 15 ») — contrat respecté, mais du texte part
+    vers une TUI dont le bruit a déjà été reproché à Atoll. `2>/dev/null` porte
+    sur `wait` SEUL : le stderr du worker reste intact (mesuré).
+  - **`&` seul CASSE le chemin nominal** : un job d'arrière-plan reçoit
+    `/dev/null` sur stdin, donc le worker ne lit plus le payload du hook.
+    D'où `exec 3<&0` puis `<&3`. Mesuré : sans eux, `recu:` est vide.
+
+  MESURÉ sur les trois axes : worker tué par SIGTERM et par SIGKILL → exit 0,
+  stdout vide, stderr vide ; chemin nominal complet → la décision `allow`
+  ressort intacte sur stdout. Un SIGKILL du superviseur lui-même reste non
+  garantissable — aucun processus n'y survit.
+- **Le lanceur est remis à jour au démarrage de l'app**
+  (`CodexHookInstallation.refreshWrapper`), et cela ferme deux pannes qui ne se
+  voient pas : une correction du lanceur n'atteignait JAMAIS un poste déjà
+  installé (le fichier n'était écrit qu'à l'installation), et une app déplacée
+  laissait l'intégration morte en silence — le lanceur garde le chemin absolu du
+  bundle, et sa garde `[ -x "$BIN" ] || exit 0` faisait exactement son travail.
+  Idempotent par comparaison d'octets : sans différence réelle, rien n'est écrit
+  (vérifié en réel, mtime inchangé au second lancement). Rien n'est posé si les
+  hooks ne sont pas installés.
+### La carte d'autorisation, et comment elle sait qu'on l'attend encore
+
+La carte affichée dans l'îlot correspond à un helper BLOQUÉ sur son descripteur.
+Tout le problème est de savoir quand plus personne n'attend derrière — sans quoi
+l'îlot montre un bouton qui n'agit sur rien.
+
+- **L'EOF ne vaut RIEN comme preuve de mort ici** : le helper fait un
+  `shutdown(SHUT_WR)` normal juste après son envoi. Un veilleur d'EOF confond
+  donc « a fini d'écrire » et « est mort » — mesuré le 2026-09-09, il refermait
+  la carte en 0 s et cassait le chemin nominal. La preuve, c'est le PROCESSUS
+  (`LOCAL_PEERPID` à la connexion).
+- **Un PID seul n'est pas une identité.** Recyclé avant le passage du minuteur,
+  il ferait valider un processus étranger. L'identité est le couple
+  `(pid, instant de démarrage)`.
+- **Une carte sans pid connu doit aussi pouvoir partir** : `LOCAL_PEERPID` peut
+  échouer, et l'ancien filtre « pid > 0 » excluait précisément ces cartes-là du
+  nettoyage — elles ne partaient jamais.
+- **Un filet absolu** ferme le cas restant : au-delà du plafond de Codex, le hook
+  a été tué, plus personne ne lit la réponse, quoi que dise la sonde.
+- **Fermer le descripteur ne suffit jamais** : l'expiration côté serveur PRÉVIENT
+  le centre d'interaction, qui retire la carte.
+
+Ce jugement vit dans `CodexCardReaper` (AtollCore, testé et **vérifié par
+sabotage** : six propriétés retirées une à une, six tests rouges), et non dans la
+vue — il n'était pas vérifiable tant qu'il était écrit contre `kill(2)`.
+
+MESURÉ sur la matrice de fautes :
+- app tuée par SIGKILL, carte ouverte → le helper rend la main aussitôt,
+  exit 0, stdout vide, et le redémarrage n'adopte AUCUNE carte (elles ne sont
+  pas persistées, donc aucune ne peut ressusciter) ;
+- deux demandes SIMULTANÉES et IDENTIQUES → répondre à l'une libère exactement
+  un helper, l'autre continue d'attendre ; aucune décision perdue, aucune
+  confusion (c'est pourquoi la corrélation se fait par UUID lié au descripteur,
+  jamais par nom d'outil).
+
 - Le lecteur de quota lance **son propre** `codex app-server --listen stdio://` :
   `initialize` → `initialized` → `account/read(refreshToken:false)` →
   `account/rateLimits/read`. Rien d'autre : ni thread, ni turn, ni login/logout.

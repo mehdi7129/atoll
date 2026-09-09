@@ -30,18 +30,23 @@ final class BridgeServer: @unchecked Sendable {
     /// `requestID` non-nil = le helper Codex ATTEND une décision sur ce fd.
     private let onCodexEvent: (CodexHookEvent, _ requestID: String?, _ helperPid: pid_t) -> Void
     private let onStateChange: (Bool) -> Void
+    /// Prévenu sur la main queue quand une attente expire — voir
+    /// `pendingRepliesTimeout`.
+    private let onPendingExpired: (_ requestID: String) -> Void
 
     init(
         onEvent: @escaping (ParsedHookEvent, String?) -> Void,
         onStatusline: @escaping (Data) -> Void,
         onStateChange: @escaping (Bool) -> Void,
         onCodexEvent: @escaping (CodexHookEvent, String?, pid_t) -> Void = { _, _, _ in },
+        onPendingExpired: @escaping (String) -> Void = { _ in },
         socketPath: String = BridgePaths.socketPath
     ) {
         self.onEvent = onEvent
         self.onStatusline = onStatusline
         self.onStateChange = onStateChange
         self.onCodexEvent = onCodexEvent
+        self.onPendingExpired = onPendingExpired
         self.socketPath = socketPath
     }
 
@@ -335,10 +340,19 @@ final class BridgeServer: @unchecked Sendable {
         }
     }
 
+    /// Le filet de temps s'est déclenché : plus PERSONNE n'attend derrière ce
+    /// descripteur.
+    ///
+    /// ⚠️ FERMER LE FD NE SUFFIT PAS, et c'est le trou que Codex a relevé en
+    /// revue : la carte restait affichée dans l'îlot après l'expiration, et
+    /// un clic envoyait alors une décision dans le vide. Le serveur PRÉVIENT
+    /// donc le centre d'interaction, qui la retire.
     private func pendingRepliesTimeout(_ requestID: String) {
-        if let fd = pendingReplies.removeValue(forKey: requestID) {
-            close(fd)
-        }
+        guard let fd = pendingReplies.removeValue(forKey: requestID) else { return }
+        close(fd)
+        log.info("attente \(requestID, privacy: .public) expirée — descripteur fermé")
+        let notify = onPendingExpired
+        DispatchQueue.main.async { notify(requestID) }
     }
 
 }

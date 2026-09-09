@@ -13,10 +13,4 @@ public enum CodexPermissionTiming {
     public static let codexTimeoutSeconds: TimeInterval = 600
     /// Deadline MONOTONE du helper, toujours strictement inférieure.
     public static let helperDeadlineSeconds: TimeInterval = 570
-
-    /// La marge doit rester réelle : un helper qui s'arrêterait après Codex
-    /// ferait exactement ce que ce type existe pour empêcher.
-    public static var marginSeconds: TimeInterval {
-        codexTimeoutSeconds - helperDeadlineSeconds
-    }
 }
