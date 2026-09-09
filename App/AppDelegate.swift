@@ -111,14 +111,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         store.start()
         CodexService.shared.start()
         let codexServer = BridgeServer(onEvent: { _, _ in }, onStatusline: { _ in },
-                                      onStateChange: { _ in }, onCodexEvent: { event, requestID in
+                                      onStateChange: { _ in }, onCodexEvent: { event, requestID, helperPid in
             Task { @MainActor in
                 CodexService.shared.apply(event)
                 // Une demande d'autorisation laisse le helper BLOQUÉ sur son
                 // descripteur : elle va dans le centre Codex, jamais dans
                 // `InteractionCenter` — donc jamais dans Rockstar.
                 if let requestID {
-                    CodexInteractionCenter.shared.register(event: event, requestID: requestID)
+                    CodexInteractionCenter.shared.register(event: event, requestID: requestID,
+                                                          helperPid: helperPid)
                 }
             }
         }, socketPath: CodexPaths.socketPath)

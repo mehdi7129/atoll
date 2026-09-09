@@ -28,14 +28,14 @@ final class BridgeServer: @unchecked Sendable {
     private let onEvent: (ParsedHookEvent, _ requestID: String?) -> Void
     private let onStatusline: (Data) -> Void
     /// `requestID` non-nil = le helper Codex ATTEND une décision sur ce fd.
-    private let onCodexEvent: (CodexHookEvent, _ requestID: String?) -> Void
+    private let onCodexEvent: (CodexHookEvent, _ requestID: String?, _ helperPid: pid_t) -> Void
     private let onStateChange: (Bool) -> Void
 
     init(
         onEvent: @escaping (ParsedHookEvent, String?) -> Void,
         onStatusline: @escaping (Data) -> Void,
         onStateChange: @escaping (Bool) -> Void,
-        onCodexEvent: @escaping (CodexHookEvent, String?) -> Void = { _, _ in },
+        onCodexEvent: @escaping (CodexHookEvent, String?, pid_t) -> Void = { _, _, _ in },
         socketPath: String = BridgePaths.socketPath
     ) {
         self.onEvent = onEvent
@@ -270,17 +270,32 @@ final class BridgeServer: @unchecked Sendable {
             if event.kind == .permissionRequest {
                 let requestID = UUID().uuidString
                 pendingReplies[requestID] = fd
+
+                // ⚠️ ON NE PEUT PAS DÉTECTER LA MORT DU HELPER PAR EOF.
+                // Il fait `shutdown(SHUT_WR)` juste après avoir envoyé son
+                // payload — un half-close NORMAL et systématique. Un détecteur
+                // d'EOF confond donc « a fini d'écrire » et « est mort », et
+                // referme la carte AUSSITÔT : mesuré le 2026-09-09, le chemin
+                // nominal rendait la main en 0 s avec une réponse vide.
+                //
+                // La seule preuve fiable est le PROCESSUS. `LOCAL_PEERPID` le
+                // donne à la connexion ; `CodexInteractionCenter` le vérifie
+                // ensuite périodiquement.
+                var peer: pid_t = 0
+                var size = socklen_t(MemoryLayout<pid_t>.size)
+                let helperPid = getsockopt(fd, SOL_LOCAL, LOCAL_PEERPID, &peer, &size) == 0
+                    ? peer : 0
                 // Filet : jamais de fd orphelin. Posé APRÈS la deadline du
                 // helper — c'est lui qui doit rendre la main le premier.
                 queue.asyncAfter(deadline: .now() + CodexPermissionTiming.codexTimeoutSeconds) {
                     [weak self] in self?.pendingRepliesTimeout(requestID)
                 }
                 log.info("permission Codex en attente \(requestID, privacy: .public)")
-                DispatchQueue.main.async { self.onCodexEvent(event, requestID) }
+                DispatchQueue.main.async { self.onCodexEvent(event, requestID, helperPid) }
                 return
             }
             close(fd)
-            DispatchQueue.main.async { self.onCodexEvent(event, nil) }
+            DispatchQueue.main.async { self.onCodexEvent(event, nil, 0) }
             return
         }
 

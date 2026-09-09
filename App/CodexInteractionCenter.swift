@@ -33,6 +33,10 @@ final class CodexInteractionCenter {
         let projectName: String
         let tool: String
         let receivedAt: Date
+        /// PID du helper bloqué. C'est la SEULE preuve fiable qu'il attend
+        /// encore : l'EOF ne vaut rien ici, le helper faisant un half-close
+        /// normal après son envoi (mesuré le 2026-09-09).
+        let helperPid: pid_t
     }
 
     private(set) var pending: [Pending] = []
@@ -43,13 +47,14 @@ final class CodexInteractionCenter {
     /// La plus ancienne demande en attente — celle que l'îlot montre.
     var current: Pending? { pending.first }
 
-    func register(event: CodexHookEvent, requestID: String) {
+    func register(event: CodexHookEvent, requestID: String, helperPid: pid_t) {
         let card = Pending(
             id: requestID,
             sessionID: event.sessionID,
             projectName: event.cwd.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "Codex",
             tool: event.tool ?? "Codex",
-            receivedAt: Date())
+            receivedAt: Date(),
+            helperPid: helperPid)
         pending.append(card)
         log.info("carte Codex \(requestID, privacy: .public) — \(card.tool, privacy: .public)")
     }
@@ -87,6 +92,23 @@ final class CodexInteractionCenter {
             server?.cancelPending(card.id)
         }
         pending.removeAll { $0.sessionID == sessionID }
+    }
+
+    /// Retire les cartes dont le helper est MORT.
+    ///
+    /// Sans cela, tuer une session Codex sans qu'elle émette `SessionEnd`
+    /// (terminal fermé d'un coup, `SIGKILL`) laissait une CARTE FANTÔME
+    /// jusqu'au timeout de 600 s : plus personne n'attendait, et un clic
+    /// envoyait une décision dans le vide. Trouvé en mesurant la matrice de
+    /// fautes, pas en relisant.
+    ///
+    /// `kill(pid, 0)` ne tue rien : il teste l'existence du processus.
+    func dropCardsOfDeadHelpers() {
+        let dead = pending.filter { $0.helperPid > 0 && kill($0.helperPid, 0) != 0 }
+        for card in dead {
+            log.info("helper \(card.helperPid) disparu — carte \(card.id, privacy: .public) retirée")
+            handBack(card.id)
+        }
     }
 
     /// Filet de nettoyage sur `PostToolUse`, et RIEN DE PLUS.

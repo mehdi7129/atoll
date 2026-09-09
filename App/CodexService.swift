@@ -24,6 +24,8 @@ final class CodexService {
             Task { @MainActor in
                 guard let self else { return }
                 self.observed.prune()
+                // Un helper mort ne doit pas laisser sa carte à l'écran.
+                CodexInteractionCenter.shared.dropCardsOfDeadHelpers()
                 self.adoptRunningSessions()
                 self.sessions = self.observed.sessions()
             }
