@@ -83,7 +83,17 @@ public struct CodexSessions: Sendable {
         /// tous les hooks n'ont pas le même environnement, et perdre l'ancre
         /// éteindrait le bouton au milieu d'une session vivante.
         var anchor: TerminalAnchor?
+        /// Le tour courant est-il CLÔTURÉ (`Stop` ou `Interrupt` reçu) ?
+        var turnIsClosed = false
+        /// Tours déjà clôturés, du plus ancien au plus récent. BORNÉ : une
+        /// session peut enchaîner des centaines de tours, la mémoire n'a pas à
+        /// croître avec eux — seuls les retardataires proches importent.
+        var closedTurns: [String] = []
     }
+
+    /// Combien de tours clôturés on retient. Huit suffisent très largement : un
+    /// hook async retardataire arrive dans la seconde, pas huit tours plus tard.
+    private static let closedTurnMemory = 8
     private var entries: [String: Entry] = [:]
     public init() {}
 
@@ -100,10 +110,35 @@ public struct CodexSessions: Sendable {
             projectName: event.cwd.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "Codex",
             status: .awaitingInput, startedAt: now, cwd: event.cwd, provider: .codex
         ), lastEvent: now)
-        // A late event from the previous turn must not finish the new turn.
+        // ⚠️ LA CLÔTURE D'UN TOUR EST MONOTONE : une fois `Stop` ou `Interrupt`
+        // reçu, plus RIEN de ce tour ne peut le rouvrir.
+        //
+        // DÉFAUT TROUVÉ PAR CODEX le 2026-09-09, sur sa propre machine à états,
+        // et introduit par le passage des hooks en `async`. `Stop` est resté
+        // synchrone, ce qui garantit sa LIVRAISON — pas qu'il arrive après les
+        // processus async déjà lancés. Un retardataire du MÊME tour passait
+        // alors le garde (`turn_id` identique) et remettait la session en
+        // `.working` : fausse activité jusqu'à la péremption de quinze minutes.
+        //
+        // Le cas le plus grave était un `UserPromptSubmit` retardataire, parce
+        // que cette branche est EXEMPTÉE du garde : arrivé après le prompt d'un
+        // tour plus récent, il replaçait `entry.turnID` sur l'ancien tour, et
+        // tous les événements du vrai tour courant étaient ensuite rejetés.
+        // La session se figeait pour de bon.
+        if let turn = event.turnID, entry.closedTurns.contains(turn) { return }
+
+        // Un événement d'un AUTRE tour ne finit pas le tour courant (garde
+        // d'origine). `userPromptSubmit` en est exempté : c'est lui qui ouvre.
         if event.kind != .userPromptSubmit, let turn = event.turnID,
            let current = entry.turnID, turn != current { return }
+
+        // Un tour clos ne se rouvre que par un PROMPT explicite. Sans cela, un
+        // retardataire SANS `turn_id` — que les deux gardes ci-dessus laissent
+        // passer — ferait repartir l'activité tout seul.
+        if entry.turnIsClosed, event.kind != .userPromptSubmit { return }
+
         if event.kind == .userPromptSubmit || entry.turnID == nil { entry.turnID = event.turnID }
+        if event.kind == .userPromptSubmit { entry.turnIsClosed = false }
         if let cwd = event.cwd {
             entry.session.cwd = cwd
             entry.session.projectName = URL(fileURLWithPath: cwd).lastPathComponent
@@ -112,6 +147,13 @@ public struct CodexSessions: Sendable {
         if let anchor = event.anchor { entry.anchor = anchor }
         entry.lastEvent = now
         entry.session.stateConfirmedByHook = true
+        if event.kind == .stop || event.kind == .interrupt {
+            entry.turnIsClosed = true
+            if let turn = event.turnID, !entry.closedTurns.contains(turn) {
+                entry.closedTurns.append(turn)
+                entry.closedTurns = Array(entry.closedTurns.suffix(Self.closedTurnMemory))
+            }
+        }
         switch event.kind {
         case .sessionStart, .stop, .interrupt: entry.session.status = .awaitingInput
         case .userPromptSubmit:
