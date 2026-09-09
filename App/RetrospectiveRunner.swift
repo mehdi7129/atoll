@@ -40,6 +40,45 @@ final class RetrospectiveRunner {
         let snapshot: SessionStore.Tracked
         let endedAt: Date
         var forced = false
+        /// Quel CLI a produit le transcript à analyser. Détermine le parseur du
+        /// condensé — un rollout Codex passé au parseur Claude rend zéro entrée,
+        /// et le bilan partirait sur un texte vide.
+        var transcriptProvider: AgentProvider = .claude
+    }
+
+    /// Bilan de fin de session pour une session CODEX.
+    ///
+    /// POURQUOI CETTE PORTE SÉPARÉE. Le chemin Claude part de
+    /// `SessionStore.onSessionEnded` ; or `SessionStore` ne connaît pas les
+    /// sessions Codex — elles vivent dans `CodexService`. Sans cette entrée,
+    /// fermer Claude Code éteignait toute la boucle d'apprentissage : zéro note,
+    /// zéro skill. Mehdi a tranché le 2026-09-09 : « il faut que ce que faisait
+    /// Atoll avec Claude Code fonctionne sur Codex, c'est ça qui donne toute la
+    /// puissance de l'outil ».
+    ///
+    /// Le reste du chemin est COMMUN — gate, choix du fournisseur qui paie,
+    /// condensé, revalidation Swift, écriture des fichiers par Atoll. Seul le
+    /// parseur du transcript change.
+    func codexSessionEnded(_ ended: CodexSessions.EndedSession) {
+        guard LearningSettings.shared.isEnabled else { return }
+        guard let path = ended.transcriptPath, FileManager.default.fileExists(atPath: path) else {
+            log.info("session Codex \(ended.sessionID, privacy: .public) : rollout introuvable — pas de bilan")
+            return
+        }
+        // Les faits que `LearningGate` attend, projetés depuis ce que les hooks
+        // ont RÉELLEMENT compté. `isSynthetic: false` est exact : ces faits
+        // viennent de hooks, pas d'un transcript deviné.
+        let snapshot = SessionStore.Tracked(
+            id: ended.sessionID, cwd: ended.cwd, transcriptPath: path,
+            phase: .ended, isSynthetic: false,
+            firstSeenAt: ended.startedAt, lastEventAt: Date())
+        var tracked = snapshot
+        tracked.model = ended.model
+        tracked.userPromptCount = ended.userPromptCount
+        lastEndedSnapshot = tracked
+        queue.append(Job(snapshot: tracked, endedAt: Date(), transcriptProvider: .codex))
+        log.info("session Codex \(ended.sessionID, privacy: .public) terminée — bilan candidat dans \(Int(Self.startDelaySeconds)) s")
+        scheduleNext()
     }
 
     /// Un run est-il engagé ? Pas seulement « un processus tourne » : la
@@ -390,8 +429,13 @@ final class RetrospectiveRunner {
         let sessionDirectory = job.snapshot.cwd.flatMap { path -> URL? in
             path.isEmpty ? nil : URL(fileURLWithPath: path, isDirectory: true)
         }
+        // ⚠️ LE PARSEUR SUIT LE FOURNISSEUR DU TRANSCRIPT. Un rollout Codex
+        // passé au parseur Claude rend ZÉRO entrée : le bilan partirait sur un
+        // condensé vide et paierait un run pour rien. Même motif que
+        // `byCoverage` juste au-dessus — le savoir dans le code, pas dans l'appel.
+        let transcriptProvider = job.transcriptProvider
         let prepared = await Task.detached(priority: .utility) {
-            (digest: Self.digest(ofTranscriptAt: transcriptPath),
+            (digest: Self.digest(ofTranscriptAt: transcriptPath, provider: transcriptProvider),
              capabilities: SkillCatalog(projectDirectory: sessionDirectory).summaryForPrompt())
         }.value
         // L'utilisateur a pu couper l'apprentissage PENDANT la préparation :
@@ -843,7 +887,8 @@ final class RetrospectiveRunner {
     /// condensé. En écrire un second aurait fait diverger deux lectures d'un
     /// format que la règle n° 3 déclare instable.
     nonisolated static func digest(ofTranscriptAt path: String,
-                                   budget: Int = TranscriptDigest.defaultCharacterBudget) -> TranscriptDigest.Result? {
+                                   budget: Int = TranscriptDigest.defaultCharacterBudget,
+                                   provider: AgentProvider = .claude) -> TranscriptDigest.Result? {
         guard let handle = FileHandle(forReadingAtPath: path) else { return nil }
         defer { try? handle.close() }
         var splitter = TranscriptLineSplitter(startOffset: 0)
@@ -853,7 +898,10 @@ final class RetrospectiveRunner {
               let chunk = try? handle.read(upToCount: 4 << 20), !chunk.isEmpty {
             readBytes += chunk.count
             for raw in splitter.consume(chunk) {
-                if let parsed = TranscriptLineParser.parse(raw.data) { lines.append(parsed) }
+                let parsed = provider == .codex
+                    ? CodexTranscriptParser.parse(raw.data)
+                    : TranscriptLineParser.parse(raw.data)
+                if let parsed { lines.append(parsed) }
                 if lines.count >= digestLineCap { break }
             }
         }

@@ -37,10 +37,19 @@ final class CodexService {
         observed.anchor(for: sessionID)
     }
 
+    /// Rollout d'une session Codex, pour la passation et le bilan.
+    func transcriptPath(for sessionID: String) -> String? {
+        observed.transcriptPath(for: sessionID)
+    }
+
     func apply(_ event: CodexHookEvent) {
-        observed.apply(event)
+        // `apply` rend les faits de la session quand elle vient de se terminer :
+        // c'est le pendant Codex de `SessionStore.onSessionEnded`, et sans lui
+        // la boucle d'apprentissage n'existe pas pour Codex.
+        let ended = observed.apply(event)
         sessions = observed.sessions()
         playSound(for: event)
+        if let ended { RetrospectiveRunner.shared.codexSessionEnded(ended) }
     }
 
     /// Les DEUX sons d'Atoll valent pour Codex comme pour Claude.

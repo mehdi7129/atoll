@@ -248,14 +248,18 @@ struct SessionDetailView: View {
         guard !preparingHandoff else { return } // garde de ré-entrance (double-clic)
         preparingHandoff = true
         handoffMessage = nil
-        let transcript = store.transcriptPath(for: session.id)
+        let transcript = session.provider == .codex
+            ? CodexService.shared.transcriptPath(for: session.id)
+            : store.transcriptPath(for: session.id)
+        let provider = session.provider
         let session = session
         Task {
             // Budget RÉDUIT à dessein : c'est une reprise, pas une analyse. Les
             // 150 000 caractères du bilan seraient payés au premier tour Codex.
             let digest = await Task.detached(priority: .userInitiated) {
                 transcript.flatMap {
-                    RetrospectiveRunner.digest(ofTranscriptAt: $0, budget: 40_000)
+                    RetrospectiveRunner.digest(ofTranscriptAt: $0, budget: 40_000,
+                                               provider: provider)
                 }?.text ?? ""
             }.value
             preparingHandoff = false

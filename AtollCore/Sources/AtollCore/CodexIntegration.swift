@@ -22,6 +22,11 @@ public struct CodexHookEvent: Sendable {
     public let model: String?
     public let prompt: String?
     public let tool: String?
+    /// Chemin du rollout de la session (`~/.codex/sessions/**/*.jsonl`).
+    /// PRÉSENT SUR TOUS LES ÉVÉNEMENTS, `SessionEnd` compris (vérifié sur
+    /// `codex-cli 0.153.4`) — c'est lui qui permet au bilan de fin de session
+    /// de trouver quoi analyser, sans jamais avoir à deviner un fichier.
+    public let transcriptPath: String?
     /// Ancre terminal, si le helper l'a capturée.
     ///
     /// POURQUOI ELLE EXISTE ICI. Mehdi a tranché le 2026-09-09 : Codex tourne
@@ -52,6 +57,7 @@ public struct CodexHookEvent: Sendable {
         tool = ParsedHookEvent.summarize(toolName: payload["tool_name"] as? String,
                                          input: payload["tool_input"] as? [String: Any])
 
+        transcriptPath = payload["transcript_path"] as? String
         let enrich = envelope["enrich"] as? [String: Any] ?? [:]
         let environment = enrich["env"] as? [String: String] ?? [:]
         let hint = enrich["terminalHint"] as? String
@@ -89,6 +95,23 @@ public struct CodexSessions: Sendable {
         /// session peut enchaîner des centaines de tours, la mémoire n'a pas à
         /// croître avec eux — seuls les retardataires proches importent.
         var closedTurns: [String] = []
+        /// Rollout de la session, pour le bilan de fin de session.
+        var transcriptPath: String?
+        /// Prompts utilisateur COMPTÉS, jamais devinés : `LearningGate` refuse
+        /// une session qui n'en a pas assez, et une valeur inventée fausserait
+        /// sa décision dans le sens le plus coûteux (lancer pour rien).
+        var userPromptCount = 0
+    }
+
+    /// Faits d'une session Codex terminée, pour le bilan de fin de session.
+    /// Le miroir de ce que `SessionStore.Tracked` fournit côté Claude.
+    public struct EndedSession: Equatable, Sendable {
+        public let sessionID: String
+        public let transcriptPath: String?
+        public let cwd: String?
+        public let model: String?
+        public let userPromptCount: Int
+        public let startedAt: Date
     }
 
     /// Combien de tours clôturés on retient. Huit suffisent très largement : un
@@ -103,8 +126,29 @@ public struct CodexSessions: Sendable {
         entries[sessionID]?.anchor
     }
 
-    public mutating func apply(_ event: CodexHookEvent, now: Date = Date()) {
-        if event.kind == .sessionEnd { entries.removeValue(forKey: event.sessionID); return }
+    /// Rollout d'une session Codex vivante — pendant de
+    /// `SessionStore.transcriptPath(for:)`.
+    public func transcriptPath(for sessionID: String) -> String? {
+        entries[sessionID]?.transcriptPath
+    }
+
+    /// `apply` rend les faits de la session quand elle vient de SE TERMINER —
+    /// `nil` sinon. C'est ce que l'appelant transmet au bilan de fin de session.
+    @discardableResult
+    public mutating func apply(_ event: CodexHookEvent, now: Date = Date()) -> EndedSession? {
+        if event.kind == .sessionEnd {
+            let ended = entries.removeValue(forKey: event.sessionID).map {
+                EndedSession(sessionID: event.sessionID,
+                             // Le chemin de l'événement de fin fait autorité ; on
+                             // se rabat sur le dernier connu s'il manque.
+                             transcriptPath: event.transcriptPath ?? $0.transcriptPath,
+                             cwd: event.cwd ?? $0.session.cwd,
+                             model: $0.session.model,
+                             userPromptCount: $0.userPromptCount,
+                             startedAt: $0.session.startedAt)
+            }
+            return ended
+        }
         var entry = entries[event.sessionID] ?? Entry(session: AgentSession(
             id: event.sessionID,
             projectName: event.cwd.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "Codex",
@@ -125,17 +169,17 @@ public struct CodexSessions: Sendable {
         // tour plus récent, il replaçait `entry.turnID` sur l'ancien tour, et
         // tous les événements du vrai tour courant étaient ensuite rejetés.
         // La session se figeait pour de bon.
-        if let turn = event.turnID, entry.closedTurns.contains(turn) { return }
+        if let turn = event.turnID, entry.closedTurns.contains(turn) { return nil }
 
         // Un événement d'un AUTRE tour ne finit pas le tour courant (garde
         // d'origine). `userPromptSubmit` en est exempté : c'est lui qui ouvre.
         if event.kind != .userPromptSubmit, let turn = event.turnID,
-           let current = entry.turnID, turn != current { return }
+           let current = entry.turnID, turn != current { return nil }
 
         // Un tour clos ne se rouvre que par un PROMPT explicite. Sans cela, un
         // retardataire SANS `turn_id` — que les deux gardes ci-dessus laissent
         // passer — ferait repartir l'activité tout seul.
-        if entry.turnIsClosed, event.kind != .userPromptSubmit { return }
+        if entry.turnIsClosed, event.kind != .userPromptSubmit { return nil }
 
         if event.kind == .userPromptSubmit || entry.turnID == nil { entry.turnID = event.turnID }
         if event.kind == .userPromptSubmit { entry.turnIsClosed = false }
@@ -144,7 +188,9 @@ public struct CodexSessions: Sendable {
             entry.session.projectName = URL(fileURLWithPath: cwd).lastPathComponent
         }
         if let model = event.model { entry.session.model = model }
+        if let path = event.transcriptPath { entry.transcriptPath = path }
         if let anchor = event.anchor { entry.anchor = anchor }
+        if event.kind == .userPromptSubmit { entry.userPromptCount += 1 }
         entry.lastEvent = now
         entry.session.stateConfirmedByHook = true
         if event.kind == .stop || event.kind == .interrupt {
@@ -167,6 +213,7 @@ public struct CodexSessions: Sendable {
         case .sessionEnd: break
         }
         entries[event.sessionID] = entry
+        return nil
     }
 
     public func sessions(now: Date = Date()) -> [AgentSession] {
