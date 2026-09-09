@@ -232,6 +232,8 @@ private actor MemoryIndexWorker {
                 await indexFile(at: file, projectDir: dir.lastPathComponent, index: index)
             }
         }
+        await scanCodexRollouts(index: index)
+
         // Notes d'apprentissage (7b) : re-scannées ici pour survivre à une
         // reconstruction de la base (revue : indexées seulement à l'écriture,
         // un rebuild les orphelinait de recall pour toujours).
@@ -297,6 +299,41 @@ private actor MemoryIndexWorker {
         }
     }
 
+    /// Rollouts Codex — `~/.codex/sessions/<année>/<mois>/<jour>/*.jsonl`.
+    ///
+    /// POURQUOI : sans cela, une session Codex ne laisse AUCUNE trace en
+    /// mémoire. Mehdi a tranché le 2026-09-09 — « quand j'utilise Codex ou
+    /// Claude Code, Atoll doit fonctionner de la même manière » — et
+    /// « se souvenir » est l'un des trois verbes de la vision du projet.
+    ///
+    /// L'arborescence est datée, donc RÉCURSIVE, contrairement au scan Claude
+    /// qui est plat par construction. On la borne quand même : un dossier de
+    /// sessions accumule des années, et `skipsHiddenFiles` évite les sidecars.
+    private func scanCodexRollouts(index: MemoryIndex) async {
+        let fm = FileManager.default
+        let root = BridgePaths.codexSessionsURL
+        guard fm.fileExists(atPath: root.path),
+              let walker = fm.enumerator(at: root, includingPropertiesForKeys: [.isRegularFileKey],
+                                         options: [.skipsHiddenFiles])
+        else { return }
+        var scanned = 0
+        for case let file as URL in walker {
+            if Task.isCancelled { return }
+            guard file.pathExtension == "jsonl" else { continue }
+            // Le dossier du jour sert de « projet » : c'est ce qui apparaîtra
+            // dans les statistiques, faute de notion de projet dans un rollout.
+            await indexFile(at: file, projectDir: file.deletingLastPathComponent().lastPathComponent,
+                            index: index, provider: .codex)
+            scanned += 1
+            if scanned >= Self.codexRolloutCap { break }
+        }
+    }
+
+    /// Plafond de rollouts par passe. Le scan tourne toutes les 30 s : borner
+    /// évite qu'un backfill initial monopolise le worker, sans rien perdre —
+    /// la passe suivante reprend là où l'offset s'est arrêté.
+    private static let codexRolloutCap = 400
+
     /// Indexe une note d'apprentissage (fichier .md complet, pas du JSONL) :
     /// une pseudo-session « atoll-note-<slug> » avec un unique fragment `note`.
     func indexNoteFile(url: URL, slug: String) {
@@ -319,7 +356,8 @@ private actor MemoryIndexWorker {
 
     // MARK: - Lecture incrémentale d'un fichier
 
-    private func indexFile(at url: URL, projectDir: String, index: MemoryIndex) async {
+    private func indexFile(at url: URL, projectDir: String, index: MemoryIndex,
+                           provider: AgentProvider = .claude) async {
         let path = url.path
         guard let attrs = try? FileManager.default.attributesOfItem(atPath: path) else { return }
         let inode = (attrs[.systemFileNumber] as? UInt64) ?? 0
@@ -337,7 +375,14 @@ private actor MemoryIndexWorker {
         defer { try? handle.close() }
         try? handle.seek(toOffset: UInt64(state.offset))
 
-        let sessionID = url.deletingPathExtension().lastPathComponent
+        // Identifiant de session. Côté Codex le fichier s'appelle
+        // `rollout-<horodatage>-<uuid>.jsonl` : on en extrait l'uuid et on le
+        // préfixe `codex:`, EXACTEMENT comme `CodexSessions`. Sans ce préfixe
+        // commun, l'exclusion de la session courante par le recall proactif ne
+        // reconnaîtrait pas la session qui vient de poser la question.
+        let sessionID = provider == .codex
+            ? "codex:" + CodexRollout.sessionID(fromFileName: url.lastPathComponent)
+            : url.deletingPathExtension().lastPathComponent
         var splitter = TranscriptLineSplitter(startOffset: state.offset)
         var batch: [(line: TranscriptLine, syntheticUUID: String)] = []
         var skillUses: [SkillInvocation] = [] // invocations de skills pour les stats (7c)
@@ -371,10 +416,18 @@ private actor MemoryIndexWorker {
             if Task.isCancelled { return } // sans lastSeen : sera repris
             guard let chunk = try? handle.read(upToCount: Self.chunkSize), !chunk.isEmpty else { break }
             for line in splitter.consume(chunk) {
-                if let parsed = TranscriptLineParser.parse(line.data) {
+                let parsed = provider == .codex
+                    ? CodexTranscriptParser.parse(line.data)
+                    : TranscriptLineParser.parse(line.data)
+                if let parsed {
                     batch.append((parsed, "line-\(line.startOffset)"))
                 }
-                skillUses.append(contentsOf: SkillUsageParser.invocations(inLine: line.data))
+                // Les invocations de skills sont un format Claude Code : les
+                // chercher dans un rollout Codex ne rendrait jamais rien, et
+                // fausserait les statistiques d'usage si le format collisionnait.
+                if provider == .claude {
+                    skillUses.append(contentsOf: SkillUsageParser.invocations(inLine: line.data))
+                }
                 if batch.count >= Self.batchSize, !flush() { return }
             }
             await Task.yield() // backfill de centaines de Mo sans monopoliser un cœur

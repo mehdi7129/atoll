@@ -128,6 +128,7 @@ enum RecallCLI {
     /// 1. [2026-07-18 14:32] ~/Desktop/Dynamic_Island — « Titre de session »
     ///    (assistant) …extrait avec «termes» marqués…
     ///    session <uuid> · reprendre : claude --resume <uuid>
+    ///    (ou `codex resume <uuid>` pour une session Codex)
     /// ```
     private static func printText(hits: [MemoryIndex.Hit], query: String, relaxed: Bool) {
         guard !hits.isEmpty else {
@@ -160,7 +161,7 @@ enum RecallCLI {
             if hit.sessionID.hasPrefix("atoll-note-") {
                 print("   note Atoll · ~/.atoll/learning/notes/")
             } else {
-                print("   session \(hit.sessionID) · reprendre : claude --resume \(hit.sessionID)")
+                print("   session \(hit.sessionID) · reprendre : \(resumeCommand(for: hit.sessionID))")
             }
         }
     }
@@ -223,4 +224,19 @@ enum RecallCLI {
         if let string { return string }
         return NSNull()
     }
+}
+
+/// Commande de reprise adaptée au fournisseur.
+///
+/// Une session Codex indexée porte un identifiant préfixé `codex:` (voir
+/// `MemoryIndexer`). Lui proposer `claude --resume codex:<uuid>` donnait une
+/// commande qui ne peut QUE échouer — et l'utilisateur n'a aucun moyen de
+/// deviner laquelle est la bonne. Le préfixe est retiré : `codex resume` attend
+/// l'identifiant nu.
+func resumeCommand(for sessionID: String) -> String {
+    let codexPrefix = "codex:"
+    guard sessionID.hasPrefix(codexPrefix) else {
+        return "claude --resume \(sessionID)"
+    }
+    return "codex resume \(sessionID.dropFirst(codexPrefix.count))"
 }
