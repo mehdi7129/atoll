@@ -24,6 +24,8 @@ IDENTITY="Developer ID Application"
 cd "$ROOT"
 
 VERSION=$(grep -m1 'MARKETING_VERSION' project.yml | sed 's/.*"\(.*\)".*/\1/')
+# Numéro de build : c'est lui qui nomme les deltas Sparkle (`Atoll<BUILD>-<N>`).
+BUILD=$(grep -m1 'CURRENT_PROJECT_VERSION' project.yml | sed 's/.*"\(.*\)".*/\1/')
 if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   echo "✗ MARKETING_VERSION illisible dans project.yml : « $VERSION »"
   exit 1
@@ -154,7 +156,11 @@ FIXTAGS
 
 cp "$UPDATES/appcast.xml" "$ROOT/docs/appcast.xml"
 # Deltas éventuels (dès la 2e release) : à joindre à la release GitHub.
-DELTAS=("$UPDATES"/*.delta(N))
+# ⚠️ CEUX DE CETTE VERSION SEULEMENT. `dist/updates` est PERSISTANT : il contient
+# aussi les deltas des releases précédentes, qui vivent déjà sous LEUR tag et que
+# l'appcast y désigne. Les joindre ici en ferait des doublons orphelins sous le
+# nouveau tag — la même famille de défaut que le préfixe d'URL corrigé plus haut.
+DELTAS=("$UPDATES"/Atoll${BUILD}-*.delta(N))
 
 echo ""
 echo "✓ Artefacts : $DMG"
