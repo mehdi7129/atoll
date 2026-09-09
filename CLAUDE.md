@@ -540,6 +540,16 @@ AVANT de lancer `Scripts/release.sh` :
 survient quand même, retirer l'archive fautive de `dist/updates/` avant de relancer
 (sinon elle continue de provoquer la collision).
 
+**SECOND PIÈGE SPARKLE, trouvé le 2026-09-09 en publiant la v0.17.0 :
+`generate_appcast` REPOINTE LES ENTRÉES ANTÉRIEURES VERS LE TAG COURANT.** Après la
+génération, l'entrée 0.16.6 pointait vers `download/v0.17.0/Atoll-0.16.6.zip` — un
+**404**, puisque cette archive vit sous `v0.16.6`. Le défaut était DÉJÀ LÀ avant cette
+release (l'entrée 0.16.5 pointait vers `v0.16.6/`) : il se reproduit à chaque
+publication, en silence, parce que Sparkle propose la version la plus récente et que
+personne ne teste les entrées anciennes. Après régénération, remettre chaque archive
+sous SON tag et **vérifier les URL une par une** — c'est `Scripts/check-docs.py
+--network` qui l'a attrapé, et c'est la raison d'être de ce contrôle.
+
 PIÈGES DE MÉTHODE appris pendant cet audit :
 - **`claude agents --json` ne liste QUE les sessions vivantes** ; le champ
   `state` (`done`/`stopped`) n'apparaît qu'avec `--all`, et ces entrées-là
