@@ -1,13 +1,12 @@
 # CLAUDE.md — instructions projet Atoll
 
-> Une intégration Codex expérimentale est en revue sur la branche
-> `codex/codex-support-dual-quotas`. Sur cette branche, lire d'abord
-> [`codex/HANDOFF-CLAUDE.md`](codex/HANDOFF-CLAUDE.md), puis
-> [`docs/CODEX-INTEGRATION.md`](docs/CODEX-INTEGRATION.md), puis
-> [`docs/CODEX-FAILOVER.md`](docs/CODEX-FAILOVER.md) — la BASCULE empilée
-> par-dessus (2026-09-06), demandée par Mehdi : « si je n'ai plus de quota sur
-> Claude, j'aimerais que ça passe sur mon compte Codex ». Ne pas fusionner la
-> PR #1 ni toucher à l'app stable ou au journal recall sans accord de Mehdi.
+> **v0.17.0 — ATOLL SUIT AUSSI CODEX** (2026-09-09). Première release depuis la
+> PR #1 de Codex, empilée de la BASCULE DE QUOTA demandée par Mehdi le 2026-09-06
+> (« si je n'ai plus de quota sur Claude, j'aimerais que ça passe sur mon compte
+> Codex »), puis de la PARITÉ COMPLÈTE qu'il a exigée ensuite : « ce que faisait
+> Atoll avec Claude Code doit fonctionner sur Codex ». Lire
+> [`docs/CODEX-INTEGRATION.md`](docs/CODEX-INTEGRATION.md) puis
+> [`docs/CODEX-FAILOVER.md`](docs/CODEX-FAILOVER.md).
 >
 > ⚠️ **CE QUI BASCULE N'EST PAS LE TRAVAIL DE MEHDI.** Atoll OBSERVE le CLI
 > `claude`, il ne le pilote pas : aucun hook, aucun réglage ne transforme une
@@ -30,6 +29,37 @@
 > correctif : bilan **exit 0 en 7 s**, curation **exit 0**, les deux rapports
 > réels figés verbatim en test.
 >
+> ⚠️ **LE LANCEUR DE HOOKS EST UN SUPERVISEUR, ET SA FORME EST MESURÉE.** Deux
+> écritures « évidentes » ont échoué avant elle, le 2026-09-09 :
+> - `exec "$BIN"` fait REMPLACER le shell par le worker — tuer le worker devient
+>   alors la mort du hook, que Codex affiche comme un ÉCHEC au lieu d'une
+>   abstention, et plus personne ne peut la convertir en « exit 0, stdout vide » ;
+> - en avant-plan, le shell annonce cette mort sur SON stderr (« line 4: 47645
+>   Terminated: 15 ») — contrat respecté, mais du texte part vers une TUI dont
+>   Mehdi a déjà reproché le bruit ;
+> - **`&` SEUL CASSE LE CHEMIN NOMINAL** : un job d'arrière-plan reçoit
+>   `/dev/null` sur stdin, donc le worker ne lit PLUS LE PAYLOAD du hook. Mesuré.
+>
+> D'où `exec 3<&0` / `<&3 &` / `wait $! 2>/dev/null` — la redirection portant sur
+> `wait` SEUL, jamais sur le stderr du worker. C'est le même piège que le
+> veilleur d'EOF de la veille : **réparer un cas de faute en cassant le nominal.**
+>
+> ⚠️ **UN ARTEFACT INSTALLÉ NE REÇOIT JAMAIS LES CORRECTIFS.** Ce lanceur n'était
+> écrit qu'à l'INSTALLATION : le superviseur corrigé dans le générateur est resté
+> un `exec` sur le disque, et personne ne l'aurait vu. Pire, il porte le chemin
+> ABSOLU du bundle — une app DÉPLACÉE rendait l'intégration Codex morte EN
+> SILENCE, sa garde `[ -x "$BIN" ] || exit 0` faisant exactement son travail.
+> D'où `CodexHookInstallation.refreshWrapper` au démarrage, idempotent par
+> comparaison d'octets. Et le script ne vit plus qu'à UN endroit : l'avoir eu en
+> deux exemplaires est ce qui a produit le défaut. Se demander, pour tout fichier
+> qu'Atoll pose hors de son bundle : **qui le réécrit quand il change ?**
+>
+> ⚠️ **UN PID SEUL N'EST PAS UNE IDENTITÉ DE PROCESSUS.** Recyclé avant le
+> passage du minuteur, `kill(pid, 0)` valide un processus ÉTRANGER et une carte
+> d'autorisation survit à son helper. L'identité est le couple `(pid, instant de
+> démarrage)`. Voir `CodexCardReaper` — et noter que l'EOF ne prouve RIEN ici :
+> le helper fait un `shutdown(SHUT_WR)` normal après son envoi.
+>
 > Les PAYLOADS de hooks Codex sont eux aussi validés sur pièces (capture dans un
 > `CODEX_HOME` jetable) : `cwd`, `turn_id`, `model`, `prompt`, `tool_name`,
 > `tool_input`, `session_id` sont tous présents, six événements dans un run
@@ -39,11 +69,11 @@
 > jamais : c'est la capture qui décide.
 >
 > Le format de `hooks.json` de la PR #1 est VALIDÉ SUR PIÈCES depuis le
-> 2026-09-06, ce que son handoff listait comme non fait : soumis au RPC
-> `hooks/list` d'un `codex app-server` lancé sur un `CODEX_HOME` jetable, ses
-> 10 événements sont tous reconnus par `codex-cli 0.153.4`, et un événement
-> INCONNU y est ignoré sans invalider le fichier — donc un renommage côté OpenAI
-> ne casserait pas la configuration Codex de l'utilisateur.
+> 2026-09-06 : soumis au RPC `hooks/list` d'un `codex app-server` lancé sur un
+> `CODEX_HOME` jetable, ses 10 événements sont tous reconnus par
+> `codex-cli 0.153.4`, et un événement INCONNU y est ignoré sans invalider le
+> fichier — donc un renommage côté OpenAI ne casserait pas la configuration
+> Codex de l'utilisateur.
 > ⚠️ **`codex exec` LIT STDIN même quand le prompt est en argument** : sans
 > `/dev/null`, il attend EOF, soit dix minutes de watchdog par run (mesuré).
 > Les deux lanceurs posent `standardInput = .nullDevice` — ne pas le retirer en
@@ -52,7 +82,7 @@
 > 📌 **REPRISE DE DEV : lire `docs/HANDOFF.md` en premier** — état exact, méthode de
 > travail, et TOUS les pièges appris à la dure.
 >
-> **Version publiée : v0.16.6** — un seul défaut fermé, aucune fonction ajoutée,
+> **v0.16.6** — un seul défaut fermé, aucune fonction ajoutée,
 > mais il rendait MUETTES les deux seules dépenses de quota du projet.
 > `NotesCurationService` et `RetrospectiveRunner` lançaient
 > `zsh -l -c "… exec claude …"` en comptant sur le PATH du shell — et leur

@@ -72,10 +72,18 @@ public enum CodexCardReaper {
             let seen = probe(card.helperPid)
             if !seen.isAlive { return true }
             // Vivant, mais est-ce le MÊME processus ? Deux instants de démarrage
-            // qui diffèrent désignent un PID recyclé. Une seconde de tolérance :
-            // la valeur vient de `sysctl` et n'est pas plus fine que ça.
+            // qui diffèrent désignent un PID recyclé.
+            //
+            // ⚠️ COMPARAISON EXACTE, ET MA PREMIÈRE VERSION AVAIT TORT. Elle
+            // tolérait une seconde d'écart « parce que sysctl n'est pas plus
+            // fin » — c'est FAUX : `pbi_start_tvsec` ET `pbi_start_tvusec` sont
+            // figés au démarrage du processus, donc deux lectures du MÊME
+            // processus ne dérivent jamais. La tolérance ne couvrait aucun
+            // bruit réel ; elle rouvrait seulement la faille qu'elle prétendait
+            // fermer, en laissant passer un PID recyclé en moins d'une seconde.
+            // Constat de Codex, revue du 2026-09-09.
             if let expected = card.helperStartTime, let current = seen.startTime,
-               abs(current - expected) > 1 { return true }
+               current != expected { return true }
             return tooOld
         }.map(\.id)
     }

@@ -70,7 +70,7 @@ continue à dépendre de la statusline ; sans données récentes, elle peut manq
   pour les clients déjà ouverts ; bundle manquant → sortie silencieuse.
 - **C'est un SUPERVISEUR, et sa forme exacte a été mesurée, pas devinée**
   (2026-09-09). Il lance le worker en arrière-plan, lui rend stdin par un
-  descripteur explicite, attend, et sort toujours 0 :
+  descripteur explicite, attend, et sort 0 quel que soit le sort du worker :
 
   ```sh
   exec 3<&0
@@ -94,8 +94,18 @@ continue à dépendre de la statusline ; sans données récentes, elle peut manq
 
   MESURÉ sur les trois axes : worker tué par SIGTERM et par SIGKILL → exit 0,
   stdout vide, stderr vide ; chemin nominal complet → la décision `allow`
-  ressort intacte sur stdout. Un SIGKILL du superviseur lui-même reste non
-  garantissable — aucun processus n'y survit.
+  ressort intacte sur stdout.
+
+  ⚠️ **LA GARANTIE PORTE SUR LE WORKER, PAS SUR TOUT SIGNAL.** Ce document a
+  d'abord écrit « sort toujours 0 » ; Codex l'a mesuré faux : un `SIGTERM`
+  adressé au SUPERVISEUR rend **143** et laisse le worker vivant — le shell
+  n'atteint pas sa dernière ligne, `wait` n'a rien à convertir. La formulation
+  juste est « le worker qui termine ou qui est tué devient une abstention ».
+  Un `SIGKILL` du superviseur reste de toute façon non garantissable. Rendre le
+  `SIGTERM` convertible demanderait un `trap` qui retransmet au worker puis
+  attend à nouveau : ce n'est pas fait, et la documentation officielle des hooks
+  ne dit pas à quel PID ou groupe Codex adresse ses annulations — on ne remplace
+  pas une forme mesurée de bout en bout par une supposition.
 - **Le lanceur est remis à jour au démarrage de l'app**
   (`CodexHookInstallation.refreshWrapper`), et cela ferme deux pannes qui ne se
   voient pas : une correction du lanceur n'atteignait JAMAIS un poste déjà

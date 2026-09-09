@@ -52,11 +52,22 @@ public enum CodexHookInstallation {
     /// voit comme un échec au lieu d'une abstention. Personne ne peut alors la
     /// convertir en « exit 0, stdout vide ».
     ///
-    /// Ici le shell reste vivant, attend le worker, et sort TOUJOURS 0 : ce que
-    /// le worker a écrit sur stdout est déjà parti vers Codex (allow/deny), et
-    /// s'il est mort sans rien écrire, l'abstention est exactement ce qu'il
-    /// faut. Constat de la revue de Codex du 2026-09-09 : « sans ce changement,
-    /// l'architecture demandée est absente ».
+    /// Ici le shell reste vivant, attend le worker, et sort 0 **quel que soit le
+    /// sort du worker** : ce que celui-ci a écrit sur stdout est déjà parti vers
+    /// Codex (allow/deny), et s'il est mort sans rien écrire, l'abstention est
+    /// exactement ce qu'il faut. Constat de la revue de Codex du 2026-09-09 :
+    /// « sans ce changement, l'architecture demandée est absente ».
+    ///
+    /// ⚠️ LA GARANTIE PORTE SUR LE WORKER, PAS SUR TOUT SIGNAL. Cette page a
+    /// d'abord écrit « sort TOUJOURS 0 », et Codex l'a mesuré faux : un
+    /// `SIGTERM` adressé au SUPERVISEUR lui-même rend **143** et laisse le
+    /// worker vivant — le shell n'atteint jamais sa dernière ligne, `wait` n'a
+    /// rien à convertir. La formulation exacte est donc : « le worker qui
+    /// termine ou qui est tué devient une abstention ». Rendre aussi ce cas
+    /// convertible demanderait un `trap` qui retransmet au worker puis attend à
+    /// nouveau ; ce n'est PAS fait, et la documentation officielle des hooks ne
+    /// dit pas à quel PID ou groupe Codex adresse ses annulations. On ne
+    /// remplace pas une forme mesurée de bout en bout par une supposition.
     ///
     /// ⚠️ LES TROIS LIGNES DU MILIEU NE SONT PAS DÉCORATIVES, et la forme
     /// évidente (`"$BIN" codex-hook` en avant-plan) a été MESURÉE défaillante

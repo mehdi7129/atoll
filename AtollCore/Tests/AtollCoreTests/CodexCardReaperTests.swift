@@ -54,10 +54,20 @@ final class CodexCardReaperTests: XCTestCase {
         XCTAssertEqual(expired([card("a", start: 1000)], probe: alive(9999)), ["a"])
     }
 
-    /// La tolérance d'une seconde : `sysctl` n'est pas plus précis que ça, et
-    /// un écart de quelques centièmes ne prouve rien.
-    func testASubSecondDriftIsNotARecycledPid() {
-        XCTAssertEqual(expired([card("a", start: 1000)], probe: alive(1000.4)), [])
+    /// ⚠️ LE MOINDRE ÉCART DÉSIGNE UN AUTRE PROCESSUS, y compris sous la
+    /// seconde. `pbi_start_tvsec`/`tvusec` sont figés au démarrage : deux
+    /// lectures du même processus rendent la MÊME valeur, donc une tolérance ne
+    /// couvrirait aucun bruit — elle laisserait seulement passer un PID recyclé
+    /// très vite. (Constat de Codex : ma version tolérait une seconde.)
+    func testEvenASubSecondDifferenceMeansAnotherProcess() {
+        XCTAssertEqual(expired([card("a", start: 1000)], probe: alive(1000.4)), ["a"])
+        XCTAssertEqual(expired([card("a", start: 1000)], probe: alive(1000.000001)), ["a"])
+    }
+
+    /// …et la valeur IDENTIQUE, elle, garde la carte : c'est le cas nominal,
+    /// celui d'un helper qui attend toujours.
+    func testTheSameStartTimeKeepsTheCard() {
+        XCTAssertEqual(expired([card("a", start: 1000)], probe: alive(1000)), [])
     }
 
     /// ⚠️ ABSENCE D'INFORMATION ≠ PREUVE. Une sonde qui ne sait pas dire

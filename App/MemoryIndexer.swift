@@ -217,12 +217,11 @@ private actor MemoryIndexWorker {
         // l'autre ») et une violation directe de l'isolation. Trouvé par Codex
         // en revue. L'absence d'une source rend une liste vide POUR ELLE,
         // jamais l'annulation de l'autre.
-        let claudeProjects = try? fm.contentsOfDirectory(
+        let projectDirs = (try? fm.contentsOfDirectory(
             at: BridgePaths.claudeProjectsURL,
             includingPropertiesForKeys: [.isDirectoryKey],
             options: [.skipsHiddenFiles]
-        )
-        let projectDirs = claudeProjects ?? []
+        )) ?? []
 
         // ⚠️ ON NE DÉCLARE DISPARU QUE CE QU'ON A RÉELLEMENT REGARDÉ.
         //
@@ -238,10 +237,14 @@ private actor MemoryIndexWorker {
         // notes : « un dossier momentanément illisible ne doit rien effacer ».
         // Chaque source n'autorise donc le ménage QUE sur son propre préfixe,
         // et seulement si son listage a réussi.
+        // ⚠️ LE PRÉFIXE EST CELUI DES DOSSIERS RÉELLEMENT LUS, PAS DE LA RACINE.
+        // Poser la racine promettait plus que le code ne tient : si la racine se
+        // liste mais qu'un SOUS-DOSSIER devient illisible pendant le parcours,
+        // ses fichiers retombaient sous le préfixe et étaient déclarés disparus.
+        // Constat de Codex, revue du 2026-09-09 — « la promesse est plus large
+        // que le code ». Chaque dossier ajoute donc le sien après un listage
+        // réussi, plus bas dans la boucle.
         var scannedPrefixes: [String] = []
-        if claudeProjects != nil {
-            scannedPrefixes.append(BridgePaths.claudeProjectsURL.path + "/")
-        }
 
         var seenPaths = Set<String>()
         for dir in projectDirs {
@@ -253,6 +256,7 @@ private actor MemoryIndexWorker {
                   isDirectory.boolValue,
                   let entries = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)
             else { continue }
+            scannedPrefixes.append(dir.path + "/")
             for file in entries where file.pathExtension == "jsonl" {
                 if Task.isCancelled { return }
                 seenPaths.insert(file.path)
@@ -359,13 +363,21 @@ private actor MemoryIndexWorker {
         let fm = FileManager.default
         let root = BridgePaths.codexSessionsURL
         var seen = Set<String>()
+        // ⚠️ UN ÉNUMÉRATEUR RÉCURSIF SAUTE EN SILENCE CE QU'IL NE PEUT PAS LIRE.
+        // Sans `errorHandler`, un sous-dossier illisible ne se distingue pas
+        // d'un sous-dossier vide : la passe se croirait complète et déclarerait
+        // ses rollouts disparus. Le handler rend `false` pour ARRÊTER le
+        // parcours, et `listed` devient faux — donc aucun marquage. Constat de
+        // Codex, revue du 2026-09-09.
+        var readable = true
         guard fm.fileExists(atPath: root.path),
               let walker = fm.enumerator(at: root, includingPropertiesForKeys: [.isRegularFileKey],
-                                         options: [.skipsHiddenFiles])
+                                         options: [.skipsHiddenFiles],
+                                         errorHandler: { _, _ in readable = false; return false })
         else { return (seen, false) }
         var scanned = 0
         for case let file as URL in walker {
-            if Task.isCancelled { return (seen, true) }
+            if Task.isCancelled { return (seen, readable) }
             guard file.pathExtension == "jsonl" else { continue }
             // Compté comme VU quoi qu'il arrive : le fichier existe, et le
             // déclarer disparu serait faux.
@@ -385,7 +397,7 @@ private actor MemoryIndexWorker {
                 index: index, provider: .codex)
             if worked { scanned += 1 }
         }
-        return (seen, true)
+        return (seen, readable)
     }
 
     /// Plafond de rollouts par passe. Le scan tourne toutes les 30 s : borner

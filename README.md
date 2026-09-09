@@ -7,25 +7,21 @@
   ╰──────────────────────────────────────╯
 ```
 
-**Une Dynamic Island pour Claude Code, dans l'encoche de ton MacBook.**
+**Une Dynamic Island pour Claude Code et Codex, dans l'encoche de ton MacBook.**
 
-> Sur cette branche : intégration **Codex expérimentale**, avec suivi par hooks et
-> quotas Claude/Codex séparés. Pas encore une release. Voir le
-> [plan, les limites et l'aperçu sans installation](docs/CODEX-INTEGRATION.md).
-
-Trois `claude` tournent : un dans un onglet Cursor, un dans un iTerm passé derrière le
-navigateur, un en arrière-plan lancé il y a vingt minutes. L'un des trois est bloqué depuis
-huit minutes sur une demande de permission — tu ne sais pas lequel. Tu ne sais pas non plus
-combien de quota il te reste, ni comment tu avais réglé ce même bug le mois dernier, dans
-un autre projet.
+Trois sessions tournent : un `claude` dans un onglet Cursor, un `codex` dans un iTerm passé
+derrière le navigateur, un troisième en arrière-plan lancé il y a vingt minutes. L'un des
+trois est bloqué depuis huit minutes sur une demande de permission — tu ne sais pas lequel.
+Tu ne sais pas non plus combien de quota il te reste, sur l'un ou sur l'autre abonnement, ni
+comment tu avais réglé ce même bug le mois dernier, dans un autre projet.
 
 Atoll met tout ça autour de l'encoche.
 
 > **Atoll ne fait pas travailler les agents.
 > Il SAIT ce qui se passe sur ta machine, il s'en SOUVIENT, et il t'APPELLE.**
 
-macOS 14+ · Swift/SwiftUI natif, pas d'Electron · zéro télémétrie · zéro compte ·
-**gratuit et open source (GPL-3.0-or-later)**
+macOS 14+ · **Claude Code et Codex** · Swift/SwiftUI natif, pas d'Electron ·
+zéro télémétrie · zéro compte · **gratuit et open source (GPL-3.0-or-later)**
 
 ---
 
@@ -42,12 +38,13 @@ Tu descends la souris vers l'encoche, l'îlot se déplie :
       ·  site-vitrine · refonte CSS                   [ DONE ]
 ── QUOTA ───────────────────────────────────────────────────────
   5 h ███████▏░░  68 %  reset 14:05     7 j ████▎░░░░░  41 %
+  Codex  5h  ██▌░░░░░░░  24 %           7j  █▏░░░░░░░░  11 %
 ```
 
-Toutes tes sessions, **tous projets confondus**, regroupées par dépôt — ou par état, si la
-vraie question du moment est « laquelle m'attend ? ». Le pourcentage est le contexte
-consommé ; le quota 5 h et 7 j est celui que renvoie le serveur d'Anthropic : **lu, jamais
-estimé**.
+Toutes tes sessions, **tous projets et les deux CLI confondus**, regroupées par dépôt — ou
+par état, si la vraie question du moment est « laquelle m'attend ? ». Le pourcentage est le
+contexte consommé ; les quotas 5 h et 7 j sont ceux que renvoient les serveurs d'Anthropic
+et d'OpenAI : **lus, jamais estimés**.
 
 Un clic ouvre le détail d'une session, un autre ramène la fenêtre du terminal exact d'où
 elle vient — Cursor, VS Code, Terminal.app, iTerm2. Fin de la chasse à l'onglet.
@@ -72,10 +69,30 @@ apparaît dans l'encoche, la commande en clair :
 contexte, répondre, puis revenir à ce qu'on faisait — trente secondes de concentration
 perdues, plusieurs fois par jour.
 
+## Claude Code et Codex, au même endroit
+
+Si tu travailles avec les deux, tu as deux abonnements, deux terminaux, et deux façons de
+savoir où en est une session. Atoll les met dans le même îlot : les sessions Codex
+apparaissent à côté des sessions Claude, avec leur projet, leur état, leur jump-back vers le
+bon terminal — et **leur propre quota**, lu chez OpenAI comme celui d'Anthropic est lu chez
+Anthropic.
+
+Le reste suit : les rollouts Codex entrent dans la même mémoire locale, le bilan de fin de
+session sait les relire, et les sons sonnent pareil.
+
+**Les deux restent étanches.** Socket séparé, événements séparés, décisions séparées : une
+permission Codex ne traverse jamais la logique écrite pour Claude, et une règle que tu as
+posée pour l'un ne s'applique jamais à l'autre. C'est une isolation de bout en bout, pas un
+drapeau dans une fonction commune.
+
+L'installation est distincte et facultative — Atoll marche très bien avec un seul des deux.
+Elle touche à `hooks.json` (sauvegardé avant la première écriture) et à rien d'autre : ni
+`config.toml`, ni tes choix de confiance.
+
 ## Se souvenir — au-delà d'un seul dépôt
 
-Tous les transcripts de toutes tes sessions passées sont indexés **en local** (SQLite FTS5,
-dans `~/.atoll/memory.db`). Rien ne quitte la machine.
+Tous les transcripts de toutes tes sessions passées — Claude Code **et** Codex — sont
+indexés **en local** (SQLite FTS5, dans `~/.atoll/memory.db`). Rien ne quitte la machine.
 
 Le skill `atoll-recall` ouvre ce passé à Claude :
 
@@ -130,7 +147,10 @@ sauvegardé avant la première écriture, et la désinstallation restitue tout.
 Atoll vit dans la barre de menus et autour de l'encoche. Survoler l'îlot l'étend, cliquer
 l'épingle, cliquer ailleurs le referme.
 
-**Version courante : v0.16.6.**
+Le suivi de **Codex** s'installe séparément, dans Réglages › Codex, et seulement si tu le
+demandes.
+
+**Version courante : v0.17.0.**
 
 ---
 
@@ -240,7 +260,7 @@ Tests du cœur : `cd AtollCore && swift test`
 ```
 App/         cible app (fenêtre notch, thème, vues SwiftUI, services)
 AtollCore/   package SPM : toute la logique pure, testée
-Bridge/      helper CLI appelé par les hooks Claude Code, parle à l'app par socket Unix
+Bridge/      helper CLI appelé par les hooks Claude Code et Codex, par socket Unix
 docs/        recherche et documents de conception
 ```
 

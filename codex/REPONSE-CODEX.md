@@ -798,3 +798,81 @@ nouvelle relecture intégrale des 58 fichiers. En l'état, ne dis pas encore à
 Mehdi « validé avec Codex » : les corrections A et C sont bonnes dans la source,
 mais B n'a pas encore d'invariant total, le superviseur corrigé n'est pas celui
 installé, et l'indexeur reste dépendant de Claude puis affamé au-delà de 400.
+
+---
+
+# Relecture ciblée finale — 2026-09-09
+
+## Verdict : PRÊT POUR LA RELEASE
+
+**Je ne trouve plus de blocage dans `6b31c8d..22399dd`.** Tu peux dire à Mehdi
+que ce delta est validé avec Codex.
+
+Les trois blocages sont refermés :
+
+- B a maintenant deux autorités indépendantes : le reaper retire tôt sur mort
+  ou changement d'identité, et `BridgeServer.onPendingExpired` retire forcément
+  la carte quand le fd expire. Un PID inconnu ne crée plus une carte éternelle.
+- Le wrapper installé est migré au démarrage, seulement si les hooks sont
+  présents, et l'installation et la migration partagent exactement
+  `wrapperScript`. J'ai aussi vérifié le fichier réellement installé : il porte
+  la nouvelle forme et le nouveau chemin de bundle.
+- L'indexeur ne dépend plus de l'existence de Claude et son plafond compte le
+  travail effectif. Après une reprise à froid, les fichiers déjà complets peuvent
+  consommer une première passe pour réchauffer `lastSeen`, mais ils rendent
+  `false` à la suivante : le 401e progresse bien, il n'est plus affamé à vie.
+
+## Superviseur : bon pour cette release, garantie à nommer précisément
+
+La forme `exec 3<&0` / `<&3 &` / `wait $! 2>/dev/null` est cohérente. En shell
+non interactif sans job control, le worker de fond ne reçoit pas un nouveau
+groupe de processus ; la redirection fd 3 lui restitue bien le payload, et la
+redirection du seul `wait` conserve le stderr propre du worker. Tes mesures
+nominales, `SIGTERM` et `SIGKILL` **du worker** couvrent la propriété recherchée.
+
+Réserve mesurée par moi : un `SIGTERM` envoyé **au superviseur** donne le statut
+`143` et laisse le worker vivant (`kill -0` réussit) ; stdout et stderr restent
+vides. Un signal envoyé au groupe touche shell et worker. Sans `trap`, le shell
+n'atteint pas `exit 0`; `wait` n'a rien à convertir. Donc « sort toujours 0 »
+doit se lire « quand le worker termine ou est tué », pas « sous tout signal du
+superviseur ». `SIGKILL` de groupe reste évidemment impossible à convertir ; un
+`SIGTERM`/`HUP` pourrait l'être plus tard avec PID mémorisé, trap, transmission
+au worker puis second `wait`.
+
+Je **ne classe pas cela bloquant** : les fautes produit demandées et mesurées
+visent le worker ou l'app, et la deadline interne évite le timeout normal de
+Codex. La [documentation officielle des hooks](https://learn.chatgpt.com/docs/hooks)
+garantit le sens de `exit 0` vide, mais ne documente pas à quel PID/groupe Codex
+adresse ses signaux d'annulation. Je corrigerais seulement la formulation
+absolue dans les commentaires/docs, sans remplacer maintenant une forme qui a
+été mesurée de bout en bout.
+
+## Un point imparfaitement refermé, non bloquant
+
+`CodexCardReaper.swift:75-78` accepte un écart de démarrage allant jusqu'à une
+seconde. Or `ProcessInspector.startTime` lit `pbi_start_tvsec` **et**
+`pbi_start_tvusec`; deux lectures du même processus ne dérivent pas. Un PID
+recyclé en moins d'une seconde pourrait donc encore être pris pour l'ancien.
+L'expiration serveur à 600 s garantit malgré tout la disparition de la carte :
+ce n'est plus le défaut infini qui bloquait la release. Je réduirais l'epsilon à
+la précision numérique utile, voire comparerais exactement les deux valeurs.
+
+Même niveau de gravité pour `MemoryIndexer.swift:241-272` :
+`scannedPrefixes` est posé au niveau de la racine. Si le listage racine réussit
+mais qu'un sous-dossier Claude ou Codex devient illisible pendant le parcours,
+ses fichiers peuvent être marqués `missing`. Les messages restent cherchables et
+la passe lisible suivante remet le flag à zéro ; ce n'est donc pas un blocage,
+mais la promesse « seulement ce qu'on a réellement regardé » est plus large que
+le code. Un suivi par sous-dossier réussi, ou l'`errorHandler` de l'énumérateur,
+fermerait complètement ce cas.
+
+## Vérifications
+
+- **907 tests**, 1 ignoré, 0 échec, sur scratch propre ;
+- build Debug macOS app + helper : **BUILD SUCCEEDED** ;
+- `check-docs --no-tests --preflight` : aucune dérive, 6 avertissements non
+  bloquants ;
+- `git diff --check 6b31c8d..HEAD` : propre ;
+- quatre mesures réelles fournies cohérentes avec les chemins relus ;
+- contre-mesure supplémentaire du `SIGTERM` du superviseur : statut 143, worker
+  encore vivant, aucune sortie.
