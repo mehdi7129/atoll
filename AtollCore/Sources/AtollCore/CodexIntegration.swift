@@ -132,10 +132,84 @@ public struct CodexSessions: Sendable {
         entries[sessionID]?.transcriptPath
     }
 
+    /// Ce que la projection a fait d'un événement.
+    ///
+    /// ⚠️ `accepted` EXISTE PARCE QUE `nil` NE SUFFISAIT PAS. `apply` rendait
+    /// `nil` aussi bien pour « événement REJETÉ — il appartient à un tour clos
+    /// ou périmé » que pour « accepté, aucune session terminée » : l'appelant ne
+    /// pouvait donc pas distinguer les deux, et il enregistrait la carte
+    /// d'autorisation dans les DEUX cas. Le filtrage des tours protégeait l'état
+    /// de session et pas l'interaction — une permission retardataire d'un tour
+    /// déjà clos créait quand même une carte. Constat de Codex, revue du
+    /// 2026-09-09.
+    public struct Applied: Sendable, Equatable {
+        /// Ce que la projection sait du TOUR de l'événement.
+        ///
+        /// ⚠️ « REJETÉ » NE VEUT PAS DIRE « PÉRIMÉ ». Un booléen ne suffisait
+        /// pas ici, et le croire a produit une régression mesurée par Codex le
+        /// 2026-09-09, dans le correctif du matin même : `UserPromptSubmit`
+        /// est ASYNC, donc une `PermissionRequest(t2)` peut arriver AVANT le
+        /// prompt qui ouvre `t2`. Le garde « ce n'est pas le tour courant » la
+        /// rejetait — à raison pour l'état de session — et l'appelant, qui ne
+        /// lisait qu'un `accepted == false`, rendait aussitôt la main : une
+        /// demande VIVANTE perdait sa carte, définitivement, puisque rien ne la
+        /// recrée quand le prompt arrive enfin.
+        ///
+        /// Le doute et la certitude n'appellent donc pas le même geste : on ne
+        /// détruit une carte que sur un tour CERTAINEMENT clos.
+        public enum Turn: Sendable, Equatable {
+            /// Événement retenu.
+            case current
+            /// Tour dont on sait qu'il est CLOS — la demande ne vaut plus rien.
+            case closed
+            /// Tour ni courant ni connu comme clos : l'état de session ne bouge
+            /// pas, mais l'interaction est laissée intacte. Une carte de trop se
+            /// ferme au clic ou expire ; une carte détruite est perdue.
+            case unknown
+        }
+
+        /// Ce que cet événement vient de CLORE, s'il clôt quelque chose.
+        ///
+        /// `unnamed` existe parce qu'un `Stop` ou un `Interrupt` peut arriver
+        /// SANS `turn_id` : le rendre `nil` confondait « rien de clos » et
+        /// « clos, mais sans nom », et le repli de l'appelant devenait
+        /// inatteignable. Constat de Codex sur ce même correctif.
+        public enum Closure: Sendable, Equatable {
+            case none
+            case named(String)
+            case unnamed
+        }
+
+        public let turn: Turn
+        /// Faits de la session quand elle vient de SE TERMINER — `nil` sinon.
+        public let ended: EndedSession?
+        public let closure: Closure
+
+        /// L'événement a été retenu par la projection.
+        public var accepted: Bool { turn == .current }
+        /// La demande d'autorisation qu'il porte, s'il en porte une, est morte.
+        public var cardIsStale: Bool { turn == .closed }
+
+        public init(turn: Turn, ended: EndedSession? = nil, closure: Closure = .none) {
+            self.turn = turn
+            self.ended = ended
+            self.closure = closure
+        }
+    }
+
     /// `apply` rend les faits de la session quand elle vient de SE TERMINER —
     /// `nil` sinon. C'est ce que l'appelant transmet au bilan de fin de session.
+    ///
+    /// Vue étroite d'`applyEvent`, conservée parce qu'elle se lit bien là où le
+    /// verdict n'importe pas. Une SEULE logique, deux lectures : deux
+    /// implémentations divergeraient au premier correctif.
     @discardableResult
     public mutating func apply(_ event: CodexHookEvent, now: Date = Date()) -> EndedSession? {
+        applyEvent(event, now: now).ended
+    }
+
+    @discardableResult
+    public mutating func applyEvent(_ event: CodexHookEvent, now: Date = Date()) -> Applied {
         if event.kind == .sessionEnd {
             let ended = entries.removeValue(forKey: event.sessionID).map {
                 EndedSession(sessionID: event.sessionID,
@@ -147,7 +221,7 @@ public struct CodexSessions: Sendable {
                              userPromptCount: $0.userPromptCount,
                              startedAt: $0.session.startedAt)
             }
-            return ended
+            return Applied(turn: .current, ended: ended)
         }
         var entry = entries[event.sessionID] ?? Entry(session: AgentSession(
             id: event.sessionID,
@@ -169,17 +243,28 @@ public struct CodexSessions: Sendable {
         // tour plus récent, il replaçait `entry.turnID` sur l'ancien tour, et
         // tous les événements du vrai tour courant étaient ensuite rejetés.
         // La session se figeait pour de bon.
-        if let turn = event.turnID, entry.closedTurns.contains(turn) { return nil }
+        // Tour explicitement mémorisé comme clos : certitude.
+        if let turn = event.turnID, entry.closedTurns.contains(turn) { return Applied(turn: .closed) }
 
         // Un événement d'un AUTRE tour ne finit pas le tour courant (garde
         // d'origine). `userPromptSubmit` en est exempté : c'est lui qui ouvre.
+        // Tour DIFFÉRENT du courant, et pas dans la mémoire des tours clos : on
+        // ne sait pas s'il est ancien ou s'il vient de s'ouvrir (le prompt qui
+        // l'ouvre est async, il peut arriver après). L'état ne bouge pas, la
+        // carte est laissée en vie.
         if event.kind != .userPromptSubmit, let turn = event.turnID,
-           let current = entry.turnID, turn != current { return nil }
+           let current = entry.turnID, turn != current { return Applied(turn: .unknown) }
 
         // Un tour clos ne se rouvre que par un PROMPT explicite. Sans cela, un
         // retardataire SANS `turn_id` — que les deux gardes ci-dessus laissent
         // passer — ferait repartir l'activité tout seul.
-        if entry.turnIsClosed, event.kind != .userPromptSubmit { return nil }
+        // Tour courant clos. Un événement qui le NOMME est périmé pour de bon ;
+        // un événement sans `turn_id` peut appartenir au tour suivant, dont le
+        // prompt n'est pas encore arrivé — doute, donc on ne détruit rien.
+        if entry.turnIsClosed, event.kind != .userPromptSubmit {
+            let named = event.turnID != nil && event.turnID == entry.turnID
+            return Applied(turn: named ? .closed : .unknown)
+        }
 
         if event.kind == .userPromptSubmit || entry.turnID == nil { entry.turnID = event.turnID }
         if event.kind == .userPromptSubmit { entry.turnIsClosed = false }
@@ -213,7 +298,17 @@ public struct CodexSessions: Sendable {
         case .sessionEnd: break
         }
         entries[event.sessionID] = entry
-        return nil
+        // `Stop` et `Interrupt` closent le tour : l'appelant retire les cartes
+        // qui lui appartenaient. Le tour COURANT sert de repli quand
+        // l'événement de clôture ne porte pas de `turn_id` — la projection le
+        // connaît, elle, et le taire rendait le nettoyage inatteignable.
+        let closure: Applied.Closure
+        if event.kind == .stop || event.kind == .interrupt {
+            closure = (event.turnID ?? entry.turnID).map { .named($0) } ?? .unnamed
+        } else {
+            closure = .none
+        }
+        return Applied(turn: .current, closure: closure)
     }
 
     public func sessions(now: Date = Date()) -> [AgentSession] {

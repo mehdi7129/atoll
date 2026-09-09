@@ -1,5 +1,77 @@
 # CLAUDE.md — instructions projet Atoll
 
+> **v0.17.1 — CE QUE CODEX A TROUVÉ APRÈS LA PUBLICATION** (2026-09-09). Sa
+> quatrième revue, faite sur la v0.17.0 DÉJÀ publiée et installée, a rendu
+> quatre défauts P2 — tous sur des fonctions livrées le matin même. Aucune
+> fonction ajoutée. **La leçon d'abord** : un verdict « prêt pour la release »
+> borne ce qui a été RELU, pas ce qui existe. Trois des quatre défauts vivaient
+> dans du code qu'il avait relu deux fois.
+>
+> ⚠️ **UN CANDIDAT UNIQUE N'EST PAS UNE CORRÉLATION.** `noteToolFinished`
+> refermait une carte quand `PostToolUse` arrivait et qu'il ne restait qu'UN
+> candidat pour cette session et cet outil — règle que Codex avait lui-même
+> proposée, puis mesurée fausse : elle compte les candidats APRÈS le retrait des
+> cartes déjà tranchées. Deux demandes identiques A et B, l'utilisateur autorise
+> A, sa carte part ; le `PostToolUse` de A arrive alors que B est devenue
+> l'unique candidate, et c'était B qu'on rendait au client. Le filet est
+> SUPPRIMÉ, pas raffiné : il n'apportait aucune garantie que les cinq autres
+> autorités n'apportent déjà sur un fait CONSTATÉ — clic, retour explicite, fin
+> de session ou de tour, mort du helper, expiration serveur. Un sixième chemin
+> qui DEVINE ne pouvait que se tromper.
+>
+> ⚠️ **UN FILTRE QUI PROTÈGE L'ÉTAT NE PROTÈGE PAS L'INTERACTION.**
+> `CodexSessions.apply` rendait `nil` aussi bien pour « événement REJETÉ, tour
+> clos ou périmé » que pour « accepté, rien de terminé » : l'appelant ne pouvait
+> pas les distinguer et enregistrait la carte d'autorisation dans les DEUX cas.
+> La clôture monotone des tours — écrite en v0.17.0 précisément contre les
+> retardataires — ne gouvernait donc que la machine à états. D'où
+> `CodexSessions.applyEvent` → `Applied`, et l'annulation des cartes d'un tour
+> qu'un `Interrupt` vient de clore : `SessionEnd` avait son nettoyage,
+> l'interruption n'en avait aucun.
+>
+> ⚠️ **ET LA REVUE DE CE CORRECTIF A TROUVÉ UNE RÉGRESSION DANS LE CORRECTIF** —
+> comme en v0.16.6, et c'est la raison d'être de cette passe. Un booléen
+> `accepted` confondait « tour CERTAINEMENT clos » et « tour INCONNU ». Or
+> `UserPromptSubmit` est async : une `PermissionRequest(t2)` peut arriver AVANT
+> le prompt qui ouvre `t2`. Le garde la rejetait — à raison pour l'état de
+> session — et ma première version rendait aussitôt la main : une demande
+> VIVANTE perdait sa carte, définitivement, puisque rien ne la recrée quand le
+> prompt arrive. **Le doute et la certitude n'appellent pas le même geste** :
+> `Applied.Turn` vaut `.current` / `.closed` / `.unknown`, et on ne détruit une
+> carte que sur `.closed`. Même correction sur la clôture : un `Stop` sans
+> `turn_id` n'est pas une absence de clôture, d'où `Applied.Closure` (`.none` /
+> `.named` / `.unnamed`) — rendre `nil` pour les deux rendait le nettoyage
+> inatteignable, le `if let` de l'appelant sautant tout. Deuxième constat de la
+> même revue : `preparingHandoff` était levé AVANT l'`await`, donc deux
+> passations pouvaient se chevaucher et écraser leurs fichiers — `defer`.
+>
+> ⚠️ **UN CHEMIN RELATIF N'A DE SENS QUE RAPPORTÉ À UN DOSSIER — ICI IL Y EN A
+> DEUX.** La passation écrivait le condensé dans `~/.atoll/handoff/<session>/`
+> puis lançait un script qui fait `cd <dossier du projet>` et demande de lire
+> `./contexte.md`. Introuvable — ou pire, un homonyme du projet lu à sa place,
+> pendant que l'interface annonçait « contexte joint ». Le test qui existait
+> cherchait « contexte.md » dans le script : `./contexte.md` le satisfaisait
+> aussi. **Un test qui ne peut pas distinguer les deux cas ne garde rien.**
+> Corrigé avec le chemin ABSOLU, l'exécutable RÉSOLU (le nom nu, c'est la panne
+> de la v0.16.6) et un `.opened` qui attend le résultat réel de l'ouverture.
+>
+> ⚠️ **LA MÉMOIRE N'EST PAS ÉTANCHE, ET NE DOIT PAS PRÉTENDRE L'ÊTRE.** Les
+> rollouts Codex entrent dans le MÊME index que les transcripts Claude —
+> **mesuré : 1 051 messages Codex sur 70 685, dont 37 `user` et 92 `assistant`**,
+> les rôles qu'injecte le recall proactif. C'est voulu (se souvenir d'un DÉPÔT,
+> pas d'un outil), mais le README annonçait « une isolation de bout en bout » :
+> l'étanchéité porte sur les décisions, les événements et les règles, jamais sur
+> le corpus. Corrigé dans le README et dans le panneau de réglages.
+>
+> ⚠️ **LA CAUSE RACINE DU BUG D'APPCAST EST FERMÉE, pas seulement son symptôme.**
+> `generate_appcast` applique le `--download-url-prefix` de la release courante à
+> TOUTES les entrées : `Scripts/release.sh` repointe désormais chaque URL vers le
+> tag de SA propre version, et `check-docs.py` vérifie cet invariant **sans
+> réseau** — il n'était attrapé que par `--network`, donc jamais par le préflight
+> qui tourne pourtant juste avant chaque publication. Le post-traitement a été
+> validé en le rejouant sur l'appcast réellement cassé : il reproduit à l'octet
+> près la réparation faite à la main.
+>
 > **v0.17.0 — ATOLL SUIT AUSSI CODEX** (2026-09-09). Première release depuis la
 > PR #1 de Codex, empilée de la BASCULE DE QUOTA demandée par Mehdi le 2026-09-06
 > (« si je n'ai plus de quota sur Claude, j'aimerais que ça passe sur mon compte

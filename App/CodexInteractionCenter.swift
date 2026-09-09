@@ -43,6 +43,10 @@ final class CodexInteractionCenter {
         /// `(pid, startTime)` est l'identité ; le projet composait déjà ce
         /// couple ailleurs. Constat de Codex en revue.
         let helperStartTime: Double?
+        /// Tour auquel la demande appartient. Une interruption ne clôt qu'un
+        /// TOUR, pas la session : sans lui, annuler sur `Interrupt` emporterait
+        /// les demandes d'un tour qui n'a pas été interrompu.
+        let turnID: String?
     }
 
     private(set) var pending: [Pending] = []
@@ -61,7 +65,8 @@ final class CodexInteractionCenter {
             tool: event.tool ?? "Codex",
             receivedAt: Date(),
             helperPid: helperPid,
-            helperStartTime: helperPid > 0 ? ProcessInspector.startTime(of: helperPid) : nil)
+            helperStartTime: helperPid > 0 ? ProcessInspector.startTime(of: helperPid) : nil,
+            turnID: event.turnID)
         pending.append(card)
         log.info("carte Codex \(requestID, privacy: .public) — \(card.tool, privacy: .public)")
     }
@@ -132,17 +137,44 @@ final class CodexInteractionCenter {
         }
     }
 
-    /// Filet de nettoyage sur `PostToolUse`, et RIEN DE PLUS.
+    /// Toutes les cartes d'un TOUR interrompu — l'utilisateur a coupé, plus
+    /// personne n'attend la réponse à une demande de ce tour.
     ///
-    /// `PermissionRequest` ne porte pas de `tool_use_id` : le nom d'outil ne
-    /// distingue pas deux demandes simultanées identiques. On ne referme donc
-    /// que s'il n'y a AUCUNE ambiguïté — un seul candidat pour cette session et
-    /// cet outil. Sinon on ne touche à rien : une carte de trop se ferme au
-    /// clic, une carte fermée à tort perd une décision de l'utilisateur.
-    func noteToolFinished(sessionID: String, tool: String?) {
-        guard let tool else { return }
-        let candidates = pending.filter { $0.sessionID == sessionID && $0.tool == tool }
-        guard candidates.count == 1, let card = candidates.first else { return }
-        handBack(card.id)
+    /// `SessionEnd` avait son nettoyage (`cancelAll(forSession:)`), pas
+    /// l'interruption : une carte pouvait survivre à un ⎋ jusqu'au passage du
+    /// reaper ou à l'expiration de 600 s. Constat de Codex, revue du
+    /// 2026-09-09.
+    func cancelAll(forSession sessionID: String, turn: String) {
+        for card in pending where card.sessionID == sessionID && card.turnID == turn {
+            handBack(card.id)
+        }
+    }
+
+    /// Cartes d'une session qui ne portent AUCUN tour, quand la clôture n'en
+    /// nomme aucun non plus. C'est tout ce qu'on peut retirer sans deviner :
+    /// une carte qui nomme son tour n'est pas prouvée close par un `Stop`
+    /// anonyme.
+    func cancelUnattributedCards(forSession sessionID: String) {
+        for card in pending where card.sessionID == sessionID && card.turnID == nil {
+            handBack(card.id)
+        }
     }
 }
+
+// ⛔️ `noteToolFinished` A ÉTÉ RETIRÉ le 2026-09-09, et il faut dire pourquoi
+// avant que quelqu'un le réintroduise.
+//
+// Ce filet fermait une carte quand `PostToolUse` arrivait et qu'il ne restait
+// qu'UN candidat pour cette session et cet outil. Codex avait lui-même proposé
+// la règle du candidat unique, puis l'a mesurée insuffisante : elle compte les
+// candidats APRÈS le retrait des cartes déjà tranchées. Deux demandes
+// identiques A et B attendent, l'utilisateur autorise A, la carte de A part ;
+// le `PostToolUse` de A arrive alors que B est devenue l'unique candidate, et
+// c'est B qu'on rendait au client — sa demande attendait toujours.
+//
+// Il n'est pas remplacé par une règle plus fine : il n'apportait AUCUNE
+// garantie que les quatre autres autorités n'apportent déjà, chacune sur un
+// fait constaté et non déduit — le clic (UUID), le retour explicite,
+// `SessionEnd` / l'interruption, la mort du helper (`CodexCardReaper`) et
+// l'expiration serveur (`onPendingExpired`). Un cinquième chemin qui devine
+// ne pouvait que se tromper.

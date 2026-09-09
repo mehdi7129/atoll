@@ -200,7 +200,24 @@ Pas de socket, pas de réparation des hooks, pas de login, pas de réseau, pas d
 relecture/injection du journal de recall, réglages indisponibles. Cet aperçu peut
 coexister avec l'Atoll stable. Quitter via son menu « Quitter l'aperçu ».
 
-### 3. Essai fonctionnel explicite — à faire avant fusion
+### 3. Essai fonctionnel explicite
+
+> **CETTE SECTION A DIT « AVANT FUSION » APRÈS LA FUSION.** La PR #1 est dans
+> `main` depuis la v0.17.0 (2026-09-09) et l'app est installée chez son
+> utilisateur. Ce qui suit reste la procédure d'essai — elle vaut pour toute
+> reprise du sujet — mais ce n'est plus une condition de fusion.
+>
+> **CE QUI A ÉTÉ EXERCÉ EN VRAI, au 2026-09-09** : hooks installés chez
+> l'utilisateur (10 événements), découverte d'une session `codex exec` vivante
+> et son affichage dans l'îlot à côté d'une session Claude (capture à l'appui),
+> migration automatique du lanceur de hooks vers l'app installée, lecture du
+> quota, indexation des rollouts (1 051 messages), bilan de fin de session par
+> `codex exec`.
+> **CE QUI NE L'A PAS ÉTÉ** : la carte d'autorisation cliquée dans une VRAIE
+> session Codex en Release. Les triggers de debug sont `#if DEBUG` — ils
+> décideraient à la place de l'utilisateur — donc la première vraie carte devra
+> être cliquée à la main. Tant que ce n'est pas fait, ne pas écrire que ce
+> chemin est vérifié de bout en bout.
 
 Ce n'est **pas** l'aperçu : le démarrage normal de l'app lance les services existants
 et peut réparer les wrappers Claude. Ne pas lancer simultanément deux Atoll normaux
@@ -256,4 +273,8 @@ Une conversation automatique entre agents demanderait un travail distinct.
   de recall de production rejouée. Les parcours réels de hooks, permissions natives,
   clients desktop/IDE et changement de compte restent à valider avant fusion.
 
-La PR doit rester en **brouillon** jusqu'à cette validation et à la revue du diff.
+La PR a été fusionnée le 2026-09-09 après trois revues de Codex (deux verdicts
+BLOQUANT, puis « prêt pour la release ») et publiée en v0.17.0. Sa **quatrième**
+revue, faite APRÈS publication, a trouvé quatre défauts P2 sur des fonctions
+déjà livrées — corrigés en v0.17.1. La leçon vaut d'être écrite : un verdict
+« prêt pour la release » borne ce qui a été relu, pas ce qui existe.

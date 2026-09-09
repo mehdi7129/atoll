@@ -35,12 +35,29 @@ public enum SessionHandoff {
     /// `digest` est le condensé produit par `TranscriptDigest` ; vide si le
     /// transcript est illisible — le handoff reste utile (il ouvre Codex au bon
     /// endroit), il annonce simplement qu'il n'a pas de contexte à offrir.
+    /// `contextPath` est le chemin ABSOLU du fichier de contexte, celui que
+    /// l'appelant va réellement écrire.
+    ///
+    /// ⚠️ IL A ÉTÉ RELATIF, ET C'ÉTAIT UN DÉFAUT (constat de Codex, revue du
+    /// 2026-09-09). Le script se place dans le dossier du PROJET, puis demandait
+    /// de lire `./contexte.md` — un fichier qui vit dans `~/.atoll/handoff/…`.
+    /// Deux issues, toutes deux fausses : Codex ne trouve rien alors que
+    /// l'interface a annoncé « contexte joint », ou pire, le projet contient un
+    /// `contexte.md` à lui et c'est CELUI-LÀ qui est lu. Un chemin relatif n'a
+    /// de sens que rapporté à un dossier — ici il y en a deux, et ce n'est pas
+    /// le même.
+    ///
+    /// `executable` est le chemin du binaire `codex` déjà résolu par
+    /// l'appelant. Le nom nu dépendait du PATH du shell qui exécute le
+    /// `.command` : c'est exactement la panne de la v0.16.6, où « `claude` est
+    /// résolu par le PATH du shell » était écrit et faux.
     public static func make(
         projectName: String,
         workingDirectory: String?,
         gitBranch: String?,
         digest: String,
-        contextFileName: String = "contexte.md",
+        contextPath: String,
+        executable: String? = nil,
         endedAt: Date,
         formatter: DateFormatter? = nil
     ) -> Files {
@@ -81,17 +98,20 @@ public enum SessionHandoff {
         let quotedDirectory = shellQuote(workingDirectory ?? "")
         let prompt = """
         Je reprends dans Codex une session Claude Code interrompue faute de \
-        quota. Lis ./\(contextFileName) — c'est le compte rendu de ce qui a été \
+        quota. Lis \(contextPath) — c'est le compte rendu de ce qui a été \
         fait — puis attends ma consigne. Ne modifie rien avant que je te le \
         demande.
         """
+        // Chemin ABSOLU quand l'appelant a su le résoudre — le nom nu ne
+        // survit qu'au PATH du shell qui ouvre le `.command`.
+        let binary = (executable?.isEmpty == false) ? shellQuote(executable!) : "codex"
         let launcher = """
         #!/bin/sh
         # Écrit par Atoll — reprise d'une session Claude Code sur Codex.
         # Ce fichier est jetable : il peut être supprimé à tout moment.
         set -e
         cd \(quotedDirectory.isEmpty ? "." : quotedDirectory)
-        exec codex \(shellQuote(prompt))
+        exec \(binary) \(shellQuote(prompt))
         """
         return Files(contextMarkdown: context, launcherScript: launcher)
     }

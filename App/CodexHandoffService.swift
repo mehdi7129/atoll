@@ -34,15 +34,7 @@ enum CodexHandoffService {
     ///
     /// `digest` est calculé par l'appelant : c'est lui qui sait lire le
     /// transcript, et ce type ne doit pas dépendre du format JSONL.
-    static func start(session: AgentSession, digest: String) -> Outcome {
-        let files = SessionHandoff.make(
-            projectName: session.projectName,
-            workingDirectory: session.cwd,
-            gitBranch: session.gitBranch,
-            digest: digest,
-            endedAt: Date()
-        )
-
+    static func start(session: AgentSession, digest: String) async -> Outcome {
         // Un dossier par session, remplacé à chaque fois : deux reprises de la
         // même session ne doivent pas empiler des contextes contradictoires.
         let safeID = session.id.replacingOccurrences(
@@ -50,6 +42,21 @@ enum CodexHandoffService {
         let workspace = directory.appendingPathComponent(safeID, isDirectory: true)
         let contextFile = workspace.appendingPathComponent("contexte.md")
         let scriptFile = workspace.appendingPathComponent("reprendre.command")
+
+        // ⚠️ LES CHEMINS SE CALCULENT AVANT LE SCRIPT, PAS APRÈS. Le script
+        // doit désigner le fichier qu'on va réellement écrire : il se place
+        // dans le dossier du PROJET, alors que le contexte vit dans
+        // `~/.atoll/handoff/…`. Un `./contexte.md` y désignait donc autre
+        // chose — rien, ou un homonyme du projet.
+        let files = SessionHandoff.make(
+            projectName: session.projectName,
+            workingDirectory: session.cwd,
+            gitBranch: session.gitBranch,
+            digest: digest,
+            contextPath: contextFile.path,
+            executable: await CodexExecutable.resolve(),
+            endedAt: Date()
+        )
 
         do {
             // 0700 : le condensé, c'est le contenu d'une session de travail.
@@ -71,11 +78,20 @@ enum CodexHandoffService {
         }
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = true
-        NSWorkspace.shared.open([scriptFile], withApplicationAt: terminal,
-                                configuration: configuration) { _, error in
-            if let error {
-                log.error("ouverture du terminal : \(error.localizedDescription, privacy: .public)")
+        // ⚠️ ON ATTEND LE RÉSULTAT. `open` est ASYNCHRONE : rendre `.opened`
+        // tout de suite faisait dire « Codex ouvert dans un terminal » à
+        // l'interface avant de savoir si Terminal s'était ouvert, et un échec
+        // ultérieur ne partait qu'au journal. Annoncer un fait qu'on n'a pas
+        // constaté est le défaut que ce projet paie le plus cher.
+        let failure: String? = await withCheckedContinuation { continuation in
+            NSWorkspace.shared.open([scriptFile], withApplicationAt: terminal,
+                                    configuration: configuration) { _, error in
+                continuation.resume(returning: error?.localizedDescription)
             }
+        }
+        if let failure {
+            log.error("ouverture du terminal : \(failure, privacy: .public)")
+            return .failed("Terminal n'a pas pu être ouvert (\(failure)) — le script est prêt dans \(workspace.path)")
         }
         log.info("passation Codex préparée pour \(session.id, privacy: .public)")
         return .opened(workspace)

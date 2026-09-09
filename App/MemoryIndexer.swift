@@ -376,8 +376,19 @@ private actor MemoryIndexWorker {
                                          errorHandler: { _, _ in readable = false; return false })
         else { return (seen, false) }
         var scanned = 0
-        for case let file as URL in walker {
-            if Task.isCancelled { return (seen, readable) }
+        // ⚠️ `nextObject()` ET NON `for … in walker` : `Sequence.makeIterator`
+        // est indisponible depuis un contexte asynchrone, et ce qui n'est
+        // aujourd'hui qu'un avertissement devient une ERREUR en Swift 6.
+        while let object = walker.nextObject() {
+            guard let file = object as? URL else { continue }
+            // ⚠️ UNE PASSE ANNULÉE N'A PAS LISTÉ LE DOSSIER. Rendre `readable`
+            // ici disait « j'ai tout vu » après un parcours interrompu :
+            // l'appelant posait le préfixe et déclarait DISPARUS les rollouts
+            // non encore visités. Même faute que le préfixe posé à la racine,
+            // au même endroit — la promesse « seulement ce qu'on a réellement
+            // regardé » ne tient que si l'annulation la respecte aussi.
+            // Constat de Codex, revue du 2026-09-09.
+            if Task.isCancelled { return (seen, false) }
             guard file.pathExtension == "jsonl" else { continue }
             // Compté comme VU quoi qu'il arrive : le fichier existe, et le
             // déclarer disparu serait faux.

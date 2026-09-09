@@ -280,6 +280,39 @@ def check_versions(preflight: bool = False) -> None:
 
 # ------------------------------- 4. symboles et fichiers cités par les documents
 
+def check_appcast_tags() -> None:
+    """Chaque URL d'une entrée d'appcast porte le tag de SA version.
+
+    Défaut réel, trouvé le 2026-09-09 : `generate_appcast` applique le
+    `--download-url-prefix` de la release courante à TOUTES les entrées, y
+    compris les anciennes. L'archive 0.16.6 était annoncée sous `v0.17.0` — un
+    404 — et l'entrée 0.16.5 pointait déjà vers `v0.16.6` à la release
+    précédente. Personne ne le voyait : Sparkle ne propose que la version la
+    plus récente.
+
+    ⚠️ CE CONTRÔLE EST LOCAL EXPRÈS. Le défaut n'était attrapé que par
+    `--network`, c'est-à-dire 18 requêtes HTTP qu'on ne lance pas à chaque
+    passe — et jamais par `--preflight`, qui tourne pourtant juste avant chaque
+    publication. L'invariant, lui, se vérifie sans réseau : il est dans le
+    fichier.
+    """
+    global checked
+    appcast = read("docs/appcast.xml")
+    if not appcast:
+        return
+    checked += 1
+    for item in re.findall(r"<item>.*?</item>", appcast, re.S):
+        short = re.search(r"<sparkle:shortVersionString>([^<]+)", item)
+        if not short:
+            continue
+        tag = "v" + short.group(1)
+        for url in re.findall(r'url="([^"]+)"', item):
+            found = re.search(r"/releases/download/([^/]+)/", url)
+            if found and found.group(1) != tag:
+                fail("appcast", f"l'entrée {short.group(1)} pointe vers {found.group(1)} "
+                                f"— {url.rsplit('/', 1)[-1]} vit sous {tag}")
+
+
 def check_cited_symbols() -> None:
     """`Type.membre` cité entre accents graves : le membre existe-t-il ?
 
@@ -598,6 +631,7 @@ def main() -> int:
     check_test_count(run_tests=not args.no_tests)
     check_debug_triggers()
     check_versions(preflight=args.preflight)
+    check_appcast_tags()
     check_cited_symbols()
     check_cited_files()
     check_readme_ascii()

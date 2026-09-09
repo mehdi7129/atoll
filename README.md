@@ -80,10 +80,15 @@ Anthropic.
 Le reste suit : les rollouts Codex entrent dans la même mémoire locale, le bilan de fin de
 session sait les relire, et les sons sonnent pareil.
 
-**Les deux restent étanches.** Socket séparé, événements séparés, décisions séparées : une
-permission Codex ne traverse jamais la logique écrite pour Claude, et une règle que tu as
-posée pour l'un ne s'applique jamais à l'autre. C'est une isolation de bout en bout, pas un
-drapeau dans une fonction commune.
+**Les décisions restent étanches.** Socket séparé, événements séparés, décisions séparées :
+une permission Codex ne traverse jamais la logique écrite pour Claude, et une règle que tu as
+posée pour l'un ne s'applique jamais à l'autre — le mode Rockstar, en particulier, ne décide
+jamais pour Codex. C'est une isolation réelle, pas un drapeau dans une fonction commune.
+
+**La mémoire, elle, est commune — et c'est voulu.** Un index unique, pas deux : c'est tout
+l'intérêt de se souvenir d'un dépôt plutôt que d'un outil, et un souvenir venu d'une session
+Codex peut donc remonter pendant une session Claude. Si tu veux que les deux n'aient rien en
+commun, l'indexation se coupe dans Réglages → Mémoire — elle les coupe alors tous les deux.
 
 L'installation est distincte et facultative — Atoll marche très bien avec un seul des deux.
 Elle touche à `hooks.json` (sauvegardé avant la première écriture) et à rien d'autre : ni
@@ -150,7 +155,7 @@ l'épingle, cliquer ailleurs le referme.
 Le suivi de **Codex** s'installe séparément, dans Réglages › Codex, et seulement si tu le
 demandes.
 
-**Version courante : v0.17.0.**
+**Version courante : v0.17.1.**
 
 ---
 

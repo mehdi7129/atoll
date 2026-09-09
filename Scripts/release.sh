@@ -118,6 +118,40 @@ GENERATE_APPCAST=$(find "$DD/SourcePackages/artifacts" -name generate_appcast -t
 "$GENERATE_APPCAST" \
   --download-url-prefix "https://github.com/mehdi7129/atoll/releases/download/v$VERSION/" \
   "$UPDATES"
+
+# ⚠️ generate_appcast APPLIQUE CE PRÉFIXE À TOUTES LES ENTRÉES, y compris les
+# ANCIENNES : l'archive 0.16.6 s'est retrouvée annoncée sous le tag v0.17.0,
+# soit un 404. Le défaut se reproduit à CHAQUE publication, en silence, parce
+# que Sparkle ne propose que la version la plus récente — personne ne clique
+# jamais sur une entrée ancienne. Trouvé le 2026-09-09 par check-docs --network,
+# alors qu'il durait déjà depuis la release précédente.
+#
+# Chaque fichier d'une release vit sous SON tag : l'invariant est donc « toutes
+# les URL d'un <item> portent v<shortVersionString> de cet item ». Réparé ici,
+# pas à la main après coup — une correction manuelle à refaire à chaque fois est
+# une correction qu'on oubliera.
+python3 - "$UPDATES/appcast.xml" <<'FIXTAGS'
+import re, sys
+path = sys.argv[1]
+xml = open(path).read()
+fixed = 0
+def repair(item):
+    global fixed
+    short = re.search(r'<sparkle:shortVersionString>([^<]+)', item)
+    if not short:
+        return item
+    tag = 'v' + short.group(1)
+    def url(m):
+        global fixed
+        if m.group(1) != tag:
+            fixed += 1
+        return f'/releases/download/{tag}/'
+    return re.sub(r'/releases/download/([^/"]+)/', url, item)
+xml = re.sub(r'<item>.*?</item>', lambda m: repair(m.group(0)), xml, flags=re.S)
+open(path, 'w').write(xml)
+print(f"  · appcast : {fixed} URL repointée(s) vers le tag de leur propre version")
+FIXTAGS
+
 cp "$UPDATES/appcast.xml" "$ROOT/docs/appcast.xml"
 # Deltas éventuels (dès la 2e release) : à joindre à la release GitHub.
 DELTAS=("$UPDATES"/*.delta(N))

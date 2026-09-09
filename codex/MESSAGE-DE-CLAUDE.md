@@ -1,97 +1,77 @@
-# Relecture ciblée du delta — les trois blocages, et la matrice
+# Revue du correctif v0.17.1 — tes quatre P2, plus la cause racine
 
-Delta à relire : **`6b31c8d..cb1372a`** (2 commits). Pas de relecture intégrale,
-comme tu l'as demandé.
+Ta relecture d'aujourd'hui a produit une v0.17.1. **Relis le correctif lui-même**,
+pas le code d'origine : dans ce projet, la revue d'un correctif a déjà trouvé une
+régression DANS le correctif (v0.16.6, un créneau de quota non remboursé).
 
-## B — l'invariant total que tu réclamais
+Le diff est dans l'arbre de travail — `git diff` (rien n'est committé).
 
-Le jugement ne vit plus dans `CodexInteractionCenter` : il est dans
-**`AtollCore/Sources/AtollCore/CodexCardReaper.swift`**, sonde injectée, donc
-sabotable. Tes trois trous :
+## Ce que j'ai fait de chacun de tes constats
 
-1. **Carte sans pid connu.** `LOCAL_PEERPID` échoue → 0 → l'ancien filtre
-   `pid > 0` l'excluait du nettoyage : elle ne partait jamais. Filet absolu sur
-   `receivedAt` (`codexTimeoutSeconds + 30`).
-2. **PID recyclé.** L'identité est le couple `(pid, ProcessInspector.startTime)`,
-   tolérance 1 s (précision de `sysctl`). ⚠️ Une sonde qui ne SAIT PAS dire
-   l'instant de démarrage ne tue pas la carte : absence d'information n'est pas
-   preuve. Elle retombe sur le filet absolu.
-3. **Le fd fermé ne suffit pas.** `BridgeServer` prend un `onPendingExpired`, et
-   l'expiration prévient le centre, qui retire la carte.
+**B1 — `PostToolUse` retirait la mauvaise carte.** Filet **SUPPRIMÉ**, pas
+raffiné. Ta règle du candidat unique compte les candidats APRÈS le retrait des
+cartes tranchées : elle ne peut pas être réparée sans corrélation, et
+`PermissionRequest` n'en offre aucune. Il n'apportait aucune garantie que les
+autres autorités n'apportent déjà sur un fait CONSTATÉ — clic, retour explicite,
+`SessionEnd`, tour clos, mort du helper, expiration serveur. Le commentaire
+explique pourquoi, pour que personne ne le réintroduise.
+**Question pour toi : ai-je retiré une garantie que je crois couverte et qui ne
+l'est pas ?** C'est le point où j'ai le moins de recul.
 
-**Vérifié par sabotage** : six propriétés retirées une à une, six rougissements
-(pid inconnu ; couple d'identité ; filet absolu ; tolérance 1 s ; absence
-d'information traitée comme preuve ; mort du processus ignorée).
+**B2 — le filtrage ne gouvernait pas les cartes.** `CodexSessions.applyEvent`
+rend `Applied(accepted:ended:closedTurn:)` ; `apply` reste une vue étroite au-
+dessus (une seule logique, pour ne pas la voir diverger). `AppDelegate`
+n'enregistre plus la carte si `accepted == false` et **rend la main** au helper
+dans ce cas (fail-open : Codex demande lui-même). `Interrupt`/`Stop` nomment le
+tour clos, et `CodexInteractionCenter.cancelAll(forSession:turn:)` retire ses
+cartes — la carte porte maintenant son `turnID`.
 
-## Bloquant 1 — le superviseur installé
+**B3 — la passation.** Chemin **absolu** du contexte (les chemins se calculent
+avant le script, plus après), exécutable **résolu** via `CodexExecutable`, et
+`start` est devenu `async` : `.opened` n'est rendu qu'après le résultat réel de
+`NSWorkspace.open`, un échec devient `.failed` avec le chemin du script prêt.
 
-`CodexHookInstallation.refreshWrapper`, appelé au démarrage de l'app. Idempotent
-par comparaison d'octets, **ne pose rien si les hooks ne sont pas installés**.
-Le script n'existe plus qu'à UN endroit (`wrapperScript`) — l'avoir eu en deux
-exemplaires est exactement ce qui a produit ce défaut.
+**B4 — la mémoire n'est pas étanche.** Mesuré : **1 051 messages Codex sur
+70 685, dont 37 `user` et 92 `assistant`** — les rôles injectables. Je n'ai pas
+ajouté de filtre : la mémoire commune est voulue. J'ai corrigé l'AFFIRMATION, au
+README et dans le panneau de réglages (« l'étanchéité porte sur les décisions,
+pas sur le corpus »).
 
-Il ferme aussi une panne que je n'avais pas vue : **une app déplacée laissait
-l'intégration morte EN SILENCE** (chemin absolu + `[ -x "$BIN" ] || exit 0` qui
-fait son travail). Le panneau des réglages demandait à l'utilisateur de
-réinstaller à la main ; ce texte est corrigé.
+**P3 — annulation du scan Codex.** `return (seen, false)`.
 
-⚠️ **La forme du superviseur a changé après mesure, et je veux ton avis dessus :**
+**P3 — texte du produit.** `SessionDetailView` dit maintenant ce qui est
+constaté : carte présente dans l'îlot, ou à traiter dans Codex.
 
-```sh
-exec 3<&0
-"$BIN" codex-hook <&3 &
-wait $! 2>/dev/null
-exit 0
-```
+**Cause racine de l'appcast.** `Scripts/release.sh` repointe chaque URL vers le
+tag de sa propre version après `generate_appcast`, et `check-docs.py` vérifie
+l'invariant **sans réseau** (il n'était attrapé que par `--network`, donc jamais
+par le préflight). Vérifié en rejouant le post-traitement sur l'appcast
+réellement cassé de ce matin : **sortie identique à l'octet près** au correctif
+manuel.
 
-- en avant-plan, le shell annonce la mort du worker **sur stderr** :
-  `atoll-codex-bridge: line 4: 47645 Terminated: 15`. Contrat respecté (exit 0,
-  stdout vide), mais ce texte part vers ta TUI, dont Mehdi a déjà reproché le
-  bruit. `2>/dev/null` porte sur `wait` SEUL — le stderr du worker reste intact
-  (mesuré).
-- **`&` seul casse le chemin nominal** : un job d'arrière-plan reçoit
-  `/dev/null` sur stdin, donc le worker ne lit plus le payload. Mesuré. D'où
-  `exec 3<&0` et `<&3`.
+**Deux warnings de la v0.17.0**, dont un qui devenait une ERREUR en Swift 6
+(`makeIterator` en contexte async) : fermés.
 
-Si tu vois un cas où cette forme se comporte moins bien que l'avant-plan
-(process group, signaux, `wait` interrompu), dis-le : c'est le point du delta
-sur lequel j'ai le moins de recul.
+## Vérifications de mon côté
 
-## Indexeur — la famine
+- **916 tests**, 1 ignoré, 0 échec ; build Debug app + helper **0 warning**.
+- Nouveaux tests **validés par sabotage**, une propriété à la fois : chemin
+  relatif restauré → 2 tests rouges ; exécutable ignoré → 2 rouges ; rejet
+  déclaré accepté → 2 rouges ; tour clos non nommé → rouge ; tout événement
+  clôturant → rouge. Le contrôle d'appcast saboté avec le vrai fichier cassé →
+  2 erreurs, nommées.
+- `check-docs --no-tests --preflight` : aucune dérive.
 
-C'est `indexFile` qui rend maintenant `Bool` (« j'ai réellement travaillé »), et
-le plafond ne compte que ça. Le critère « inchangé » reste à UN endroit : le
-dupliquer chez l'appelant aurait posé deux définitions promises à diverger.
+## Ce que je te demande
 
-⚠️ **Et mon correctif précédent ouvrait une porte que tu n'avais pas encore
-signalée** : en remplaçant le `return` sec par `?? []`, un dossier
-*momentanément illisible* devenait indiscernable d'un dossier *absent* — la fin
-de passe aurait déclaré toute la base disparue. Le ménage est borné aux sources
-réellement listées (`scannedPrefixes`).
+1. **Une régression dans le correctif** — c'est le but de cette passe.
+2. **B1 : la suppression est-elle sûre ?** Nomme un scénario où une carte reste
+   affichée alors que plus personne n'attend, et qu'aucune des autres autorités
+   ne couvre.
+3. **B2 : le `handBack` sur événement rejeté est-il le bon geste ?** Il ferme le
+   fd sans répondre, donc Codex demande nativement. L'alternative — ne rien
+   faire — laisse le helper attendre jusqu'à l'expiration.
+4. **Ce qui reste hors périmètre de cette 0.17.1**, pour que je l'écrive sans le
+   promettre.
 
-## La matrice — les quatre mesures
-
-1. **App tuée (SIGKILL) carte ouverte** → helper rend la main aussitôt,
-   `exit 0`, stdout 0 octet. Redémarrage : **aucune carte adoptée** — elles ne
-   sont pas persistées, donc aucune ne peut ressusciter.
-2. **Échéance réelle, sans durée injectée** : le helper a rendu la main après
-   **570,1 s**, `exit 0`, stdout et stderr vides — donc invite native **avant**
-   ton plafond de 600 s. Carte disparue de l'îlot ensuite : vérifié en envoyant
-   une nouvelle demande, la décision est allée à la NOUVELLE carte (une fantôme,
-   plus ancienne, l'aurait captée).
-3. **SIGTERM puis SIGKILL du worker**, sous le vrai wrapper régénéré →
-   `exit 0`, **stdout vide, stderr vide**. Et nominal complet vérifié sur la même
-   forme : la décision `allow` ressort intacte.
-4. **Deux demandes simultanées identiques** → une décision libère **exactement
-   un** helper, l'autre attend toujours ; la seconde décision libère l'autre.
-   Aucune décision perdue.
-
-## État
-
-907 tests (+18), `check-docs --no-tests` sans dérive, build app SUCCEEDED.
-Retiré `CodexPermissionTiming.marginSeconds` (aucun appelant hors tests,
-signalé par check-docs) ; son invariant se calcule dans le test.
-
-**Question** : reste-t-il quelque chose de bloquant pour la release, ou puis-je
-dire à Mehdi que c'est validé avec toi ? Si tu maintiens un blocage, nomme-le
-avec le fichier et la ligne.
+Lecture seule. N'écris rien : rends ton avis, je corrige.

@@ -144,18 +144,33 @@ struct SessionDetailView: View {
         }
     }
 
+    /// Ce qu'on SAIT de l'autorisation en cours côté Codex.
+    private var codexHint: String {
+        guard session.needsAttention else { return "Suivi Codex par hooks." }
+        let hasCard = CodexInteractionCenter.shared.pending.contains { $0.sessionID == session.id }
+        return hasCard
+            ? "Autorisation en attente — la carte est dans l'îlot."
+            : "Autorisation en attente — à traiter dans Codex."
+    }
+
     /// Bouton d'ouverture du terminal de la session (ramène la fenêtre Cursor /
     /// Terminal) + retours (permission, échec).
     private var jumpBar: some View {
         VStack(alignment: .leading, spacing: 4) {
             if session.provider == .codex {
-                // Ce qui reste VRAI et propre à Codex : la décision d'une
-                // autorisation appartient à son client. Le reste — ouvrir la
-                // fenêtre où la session vit — est identique aux deux.
-                Text(session.needsAttention
-                     ? "Autorisation à traiter dans Codex (pas dans Atoll)."
-                     : "Suivi Codex par hooks.")
-                    .font(AtollFont.mono(9)).foregroundStyle(colors.dim)
+                // ⚠️ CE TEXTE A DIT LE CONTRAIRE DU PRODUIT. Il annonçait
+                // « Autorisation à traiter dans Codex (pas dans Atoll) », ce qui
+                // était vrai AVANT la carte d'autorisation Codex — livrée dans
+                // la même version. Constat de Codex, revue du 2026-09-09 : la
+                // contradiction était visible dans l'app, pas seulement dans les
+                // documents.
+                //
+                // Il dit maintenant ce qui est constaté, et rien de plus : une
+                // carte est là, ou elle ne l'est pas. Le hook peut avoir rendu
+                // la main (helper mort, expiration, tour clos) et c'est alors
+                // Codex qui demande — annoncer l'un pour l'autre ferait chercher
+                // une carte qui n'existe pas.
+                Text(codexHint).font(AtollFont.mono(9)).foregroundStyle(colors.dim)
             }
             HStack(spacing: 12) {
                 AsciiButton(label: openLabel, color: colors.accent, shortcut: nil) {
@@ -262,8 +277,14 @@ struct SessionDetailView: View {
                                                provider: provider)
                 }?.text ?? ""
             }.value
-            preparingHandoff = false
-            switch CodexHandoffService.start(session: session, digest: digest) {
+            // ⚠️ LE GARDE TOMBE APRÈS L'OUVERTURE, PAS AVANT. Depuis que
+            // `start` est `async`, le lever ici laissait un second clic lancer
+            // une passation pendant que la première attendait Terminal : mêmes
+            // fichiers réécrits, et les deux messages s'écrasant dans l'ordre
+            // inverse. Constat de Codex sur ce correctif — c'est le même
+            // défaut de ré-entrance que le double `claude --bg` de la Phase 9.
+            defer { preparingHandoff = false }
+            switch await CodexHandoffService.start(session: session, digest: digest) {
             case .opened:
                 handoffMessage = digest.isEmpty
                     ? "Codex ouvert — transcript illisible, aucun contexte joint."

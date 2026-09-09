@@ -123,4 +123,129 @@ final class CodexTurnClosureTests: XCTestCase {
         XCTAssertEqual(b?.status, .working(tool: "Bash"),
                        "la clôture d'une session a contaminé l'autre")
     }
+
+    // MARK: - Le verdict rendu à l'appelant (2026-09-09, seconde revue de Codex)
+
+    /// ⚠️ LE FILTRAGE PROTÉGEAIT L'ÉTAT DE SESSION, PAS L'INTERACTION.
+    /// `apply` rendait `nil` pour « rejeté » comme pour « accepté, rien de
+    /// terminé » : l'appelant ne pouvait pas les distinguer et enregistrait la
+    /// carte d'autorisation dans les DEUX cas. Une permission retardataire d'un
+    /// tour déjà clos créait donc une carte que plus personne n'attendait.
+    func testARejectedEventSaysSoInsteadOfLookingLikeAnAcceptedOne() {
+        var sessions = CodexSessions()
+        sessions.apply(event("UserPromptSubmit", turn: "t1", prompt: "fais ça"))
+        XCTAssertTrue(sessions.applyEvent(event("PreToolUse", turn: "t1", tool: "Bash")).accepted)
+
+        sessions.apply(event("Stop", turn: "t1"))
+        let late = sessions.applyEvent(event("PermissionRequest", turn: "t1", tool: "Bash"))
+        XCTAssertFalse(late.accepted, "une permission d'un tour CLOS ne doit pas créer de carte")
+
+        // Et l'autre garde : un événement d'un tour qui n'est pas le courant.
+        sessions.apply(event("UserPromptSubmit", turn: "t2", prompt: "et ça"))
+        let other = sessions.applyEvent(event("PermissionRequest", turn: "t1", tool: "Bash"))
+        XCTAssertFalse(other.accepted, "une permission d'un AUTRE tour non plus")
+    }
+
+    /// `Stop` et `Interrupt` nomment le tour qu'ils viennent de clore :
+    /// l'appelant retire les cartes de CE tour. `SessionEnd` avait son
+    /// nettoyage, pas l'interruption — une carte y survivait jusqu'au reaper ou
+    /// aux 600 s d'expiration du serveur.
+    func testClosingAnEventNamesTheTurnWhoseCardsNobodyAwaitsAnymore() {
+        for kind in ["Stop", "Interrupt"] {
+            var sessions = CodexSessions()
+            sessions.apply(event("UserPromptSubmit", turn: "t1", prompt: "fais ça"))
+            let applied = sessions.applyEvent(event(kind, turn: "t1"))
+            XCTAssertTrue(applied.accepted, kind)
+            XCTAssertEqual(applied.closure, .named("t1"), "\(kind) doit nommer le tour qu'il clôt")
+        }
+    }
+
+    /// Un événement ORDINAIRE ne clôt rien : nommer un tour ici retirerait les
+    /// cartes d'un tour bien vivant — l'inverse exact du défaut réparé.
+    func testAnOrdinaryEventClosesNoTurn() {
+        var sessions = CodexSessions()
+        sessions.apply(event("UserPromptSubmit", turn: "t1", prompt: "fais ça"))
+        for kind in ["PreToolUse", "PostToolUse", "PermissionRequest", "PreCompact"] {
+            XCTAssertEqual(sessions.applyEvent(event(kind, turn: "t1", tool: "Bash")).closure, .none, kind)
+        }
+    }
+
+    /// La fin de session est ACCEPTÉE et porte les faits — c'est ce que
+    /// l'appelant transmet au bilan.
+    func testSessionEndIsAcceptedAndCarriesTheFacts() {
+        var sessions = CodexSessions()
+        sessions.apply(event("SessionStart", turn: nil))
+        sessions.apply(event("UserPromptSubmit", turn: "t1", prompt: "fais ça"))
+        let applied = sessions.applyEvent(event("SessionEnd", turn: nil))
+        XCTAssertTrue(applied.accepted)
+        // Le préfixe `codex:` est porté par l'événement lui-même : c'est ce qui
+        // garde les deux espaces d'identifiants disjoints jusque dans l'index.
+        XCTAssertEqual(applied.ended?.sessionID, "codex:s1")
+    }
+
+    // MARK: - Certitude contre doute (régression trouvée par Codex dans le correctif)
+
+    /// ⚠️ LE SCÉNARIO EXACT DE LA RÉGRESSION. `UserPromptSubmit` est ASYNC :
+    /// une `PermissionRequest(t2)` peut arriver AVANT le prompt qui ouvre `t2`.
+    /// La projection la rejette — à raison, l'état de session ne doit pas
+    /// bouger — mais la DEMANDE est vivante : la carte doit survivre, sinon
+    /// plus rien ne la recrée quand le prompt arrive enfin.
+    func testAPermissionOfAnUnopenedTurnKeepsItsCard() {
+        var sessions = CodexSessions()
+        sessions.apply(event("UserPromptSubmit", turn: "t1", prompt: "fais ça"))
+        sessions.apply(event("Stop", turn: "t1"))
+
+        let early = sessions.applyEvent(event("PermissionRequest", turn: "t2", tool: "Bash"))
+        XCTAssertFalse(early.accepted, "l'état de session ne doit pas suivre un tour non ouvert")
+        XCTAssertFalse(early.cardIsStale, "sa carte est VIVANTE : le prompt de t2 n'est pas encore arrivé")
+    }
+
+    /// L'autre moitié : un tour dont on SAIT qu'il est clos tue bien la carte.
+    /// Sans elle, le correctif ne corrigerait plus rien.
+    func testAPermissionOfAProvenClosedTurnLosesItsCard() {
+        var sessions = CodexSessions()
+        sessions.apply(event("UserPromptSubmit", turn: "t1", prompt: "fais ça"))
+        sessions.apply(event("Stop", turn: "t1"))
+
+        let late = sessions.applyEvent(event("PermissionRequest", turn: "t1", tool: "Bash"))
+        XCTAssertFalse(late.accepted)
+        XCTAssertTrue(late.cardIsStale, "t1 est mémorisé comme CLOS : la demande ne vaut plus rien")
+    }
+
+    /// Un événement sans `turn_id` arrivant après une clôture ne prouve rien :
+    /// il peut appartenir au tour suivant. Doute ⇒ on ne détruit pas.
+    func testAnUnnamedLateEventDoesNotKillACard() {
+        var sessions = CodexSessions()
+        sessions.apply(event("UserPromptSubmit", turn: "t1", prompt: "fais ça"))
+        sessions.apply(event("Stop", turn: "t1"))
+
+        let anonymous = sessions.applyEvent(event("PermissionRequest", turn: nil, tool: "Bash"))
+        XCTAssertFalse(anonymous.accepted)
+        XCTAssertFalse(anonymous.cardIsStale)
+    }
+
+    /// ⚠️ UNE CLÔTURE SANS `turn_id` N'EST PAS UNE ABSENCE DE CLÔTURE. Rendre
+    /// `nil` pour les deux rendait le nettoyage inatteignable depuis le
+    /// service : le `if let` sautait tout. La projection connaît le tour
+    /// courant — c'est lui qu'elle nomme.
+    func testAnUnnamedClosureFallsBackToTheCurrentTurn() {
+        var sessions = CodexSessions()
+        sessions.apply(event("UserPromptSubmit", turn: "t1", prompt: "fais ça"))
+        XCTAssertEqual(sessions.applyEvent(event("Stop", turn: nil)).closure, .named("t1"))
+    }
+
+    /// Aucun tour connu du tout : la clôture est ANONYME, et l'appelant ne
+    /// retire alors que les cartes qui ne nomment pas leur tour non plus.
+    func testAClosureWithNoKnownTurnAtAllIsUnnamed() {
+        var sessions = CodexSessions()
+        sessions.apply(event("SessionStart", turn: nil))
+        XCTAssertEqual(sessions.applyEvent(event("Stop", turn: nil)).closure, .unnamed)
+    }
+
+    /// Un événement ordinaire ne clôt toujours rien.
+    func testAnOrdinaryEventStillClosesNothing() {
+        var sessions = CodexSessions()
+        sessions.apply(event("UserPromptSubmit", turn: "t1", prompt: "fais ça"))
+        XCTAssertEqual(sessions.applyEvent(event("PreToolUse", turn: "t1", tool: "Bash")).closure, .none)
+    }
 }

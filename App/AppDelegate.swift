@@ -139,10 +139,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let codexServer = BridgeServer(onEvent: { _, _ in }, onStatusline: { _ in },
                                       onStateChange: { _ in }, onCodexEvent: { event, requestID, helperPid in
             Task { @MainActor in
-                CodexService.shared.apply(event)
+                let applied = CodexService.shared.apply(event)
                 // Une demande d'autorisation laisse le helper BLOQUÉ sur son
                 // descripteur : elle va dans le centre Codex, jamais dans
                 // `InteractionCenter` — donc jamais dans Rockstar.
+                //
+                // ⚠️ SEULEMENT SI LA PROJECTION A RETENU L'ÉVÉNEMENT. Une
+                // permission retardataire d'un tour clos créait sinon une carte
+                // que plus personne n'attendait : le filtrage des tours
+                // protégeait l'état de session, pas l'interaction. La carte
+                // n'est pas perdue pour autant — le helper reçoit l'abstention
+                // du serveur et Codex demande lui-même à l'utilisateur.
+                // ⚠️ ON NE REND LA MAIN QUE SUR UNE CERTITUDE. Un tour
+                // seulement INCONNU n'est pas un tour clos : `UserPromptSubmit`
+                // étant async, une permission peut arriver AVANT le prompt qui
+                // ouvre son tour. Rendre la main là-dessus tuait une demande
+                // vivante, et rien ne la recrée quand le prompt arrive —
+                // régression trouvée par Codex dans la première version de ce
+                // correctif.
+                if applied.cardIsStale {
+                    if let requestID { CodexInteractionCenter.shared.handBack(requestID) }
+                    return
+                }
                 if let requestID {
                     CodexInteractionCenter.shared.register(event: event, requestID: requestID,
                                                           helperPid: helperPid)

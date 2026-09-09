@@ -1,15 +1,35 @@
 # HANDOFF — reprise du développement d'Atoll
 
-> **Ajout 2026-09-06 — branche expérimentale Codex en cours de revue.**
-> À la demande de Mehdi, `codex/codex-support-dual-quotas` ajoute un adaptateur
-> Codex séparé et les quotas des deux fournisseurs. `main` et le bundle stable
-> ne sont pas remplacés. Plan et tests : [CODEX-INTEGRATION.md](CODEX-INTEGRATION.md).
-> Les états « une seule branche / rien en cours » ci-dessous sont des relevés
-> historiques, pas l'état de cette branche. Le gel de la mesure recall est préservé.
+> **ÉTAT AU 2026-09-09 — v0.17.1 : Codex est FUSIONNÉ, PUBLIÉ et INSTALLÉ.**
+> La branche `codex/codex-support-dual-quotas` (PR #1) est dans `main` depuis la
+> **v0.17.0**, après trois revues de Codex — deux verdicts BLOQUANT, puis « prêt
+> pour la release ». La **v0.17.1** ferme ce que sa quatrième revue a trouvé
+> APRÈS publication : quatre défauts P2 sur des fonctions déjà livrées, plus la
+> cause racine du bug d'appcast. Lire
+> [CODEX-INTEGRATION.md](CODEX-INTEGRATION.md) puis
+> [CODEX-FAILOVER.md](CODEX-FAILOVER.md).
+>
+> ⚠️ **CE TABLEAU A ANNONCÉ v0.16.6 PENDANT QUE LA v0.17.0 ÉTAIT PUBLIÉE ET
+> INSTALLÉE.** Ce fichier est celui que `CLAUDE.md` désigne comme « à lire en
+> premier à la reprise » : il inspire confiance par construction, et c'est
+> exactement ce qui rend sa dérive coûteuse. `Scripts/check-docs.py` ne l'attrape
+> PAS — il contrôle les versions de `project.yml`, du README, de `CLAUDE.md` et
+> de l'appcast, pas les relevés d'état écrits en prose ici. Relire `git log` et
+> `project.yml` avant de croire une ligne de cette section.
+>
+> **CE QUI A CHANGÉ POUR LA MÉMOIRE, et qui touche le rendez-vous du recall :**
+> les rollouts Codex entrent dans le MÊME index que les transcripts Claude.
+> Mesuré le 2026-09-09 : **1 051 messages Codex sur 70 685**, dont 37 `user` et
+> 92 `assistant` — les rôles que le recall proactif peut injecter. Le corpus de
+> référence du mois de mesure a donc changé à partir de ce jour ; les chiffres
+> du mois écoulé restent valides (l'index n'a reçu du Codex qu'après la clôture),
+> toute mesure ULTÉRIEURE porte sur autre chose. Ce n'est pas un défaut — c'est
+> le lot 4 voulu — mais l'affirmation « les deux CLI sont étanches » ne vaut plus
+> pour la mémoire, et le README comme le panneau de réglages le disent désormais.
 
 > Document de continuité pour reprendre le dev après un compactage de conversation.
 > **À lire en premier** avec `CLAUDE.md` (règles) et `PLAN.md` (plan produit).
-> Dernière mise à jour : **2026-08-16**.
+> Dernière mise à jour : **2026-09-09** (v0.17.1).
 >
 > Le **14 août** : un **audit complet** (`docs/AUDIT-2026-08-14.md`, 18 défauts
 > corrigés dont trois chemins destructeurs), **deux outils de continuité**, **deux
@@ -290,7 +310,17 @@
 Atoll est une « Dynamic Island » ASCII pour Claude Code sur macOS (Swift/SwiftUI,
 GPL-3.0, repo PUBLIC `github.com/mehdi7129/atoll`).
 
-### État EXACT au 2026-09-04 (dernier commit du dépôt)
+### État EXACT au 2026-09-09 — v0.17.1
+
+| Quoi | Où |
+|---|---|
+| Version | **v0.17.1** — correctifs de la quatrième revue de Codex, aucune fonction ajoutée. Quatre défauts sur des fonctions déjà livrées : la passation Codex désignait `./contexte.md` dans le dossier du PROJET alors que le fichier vit dans `~/.atoll/handoff/` (introuvable, ou pire : un homonyme du projet) ; `noteToolFinished` rendait au client la MAUVAISE carte quand deux demandes identiques attendaient ; le filtrage des tours protégeait l'état de session mais pas les cartes, et rien n'annulait sur `Interrupt` ; le scan des rollouts déclarait « j'ai tout listé » après une annulation. Plus la CAUSE RACINE du bug d'appcast, jusqu'ici réparée à la main à chaque release |
+| Tests | **916 verts**, 1 ignoré (`cd AtollCore && swift test`, ~3 s), build **0 warning** — les deux warnings apparus en v0.17.0 sont fermés, dont un qui devenait une ERREUR en Swift 6 |
+| Git | `main`, arbre propre — **le vérifier, ne pas le croire** : `git status --porcelain && git branch && git worktree list` |
+| Build installé | `~/Applications/Atoll.app`, Release notarisée. La v0.17.0 y a été installée le 2026-09-09 à 15:44, et le lanceur de hooks Codex s'est repointé tout seul de l'app de test vers elle — le scénario exact que `CodexHookInstallation.refreshWrapper` existe pour couvrir |
+| Mesure recall | **CLOSE le 2026-09-09** — 1 062 passages sur 31 jours, 66 % d'injection, 46 % des extraits n'appariant qu'UN mot, latence médiane 119 ms. Décision de Mehdi en attente (durcir / retirer / changer de corpus) |
+
+### État au 2026-09-04 (relevé historique, conservé pour ses pièges)
 
 | Quoi | Où |
 |---|---|
@@ -661,8 +691,13 @@ de décision — pas une liste de vœux.
 
 ### A. Pistes identifiées, non tranchées (demander à Mehdi avant d'ouvrir)
 
-1. **Multi-provider** (Codex, OpenCode…) à la façon d'AgentGlance. Gros chantier,
-   v2 assumée, **NE PAS entamer sans accord explicite**.
+1. ~~**Multi-provider** (Codex, OpenCode…)~~ — **LIVRÉ pour Codex** en v0.17.0
+   (2026-09-09), sur demande explicite de Mehdi. Ce qui reste ouvert n'est plus
+   « faut-il le faire » mais les lots 2 à 5 de `docs/CODEX-INTEGRATION.md` :
+   matrice des clients réellement supportés, parcours d'interaction exercés en
+   Release, contrat de la mémoire partagée, passation auditable. **OpenCode et
+   les autres restent hors périmètre** : un second fournisseur a coûté trois
+   revues et quatre défauts trouvés APRÈS publication.
 2. **Jump-back Ghostty / tmux** (les adapters existent pour Terminal/iTerm2/Cursor).
    Mehdi a tranché le 2026-07-27 : **sans valeur tant qu'il travaille dans Cursor**.
 3. **« Rapport de retour » de fin de session** (`docs/VISION-2026-08.md` §4.1) — la

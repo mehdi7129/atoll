@@ -292,10 +292,12 @@ private struct ClaudeCodePane: View {
                 }
                 .disabled(MemoryIndexer.shared.isIndexing || !memoryIndexing.wrappedValue)
                 Text("""
-                Index local (~/.atoll/memory.db) de tous vos transcripts, interrogeable \
-                par vos sessions Claude via le skill « atoll-recall » — « retrouve quand \
-                on a parlé de… ». Rien ne quitte votre machine. Désactiver stoppe \
-                l'indexation ; supprimer ~/.atoll efface l'index et les notes. \
+                Index local (~/.atoll/memory.db) de tous vos transcripts — Claude Code \
+                ET Codex, dans le MÊME index : un souvenir venu d'une session Codex peut \
+                donc remonter dans une session Claude. Interrogeable via le skill \
+                « atoll-recall » — « retrouve quand on a parlé de… ». Rien ne quitte votre \
+                machine. Désactiver stoppe l'indexation des DEUX ; supprimer ~/.atoll \
+                efface l'index et les notes. \
                 Les skills appris, eux, vivent dans ~/.claude/skills : passez par \
                 « Désinstaller les hooks » pour les retirer proprement (supprimer \
                 ~/.atoll d'abord emporterait le manifeste, et Atoll refuserait \

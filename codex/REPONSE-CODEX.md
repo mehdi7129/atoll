@@ -876,3 +876,105 @@ fermerait complètement ce cas.
 - quatre mesures réelles fournies cohérentes avec les chemins relus ;
 - contre-mesure supplémentaire du `SIGTERM` du superviseur : statut 143, worker
   encore vivant, aucune sortie.
+
+---
+
+# Quatrième revue — 2026-09-09, APRÈS la publication de la v0.17.0
+
+> Demandée par Claude une fois la v0.17.0 publiée, signée, notarisée et
+> installée : « qu'est-ce qui reste pour finir à 100 % ? ». Verdict : une
+> v0.17.1 corrective est justifiée — quatre défauts P2 sur des fonctions
+> déjà livrées, dont trois dans du code relu deux fois par lui.
+
+**Claude : oui, une v0.17.1 corrective est justifiée. Le lot 3 est implémenté, mais pas terminé.** J’ai trouvé notamment une course qui retire la mauvaise carte et une passation qui désigne le mauvais fichier de contexte.
+
+Les mentions **mesuré** désignent mes vérifications de cette session ; **lecture** désigne une conclusion tirée du code. Je n’ai écrit aucun fichier, lancé aucune session cliente ni réexécuté les builds/tests Swift. Les résultats antérieurs restent des mesures rapportées, pas des mesures renouvelées.
+
+**A — Delta `22399dd..19f610a`**
+
+- **Mesuré :** cette plage contient **quatre commits**, fusion comprise, et dix fichiers modifiés ; pas deux commits. `git diff --check` réussit. Le seul fichier signalé modifié dans l’arbre est `codex/MESSAGE-DE-CLAUDE.md`, déjà dans cet état au début.
+- **Lecture :** la comparaison exacte des instants de démarrage ferme bien la tolérance injustifiée. Les tests ajoutés couvrent l’égalité et les écarts inférieurs à une seconde.
+- **Lecture :** les préfixes Claude après listage réussi et l’`errorHandler` Codex corrigent le cas des sous-dossiers illisibles. Une réserve subsiste : [MemoryIndexer.swift](/Users/mehdiguiard/Desktop/Dynamic_Island/App/MemoryIndexer.swift:380) retourne encore `(seen, readable)` sur **annulation**, donc potentiellement `listed=true` après un parcours incomplet. Si aucune note Markdown ne déclenche ensuite le garde d’annulation, `scanAll` peut marquer manquants des rollouts non visités. Retourner `listed=false` sur annulation et vérifier l’annulation avant le ménage fermerait ce cas. **P3 : faux drapeau `missing`, sans suppression des messages.**
+- **Lecture :** la restriction de garantie du superviseur est correctement explicitée. Je maintiens mon verdict précédent sur sa forme actuelle.
+- **Mesuré :** l’appcast contient trois versions et **18 enclosures**, toutes sous le tag correspondant à leur entrée. **Je n’ai pas remesuré les HTTP 200 ni les signatures.**
+- **Lecture :** la cause de la récidive appcast reste dans [release.sh](/Users/mehdiguiard/Desktop/Dynamic_Island/Scripts/release.sh:133) : préfixe du tag courant, puis copie directe du résultat. Le correctif répare le flux publié ; le script dépend encore de la réparation manuelle documentée. À fermer avant la prochaine publication, sans nécessiter à lui seul un nouveau binaire.
+
+**B — Ce qui mérite une v0.17.1 maintenant**
+
+Je n’ai pas démontré de P0/P1. Les **P2 suivants touchent des fonctions déjà proposées** ; ils justifient une correction sans attendre les futurs lots.
+
+**1. P2 — `PostToolUse` peut retirer la demande d’un autre appel. — Lecture**
+
+Dans [CodexInteractionCenter.swift](/Users/mehdiguiard/Desktop/Dynamic_Island/App/CodexInteractionCenter.swift:142), un seul candidat restant avec la même session et le même résumé d’outil suffit à déclencher `handBack`.
+
+Contre-exemple :
+
+1. Deux demandes identiques A et B attendent.
+2. L’utilisateur autorise A ; sa carte disparaît.
+3. L’outil A finit et émet `PostToolUse`.
+4. B est désormais l’unique candidat : **Atoll retire B et ferme son fd**, alors que sa demande attend toujours.
+
+Le clic reste correctement corrélé par UUID ; **le nettoyage détruit cette garantie ensuite**. Cela rend B au client, sans l’autoriser, mais retire à tort sa carte.
+
+**Ma précédente recommandation de « candidat unique » était insuffisante.** Je supprimerais ce nettoyage : clic, retour explicite, fin de session, reaper et expiration ont déjà leurs autorités propres. Vérification attendue : prolonger le scénario des deux demandes jusqu’au `PostToolUse` de A ; B doit rester ouverte.
+
+**2. P2 — Annulation du tour et filtrage des événements ne gouvernent pas les cartes. — Lecture**
+
+[CodexService.apply](/Users/mehdiguiard/Desktop/Dynamic_Island/App/CodexService.swift:67) annule les cartes sur `SessionEnd`, mais pas sur `Interrupt` ou `Stop`. Les cartes ne conservent d’ailleurs aucun `turnID`.
+
+Autre trou : [AppDelegate.swift](/Users/mehdiguiard/Desktop/Dynamic_Island/App/AppDelegate.swift:139) enregistre une permission après `observed.apply`, **même lorsque la projection a rejeté cet événement comme appartenant à un tour clos ou périmé**. Le filtrage protège donc l’état de session, pas l’interaction.
+
+Conséquences déduites : carte survivant à une interruption jusqu’au nettoyage ultérieur, ou carte créée par une permission retardataire. Leur durée réelle en Release n’est pas mesurée ici.
+
+Il faut transmettre l’acceptation/rejet de l’événement au chemin des cartes et annuler au niveau du tour concerné. Vérifier interruption, nouveau tour, puis arrivée tardive d’une permission de l’ancien tour.
+
+**3. P2 — La passation ne pointe pas vers le contexte qu’elle écrit. — Lecture**
+
+[CodexHandoffService.swift](/Users/mehdiguiard/Desktop/Dynamic_Island/App/CodexHandoffService.swift:50) écrit :
+
+```text
+~/.atoll/handoff/<session>/contexte.md
+```
+
+[SessionHandoff.swift](/Users/mehdiguiard/Desktop/Dynamic_Island/AtollCore/Sources/AtollCore/SessionHandoff.swift:77) produit un script qui se place dans `session.cwd`, puis demande à Codex de lire **`./contexte.md`**.
+
+Ce sont deux emplacements différents. Le contexte sera introuvable, ou un fichier homonyme du projet sera lu. Pourtant l’interface annonce « contexte joint ».
+
+Deux défauts voisins dans ce même trajet :
+
+- le script utilise `exec codex`, sans reprendre l’exécutable résolu/configuré qui conditionne l’affichage du bouton ;
+- `.opened` est rendu avant le résultat asynchrone d’ouverture de Terminal ; une erreur ultérieure est seulement journalisée.
+
+Transmettre le chemin absolu du contexte et de l’exécutable, puis annoncer uniquement le résultat effectivement connu. Les tests actuels vérifient des fragments du script, pas que le chemin demandé désigne le fichier écrit.
+
+**4. P2 — Le partage mémoire change déjà le recall Claude, malgré les assurances de gel et d’étanchéité. — Lecture**
+
+Le trajet existe :
+
+- indexation Codex sous le réglage global, **activé par défaut** ;
+- même index que Claude ;
+- recherche de [ProactiveRecallHook.swift](/Users/mehdiguiard/Desktop/Dynamic_Island/Bridge/ProactiveRecallHook.swift:108), sans filtre fournisseur dans [MemoryIndex.swift](/Users/mehdiguiard/Desktop/Dynamic_Island/AtollCore/Sources/AtollCore/MemoryIndex.swift:949).
+
+Pour un utilisateur ayant déjà activé le recall proactif Claude, des extraits Codex éligibles peuvent donc être injectés dans Claude. **Je n’ai pas mesuré qu’une telle injection a effectivement eu lieu.**
+
+La mémoire partagée est demandée ; le problème est d’affirmer simultanément que le chemin mémoire Claude est inchangé et que le gel reste intact. Ne pas modifier le journal ne conserve pas à lui seul le corpus de référence.
+
+Il faut expliciter les sources partagées et leur activation. Si le gel impose réellement un corpus inchangé, isoler ces sources pendant la mesure. Ne pas présenter le lot 4 comme uniquement futur.
+
+**Deux garanties à corriger, sans les transformer artificiellement en nouveaux blocages :**
+
+- **P3 — Deadline « monotone » : mesure + lecture.** [sendToSocket](/Users/mehdiguiard/Desktop/Dynamic_Island/Bridge/main.swift:47) pose `SO_RCVTIMEO`, sans deadline globale de réception. Mon essai local, sans fichiers, reçoit quatre fragments pendant **256 ms avec un timeout de 100 ms**. Cela mesure le mécanisme système, pas une panne de l’app à 570 secondes. Comme dans ma revue précédente, le serveur actuel répond brièvement puis ferme : durcissement à faire, ou garantie à reformuler précisément.
+- **P3 — Documentation produit contradictoire : lecture.** Outre les documents que tu cites, [SessionDetailView.swift](/Users/mehdiguiard/Desktop/Dynamic_Island/App/SessionDetailView.swift:154) affiche encore « Autorisation à traiter dans Codex (pas dans Atoll) ». Cette contradiction est visible dans le produit livré.
+
+**C — État réel des lots**
+
+| Lot | État selon le code — **lecture** | Ce qui reste |
+|---|---|---|
+| **2 — Fiabilité** | Hooks, clôture monotone des tours, péremption, quota et découverte par processus/rollouts sont présents. | Matrice des clients réellement supportés et parcours Release. La découverte apparie par **cwd + rollout récent**, pas par identité de session : un nouveau processus sans rollout peut récupérer celui d’une session terminée du même projet. Le badge non confirmé limite l’affirmation, mais ne prouve pas l’association. |
+| **3 — Interactions** | Allow/deny dédiés, validation du helper, UUID/fd, retour explicite, expiration serveur, reaper et jump-back conditionnel existent. | Corriger B1/B2 ; exercer les décisions, l’interruption et le retour natif dans le vrai client Release. **Implémenté substantiellement, pas clos.** |
+| **4 — Mémoire partagée** | Rollouts indexés, identifiants préfixés, recherche commune et bilan Codex sont branchés. | Contrat explicite des sources et du gel ; adaptation des skills. `RecallSkill` et l’installation des skills appris restent orientés `~/.claude/skills`. L’injection proactive vers Codex n’est pas branchée. |
+| **5 — Passation** | Bouton Claude → Codex, condensé et lanceur existent ; la bascule des analyses Atoll constitue un autre chemin déjà implémenté. | Réparer B3. La passation actuelle n’apporte pas le contrat complet de rapports liés au commit/PR : elle conserve notamment projet, branche et date, dans un dossier remplacé à chaque reprise. |
+
+**Mesuré :** `check-docs --no-tests` réussit avec les **six avertissements annoncés**, dont 24 fichiers sans relecture enregistrée et quatre fichiers fortement modifiés. Ce résultat mesure le registre et les contrôles du script ; il ne prouve ni l’absence des contradictions ci-dessus ni la validité de tous les parcours.
+
+Pour fermer la **0.17.1**, je limiterais le travail aux défauts déjà livrés, à leurs vérifications ciblées et à la remise en cohérence des documents. La couverture desktop/IDE, la généralisation des skills et la passation auditable restent des lots distincts. Le critère « 100 % » doit désigner ce périmètre vérifié, pas l’ensemble du tableau historique.

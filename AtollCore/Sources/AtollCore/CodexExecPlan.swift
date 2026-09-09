@@ -118,16 +118,25 @@ public enum CodexExecPlan {
         "maxProperties", "minProperties", "default", "examples",
     ]
 
+    /// Un nœud converti s'il est un objet, rendu tel quel sinon.
+    private static func converted(_ value: Any) -> Any {
+        (value as? [String: Any]).map { convert($0) as Any } ?? value
+    }
+
     private static func convert(_ node: [String: Any]) -> [String: Any] {
         var result: [String: Any] = [:]
         for (key, value) in node where !unsupportedKeywords.contains(key) {
             switch value {
             case let child as [String: Any]:
+                // `converted(_:)` plutôt qu'un `?? $0` : ce dernier compose un
+                // `Any?` que Swift coerce implicitement en `Any`, ce qui
+                // stockerait un optionnel EMBALLÉ dans le dictionnaire — il
+                // ressortirait à l'encodage JSON en tant que tel.
                 result[key] = key == "properties"
-                    ? child.mapValues { ($0 as? [String: Any]).map(convert) ?? $0 }
+                    ? child.mapValues(converted)
                     : convert(child)
             case let array as [Any]:
-                result[key] = array.map { ($0 as? [String: Any]).map(convert) ?? $0 }
+                result[key] = array.map(converted)
             default:
                 result[key] = value
             }

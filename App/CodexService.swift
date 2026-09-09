@@ -64,24 +64,42 @@ final class CodexService {
         observed.transcriptPath(for: sessionID)
     }
 
-    func apply(_ event: CodexHookEvent) {
-        // `apply` rend les faits de la session quand elle vient de se terminer :
-        // c'est le pendant Codex de `SessionStore.onSessionEnded`, et sans lui
-        // la boucle d'apprentissage n'existe pas pour Codex.
-        let ended = observed.apply(event)
+    /// Rend le verdict de la projection à l'appelant, qui en a besoin pour
+    /// décider du sort de la CARTE : un tour certainement clos la tue, un tour
+    /// seulement inconnu la laisse vivre.
+    @discardableResult
+    func apply(_ event: CodexHookEvent) -> CodexSessions.Applied {
+        // `applyEvent` rend les faits de la session quand elle vient de se
+        // terminer : c'est le pendant Codex de `SessionStore.onSessionEnded`, et
+        // sans lui la boucle d'apprentissage n'existe pas pour Codex.
+        let applied = observed.applyEvent(event)
         sessions = observed.sessions()
+        // Un événement rejeté n'est pas un événement : il ne sonne pas non plus.
+        // Sonner sur le `Stop` retardataire d'un tour déjà clos ferait tinter
+        // une fin de tâche qui a déjà eu lieu.
+        guard applied.accepted else { return applied }
         playSound(for: event)
         // Une session qui se termine emporte ses cartes : le helper est mort
         // avec elle, répondre sur ces descripteurs n'atteindrait personne.
         if event.kind == .sessionEnd {
             CodexInteractionCenter.shared.cancelAll(forSession: event.sessionID)
         }
-        // Filet de nettoyage seulement — jamais l'autorité de corrélation.
-        if event.kind == .postToolUse {
-            CodexInteractionCenter.shared.noteToolFinished(sessionID: event.sessionID,
-                                                           tool: event.tool)
+        // Un TOUR interrompu ou terminé emporte les siennes : plus personne
+        // n'attend la réponse à une demande de ce tour. `SessionEnd` avait son
+        // nettoyage, pas l'interruption — une carte y survivait jusqu'au reaper
+        // ou aux 600 s d'expiration.
+        switch applied.closure {
+        case .none: break
+        case .named(let turn):
+            CodexInteractionCenter.shared.cancelAll(forSession: event.sessionID, turn: turn)
+        case .unnamed:
+            // Clôture sans tour identifiable : on ne peut retirer que les cartes
+            // qui n'en portent pas non plus. Retirer les autres reviendrait à
+            // tuer les demandes d'un tour qu'on n'a pas prouvé clos.
+            CodexInteractionCenter.shared.cancelUnattributedCards(forSession: event.sessionID)
         }
-        if let ended { RetrospectiveRunner.shared.codexSessionEnded(ended) }
+        if let ended = applied.ended { RetrospectiveRunner.shared.codexSessionEnded(ended) }
+        return applied
     }
 
     /// Les DEUX sons d'Atoll valent pour Codex comme pour Claude.
