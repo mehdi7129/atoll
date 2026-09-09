@@ -145,6 +145,30 @@ enum ProcessInspector {
         return result
     }
 
+    /// Le processus est-il le CLI `codex` ?
+    ///
+    /// MÊME PIÈGE QUE POUR CLAUDE (règle n° 7) : l'installeur standalone place
+    /// le binaire sous `~/.codex/packages/standalone/releases/<version>/bin/`,
+    /// et c'est le CHEMIN qui fait foi, pas le nom du processus. Vérifié le
+    /// 2026-09-09 : chercher « codex » par `proc_name` ne le trouvait pas.
+    static func isCodexProcess(_ pid: pid_t) -> Bool {
+        guard let path = executablePath(of: pid) else { return false }
+        if (path as NSString).lastPathComponent == "codex" { return true }
+        return path.contains("/.codex/packages/")
+    }
+
+    /// Les pids de tous les CLI `codex` vivants.
+    static func allCodexPids() -> [pid_t] {
+        let count = Int(proc_listpids(UInt32(PROC_ALL_PIDS), 0, nil, 0)) / MemoryLayout<pid_t>.size
+        guard count > 0 else { return [] }
+        var pids = [pid_t](repeating: 0, count: count)
+        let bytes = proc_listpids(UInt32(PROC_ALL_PIDS), 0, &pids,
+                                  Int32(count * MemoryLayout<pid_t>.size))
+        guard bytes > 0 else { return [] }
+        let found = Int(bytes) / MemoryLayout<pid_t>.size
+        return pids.prefix(found).filter { $0 > 0 && isCodexProcess($0) }
+    }
+
     static func currentWorkingDirectory(of pid: pid_t) -> String? {
         var info = proc_vnodepathinfo()
         let size = Int32(MemoryLayout<proc_vnodepathinfo>.size)

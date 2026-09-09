@@ -24,10 +24,30 @@ final class CodexService {
             Task { @MainActor in
                 guard let self else { return }
                 self.observed.prune()
+                self.adoptRunningSessions()
                 self.sessions = self.observed.sessions()
             }
         }
+        // AU DÉMARRAGE, tout de suite : c'est précisément le trou que ce scan
+        // comble — une session Codex ouverte pendant qu'Atoll redémarrait
+        // restait invisible jusqu'au prochain prompt de l'utilisateur.
+        adoptRunningSessions()
+        sessions = observed.sessions()
         syncQuotaSettings()
+    }
+
+    /// Scan hors du fil principal : `proc_listpids` puis une lecture d'en-tête
+    /// par rollout. Les hooks restent l'autorité — `adopt` n'écrase rien.
+    private func adoptRunningSessions() {
+        let known = Set(observed.sessions().map(\.id))
+        Task.detached(priority: .utility) {
+            let found = CodexSessionScanner.scan(known: known)
+            guard !found.isEmpty else { return }
+            await MainActor.run {
+                self.observed.adopt(found)
+                self.sessions = self.observed.sessions()
+            }
+        }
     }
 
     /// Ancre terminal d'une session Codex — pendant de

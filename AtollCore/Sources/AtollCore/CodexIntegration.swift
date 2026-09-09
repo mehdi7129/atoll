@@ -234,6 +234,33 @@ public struct CodexSessions: Sendable {
         }
     }
 
+    /// Adopte les sessions retrouvées par le scan de processus.
+    ///
+    /// ⚠️ LES HOOKS FONT AUTORITÉ, TOUJOURS. Une session déjà connue n'est
+    /// jamais écrasée : le scan ne sait ni quel outil tourne, ni si une
+    /// autorisation attend, et remplacer un état confirmé par une supposition
+    /// serait exactement l'erreur qu'`AgentSession.stateConfirmedByHook` existe
+    /// pour empêcher (v0.16.1).
+    ///
+    /// Les sessions adoptées naissent `stateConfirmedByHook = false` : l'îlot
+    /// les range dans « EN COURS », qui ne réclame aucune action — jamais dans
+    /// « en attente de toi », qui convoquerait l'utilisateur au nom d'une
+    /// session dont on ne sait rien.
+    public mutating func adopt(_ discovered: [CodexSessionDiscovery.Discovered],
+                               now: Date = Date()) {
+        for session in discovered where entries[session.sessionID] == nil {
+            var agent = AgentSession(
+                id: session.sessionID,
+                projectName: URL(fileURLWithPath: session.cwd).lastPathComponent,
+                status: .awaitingInput, startedAt: session.startedAt,
+                cwd: session.cwd, provider: .codex)
+            agent.stateConfirmedByHook = false
+            entries[session.sessionID] = Entry(
+                session: agent, turnID: nil, lastEvent: now,
+                transcriptPath: session.transcriptPath)
+        }
+    }
+
     public mutating func prune(now: Date = Date()) {
         entries = entries.filter { now.timeIntervalSince($0.value.lastEvent) < 86_400 }
     }
