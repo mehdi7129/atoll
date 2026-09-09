@@ -40,6 +40,26 @@ final class CodexService {
     func apply(_ event: CodexHookEvent) {
         observed.apply(event)
         sessions = observed.sessions()
+        playSound(for: event)
+    }
+
+    /// Les DEUX sons d'Atoll valent pour Codex comme pour Claude.
+    ///
+    /// Demande explicite de Mehdi le 2026-09-09 (« pour la partie son, je veux
+    /// qu'on ait du son, c'est hyper important »), et le besoin est identique :
+    /// il a mis ces sons pour être APPELÉ plutôt que surveiller un écran. Que
+    /// la carte d'autorisation s'affiche dans Codex plutôt que dans l'îlot ne
+    /// change rien à ce besoin — l'îlot dit d'ailleurs où la traiter.
+    ///
+    /// Table VOLONTAIREMENT étroite, comme celle du helper : `permissionRequest`
+    /// → décision attendue, `stop` → tour terminé, et RIEN d'autre. Sonner sur
+    /// `preToolUse` ou `sessionStart` ferait tinter chaque outil.
+    private func playSound(for event: CodexHookEvent) {
+        switch event.kind {
+        case .permissionRequest: SoundCenter.shared.play(.decisionNeeded)
+        case .stop: SoundCenter.shared.play(.taskCompleted)
+        default: break
+        }
     }
 
     func seedPreviewQuota() {

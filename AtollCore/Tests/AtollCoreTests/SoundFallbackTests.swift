@@ -153,3 +153,42 @@ final class SoundFallbackTests: XCTestCase {
         XCTAssertTrue(SoundFallback.shouldPlay(stampDate: now.addingTimeInterval(3600), now: now))
     }
 }
+
+/// La table du helper DIFFÈRE par fournisseur, et les deux propriétés doivent
+/// tenir en même temps.
+extension SoundFallbackTests {
+    /// Côté Claude, `PermissionRequest` est écarté À DESSEIN : le CLI émet
+    /// AUSSI `Notification` pour la même demande. L'accepter ferait sonner deux
+    /// fois — c'est la raison d'être de la table étroite.
+    func testClaudeStillIgnoresPermissionRequestToAvoidDoubleRinging() {
+        XCTAssertNil(SoundFallback.event(forHookEvent: "PermissionRequest"))
+        XCTAssertNil(SoundFallback.event(forHookEvent: "PermissionRequest", provider: .claude))
+        XCTAssertEqual(SoundFallback.event(forHookEvent: "Notification"), .decisionNeeded)
+    }
+
+    /// Côté Codex, `Notification` N'EXISTE PAS : garder l'exclusion y rendrait
+    /// Atoll muet sur la seule chose qui réclame vraiment l'utilisateur.
+    func testCodexRingsOnPermissionRequestBecauseItHasNoNotification() {
+        XCTAssertEqual(SoundFallback.event(forHookEvent: "PermissionRequest", provider: .codex),
+                       .decisionNeeded)
+        XCTAssertNil(SoundFallback.event(forHookEvent: "Notification", provider: .codex),
+                     "Codex n'émet pas cet événement")
+    }
+
+    func testStopEndsTheTurnForBothProviders() {
+        XCTAssertEqual(SoundFallback.event(forHookEvent: "Stop", provider: .claude), .taskCompleted)
+        XCTAssertEqual(SoundFallback.event(forHookEvent: "Stop", provider: .codex), .taskCompleted)
+    }
+
+    /// Aucun autre événement ne sonne — sinon chaque outil et chaque sous-agent
+    /// tinteraient.
+    func testNoOtherEventRingsForEitherProvider() {
+        for provider in [AgentProvider.claude, .codex] {
+            for name in ["PreToolUse", "PostToolUse", "SessionStart", "SessionEnd",
+                         "SubagentStop", "UserPromptSubmit", "Interrupt", "PreCompact"] {
+                XCTAssertNil(SoundFallback.event(forHookEvent: name, provider: provider),
+                             "\(name) sonne pour \(provider.rawValue)")
+            }
+        }
+    }
+}

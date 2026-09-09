@@ -33,8 +33,21 @@ enum CodexBridge {
         if !enrich.isEmpty { envelope["enrich"] = enrich }
         guard CodexHookEvent(envelope: envelope) != nil,
               let encoded = try? JSONSerialization.data(withJSONObject: envelope) else { return }
-        // Observation ONLY: no reply, no sounds/recall/Claude safety-rule edits.
-        _ = sendToSocket(encoded, path: CodexPaths.socketPath)
+        // Observation seule : aucune réponse, aucune décision, aucune écriture
+        // dans les règles de sûreté de Claude.
+        let outcome = sendToSocket(encoded, path: CodexPaths.socketPath)
+
+        // FILET SONORE — même discipline que le helper Claude, et pour la même
+        // raison, qui a coûté la v0.15.1 : « prendre quelque chose à
+        // l'utilisateur et mourir avec » viole l'esprit de la règle n° 1. Atoll
+        // fermé, aucun son Codex ne partait, alors que Mehdi met ces sons
+        // précisément pour être appelé sans surveiller un écran.
+        //
+        // On ne joue QUE si l'enveloppe n'a pas été remise : exactement un des
+        // deux sonne, jamais les deux.
+        if !outcome.reached, let name = payload["hook_event_name"] as? String {
+            SoundPlayer.play(hookEvent: name, provider: .codex)
+        }
     }
 
     static func configure(install: Bool) -> Int32 {

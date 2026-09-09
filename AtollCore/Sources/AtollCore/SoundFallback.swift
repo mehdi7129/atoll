@@ -75,10 +75,24 @@ public enum SoundFallback {
     ///
     /// Les deux événements retenus sont exactement ceux sur lesquels Mehdi avait
     /// posé ses propres `afplay` — c'est la définition honnête de « réparer ».
-    public static func event(forHookEvent name: String) -> SoundEvent? {
-        switch name {
-        case "Notification": return .decisionNeeded
-        case "Stop": return .taskCompleted
+    /// ⚠️ LA TABLE DIFFÈRE PAR FOURNISSEUR, et ce n'est pas un détail.
+    ///
+    /// Côté CLAUDE, `PermissionRequest` est écarté À DESSEIN : le CLI émet
+    /// AUSSI `Notification` pour la même demande, et accepter les deux ferait
+    /// sonner deux fois. Côté CODEX, **`Notification` n'existe pas** — ses dix
+    /// événements sont `PreToolUse`, `PermissionRequest`, `PostToolUse`,
+    /// `PreCompact`, `PostCompact`, `SessionStart`, `SessionEnd`, `Stop`,
+    /// `Interrupt`, `UserPromptSubmit` (vérifié via `hooks/list` sur
+    /// `codex-cli 0.153.4`). Garder l'exclusion pour lui rendrait donc Atoll
+    /// MUET sur la seule chose qui réclame vraiment l'utilisateur.
+    ///
+    /// Le fournisseur par défaut reste Claude : aucun appelant existant ne change.
+    public static func event(forHookEvent name: String,
+                             provider: AgentProvider = .claude) -> SoundEvent? {
+        switch (name, provider) {
+        case ("Notification", .claude): return .decisionNeeded
+        case ("PermissionRequest", .codex): return .decisionNeeded
+        case ("Stop", _): return .taskCompleted
         default: return nil
         }
     }
