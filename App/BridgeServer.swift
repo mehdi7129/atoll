@@ -27,14 +27,15 @@ final class BridgeServer: @unchecked Sendable {
     /// attente de décision via reply()/cancelPending().
     private let onEvent: (ParsedHookEvent, _ requestID: String?) -> Void
     private let onStatusline: (Data) -> Void
-    private let onCodexEvent: (CodexHookEvent) -> Void
+    /// `requestID` non-nil = le helper Codex ATTEND une décision sur ce fd.
+    private let onCodexEvent: (CodexHookEvent, _ requestID: String?) -> Void
     private let onStateChange: (Bool) -> Void
 
     init(
         onEvent: @escaping (ParsedHookEvent, String?) -> Void,
         onStatusline: @escaping (Data) -> Void,
         onStateChange: @escaping (Bool) -> Void,
-        onCodexEvent: @escaping (CodexHookEvent) -> Void = { _ in },
+        onCodexEvent: @escaping (CodexHookEvent, String?) -> Void = { _, _ in },
         socketPath: String = BridgePaths.socketPath
     ) {
         self.onEvent = onEvent
@@ -255,14 +256,31 @@ final class BridgeServer: @unchecked Sendable {
             return
         }
 
-        // Dispatch foreign providers BEFORE either Claude input path. Codex
-        // permissions are never registered in InteractionCenter (Rockstar).
+        // Les fournisseurs étrangers sont dispatchés AVANT tout chemin Claude :
+        // une permission Codex n'entre JAMAIS dans `InteractionCenter`, donc
+        // jamais dans Rockstar.
         if let envelope, let provider = envelope["provider"], provider as? String != "claude" {
             entry.source.cancel()
-            close(fd)
-            if let event = CodexHookEvent(envelope: envelope) {
-                DispatchQueue.main.async { self.onCodexEvent(event) }
+            guard let event = CodexHookEvent(envelope: envelope) else { close(fd); return }
+
+            // Une demande d'autorisation Codex laisse le fd OUVERT : le helper
+            // attend notre décision. La corrélation se fait par cet UUID lié au
+            // descripteur — jamais par le nom d'outil, qui ne distingue pas deux
+            // demandes simultanées identiques (spécifié par Codex).
+            if event.kind == .permissionRequest {
+                let requestID = UUID().uuidString
+                pendingReplies[requestID] = fd
+                // Filet : jamais de fd orphelin. Posé APRÈS la deadline du
+                // helper — c'est lui qui doit rendre la main le premier.
+                queue.asyncAfter(deadline: .now() + CodexPermissionTiming.codexTimeoutSeconds) {
+                    [weak self] in self?.pendingRepliesTimeout(requestID)
+                }
+                log.info("permission Codex en attente \(requestID, privacy: .public)")
+                DispatchQueue.main.async { self.onCodexEvent(event, requestID) }
+                return
             }
+            close(fd)
+            DispatchQueue.main.async { self.onCodexEvent(event, nil) }
             return
         }
 

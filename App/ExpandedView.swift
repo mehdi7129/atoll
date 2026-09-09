@@ -37,6 +37,14 @@ struct ExpandedView: View {
                 InteractionCardView(request: request, colors: colors)
                     .id(request.id)
                 Spacer(minLength: 0)
+            } else if let codexRequest = CodexInteractionCenter.shared.current {
+                // Une demande CODEX, après celles de Claude : les deux centres
+                // sont séparés, et une demande Claude bloque le CLI de Mehdi de
+                // la même façon. L'ordre entre les deux est arbitraire ; ce qui
+                // ne l'est pas, c'est qu'aucune ne soit jamais perdue.
+                CodexInteractionCardView(request: codexRequest, colors: colors)
+                    .id(codexRequest.id)
+                Spacer(minLength: 0)
             } else if let session = viewModel.selectedSession {
                 // Détail d'une session (clic sur une ligne).
                 SessionDetailView(session: session, colors: colors) {

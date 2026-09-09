@@ -33,9 +33,31 @@ enum CodexBridge {
         if !enrich.isEmpty { envelope["enrich"] = enrich }
         guard CodexHookEvent(envelope: envelope) != nil,
               let encoded = try? JSONSerialization.data(withJSONObject: envelope) else { return }
-        // Observation seule : aucune réponse, aucune décision, aucune écriture
-        // dans les règles de sûreté de Claude.
-        let outcome = sendToSocket(encoded, path: CodexPaths.socketPath)
+        // UN SEUL événement attend une réponse : la demande d'autorisation. Tout
+        // le reste reste de l'observation pure — aucune réponse, aucune
+        // décision, aucune écriture dans les règles de sûreté de Claude.
+        let isPermissionRequest = (payload["hook_event_name"] as? String) == "PermissionRequest"
+        let outcome = sendToSocket(
+            encoded, path: CodexPaths.socketPath,
+            awaitReply: isPermissionRequest,
+            replyDeadline: isPermissionRequest ? CodexPermissionTiming.helperDeadlineSeconds : nil)
+
+        // ⚠️ ON NE RELAIE JAMAIS LES OCTETS DE L'APP. On les DÉCODE, puis on
+        // RÉ-ENCODE depuis notre propre allowlist. Ce n'est pas de la prudence
+        // de style : renvoyer `updatedInput`, `updatedPermissions` ou
+        // `interrupt` à Codex **refuse la requête** — un octet inattendu venant
+        // d'une version future d'Atoll bloquerait le travail de l'utilisateur
+        // au lieu de lui rendre la main.
+        //
+        // Toute forme non comprise ⇒ abstention ⇒ rien sur stdout ⇒ exit 0 ⇒
+        // Codex affiche son invite native. C'est le SEUL chemin de secours, et
+        // il doit être atteint par tous les incidents : app absente, socket
+        // fermé, carte abandonnée, deadline, réponse partielle ou trop grosse.
+        if isPermissionRequest,
+           let decision = CodexPermissionDecision.decode(outcome.reply),
+           let json = decision.hookOutput() {
+            FileHandle.standardOutput.write(json)
+        }
 
         // FILET SONORE — même discipline que le helper Claude, et pour la même
         // raison, qui a coûté la v0.15.1 : « prendre quelque chose à

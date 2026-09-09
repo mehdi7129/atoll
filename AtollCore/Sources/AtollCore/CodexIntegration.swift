@@ -266,7 +266,22 @@ public enum CodexHookSettingsEditor {
     /// Relevé des trois configurations, même prompt, même machine :
     /// tout synchrone → 10 lignes / 6 événements ; tout async → 0 ligne /
     /// 5 événements ; ce compromis → **2 lignes / 6 événements**.
-    static let synchronousEvents: Set<CodexHookEvent.Kind> = [.stop, .sessionEnd]
+    /// ⚠️ `permissionRequest` EST REVENU DANS CETTE LISTE le 2026-09-09, et le
+    /// retirer casserait la carte de l'îlot : **un hook `async` ne peut pas
+    /// décider**. Codex ne l'attend pas, affiche donc son invite native, et on
+    /// se retrouverait avec DEUX interfaces concurrentes pour une seule
+    /// décision — pire que de ne rien faire.
+    static let synchronousEvents: Set<CodexHookEvent.Kind> = [.stop, .sessionEnd, .permissionRequest]
+
+    /// Délai laissé à une décision humaine. Défaut documenté des hooks Codex ;
+    /// le helper, lui, s'arrête AVANT (voir `CodexPermissionTiming`) pour que
+    /// Codex ne tue jamais le hook lui-même.
+    static let permissionTimeoutSeconds = Int(CodexPermissionTiming.codexTimeoutSeconds)
+
+    /// Message montré par la TUI pendant que le hook bloque. Ici le texte n'est
+    /// PAS du bruit — contrairement aux annonces « hook: … » qu'on a fait
+    /// taire : il explique pourquoi Codex attend et où agir.
+    static let permissionStatusMessage = "Waiting for approval in Atoll"
 
     public static func edit(_ data: Data?, install: Bool) throws -> Data {
         var root: [String: Any] = [:]
@@ -296,6 +311,10 @@ public enum CodexHookSettingsEditor {
             if install {
                 var handler: [String: Any] = ["type": "command", "command": command, "timeout": 3]
                 if !synchronousEvents.contains(kind) { handler["async"] = true }
+                if kind == .permissionRequest {
+                    handler["timeout"] = permissionTimeoutSeconds
+                    handler["statusMessage"] = permissionStatusMessage
+                }
                 groups.append(["hooks": [handler]])
             }
             if groups.isEmpty { hooks.removeValue(forKey: kind.rawValue) }

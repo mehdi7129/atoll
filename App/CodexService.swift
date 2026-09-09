@@ -49,6 +49,16 @@ final class CodexService {
         let ended = observed.apply(event)
         sessions = observed.sessions()
         playSound(for: event)
+        // Une session qui se termine emporte ses cartes : le helper est mort
+        // avec elle, répondre sur ces descripteurs n'atteindrait personne.
+        if event.kind == .sessionEnd {
+            CodexInteractionCenter.shared.cancelAll(forSession: event.sessionID)
+        }
+        // Filet de nettoyage seulement — jamais l'autorité de corrélation.
+        if event.kind == .postToolUse {
+            CodexInteractionCenter.shared.noteToolFinished(sessionID: event.sessionID,
+                                                           tool: event.tool)
+        }
         if let ended { RetrospectiveRunner.shared.codexSessionEnded(ended) }
     }
 

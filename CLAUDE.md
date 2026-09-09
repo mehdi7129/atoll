@@ -1395,6 +1395,9 @@ tenue à jour avec `App/AppDelegate.swift` :
   `retroCodexRollout` (bilan sur le plus gros ROLLOUT Codex : prouve l'autre
   moitié — rollout → parseur Codex → condensé → notes —, sans attendre qu'une
   vraie session Codex longue se termine),
+  `codexAllow` / `codexDeny` / `codexHandBack` (résolvent la première carte
+  d'autorisation CODEX par les mêmes chemins que les boutons — pendant de
+  `allow`/`deny`, et seul moyen de valider la matrice de fautes sans souris),
   `curation` (curation des notes),
   `plugins` (inventaire réel via `claude plugin list --json`, catégorie de log
   `plugins`) / `pluginSearch` (recherche d'un plugin — consomme du quota),

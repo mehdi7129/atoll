@@ -134,7 +134,11 @@ final class CodexIntegrationTests: XCTestCase {
         XCTAssertEqual(hooks.count, CodexHookEvent.Kind.allCases.count)
         for (event, groups) in hooks {
             let handler = try XCTUnwrap((groups.first?["hooks"] as? [[String: Any]])?.first)
-            XCTAssertEqual(handler["timeout"] as? Int, 3, event)
+            // Les hooks d'OBSERVATION restent bornés à 3 s — ils ne demandent
+            // rien à personne. Seul `PermissionRequest` attend une décision
+            // HUMAINE : lui imposer 3 s reviendrait à ne jamais laisser à Mehdi
+            // le temps de cliquer, donc à toujours s'abstenir (2026-09-09).
+            XCTAssertEqual(handler["timeout"] as? Int, event == "PermissionRequest" ? 600 : 3, event)
             // Aucun handler ne réclame de sortie ni de décision : le contrat
             // d'observation de la PR est intact.
             XCTAssertNil(handler["decision"], event)

@@ -111,10 +111,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         store.start()
         CodexService.shared.start()
         let codexServer = BridgeServer(onEvent: { _, _ in }, onStatusline: { _ in },
-                                      onStateChange: { _ in }, onCodexEvent: { event in
-            Task { @MainActor in CodexService.shared.apply(event) }
+                                      onStateChange: { _ in }, onCodexEvent: { event, requestID in
+            Task { @MainActor in
+                CodexService.shared.apply(event)
+                // Une demande d'autorisation laisse le helper BLOQUÉ sur son
+                // descripteur : elle va dans le centre Codex, jamais dans
+                // `InteractionCenter` — donc jamais dans Rockstar.
+                if let requestID {
+                    CodexInteractionCenter.shared.register(event: event, requestID: requestID)
+                }
+            }
         }, socketPath: CodexPaths.socketPath)
         codexBridgeServer = codexServer
+        CodexInteractionCenter.shared.server = codexServer
         try? codexServer.start()
 
         // Découverte de la flotte sur interface SUPPORTÉE (`claude agents --json`) :
@@ -329,6 +338,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             MainActor.assumeIsolated { RetrospectiveRunner.shared.debugRunOnLargestCodexRollout() }
         }
         debugTokens.append(retroCodexRolloutToken)
+
+        // Résolution de la première carte CODEX en attente, par les mêmes
+        // chemins que les boutons. Pendant de `allow`/`deny` côté Claude, et
+        // seul moyen de valider la matrice de fautes sans souris.
+        //
+        // ⚠️ NOMS ÉCRITS EN CLAIR, jamais construits par interpolation :
+        // `Scripts/check-docs.py` confronte cette liste à CLAUDE.md en cherchant
+        // des LITTÉRAUX. Une boucle rendrait ces triggers invisibles au
+        // contrôle — et un trigger qui échappe au contrôle finit par dériver.
+        var codexAllowToken: Int32 = 0
+        notify_register_dispatch("dev.mehdiguiard.atoll.debug.codexAllow",
+                                 &codexAllowToken, DispatchQueue.main) { _ in
+            MainActor.assumeIsolated {
+                guard let card = CodexInteractionCenter.shared.current else { return }
+                CodexInteractionCenter.shared.decide(card.id, .allow)
+            }
+        }
+        debugTokens.append(codexAllowToken)
+
+        var codexDenyToken: Int32 = 0
+        notify_register_dispatch("dev.mehdiguiard.atoll.debug.codexDeny",
+                                 &codexDenyToken, DispatchQueue.main) { _ in
+            MainActor.assumeIsolated {
+                guard let card = CodexInteractionCenter.shared.current else { return }
+                CodexInteractionCenter.shared.decide(card.id, .deny(message: "refusé depuis Atoll"))
+            }
+        }
+        debugTokens.append(codexDenyToken)
+
+        // Rendre la main à Codex sans décider — le chemin du bouton
+        // « DÉCIDER DANS CODEX », qui doit faire apparaître l'invite native.
+        var codexHandBackToken: Int32 = 0
+        notify_register_dispatch("dev.mehdiguiard.atoll.debug.codexHandBack",
+                                 &codexHandBackToken, DispatchQueue.main) { _ in
+            MainActor.assumeIsolated {
+                guard let card = CodexInteractionCenter.shared.current else { return }
+                CodexInteractionCenter.shared.handBack(card.id)
+            }
+        }
+        debugTokens.append(codexHandBackToken)
 
         // Inventaire des plugins : rafraîchit et journalise ce que la CLI rend
         // (vérification du chemin complet spawn → décodage → état observable).
