@@ -73,36 +73,48 @@ public enum CodexPermissionDecision: Equatable, Sendable {
               let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
         else { return nil }
 
-        // Deux enveloppes acceptées : celle du hook (telle qu'on l'émet) et la
-        // forme nue `{"behavior": …}`, pour que l'app n'ait pas à connaître le
-        // détail du protocole.
+        // ⚠️ ALLOWLIST PAR ENSEMBLE DE CLÉS EXACT, aux TROIS niveaux.
+        //
+        // La version précédente ne refusait que les trois champs réservés et
+        // laissait passer tout le reste — Codex l'a relevé en revue avec quatre
+        // contre-exemples : `{"behavior":"allow","futureKey":true}`,
+        // `{"behavior":"allow","message":"…"}` (un message n'a pas de sens sur
+        // un allow), `{"behavior":"deny","message":42}` (message non textuel),
+        // et une clé inconnue posée à côté de `decision`.
+        //
+        // Aucun ne relayait de clé dangereuse — le ré-encodage les retirait —
+        // mais ce n'est PAS la règle : forme inconnue ⇒ ABSTENTION, jamais
+        // interprétation partielle. La différence compte exactement au moment
+        // où elle est le plus difficile à diagnostiquer : un décalage de
+        // versions entre l'app et le helper.
         let decision: [String: Any]
         if let output = root["hookSpecificOutput"] as? [String: Any] {
-            guard output["hookEventName"] as? String == "PermissionRequest",
+            guard Set(root.keys) == ["hookSpecificOutput"],
+                  Set(output.keys) == ["hookEventName", "decision"],
+                  output["hookEventName"] as? String == "PermissionRequest",
                   let nested = output["decision"] as? [String: Any] else { return nil }
             decision = nested
-        } else if root["behavior"] != nil {
-            decision = root
         } else {
-            return nil
-        }
-
-        // Les trois champs RÉSERVÉS font refuser la requête s'ils atteignent
-        // Codex. Leur présence ici trahit une réponse qu'on ne comprend pas :
-        // on s'abstient plutôt que de deviner.
-        for reserved in ["updatedInput", "updatedPermissions", "interrupt"]
-        where decision[reserved] != nil || root[reserved] != nil {
-            return nil
+            decision = root
         }
 
         switch decision["behavior"] as? String {
         case "allow":
+            // Un `allow` ne porte RIEN d'autre : ni message (il n'aurait pas de
+            // sens), ni champ d'une version future. C'est exactement ce que
+            // `hookOutput()` émet, et le contrat s'arrête là.
+            guard Set(decision.keys) == ["behavior"] else { return nil }
             return .allow
+
         case "deny":
-            let message = (decision["message"] as? String).map {
-                String($0.prefix(messageCap))
-            }
-            return .deny(message: message)
+            guard Set(decision.keys) == ["behavior"]
+                    || Set(decision.keys) == ["behavior", "message"] else { return nil }
+            guard let raw = decision["message"] else { return .deny(message: nil) }
+            // Présent mais pas textuel ⇒ on ne comprend pas la réponse, donc on
+            // s'abstient plutôt que de refuser en silence avec un message perdu.
+            guard let text = raw as? String else { return nil }
+            return .deny(message: String(text.prefix(messageCap)))
+
         default:
             return nil
         }

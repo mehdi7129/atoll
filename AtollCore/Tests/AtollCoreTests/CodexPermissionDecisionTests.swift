@@ -81,6 +81,22 @@ final class CodexPermissionDecisionTests: XCTestCase {
             #"{"behavior":"allow","updatedPermissions":[{"mode":"bypass"}]}"#,
             #"{"behavior":"deny","interrupt":true}"#,
             #"{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"allow","updatedInput":{}}}}"#,
+
+            // LES QUATRE CONTRE-EXEMPLES DE CODEX, revue du 2026-09-09. Aucun
+            // ne relayait de clé dangereuse — le ré-encodage les retirait —
+            // mais la règle est « forme inconnue = ABSTENTION », jamais
+            // interprétation partielle. L'écart compte exactement au moment où
+            // il est le plus dur à diagnostiquer : un décalage de versions
+            // entre l'app et le helper.
+            #"{"behavior":"allow","futureKey":true}"#,
+            #"{"behavior":"allow","message":"un message n'a pas de sens sur allow"}"#,
+            #"{"behavior":"deny","message":42}"#,
+            #"{"hookSpecificOutput":{"hookEventName":"PermissionRequest","futureKey":1,"decision":{"behavior":"allow"}}}"#,
+            // …et le champ réservé posé en FRÈRE de `decision`, que l'ancienne
+            // boucle ne regardait pas.
+            #"{"hookSpecificOutput":{"hookEventName":"PermissionRequest","interrupt":true,"decision":{"behavior":"allow"}}}"#,
+            // Une clé inconnue à la racine, à côté de l'enveloppe.
+            #"{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"allow"}},"extra":1}"#,
         ]
         for raw in cases {
             XCTAssertNil(CodexPermissionDecision.decode(Data(raw.utf8)),
@@ -101,6 +117,13 @@ final class CodexPermissionDecisionTests: XCTestCase {
             return XCTFail("refus non décodé")
         }
         XCTAssertEqual(message?.count, CodexPermissionDecision.messageCap)
+    }
+
+    /// Un `deny` SANS message reste valide : c'est ce que rend un refus depuis
+    /// l'îlot quand l'utilisateur n'écrit rien.
+    func testDenyWithoutMessageIsStillAccepted() {
+        XCTAssertEqual(CodexPermissionDecision.decode(Data(#"{"behavior":"deny"}"#.utf8)),
+                       .deny(message: nil))
     }
 
     /// Aller-retour : ce qu'on émet doit être relu à l'identique. Sans quoi le

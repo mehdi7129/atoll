@@ -31,9 +31,15 @@ public enum CodexTranscriptParser {
     /// Enveloppes machine injectées dans un message `user` : ce n'est pas
     /// l'utilisateur qui parle, c'est le client qui se décrit. Discriminant
     /// STRUCTUREL (préfixe de balise), jamais une recherche de mots.
+    /// ⚠️ `<recommended_plugins>` A ÉTÉ AJOUTÉ APRÈS COUP, sur constat de Codex
+    /// qui a compté **5 enveloppes** de ce type indexées comme paroles de
+    /// l'utilisateur dans les rollouts de cette machine — avec
+    /// l'`environment_context` concaténé à la suite dans le même message.
+    /// Preuve, s'il en fallait, qu'une liste de préfixes se vérifie sur le
+    /// corpus RÉEL et pas sur ce qu'on croit connaître du format.
     private static let machineEnvelopePrefixes = [
         "<environment_context>", "<skills_instructions>", "<user_instructions>",
-        "<plan_mode>", "<system-reminder>",
+        "<plan_mode>", "<system-reminder>", "<recommended_plugins>",
     ]
 
     /// `nil` = ligne sans substance indexable (ou illisible). Jamais d'erreur :

@@ -28,7 +28,27 @@ public enum CodexHookInstallation {
             }
             try fm.createDirectory(at: binDirectory, withIntermediateDirectories: true)
             let escaped = helperURL.resolvingSymlinksInPath().path.replacingOccurrences(of: "'", with: "'\\''")
-            let wrapper = "#!/bin/sh\nBIN='\(escaped)'\n[ -x \"$BIN\" ] && exec \"$BIN\" codex-hook\nexit 0\n"
+            // ⚠️ SUPERVISEUR, PAS `exec`. Avec `exec`, le worker REMPLACE le
+            // shell : un `SIGTERM` ou `SIGKILL` du worker devient la mort du
+            // hook, et Codex la voit comme un échec au lieu d'une abstention.
+            // Personne ne peut alors la convertir en « exit 0, stdout vide ».
+            //
+            // Ici le shell reste vivant, attend le worker, et sort TOUJOURS 0 :
+            // ce que le worker a écrit sur stdout est déjà parti vers Codex
+            // (allow/deny), et s'il est mort sans rien écrire, l'abstention est
+            // exactement ce qu'il faut. Constat de la revue de Codex du
+            // 2026-09-09 : « sans ce changement, l'architecture demandée est
+            // absente ».
+            //
+            // Un `SIGKILL` du SUPERVISEUR lui-même reste non garantissable —
+            // aucun processus ne survit à SIGKILL — et c'est documenté comme tel.
+            let wrapper = """
+                #!/bin/sh
+                BIN='\(escaped)'
+                [ -x "$BIN" ] || exit 0
+                "$BIN" codex-hook
+                exit 0
+                """ + "\n"
             let url = binDirectory.appendingPathComponent("atoll-codex-bridge")
             let temporary = binDirectory.appendingPathComponent(".codex-\(UUID().uuidString).tmp")
             defer { try? fm.removeItem(at: temporary) }

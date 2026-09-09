@@ -211,7 +211,7 @@ enum RecallCLI {
                 "role": hit.role,
                 "snippet": hit.snippet,
                 "resume": jsonValue(hit.sessionID.hasPrefix("atoll-note-")
-                    ? nil : "claude --resume \(hit.sessionID)"),
+                    ? nil : resumeCommand(for: hit.sessionID)),
             ]
         }
         if let data = try? JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys]) {

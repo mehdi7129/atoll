@@ -232,7 +232,14 @@ private actor MemoryIndexWorker {
                 await indexFile(at: file, projectDir: dir.lastPathComponent, index: index)
             }
         }
-        await scanCodexRollouts(index: index)
+        // ⚠️ LES CHEMINS CODEX DOIVENT ENTRER DANS `seenPaths`. Sans cela, la
+        // fin de passe les traite tous comme DISPARUS : `markMissing` puis
+        // retrait de `lastSeen`, et la passe suivante les réindexe pour les
+        // remarquer manquants — une boucle d'écritures SQLite toutes les 30 s,
+        // qui neutralise au passage tout le scan incrémental côté Codex.
+        // Trouvé par Codex en revue ; les messages restaient cherchables, donc
+        // la preuve « 714 indexés » ne le contredisait pas.
+        seenPaths.formUnion(await scanCodexRollouts(index: index))
 
         // Notes d'apprentissage (7b) : re-scannées ici pour survivre à une
         // reconstruction de la base (revue : indexées seulement à l'écriture,
@@ -309,24 +316,32 @@ private actor MemoryIndexWorker {
     /// L'arborescence est datée, donc RÉCURSIVE, contrairement au scan Claude
     /// qui est plat par construction. On la borne quand même : un dossier de
     /// sessions accumule des années, et `skipsHiddenFiles` évite les sidecars.
-    private func scanCodexRollouts(index: MemoryIndex) async {
+    /// Rend les chemins RENCONTRÉS — y compris ceux que le plafond de la passe
+    /// n'a pas indexés : ils existent, et les déclarer disparus serait faux.
+    @discardableResult
+    private func scanCodexRollouts(index: MemoryIndex) async -> Set<String> {
         let fm = FileManager.default
         let root = BridgePaths.codexSessionsURL
+        var seen = Set<String>()
         guard fm.fileExists(atPath: root.path),
               let walker = fm.enumerator(at: root, includingPropertiesForKeys: [.isRegularFileKey],
                                          options: [.skipsHiddenFiles])
-        else { return }
+        else { return seen }
         var scanned = 0
         for case let file as URL in walker {
-            if Task.isCancelled { return }
+            if Task.isCancelled { return seen }
             guard file.pathExtension == "jsonl" else { continue }
+            // Compté comme VU même au-delà du plafond : le fichier existe, et
+            // seule son indexation est reportée à la passe suivante.
+            seen.insert(file.path)
+            guard scanned < Self.codexRolloutCap else { continue }
             // Le dossier du jour sert de « projet » : c'est ce qui apparaîtra
             // dans les statistiques, faute de notion de projet dans un rollout.
             await indexFile(at: file, projectDir: file.deletingLastPathComponent().lastPathComponent,
                             index: index, provider: .codex)
             scanned += 1
-            if scanned >= Self.codexRolloutCap { break }
         }
+        return seen
     }
 
     /// Plafond de rollouts par passe. Le scan tourne toutes les 30 s : borner
