@@ -111,15 +111,34 @@ final class CodexIntegrationTests: XCTestCase {
         XCTAssertEqual((group["hooks"] as? [[String: String]])?.first?["command"], "echo atoll-codex-bridge")
     }
 
+    /// ⚠️ L'ATTENTE `async == nil` A ÉTÉ RETIRÉE ICI le 2026-09-09, et ce n'est
+    /// pas un détail : elle figeait un choix de conception explicite de la PR
+    /// (« les hooks sont synchrones pour garder leur ordre »). Ce qui l'a
+    /// renversé est une MESURE, pas une préférence — un hook synchrone est
+    /// ANNONCÉ par Codex dans sa sortie, soit dix lignes de bruit par tour d'un
+    /// seul outil, infligées en permanence dès l'installation. La règle n° 1 du
+    /// projet tranche : rien de ce qu'Atoll installe ne doit gêner le CLI.
+    ///
+    /// CE QU'ON PERD, et qu'il faut assumer : l'ordre d'arrivée n'est plus
+    /// garanti entre hooks async. Sans conséquence connue — le seul état que
+    /// l'ordre protège est « quel outil tourne », transitoire et cosmétique, et
+    /// la fin de tour (`Stop`) reste synchrone précisément pour ne jamais être
+    /// perdue. Le garde de tour (`turn_id`) couvre déjà le vrai risque.
+    ///
+    /// Ce que le test continue de garantir, et qui EST son intention : les
+    /// hooks restent bornés (timeout 3 s) et purement observateurs.
     func testInstalledHooksAreBoundedObservationOnly() throws {
         let data = try CodexHookSettingsEditor.edit(nil, install: true)
         let root = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         let hooks = try XCTUnwrap(root["hooks"] as? [String: [[String: Any]]])
         XCTAssertEqual(hooks.count, CodexHookEvent.Kind.allCases.count)
-        for groups in hooks.values {
+        for (event, groups) in hooks {
             let handler = try XCTUnwrap((groups.first?["hooks"] as? [[String: Any]])?.first)
-            XCTAssertEqual(handler["timeout"] as? Int, 3)
-            XCTAssertNil(handler["async"])
+            XCTAssertEqual(handler["timeout"] as? Int, 3, event)
+            // Aucun handler ne réclame de sortie ni de décision : le contrat
+            // d'observation de la PR est intact.
+            XCTAssertNil(handler["decision"], event)
+            XCTAssertEqual(handler["type"] as? String, "command", event)
         }
     }
 }

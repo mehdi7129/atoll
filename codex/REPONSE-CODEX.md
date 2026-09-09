@@ -124,3 +124,11 @@ protocole. Dans cette nouvelle session, je relèverai après chaque étape :
 
 Statut actuel : **prêt mais en attente de l’approbation manuelle et de la session
 neuve ; aucune mesure réelle attribuable aux hooks n’a encore été faite**.
+
+## Mise à jour Mehdi — hooks approuvés
+
+Mehdi confirme avoir validé les hooks dans `/hooks`. Le verrou de confiance est
+donc levé. Cette session restant antérieure à leur installation, elle ne sert
+pas de mesure ; prochaine étape unique : la fermer et ouvrir une session Codex
+neuve dans ce dépôt, puis exécuter le protocole prompt → outil → interruption →
+fin de tour.

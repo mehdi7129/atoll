@@ -150,11 +150,34 @@ public struct CodexSessions: Sendable {
     }
 }
 
-/// Installed synchronously (short, fail-open) so main-thread lifecycle events
-/// retain their order. No output, no decision, no transcript reads.
+/// Hooks d'OBSERVATION : aucune sortie, aucune décision, aucune lecture de
+/// transcript.
 public enum CodexHookSettingsEditor {
     public static let command = "\"$HOME/.atoll/bin/atoll-codex-bridge\""
     public enum EditError: Error { case invalidSettings }
+
+    /// Les seuls événements posés en SYNCHRONE. Tous les autres sont `async`.
+    ///
+    /// ⚠️ MESURÉ LE 2026-09-09, ET C'ÉTAIT UNE GÊNE RÉELLE POUR L'UTILISATEUR.
+    /// Un hook synchrone est ANNONCÉ par Codex dans sa sortie : « hook: PreToolUse »
+    /// puis « hook: PreToolUse Completed ». La première version posait les dix
+    /// événements en synchrone — **dix lignes de bruit pour un tour d'un seul
+    /// outil**, infligées en permanence dès l'installation d'Atoll. C'est la
+    /// règle n° 1 du projet qui tranche : rien de ce qu'Atoll installe ne doit
+    /// gêner le CLI. Or Atoll n'attend RIEN de ces hooks — il observe.
+    ///
+    /// Pourquoi `Stop` reste synchrone malgré le bruit qu'il coûte : en `async`
+    /// il est fire-and-forget, et le process se termine avant que le hook n'ait
+    /// écrit. MESURÉ : tout en async ⇒ **`Stop` perdu**, donc l'îlot ne saurait
+    /// pas que le tour est fini et laisserait la session « en cours » jusqu'à sa
+    /// péremption de 15 min. Deux lignes de bruit valent mieux qu'un état faux.
+    /// `SessionEnd` est de toute façon FORCÉ synchrone par Codex lui-même
+    /// (vérifié : `hooks/list` rend `async: false` quoi qu'on écrive).
+    ///
+    /// Relevé des trois configurations, même prompt, même machine :
+    /// tout synchrone → 10 lignes / 6 événements ; tout async → 0 ligne /
+    /// 5 événements ; ce compromis → **2 lignes / 6 événements**.
+    static let synchronousEvents: Set<CodexHookEvent.Kind> = [.stop, .sessionEnd]
 
     public static func edit(_ data: Data?, install: Bool) throws -> Data {
         var root: [String: Any] = [:]
@@ -182,7 +205,9 @@ public enum CodexHookSettingsEditor {
                 return copy
             }
             if install {
-                groups.append(["hooks": [["type": "command", "command": command, "timeout": 3]]])
+                var handler: [String: Any] = ["type": "command", "command": command, "timeout": 3]
+                if !synchronousEvents.contains(kind) { handler["async"] = true }
+                groups.append(["hooks": [handler]])
             }
             if groups.isEmpty { hooks.removeValue(forKey: kind.rawValue) }
             else { hooks[kind.rawValue] = groups }

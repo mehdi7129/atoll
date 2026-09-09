@@ -62,3 +62,59 @@ final class CodexHookInstallationTests: XCTestCase {
         }
     }
 }
+
+/// MESURÉ le 2026-09-09 : un hook synchrone est ANNONCÉ par Codex dans sa
+/// sortie (« hook: PreToolUse » / « … Completed »). Dix événements synchrones
+/// = dix lignes de bruit par tour, infligées en permanence — la règle n° 1 du
+/// projet (rien de ce qu'Atoll installe ne doit gêner le CLI) tranche contre.
+extension CodexHookInstallationTests {
+
+    private func handlers(in data: Data) throws -> [String: [String: Any]] {
+        let root = try XCTUnwrap((try? JSONSerialization.jsonObject(with: data)) as? [String: Any])
+        let hooks = try XCTUnwrap(root["hooks"] as? [String: Any])
+        var result: [String: [String: Any]] = [:]
+        for (event, value) in hooks {
+            guard let groups = value as? [[String: Any]],
+                  let handler = (groups.first?["hooks"] as? [[String: Any]])?.first else { continue }
+            result[event] = handler
+        }
+        return result
+    }
+
+    func testObservationHooksAreAsync() throws {
+        let data = try CodexHookSettingsEditor.edit(nil, install: true)
+        let all = try handlers(in: data)
+        for event in ["PreToolUse", "PostToolUse", "UserPromptSubmit", "SessionStart",
+                      "PermissionRequest", "Interrupt", "PreCompact", "PostCompact"] {
+            XCTAssertEqual(all[event]?["async"] as? Bool, true,
+                           "\(event) synchrone : Codex l'annoncera dans sa sortie")
+        }
+    }
+
+    /// `Stop` reste synchrone À DESSEIN : en async il est fire-and-forget et le
+    /// process se termine avant que le hook n'ait écrit — MESURÉ, l'événement
+    /// est perdu, et l'îlot laisserait la session « en cours » 15 minutes.
+    func testStopStaysSynchronousSoTheEndOfTurnIsNeverLost() throws {
+        let all = try handlers(in: try CodexHookSettingsEditor.edit(nil, install: true))
+        XCTAssertNil(all["Stop"]?["async"], "Stop en async ⇒ fin de tour perdue")
+        XCTAssertNil(all["SessionEnd"]?["async"])
+    }
+
+    func testEveryEventStillCarriesTheCommandAndTimeout() throws {
+        let all = try handlers(in: try CodexHookSettingsEditor.edit(nil, install: true))
+        XCTAssertEqual(all.count, CodexHookEvent.Kind.allCases.count)
+        for (event, handler) in all {
+            XCTAssertEqual(handler["command"] as? String, CodexHookSettingsEditor.command, event)
+            XCTAssertEqual(handler["timeout"] as? Int, 3, event)
+        }
+    }
+
+    /// Le retrait doit rester complet quelle que soit la forme du handler.
+    func testUninstallRemovesAsyncHandlersToo() throws {
+        let installed = try CodexHookSettingsEditor.edit(nil, install: true)
+        XCTAssertTrue(CodexHookSettingsEditor.isInstalled(installed))
+        let removed = try CodexHookSettingsEditor.edit(installed, install: false)
+        XCTAssertFalse(CodexHookSettingsEditor.isInstalled(removed))
+        XCTAssertFalse(String(decoding: removed, as: UTF8.self).contains("atoll-codex-bridge"))
+    }
+}
