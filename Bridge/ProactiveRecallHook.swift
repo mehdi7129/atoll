@@ -25,15 +25,15 @@ import AtollCore
 enum ProactiveRecallHook {
 
     /// Rôles autorisés dans un contexte injecté d'OFFICE : l'intention de
-    /// l'utilisateur, les conclusions du modèle, les résumés de compaction et
-    /// les notes d'Atoll. Volontairement PAS `tool`/`tool_result` (sorties de
+    /// l'utilisateur, les conclusions du modèle, les résumés de compaction, les
+    /// notes d'Atoll et les mémoires de projet de Claude Code. Volontairement PAS `tool`/`tool_result` (sorties de
     /// commandes, de fichiers et de pages web : bruyantes, et le vecteur
     /// d'injection indirecte le plus probable) ni `thinking` (verbeux) ni
     /// `title` (déjà affiché en en-tête de chaque extrait). Le verbe
     /// `atoll-bridge recall`, lui, cherche dans TOUT : il est appelé
     /// explicitement, avec un humain ou un modèle qui a demandé.
     static let injectableRoles: Set<TranscriptLine.Role> = [
-        .user, .assistant, .summary, .note,
+        .user, .assistant, .summary, .note, .memory,
     ]
 
     /// Le JSON à écrire tel quel sur stdout, ou nil s'il n'y a rien à injecter.
@@ -132,12 +132,23 @@ enum ProactiveRecallHook {
         // `maxHits`. `byCoverage` préserve l'ordre d'entrée à couverture égale,
         // donc le classement pertinence+récence garde le dernier mot.
         let terms = MemoryIndex.queryTerms(query)
-        let significant = MemoryRanking.byCoverage(
-            MemoryRanking.aboveRelevanceFloor(hits), terms: terms)
-        guard !significant.isEmpty else {
+        let relevant = MemoryRanking.aboveRelevanceFloor(hits)
+        guard !relevant.isEmpty else {
             journal(.noneAboveFloor, keywords: keywordCount, pool: hits.count, kept: 0)
             return nil
         }
+        // ⚠️ LE TRI NE SUFFISAIT PAS, ET LE MOIS DE MESURE L'A PROUVÉ. `byCoverage`
+        // ne fait que CLASSER : les extraits à un seul mot restaient dans le lot
+        // et remplissaient les places sous `maxHits` dès qu'il n'y avait rien de
+        // mieux. Sur les 3 481 extraits réellement injectés, 46 % étaient dans ce
+        // cas. On les ÉCARTE désormais — un extrait qui partage un mot avec la
+        // question ne répond pas à la question.
+        let covering = MemoryRanking.covering(relevant, terms: terms)
+        guard !covering.isEmpty else {
+            journal(.belowCoverage, keywords: keywordCount, pool: hits.count, kept: 0)
+            return nil
+        }
+        let significant = MemoryRanking.byCoverage(covering, terms: terms)
         // `injectedBlock` rend le texte ET les extraits qu'il contient vraiment :
         // c'est la seule façon de journaliser ce qui est PARTI plutôt que ce
         // qu'on espérait envoyer (voir `ProactiveRecall.InjectedBlock`).

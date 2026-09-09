@@ -186,6 +186,37 @@ public enum MemoryRanking {
 
     /// Reclasse par couverture DÉCROISSANTE, en préservant l'ordre d'entrée à
     /// couverture égale (le classement bm25 + récence garde donc le dernier mot).
+    /// Couverture minimale exigée pour qu'un extrait soit injecté.
+    ///
+    /// ⚠️ CE CHIFFRE VIENT D'UNE MESURE, PAS D'UNE INTUITION. Le mois
+    /// d'instrumentation clos le 2026-09-09 a rendu 702 injections et 3 481
+    /// extraits, dont **46 % n'appariaient qu'UN mot du prompt** — un extrait
+    /// qui partage un seul mot avec la question ne répond à rien, il remplit du
+    /// contexte. Les trois règles envisagées ont été simulées sur ces vraies
+    /// données avant d'en retenir une :
+    ///
+    /// - `≥ 2` : garde **76 %** des injections et **54 %** des extraits ;
+    /// - `≥ 3` : n'en garde que 31 % — la mémoire se tairait aux trois quarts ;
+    /// - « la moitié des mots-clés » : 25 %, pire encore.
+    ///
+    /// D'où 2 : on coupe la moitié du VOLUME en gardant les trois quarts des
+    /// RÉPONSES. Les 24 % de prompts qui ne recevront plus rien sont ceux dont
+    /// tous les extraits étaient à un mot : ne rien dire y vaut mieux.
+    public static let minimumCoverage = 2
+
+    /// Les extraits appariant au moins `minimum` termes du prompt.
+    ///
+    /// Le seuil ne peut JAMAIS dépasser le nombre de termes de la requête :
+    /// exiger deux mots d'un prompt qui n'en porte qu'un écarterait tout, et
+    /// silencieusement. Une liste de termes vide laisse tout passer — on ne
+    /// filtre pas sur une information qu'on n'a pas.
+    public static func covering(_ hits: [MemoryIndex.Hit], terms: [String],
+                                minimum: Int = minimumCoverage) -> [MemoryIndex.Hit] {
+        guard !terms.isEmpty, minimum > 1 else { return hits }
+        let threshold = min(minimum, terms.count)
+        return hits.filter { coverage(of: $0, terms: terms) >= threshold }
+    }
+
     public static func byCoverage(_ hits: [MemoryIndex.Hit], terms: [String]) -> [MemoryIndex.Hit] {
         guard hits.count > 1, !terms.isEmpty else { return hits }
         return hits.enumerated()

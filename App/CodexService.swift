@@ -7,6 +7,10 @@ import AtollCore
 final class CodexService {
     static let shared = CodexService()
     static let quotaEnabledKey = "codexQuotaEnabled"
+    /// Marqueur d'environnement des `codex exec` lancés par Atoll lui-même.
+    /// Même valeur que côté helper (`CodexBridge.internalRunMarker`) et que le
+    /// chemin Claude : c'est `RetrospectiveRunner` qui le pose.
+    static let internalRunMarker = "ATOLL_RETROSPECTIVE"
     static var executableKey: String { CodexExecutable.overrideKey }
 
     private(set) var sessions: [AgentSession] = []

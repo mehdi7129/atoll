@@ -23,6 +23,15 @@ public struct TranscriptLine: Equatable, Sendable {
         case title
         /// Note d'apprentissage écrite par Atoll (Phase 7b) — donnée, pas instruction.
         case note
+        /// Mémoire de projet de Claude Code (`~/.claude/projects/*/memory/*.md`).
+        ///
+        /// DISTINCTE de `note` exprès, et la distinction n'est pas cosmétique :
+        /// la requête de recall EXEMPTE `note` du filtre de projet — une note
+        /// d'Atoll ne vient d'aucun projet et vaut pour tous. Une mémoire de
+        /// projet, elle, parle d'UN projet : lui donner `note` la ferait
+        /// remonter partout, et rouvrirait la fuite inter-projets que la
+        /// frontière de chemin ferme.
+        case memory
     }
 
     /// Un morceau de texte indexable extrait de la ligne.

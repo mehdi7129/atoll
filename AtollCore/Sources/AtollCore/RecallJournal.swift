@@ -48,6 +48,12 @@ public enum RecallJournal {
         case noHits
         /// Des résultats, mais aucun au-dessus du plancher de pertinence.
         case noneAboveFloor
+        /// Des résultats au-dessus du plancher, mais aucun n'appariait assez de
+        /// mots du prompt (`MemoryRanking.minimumCoverage`). Raison DISTINCTE de
+        /// `noneAboveFloor` exprès : sans elle, durcir le seuil ferait grossir un
+        /// seau qui mesure autre chose, et on ne pourrait plus lire ce que le
+        /// durcissement a réellement coûté.
+        case belowCoverage
         /// Des résultats retenus, mais le bloc rendu était vide (extraits
         /// entièrement caviardés ou blancs).
         case emptyBlock

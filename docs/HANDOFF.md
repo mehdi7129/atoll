@@ -1,5 +1,19 @@
 # HANDOFF — reprise du développement d'Atoll
 
+> **LE RENDEZ-VOUS DU RECALL EST ÉCHU, ET TRANCHÉ (v0.17.2, 2026-09-09).**
+> Le mois de mesure a rendu : 1 062 passages, 66 % d'injection, **46 % des
+> extraits n'appariant qu'UN mot**, latence médiane 119 ms. La décision n'a pas
+> été « garder ou supprimer » mais **le corpus**, comme la section du rendez-vous
+> le demandait : plancher de couverture à 2 (simulé sur les 702 injections
+> réelles avant d'être choisi) et indexation des **188 mémoires de projet**
+> (590 Ko) qui n'étaient pas dans l'index. Détail dans `CLAUDE.md`.
+>
+> ⚠️ **NE PAS COMPARER 46 % AUX 32 % DE LA v0.16.1** : l'instrument de couverture
+> a été corrigé le 2026-08-14 (il sur-comptait par sous-chaîne), et le journal
+> lui-même donne 41 % dès sa PREMIÈRE semaine avec l'ancienne mesure. La
+> couverture est restée stable tout le mois — elle ne s'est pas dégradée. Cette
+> comparaison a été faite ici même avant d'être vérifiée sur les données.
+>
 > **ÉTAT AU 2026-09-09 — v0.17.1 : Codex est FUSIONNÉ, PUBLIÉ et INSTALLÉ.**
 > La branche `codex/codex-support-dual-quotas` (PR #1) est dans `main` depuis la
 > **v0.17.0**, après trois revues de Codex — deux verdicts BLOQUANT, puis « prêt
@@ -314,11 +328,11 @@ GPL-3.0, repo PUBLIC `github.com/mehdi7129/atoll`).
 
 | Quoi | Où |
 |---|---|
-| Version | **v0.17.1** — correctifs de la quatrième revue de Codex, aucune fonction ajoutée. Quatre défauts sur des fonctions déjà livrées : la passation Codex désignait `./contexte.md` dans le dossier du PROJET alors que le fichier vit dans `~/.atoll/handoff/` (introuvable, ou pire : un homonyme du projet) ; `noteToolFinished` rendait au client la MAUVAISE carte quand deux demandes identiques attendaient ; le filtrage des tours protégeait l'état de session mais pas les cartes, et rien n'annulait sur `Interrupt` ; le scan des rollouts déclarait « j'ai tout listé » après une annulation. Plus la CAUSE RACINE du bug d'appcast, jusqu'ici réparée à la main à chaque release |
-| Tests | **916 verts**, 1 ignoré (`cd AtollCore && swift test`, ~3 s), build **0 warning** — les deux warnings apparus en v0.17.0 sont fermés, dont un qui devenait une ERREUR en Swift 6 |
+| Version | **v0.17.2** — le rendez-vous du recall tranché (plancher de couverture, mémoires de projet indexées) et les runs internes d'Atoll filtrés côté Codex. Avant elle, **v0.17.1** — correctifs de la quatrième revue de Codex, aucune fonction ajoutée. Quatre défauts sur des fonctions déjà livrées : la passation Codex désignait `./contexte.md` dans le dossier du PROJET alors que le fichier vit dans `~/.atoll/handoff/` (introuvable, ou pire : un homonyme du projet) ; `noteToolFinished` rendait au client la MAUVAISE carte quand deux demandes identiques attendaient ; le filtrage des tours protégeait l'état de session mais pas les cartes, et rien n'annulait sur `Interrupt` ; le scan des rollouts déclarait « j'ai tout listé » après une annulation. Plus la CAUSE RACINE du bug d'appcast, jusqu'ici réparée à la main à chaque release |
+| Tests | **929 verts**, 1 ignoré (`cd AtollCore && swift test`, ~3 s), build **0 warning** — les deux warnings apparus en v0.17.0 sont fermés, dont un qui devenait une ERREUR en Swift 6 |
 | Git | `main`, arbre propre — **le vérifier, ne pas le croire** : `git status --porcelain && git branch && git worktree list` |
 | Build installé | `~/Applications/Atoll.app`, Release notarisée. La v0.17.0 y a été installée le 2026-09-09 à 15:44, et le lanceur de hooks Codex s'est repointé tout seul de l'app de test vers elle — le scénario exact que `CodexHookInstallation.refreshWrapper` existe pour couvrir |
-| Mesure recall | **CLOSE le 2026-09-09** — 1 062 passages sur 31 jours, 66 % d'injection, 46 % des extraits n'appariant qu'UN mot, latence médiane 119 ms. Décision de Mehdi en attente (durcir / retirer / changer de corpus) |
+| Mesure recall | **CLOSE et TRANCHÉE le 2026-09-09** — 1 062 passages, 66 % d'injection, 46 % des extraits à UN mot, latence médiane 119 ms. Décision : durcir ET changer de corpus (v0.17.2). Le journal continue de tourner : c'est lui qui dira ce que le durcissement a coûté, via la raison `belowCoverage` |
 
 ### État au 2026-09-04 (relevé historique, conservé pour ses pièges)
 

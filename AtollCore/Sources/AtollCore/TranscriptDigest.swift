@@ -258,7 +258,11 @@ public enum TranscriptDigest {
                 isKept = isFailure(entry)
             case .tool:
                 isKept = succeeded(toolAt: index, in: flat, resultsByID: resultsByID)
-            case .thinking, .title, .note:
+            // `.memory` ne peut pas apparaître ici — une mémoire de projet n'est
+            // pas une ligne de transcript — mais le switch doit rester
+            // exhaustif, et le rangement prudent est celui des rôles jamais
+            // sélectionnés.
+            case .thinking, .title, .note, .memory:
                 isKept = false
             }
             guard isKept else { continue }
@@ -352,7 +356,7 @@ public enum TranscriptDigest {
         case .toolResult: return 3
         case .summary: return 4
         case .user: return 5
-        case .thinking, .title, .note: return 0
+        case .thinking, .title, .note, .memory: return 0
         }
     }
 

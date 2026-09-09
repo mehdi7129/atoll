@@ -19,6 +19,14 @@ enum CodexSessionScanner {
     /// `known` = les sessions déjà connues par les hooks, qui font autorité.
     static func scan(known: Set<String>, now: Date = Date()) -> [CodexSessionDiscovery.Discovered] {
         let processes = ProcessInspector.allCodexPids().compactMap { pid -> CodexSessionDiscovery.RunningProcess? in
+            // ⚠️ LES `codex exec` D'ATOLL NE SONT PAS DES SESSIONS DE
+            // L'UTILISATEUR. Le pendant Claude filtre ces runs depuis la
+            // Phase 7b (`internalPids` + ce même marqueur d'environnement) ;
+            // côté Codex, rien ne le lisait, et un bilan de fin de session
+            // lancé par Atoll apparaissait dans l'îlot comme une session
+            // ouverte par l'utilisateur.
+            guard ProcessInspector.environment(of: pid)[CodexService.internalRunMarker] == nil
+            else { return nil }
             guard let cwd = ProcessInspector.currentWorkingDirectory(of: pid) else { return nil }
             return .init(pid: pid, cwd: cwd)
         }

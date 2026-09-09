@@ -276,6 +276,21 @@ private actor MemoryIndexWorker {
             scannedPrefixes.append(BridgePaths.codexSessionsURL.path + "/")
         }
 
+        // Mémoires de projet de Claude Code — le corpus le plus dense de la
+        // machine, et le seul qui n'était pas indexé du tout.
+        for dir in projectDirs {
+            let memories = dir.appendingPathComponent("memory", isDirectory: true)
+            guard let files = try? fm.contentsOfDirectory(
+                at: memories, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])
+            else { continue }
+            scannedPrefixes.append(memories.path + "/")
+            for file in files where file.pathExtension == "md" {
+                if Task.isCancelled { return }
+                seenPaths.insert(file.path)
+                indexProjectMemory(url: file, projectDir: dir.lastPathComponent, index: index)
+            }
+        }
+
         // Notes d'apprentissage (7b) : re-scannées ici pour survivre à une
         // reconstruction de la base (revue : indexées seulement à l'écriture,
         // un rebuild les orphelinait de recall pour toujours).
@@ -434,6 +449,79 @@ private actor MemoryIndexWorker {
         try? index.ingest(lines: [(line, "note-0")], fileState: state,
                           sessionID: "atoll-note-\(slug)", projectDir: "atoll-notes",
                           newOffset: size)
+    }
+
+    /// Une mémoire de projet de Claude Code (`<projet>/memory/<nom>.md`).
+    ///
+    /// ⚠️ CE CORPUS ÉTAIT IGNORÉ, et c'est le plus dense de la machine :
+    /// **188 fichiers, 590 185 caractères** mesurés le 2026-09-09, dont ZÉRO
+    /// dans l'index. Pendant ce temps, le mois d'instrumentation montrait que
+    /// 46 % des extraits injectés n'appariaient qu'un seul mot du prompt — la
+    /// mémoire cherchait dans les sorties d'outils (79,5 % du corpus) ce qui
+    /// était déjà rédigé à côté. Le rendez-vous du recall demandait de poser la
+    /// question du CORPUS avant celle du mécanisme : c'est cette réponse-là.
+    ///
+    /// Le `cwd` vient d'un transcript FRÈRE, pas du nom de dossier : celui-ci
+    /// encode le chemin en remplaçant les séparateurs par des tirets, et un
+    /// projet dont le nom contient déjà un tiret ne se décode plus. Sans `cwd`,
+    /// la mémoire reste indexée mais le filtre « limiter au projet courant » ne
+    /// la retiendra que hors de ce mode — dégradé, jamais faux.
+    private func indexProjectMemory(url: URL, projectDir: String, index: MemoryIndex) {
+        guard let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let text = try? String(contentsOf: url, encoding: .utf8),
+              !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        let inode = (attrs[.systemFileNumber] as? UInt64) ?? 0
+        let size = (attrs[.size] as? Int64) ?? 0
+        guard let state = try? index.openFile(path: url.path, inode: inode, size: size),
+              state.offset < size else { return }
+        let name = url.deletingPathExtension().lastPathComponent
+        let modified = (attrs[.modificationDate] as? Date) ?? Date()
+        let line = TranscriptLine(
+            uuid: "memory", sessionID: nil, timestamp: modified,
+            cwd: Self.projectCwd(ofProjectDirectory: url.deletingLastPathComponent()
+                .deletingLastPathComponent()),
+            gitBranch: nil,
+            fragments: [.init(role: .title, text: "Mémoire de projet : \(name)"),
+                        .init(role: .memory, text: text)]
+        )
+        try? index.ingest(lines: [(line, "memory-0")], fileState: state,
+                          sessionID: "claude-memory-\(projectDir)-\(name)",
+                          projectDir: projectDir, newOffset: size)
+    }
+
+    /// `cwd` du projet, lu dans un transcript de son dossier.
+    ///
+    /// ⚠️ PAS LA PREMIÈRE LIGNE — elle ne porte pas de `cwd`. MESURÉ le
+    /// 2026-09-09 : les transcrits commencent par une ligne `mode` ou
+    /// `ai-title`, et cette fonction, écrite pour n'en lire qu'une, a rendu
+    /// `nil` pour les **188** mémoires. Conséquence : `project_path` nul, donc
+    /// exclusion par le filtre « limiter au projet courant » — c'est-à-dire
+    /// jamais injectées, exactement la panne qui frappait les notes d'Atoll
+    /// avant l'audit du 2026-07-27.
+    ///
+    /// Le côté Codex lit bien UNE ligne, lui, parce que `session_meta` y est
+    /// vraiment la première : la structure a été vérifiée là-bas et supposée
+    /// ici. On parcourt donc l'en-tête jusqu'à trouver, borné par le bloc lu.
+    private static func projectCwd(ofProjectDirectory directory: URL) -> String? {
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: directory, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])
+        else { return nil }
+        for file in files where file.pathExtension == "jsonl" {
+            guard let handle = FileHandle(forReadingAtPath: file.path) else { continue }
+            defer { try? handle.close() }
+            guard let head = try? handle.read(upToCount: 256 * 1024), !head.isEmpty else { continue }
+            // La DERNIÈRE ligne du bloc est probablement tronquée : on ne garde
+            // que celles qui sont complètes.
+            let lines = head.split(separator: 0x0A, omittingEmptySubsequences: true).dropLast()
+            for raw in lines {
+                guard let object = try? JSONSerialization.jsonObject(with: Data(raw)),
+                      let line = object as? [String: Any],
+                      let cwd = line["cwd"] as? String, !cwd.isEmpty
+                else { continue }
+                return cwd
+            }
+        }
+        return nil
     }
 
     // MARK: - Lecture incrémentale d'un fichier

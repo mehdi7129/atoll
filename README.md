@@ -155,7 +155,7 @@ l'épingle, cliquer ailleurs le referme.
 Le suivi de **Codex** s'installe séparément, dans Réglages › Codex, et seulement si tu le
 demandes.
 
-**Version courante : v0.17.1.**
+**Version courante : v0.17.2.**
 
 ---
 

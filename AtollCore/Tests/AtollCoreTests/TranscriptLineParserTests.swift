@@ -261,4 +261,40 @@ final class TranscriptLineParserTests: XCTestCase {
         """))
         XCTAssertNil(garbage.timestamp)
     }
+
+    // MARK: - Résumés de compaction (le rôle `summary` n'avait JAMAIS été produit)
+
+    /// ⚠️ LE CLI N'ÉMET PAS `type: "summary"`. Mesuré le 2026-09-09 sur tous les
+    /// transcripts de la machine : **zéro ligne** de ce type, alors que 19
+    /// résumés de compaction existent — portés par `type: "user"` avec
+    /// `isCompactSummary: true`. Le rôle `summary` était donc du code mort,
+    /// exactement comme `title` face à `aiTitle`, et ces 343 677 caractères de
+    /// texte déjà distillé étaient indexés comme des prompts de l'utilisateur.
+    func testACompactSummaryIsRecognisedAsSummaryNotAsAUserPrompt() {
+        let line = parse("""
+        {"type":"user","isCompactSummary":true,"uuid":"u1","timestamp":"2026-09-09T10:00:00Z",
+         "message":{"role":"user","content":"This session is being continued. Summary: on a corrigé le quota."}}
+        """)
+        let roles = line?.fragments.map(\.role) ?? []
+        XCTAssertEqual(roles, [.summary], "un résumé de compaction n'est pas un prompt")
+        XCTAssertTrue(line?.fragments.first?.text.contains("corrigé le quota") == true)
+    }
+
+    /// Même reconnaissance quand le contenu est en blocs plutôt qu'en chaîne.
+    func testACompactSummaryInBlocksIsAlsoRecognised() {
+        let line = parse("""
+        {"type":"user","isCompactSummary":true,"uuid":"u2","timestamp":"2026-09-09T10:00:00Z",
+         "message":{"role":"user","content":[{"type":"text","text":"Résumé de la session."}]}}
+        """)
+        XCTAssertEqual(line?.fragments.map(\.role), [.summary])
+    }
+
+    /// Et un vrai prompt reste un prompt : le drapeau seul décide.
+    func testAnOrdinaryUserLineIsStillAUserPrompt() {
+        let line = parse("""
+        {"type":"user","uuid":"u3","timestamp":"2026-09-09T10:00:00Z",
+         "message":{"role":"user","content":"corrige le quota"}}
+        """)
+        XCTAssertEqual(line?.fragments.map(\.role), [.user])
+    }
 }

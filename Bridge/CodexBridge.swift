@@ -6,8 +6,26 @@ enum CodexBridge {
         CodexPaths.hooksURL
     }
 
+    /// Marqueur posé par Atoll sur les `codex exec` qu'il lance LUI-MÊME
+    /// (bilan de fin de session, rangement des notes quand le quota Claude est
+    /// épuisé). Hérité par le hook, donc lisible ici.
+    static let internalRunMarker = "ATOLL_RETROSPECTIVE"
+
     static func forward() {
         guard isatty(0) == 0 else { return }
+        // ⚠️ ATOLL NE DOIT PAS SE REGARDER TRAVAILLER. Le marqueur existait
+        // depuis la Phase 7b et n'était lu QUE côté Claude (`reconcile()`) : un
+        // `codex exec` lancé par Atoll déclenchait donc les hooks comme
+        // n'importe quelle session, et l'îlot montrait à l'utilisateur une
+        // session Codex qu'il n'avait pas ouverte. Le commentaire de
+        // `RetrospectiveRunner` disait « filtré par reconcile() » — vrai pour
+        // Claude, et personne n'avait posé la question pour Codex.
+        //
+        // On s'abstient AVANT de lire stdin : rien n'est envoyé, rien n'est
+        // écrit sur stdout, exit 0. Une demande d'autorisation d'un run interne
+        // retombe donc sur la politique par défaut de Codex, ce qui est le bon
+        // comportement — il n'y a personne devant l'écran pour y répondre.
+        guard ProcessInfo.processInfo.environment[internalRunMarker] == nil else { return }
         let data = FileHandle.standardInput.readDataToEndOfFile()
         guard data.count <= 8_388_608,
               let payload = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]

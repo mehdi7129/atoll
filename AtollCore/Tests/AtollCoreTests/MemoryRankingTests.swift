@@ -221,4 +221,46 @@ final class MemoryRankingTests: XCTestCase {
         XCTAssertEqual(classés.first?.snippet, fort.snippet,
                        "celui qui a VRAIMENT apparié deux termes passe devant")
     }
+
+    // MARK: - Plancher de COUVERTURE (décidé sur les données du mois de mesure)
+
+    private func hitCovering(_ snippet: String) -> MemoryIndex.Hit {
+        MemoryIndex.Hit(sessionID: "s", projectPath: nil, projectDir: "d", title: nil,
+                        role: "user", timestamp: nil, snippet: snippet, rank: -1)
+    }
+
+    /// ⚠️ LE TRI NE SUFFISAIT PAS. `byCoverage` classait sans écarter : un
+    /// extrait n'appariant qu'UN mot restait dans le lot et prenait une place
+    /// sous `maxHits` dès qu'il n'y avait rien de mieux. Mesuré sur le mois
+    /// d'instrumentation : 46 % des 3 481 extraits injectés étaient dans ce cas.
+    func testASingleSharedWordIsNotEnoughToBeInjected() {
+        let terms = ["houdini", "drone", "trajectoire"]
+        let kept = MemoryRanking.covering([
+            hitCovering("le «drone» vole"),                       // 1 terme
+            hitCovering("«houdini» calcule la «trajectoire»"),    // 2 termes
+        ], terms: terms)
+        XCTAssertEqual(kept.count, 1)
+        XCTAssertTrue(kept[0].snippet.contains("houdini"))
+    }
+
+    /// Le seuil ne peut jamais dépasser le nombre de termes de la requête —
+    /// sinon un prompt d'un seul mot-clé n'obtiendrait JAMAIS rien, en silence.
+    func testTheThresholdNeverExceedsTheNumberOfTerms() {
+        let kept = MemoryRanking.covering([hitCovering("le «drone» vole")], terms: ["drone"])
+        XCTAssertEqual(kept.count, 1, "un prompt d'un terme ne peut pas en exiger deux")
+    }
+
+    /// Sans termes, on ne filtre pas : on ne juge pas sur une information qu'on
+    /// n'a pas.
+    func testNoTermsMeansNoFiltering() {
+        let hits = [hitCovering("un texte"), hitCovering("un autre")]
+        XCTAssertEqual(MemoryRanking.covering(hits, terms: []).count, 2)
+    }
+
+    /// Le seuil retenu est 2, et il vient d'une simulation sur les vraies
+    /// données — pas d'une intuition. Le verrouiller ici rend tout changement
+    /// délibéré.
+    func testTheMeasuredThresholdIsTwo() {
+        XCTAssertEqual(MemoryRanking.minimumCoverage, 2)
+    }
 }

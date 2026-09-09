@@ -50,7 +50,27 @@ public enum TranscriptLineParser {
         let fragments: [TranscriptLine.Fragment]
         switch type {
         case "user":
-            fragments = userFragments(line)
+            // ⚠️ UN RÉSUMÉ DE COMPACTION EST UNE LIGNE `user`, et le rôle
+            // `summary` n'a JAMAIS été produit à cause de ça. La branche
+            // `case "summary"` ci-dessous attend `type: "summary"` avec un champ
+            // du même nom : MESURÉ le 2026-09-09 sur tous les transcripts de la
+            // machine, **zéro ligne** de ce type — le CLI écrit `type: "user"`
+            // porteur de `isCompactSummary: true`. Même mode de panne que le
+            // titre IA (`title` attendu, `aiTitle` écrit) : un champ qu'on
+            // attend et que personne n'émet ne se voit pas, il se TAIT.
+            //
+            // L'enjeu n'est pas cosmétique. Ces 19 résumés pèsent 343 677
+            // caractères — chacun la distillation d'une conversation de près
+            // d'un million de jetons — et ils étaient indexés comme des prompts
+            // de l'utilisateur, donc indiscernables d'une phrase tapée à la
+            // volée. `summary` porte déjà, dans cet enum, la mention « texte
+            // déjà distillé, très précieux pour recall » : elle était vraie et
+            // inatteignable.
+            if line["isCompactSummary"] as? Bool == true {
+                fragments = compactSummaryFragments(line)
+            } else {
+                fragments = userFragments(line)
+            }
         case "assistant":
             fragments = assistantFragments(line)
         case "summary":
@@ -77,6 +97,23 @@ public enum TranscriptLineParser {
     /// `message.content` est SOIT une String, SOIT un tableau de blocs — les deux
     /// formes existent. Blocs retenus : `text` (→ .user) et `tool_result`
     /// (→ .toolResult) ; tout le reste (image…) est ignoré.
+    /// Fragments d'un résumé de compaction, sous le rôle `summary`.
+    ///
+    /// Le contenu suit la forme d'un message `user` (chaîne, ou blocs `text`) :
+    /// on le lit comme tel et on ne change QUE le rôle. Réutiliser
+    /// `userFragments` ne marcherait pas — c'est lui qui pose `.user`.
+    private static func compactSummaryFragments(_ line: [String: Any]) -> [TranscriptLine.Fragment] {
+        guard let message = line["message"] as? [String: Any] else { return [] }
+        if let text = message["content"] as? String {
+            return singleFragment(.summary, text)
+        }
+        let joined = dictionaries(message["content"])
+            .filter { $0["type"] as? String == "text" }
+            .compactMap { $0["text"] as? String }
+            .joined(separator: "\n")
+        return singleFragment(.summary, joined)
+    }
+
     private static func userFragments(_ line: [String: Any]) -> [TranscriptLine.Fragment] {
         // isMeta : lignes fabriquées par le CLI (contexte injecté, slash-commands) —
         // l'enveloppe peut servir, le texte jamais.

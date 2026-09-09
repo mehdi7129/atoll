@@ -1,5 +1,63 @@
 # CLAUDE.md — instructions projet Atoll
 
+> **v0.17.2 — LE RENDEZ-VOUS DU RECALL EST TRANCHÉ, ET ATOLL CESSE DE SE
+> REGARDER TRAVAILLER** (2026-09-09). Un mois de mesure servait à décider ; la
+> décision est prise sur ses chiffres, pas sur une intuition.
+>
+> ⚠️ **LA QUESTION N'ÉTAIT PAS « GARDER OU SUPPRIMER », C'ÉTAIT LE CORPUS.** Le
+> journal a rendu 66 % d'injection mais **46 % des 3 481 extraits n'appariaient
+> qu'UN mot du prompt**. Deux corrections, l'une sur le mécanisme, l'autre sur
+> la matière :
+> - **Plancher de COUVERTURE (`MemoryRanking.covering`, seuil 2).** `byCoverage`
+>   ne faisait que CLASSER : un extrait à un mot restait dans le lot et prenait
+>   une place sous `maxHits` faute de mieux. Le seuil vient d'une **simulation
+>   sur les 702 injections réelles** : `≥ 2` garde **76 % des injections** et
+>   54 % des extraits ; `≥ 3` n'en garderait que 31 %, « la moitié des mots-clés »
+>   25 %. Mesuré après correctif sur trois vrais prompts : couvertures 2 et 3
+>   partout, **plus un seul extrait à un mot**. Le refus a sa propre raison au
+>   journal (`belowCoverage`) — la fondre dans `noneAboveFloor` aurait rendu
+>   illisible ce que le durcissement coûte.
+> - **LE CORPUS LE PLUS DENSE DE LA MACHINE N'ÉTAIT PAS INDEXÉ** : les mémoires
+>   de projet de Claude Code (`~/.claude/projects/*/memory/*.md`), **188 fichiers,
+>   590 185 caractères, ZÉRO dans l'index**. Pendant que la mémoire fouillait des
+>   sorties d'outils (79,5 % du corpus), la connaissance déjà rédigée était à
+>   côté. Rôle `memory` DISTINCT de `note` : la requête exempte `note` du filtre
+>   de projet, et une mémoire de projet parle d'UN projet. Mesuré après
+>   indexation : sur « filmer une animation macOS pour déboguer », la mémoire
+>   `filmer-ui-macos` sort **en premier extrait**, 4 termes appariés.
+>
+> ⚠️ **LE RÔLE `summary` N'AVAIT JAMAIS ÉTÉ PRODUIT**, et son commentaire disait
+> pourtant « texte déjà distillé, très précieux pour recall ». Le parser attend
+> `type: "summary"` ; MESURÉ sur tous les transcripts de la machine : **zéro
+> ligne** de ce type. Le CLI écrit `type: "user"` porteur de
+> `isCompactSummary: true` — 19 résumés, 343 677 caractères, chacun la
+> distillation d'une conversation de près d'un million de jetons, indexés comme
+> des prompts de l'utilisateur. **Même mode de panne que le titre IA** (`title`
+> attendu, `aiTitle` écrit) : un champ qu'on attend et que personne n'émet ne se
+> voit pas, il se TAIT. ⚠️ Le correctif n'est PAS rétroactif (l'ingestion ne
+> relit pas un fichier déjà lu) : les 19 résumés existants restent `user`, donc
+> toujours injectables — seuls les prochains seront distingués.
+>
+> ⚠️ **ATOLL SE REGARDAIT TRAVAILLER CÔTÉ CODEX.** Le marqueur
+> `ATOLL_RETROSPECTIVE=1` existe depuis la Phase 7b et n'était lu QUE par
+> `reconcile()`, côté Claude — le commentaire de `RetrospectiveRunner` le dit
+> mot pour mot, et personne n'avait posé la question pour Codex. Un `codex exec`
+> lancé par Atoll déclenchait donc les hooks comme n'importe quelle session.
+> Fermé aux DEUX bouts : le helper s'abstient **avant même de lire stdin**
+> (mesuré : le payload reste intact dans le tube, contre un tube vidé sur un run
+> normal), et `CodexSessionScanner` écarte les pids qui portent le marqueur.
+>
+> ⚠️ **UN DÉFAUT DANS CE CORRECTIF, TROUVÉ EN MESURANT ET PAS EN RELISANT.** Le
+> `cwd` d'une mémoire est lu dans un transcript frère — et je ne lisais que la
+> PREMIÈRE ligne, en recopiant le côté Codex où `session_meta` est vraiment
+> première. MESURÉ : les transcripts Claude commencent par `mode` ou `ai-title`,
+> **sans `cwd`** — les 188 mémoires sont sorties avec `project_path` NUL, donc
+> exclues par le filtre de projet : la panne exacte que les notes d'Atoll ont
+> connue avant l'audit du 2026-07-27. Après correctif, **96 sur 188** ont leur
+> chemin ; les 92 autres vivent dans des projets dont Claude Code a purgé les
+> transcripts à 30 jours (vérifié : le compte coïncide exactement), et restent
+> trouvables par le recall manuel.
+>
 > **v0.17.1 — CE QUE CODEX A TROUVÉ APRÈS LA PUBLICATION** (2026-09-09). Sa
 > quatrième revue, faite sur la v0.17.0 DÉJÀ publiée et installée, a rendu
 > quatre défauts P2 — tous sur des fonctions livrées le matin même. Aucune
