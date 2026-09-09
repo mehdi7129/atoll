@@ -20,6 +20,29 @@ public struct TerminalAnchor: Equatable, Sendable {
         self.env = env
     }
 
+    /// Les variables d'environnement qui permettent de retrouver le terminal
+    /// d'une session. UNE seule liste pour les deux helpers (Claude et Codex) :
+    /// en laisser deux copies, c'est garantir qu'un jour l'une des deux perdra
+    /// une clé sans que personne ne le voie — le motif de `byCoverage` (v0.16.1)
+    /// et du `cwd` de `SkillCatalog` (v0.16.5).
+    ///
+    /// `CLAUDE_CODE_ENTRYPOINT` y reste bien qu'elle soit propre à Claude : une
+    /// clé absente est simplement absente du sous-ensemble, et la liste doit
+    /// couvrir les deux fournisseurs sans se scinder.
+    public static let environmentKeys = [
+        "TERM_PROGRAM", "TERM_PROGRAM_VERSION", "ITERM_SESSION_ID", "TMUX", "TMUX_PANE",
+        "KITTY_WINDOW_ID", "KITTY_LISTEN_ON", "WEZTERM_PANE", "GHOSTTY_RESOURCES_DIR",
+        "ALACRITTY_WINDOW_ID", "VSCODE_INJECTION", "CURSOR_TRACE_ID", "WARP_SESSION_ID",
+        "__CFBundleIdentifier", "CLAUDE_CODE_ENTRYPOINT",
+    ]
+
+    /// Sous-ensemble d'un environnement, borné aux clés ci-dessus.
+    public static func capture(from environment: [String: String]) -> [String: String] {
+        environmentKeys.reduce(into: [:]) { result, key in
+            if let value = environment[key] { result[key] = value }
+        }
+    }
+
     public var tmux: String? { env["TMUX"] }
 
     /// La session tourne-t-elle sous tmux ? (le focus passe alors par le

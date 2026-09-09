@@ -47,9 +47,11 @@ struct CompactView: View {
                         .foregroundStyle(colors.dim)
                 }
                 Spacer(minLength: 4)
-                if viewModel.hasRealQuota {
-                    Text("5h \(Int(viewModel.usage.fiveHourFraction * 100))%")
-                        .foregroundStyle(colors.dim)
+                TimelineView(.periodic(from: .now, by: 30)) { _ in
+                    if let quota = compactQuota {
+                        Text("\(quota.label) \(Int(quota.fraction * 100))%")
+                            .foregroundStyle(colors.dim)
+                    }
                 }
             }
             .font(AtollFont.mono(10))
@@ -115,12 +117,10 @@ struct CompactView: View {
         HStack(spacing: 4) {
             Spacer(minLength: 0)
             // Jamais de jauge factice : rien tant que le vrai quota n'est pas là.
-            if viewModel.hasFreshFiveHour {
-                Text("5h")
+            if let quota = compactQuota {
+                Text(quota.label)
                     .foregroundStyle(colors.dim)
-                Text(AsciiArt.progressBar(fraction: viewModel.usage.fiveHourFraction, cells: 4))
-                    .foregroundStyle(colors.accent)
-                Text("\(Int(viewModel.usage.fiveHourFraction * 100))%")
+                Text("\(Int(quota.fraction * 100))%")
                     .foregroundStyle(colors.dim)
             } else {
                 Text("·")
@@ -131,6 +131,20 @@ struct CompactView: View {
         .lineLimit(1)          // jamais de retour à la ligne (« 5h » resté entier)
         .fixedSize()           // les chiffres du quota ne se compriment pas
         .padding(.trailing, 12)
+    }
+
+    // Follow the focused agent. Never show Claude's allowance next to a Codex
+    // session without labeling it; full windows live in the expanded panel.
+    private var compactQuota: (label: String, fraction: Double)? {
+        let provider = focusSession?.provider
+            ?? (viewModel.sessions.contains { $0.provider == .codex } ? .codex : .claude)
+        if provider == .codex {
+            guard let quota = CodexService.shared.quota, quota.isFresh(at: Date()),
+                  let window = quota.primaryBucket?.windows.first, window.isCurrent(at: Date()) else { return nil }
+            return ("Codex", window.usedFraction)
+        }
+        guard viewModel.hasFreshFiveHour else { return nil }
+        return ("Claude", viewModel.usage.fiveHourFraction)
     }
 
     // Rouge = mode rockstar actif (indicateur persistant permanent).

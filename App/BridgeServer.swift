@@ -13,6 +13,7 @@ private let log = Logger(subsystem: "dev.mehdiguiard.atoll", category: "bridge-s
 /// newConnectionHandler, constaté sur macOS 26).
 final class BridgeServer: @unchecked Sendable {
     private let queue = DispatchQueue(label: "dev.mehdiguiard.atoll.bridge-server")
+    private let socketPath: String
     private var listenFD: Int32 = -1
     /// (device, inode) du socket créé par CETTE instance — voir `stop()`.
     private var boundNode: (dev_t, ino_t)?
@@ -26,16 +27,27 @@ final class BridgeServer: @unchecked Sendable {
     /// attente de décision via reply()/cancelPending().
     private let onEvent: (ParsedHookEvent, _ requestID: String?) -> Void
     private let onStatusline: (Data) -> Void
+    /// `requestID` non-nil = le helper Codex ATTEND une décision sur ce fd.
+    private let onCodexEvent: (CodexHookEvent, _ requestID: String?, _ helperPid: pid_t) -> Void
     private let onStateChange: (Bool) -> Void
+    /// Prévenu sur la main queue quand une attente expire — voir
+    /// `pendingRepliesTimeout`.
+    private let onPendingExpired: (_ requestID: String) -> Void
 
     init(
         onEvent: @escaping (ParsedHookEvent, String?) -> Void,
         onStatusline: @escaping (Data) -> Void,
-        onStateChange: @escaping (Bool) -> Void
+        onStateChange: @escaping (Bool) -> Void,
+        onCodexEvent: @escaping (CodexHookEvent, String?, pid_t) -> Void = { _, _, _ in },
+        onPendingExpired: @escaping (String) -> Void = { _ in },
+        socketPath: String = BridgePaths.socketPath
     ) {
         self.onEvent = onEvent
         self.onStatusline = onStatusline
         self.onStateChange = onStateChange
+        self.onCodexEvent = onCodexEvent
+        self.onPendingExpired = onPendingExpired
+        self.socketPath = socketPath
     }
 
     // MARK: - Réponses aux PermissionRequest
@@ -82,7 +94,7 @@ final class BridgeServer: @unchecked Sendable {
     }
 
     func start() throws {
-        let path = BridgePaths.socketPath
+        let path = socketPath
         unlink(path)
 
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
@@ -162,9 +174,9 @@ final class BridgeServer: @unchecked Sendable {
         // autre instance a pu le remplacer entre-temps, et le lui supprimer la
         // rendrait sourde définitivement, sans qu'elle puisse le détecter.
         var info = stat()
-        if let boundNode, stat(BridgePaths.socketPath, &info) == 0,
+        if let boundNode, stat(socketPath, &info) == 0,
            info.st_dev == boundNode.0, info.st_ino == boundNode.1 {
-            unlink(BridgePaths.socketPath)
+            unlink(socketPath)
         }
         boundNode = nil
         DispatchQueue.main.async { self.onStateChange(false) }
@@ -243,6 +255,55 @@ final class BridgeServer: @unchecked Sendable {
             ? (try? JSONSerialization.jsonObject(with: entry.buffer)) as? [String: Any]
             : nil
 
+        if socketPath == CodexPaths.socketPath, envelope?["provider"] as? String != "codex" {
+            entry.source.cancel()
+            close(fd)
+            return
+        }
+
+        // Les fournisseurs étrangers sont dispatchés AVANT tout chemin Claude :
+        // une permission Codex n'entre JAMAIS dans `InteractionCenter`, donc
+        // jamais dans Rockstar.
+        if let envelope, let provider = envelope["provider"], provider as? String != "claude" {
+            entry.source.cancel()
+            guard let event = CodexHookEvent(envelope: envelope) else { close(fd); return }
+
+            // Une demande d'autorisation Codex laisse le fd OUVERT : le helper
+            // attend notre décision. La corrélation se fait par cet UUID lié au
+            // descripteur — jamais par le nom d'outil, qui ne distingue pas deux
+            // demandes simultanées identiques (spécifié par Codex).
+            if event.kind == .permissionRequest {
+                let requestID = UUID().uuidString
+                pendingReplies[requestID] = fd
+
+                // ⚠️ ON NE PEUT PAS DÉTECTER LA MORT DU HELPER PAR EOF.
+                // Il fait `shutdown(SHUT_WR)` juste après avoir envoyé son
+                // payload — un half-close NORMAL et systématique. Un détecteur
+                // d'EOF confond donc « a fini d'écrire » et « est mort », et
+                // referme la carte AUSSITÔT : mesuré le 2026-09-09, le chemin
+                // nominal rendait la main en 0 s avec une réponse vide.
+                //
+                // La seule preuve fiable est le PROCESSUS. `LOCAL_PEERPID` le
+                // donne à la connexion ; `CodexInteractionCenter` le vérifie
+                // ensuite périodiquement.
+                var peer: pid_t = 0
+                var size = socklen_t(MemoryLayout<pid_t>.size)
+                let helperPid = getsockopt(fd, SOL_LOCAL, LOCAL_PEERPID, &peer, &size) == 0
+                    ? peer : 0
+                // Filet : jamais de fd orphelin. Posé APRÈS la deadline du
+                // helper — c'est lui qui doit rendre la main le premier.
+                queue.asyncAfter(deadline: .now() + CodexPermissionTiming.codexTimeoutSeconds) {
+                    [weak self] in self?.pendingRepliesTimeout(requestID)
+                }
+                log.info("permission Codex en attente \(requestID, privacy: .public)")
+                DispatchQueue.main.async { self.onCodexEvent(event, requestID, helperPid) }
+                return
+            }
+            close(fd)
+            DispatchQueue.main.async { self.onCodexEvent(event, nil, 0) }
+            return
+        }
+
         if let envelope, envelope["statusline"] != nil {
             entry.source.cancel()
             close(fd)
@@ -279,10 +340,19 @@ final class BridgeServer: @unchecked Sendable {
         }
     }
 
+    /// Le filet de temps s'est déclenché : plus PERSONNE n'attend derrière ce
+    /// descripteur.
+    ///
+    /// ⚠️ FERMER LE FD NE SUFFIT PAS, et c'est le trou que Codex a relevé en
+    /// revue : la carte restait affichée dans l'îlot après l'expiration, et
+    /// un clic envoyait alors une décision dans le vide. Le serveur PRÉVIENT
+    /// donc le centre d'interaction, qui la retire.
     private func pendingRepliesTimeout(_ requestID: String) {
-        if let fd = pendingReplies.removeValue(forKey: requestID) {
-            close(fd)
-        }
+        guard let fd = pendingReplies.removeValue(forKey: requestID) else { return }
+        close(fd)
+        log.info("attente \(requestID, privacy: .public) expirée — descripteur fermé")
+        let notify = onPendingExpired
+        DispatchQueue.main.async { notify(requestID) }
     }
 
 }

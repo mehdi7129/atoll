@@ -81,7 +81,23 @@ public struct NotesCurationOutput: Equatable, Sendable {
         // (3) Payload structuré : structured_output (objet), sinon result (string JSON).
         guard let payload = structuredPayload(of: root) else { return nil }
 
-        return NotesCurationOutput(
+        return validate(payload: payload)
+    }
+
+    /// Sortie de `codex exec --output-last-message` : le fichier porte le payload
+    /// structuré NU, sans l'enveloppe du CLI Anthropic. La revalidation Swift
+    /// (bornes du schéma, filtrage) est la MÊME — c'est elle qui protège, et la
+    /// dupliquer serait la laisser diverger.
+    public static func parse(codexOutput: Data) -> NotesCurationOutput? {
+        let stripped = strippedCodeFences(String(decoding: codexOutput, as: UTF8.self))
+        guard !stripped.isEmpty,
+              let object = try? JSONSerialization.jsonObject(with: Data(stripped.utf8)),
+              let payload = object as? [String: Any] else { return nil }
+        return validate(payload: payload)
+    }
+
+    private static func validate(payload: [String: Any]) -> NotesCurationOutput {
+        NotesCurationOutput(
             notes: validatedNotes(payload["notes"]),
             contradictions: validatedContradictions(payload["contradictions"])
         )

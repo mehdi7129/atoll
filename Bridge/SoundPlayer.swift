@@ -16,8 +16,9 @@ enum SoundPlayer {
 
     /// Joue le son associé à un événement de hook, si tout s'y prête.
     /// Ne fait rien — jamais d'erreur remontée — dans tous les autres cas.
-    static func play(hookEvent: String, now: Date = Date()) {
-        guard let event = SoundFallback.event(forHookEvent: hookEvent) else { return }
+    static func play(hookEvent: String, provider: AgentProvider = .claude, now: Date = Date()) {
+        guard let event = SoundFallback.event(forHookEvent: hookEvent, provider: provider)
+        else { return }
         guard let settings = SoundFallback.decode(try? Data(contentsOf: BridgePaths.soundSettingsURL)),
               settings.enabled
         else { return }

@@ -12,6 +12,7 @@ public struct AgentSession: Identifiable, Equatable, Sendable {
 
     /// Identifiant stable : le session_id Claude Code (ou un id synthétique).
     public let id: String
+    public let provider: AgentProvider
     public var projectName: String
     public var gitBranch: String?
     public var status: Status
@@ -46,7 +47,9 @@ public struct AgentSession: Identifiable, Equatable, Sendable {
                 status: Status, subtitle: String? = nil, startedAt: Date = Date(),
                 model: String? = nil, subagentCount: Int = 0, mcpServers: [String] = [],
                 contextUsedFraction: Double? = nil, costUSD: Double? = nil, cwd: String? = nil,
-                recallInjected: Int = 0, stateConfirmedByHook: Bool = true) {
+                recallInjected: Int = 0, stateConfirmedByHook: Bool = true,
+                provider: AgentProvider = .claude) {
+        self.provider = provider
         self.stateConfirmedByHook = stateConfirmedByHook
         self.id = id
         self.projectName = projectName

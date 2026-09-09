@@ -156,6 +156,33 @@ final class SessionGroupingTests: XCTestCase {
                           IslandRowBudget.rows(bannerShown: false))
     }
 
+    /// MESURÉ EN CAPTURE le 2026-09-08 : activer la lecture du quota Codex
+    /// poussait les jauges CLAUDE hors du panneau clippé — l'information
+    /// principale disparaissait en silence au profit de la secondaire.
+    func testCodexQuotaCostsARow() {
+        XCTAssertEqual(IslandRowBudget.rows(bannerShown: false, codexQuotaShown: true),
+                       IslandRowBudget.rows(bannerShown: false) - 1)
+        XCTAssertEqual(IslandRowBudget.rows(bannerShown: true, codexQuotaShown: true),
+                       IslandRowBudget.rows(bannerShown: true) - 1)
+        // Sans Codex, rien ne change pour ceux qui ne l'utilisent pas.
+        XCTAssertEqual(IslandRowBudget.rows(bannerShown: false, codexQuotaShown: false),
+                       IslandRowBudget.rows(bannerShown: false))
+        // Le budget reste dessinable même dans le cas le plus contraint.
+        XCTAssertGreaterThan(IslandRowBudget.rows(bannerShown: true, codexQuotaShown: true), 0)
+    }
+
+    /// MESURÉ : à UNE rangée, `byState` ne dessine RIEN — un groupe coûte son
+    /// en-tête plus sa première session. C'est le piège qui a rendu la liste
+    /// vide quand bannière et quota Codex se cumulaient.
+    func testASingleRowBudgetShowsNothingAtAll() {
+        let sessions = (1...5).map {
+            AgentSession(id: "s\($0)", projectName: "p\($0)", status: .awaitingInput)
+        }
+        XCTAssertEqual(SessionGrouping.byState(sessions, rowBudget: 1).groups.count, 0)
+        // À deux, un groupe apparaît : c'est le plancher que la vue doit tenir.
+        XCTAssertGreaterThan(SessionGrouping.byState(sessions, rowBudget: 2).groups.count, 0)
+    }
+
     func testBucketTitlesAreDistinct() {
         XCTAssertEqual(Set(SessionStateBucket.allCases.map(\.title)).count,
                        SessionStateBucket.allCases.count)

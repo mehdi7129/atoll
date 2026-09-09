@@ -40,6 +40,45 @@ final class RetrospectiveRunner {
         let snapshot: SessionStore.Tracked
         let endedAt: Date
         var forced = false
+        /// Quel CLI a produit le transcript à analyser. Détermine le parseur du
+        /// condensé — un rollout Codex passé au parseur Claude rend zéro entrée,
+        /// et le bilan partirait sur un texte vide.
+        var transcriptProvider: AgentProvider = .claude
+    }
+
+    /// Bilan de fin de session pour une session CODEX.
+    ///
+    /// POURQUOI CETTE PORTE SÉPARÉE. Le chemin Claude part de
+    /// `SessionStore.onSessionEnded` ; or `SessionStore` ne connaît pas les
+    /// sessions Codex — elles vivent dans `CodexService`. Sans cette entrée,
+    /// fermer Claude Code éteignait toute la boucle d'apprentissage : zéro note,
+    /// zéro skill. Mehdi a tranché le 2026-09-09 : « il faut que ce que faisait
+    /// Atoll avec Claude Code fonctionne sur Codex, c'est ça qui donne toute la
+    /// puissance de l'outil ».
+    ///
+    /// Le reste du chemin est COMMUN — gate, choix du fournisseur qui paie,
+    /// condensé, revalidation Swift, écriture des fichiers par Atoll. Seul le
+    /// parseur du transcript change.
+    func codexSessionEnded(_ ended: CodexSessions.EndedSession) {
+        guard LearningSettings.shared.isEnabled else { return }
+        guard let path = ended.transcriptPath, FileManager.default.fileExists(atPath: path) else {
+            log.info("session Codex \(ended.sessionID, privacy: .public) : rollout introuvable — pas de bilan")
+            return
+        }
+        // Les faits que `LearningGate` attend, projetés depuis ce que les hooks
+        // ont RÉELLEMENT compté. `isSynthetic: false` est exact : ces faits
+        // viennent de hooks, pas d'un transcript deviné.
+        let snapshot = SessionStore.Tracked(
+            id: ended.sessionID, cwd: ended.cwd, transcriptPath: path,
+            phase: .ended, isSynthetic: false,
+            firstSeenAt: ended.startedAt, lastEventAt: Date())
+        var tracked = snapshot
+        tracked.model = ended.model
+        tracked.userPromptCount = ended.userPromptCount
+        lastEndedSnapshot = tracked
+        queue.append(Job(snapshot: tracked, endedAt: Date(), transcriptProvider: .codex))
+        log.info("session Codex \(ended.sessionID, privacy: .public) terminée — bilan candidat dans \(Int(Self.startDelaySeconds)) s")
+        scheduleNext()
     }
 
     /// Un run est-il engagé ? Pas seulement « un processus tourne » : la
@@ -131,7 +170,61 @@ final class RetrospectiveRunner {
     /// courant, sans gate. Sert à vérifier le pipeline complet (condensé →
     /// analyse → notes/skills) sur une session réellement riche, sans attendre
     /// qu'une vraie session substantielle se termine. Jamais en release.
-    func debugRunOnLargestTranscript(projectDirectory: String) {
+    /// `provider` : quel abonnement paie CE run de debug. Le gate est
+    /// court-circuité, mais pas le choix du fournisseur — c'est justement ce
+    /// qu'on veut pouvoir forcer pour prouver le chemin Codex sans attendre
+    /// qu'une vraie session substantielle se termine. Même rôle que `retroBig`
+    /// en Phase 12 : c'est LUI qui avait prouvé la boucle d'apprentissage.
+    /// Trigger debug : bilan forcé sur le PLUS GROS ROLLOUT CODEX de la machine,
+    /// sans passer par le gate. C'est le pendant de `retroBig` — l'outil qui
+    /// avait prouvé la boucle d'apprentissage en Phase 12 — et il existe pour la
+    /// même raison : sans lui, il faudrait attendre qu'une vraie session Codex
+    /// longue se termine pour savoir si la chaîne produit quelque chose.
+    func debugRunOnLargestCodexRollout() {
+        guard !isBusy, pendingDelay == nil else {
+            log.error("debug retro : un run ou une attente est déjà en cours")
+            return
+        }
+        let fm = FileManager.default
+        var largest: (url: URL, size: Int)?
+        if let walker = fm.enumerator(at: BridgePaths.codexSessionsURL,
+                                      includingPropertiesForKeys: [.fileSizeKey],
+                                      options: [.skipsHiddenFiles]) {
+            for case let file as URL in walker where file.pathExtension == "jsonl" {
+                let size = (try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+                if size > (largest?.size ?? 0) { largest = (file, size) }
+            }
+        }
+        guard let largest else {
+            log.error("debug retro Codex : aucun rollout trouvé")
+            return
+        }
+        log.info("debug retro CODEX sur \(largest.url.lastPathComponent, privacy: .public) (\(largest.size) octets)")
+
+        // Le `cwd` vient du rollout lui-même : c'est lui qui donne au catalogue
+        // d'antériorité les slash commands du PROJET (leçon de la v0.16.5).
+        let cwd = (try? String(contentsOf: largest.url, encoding: .utf8))
+            .flatMap { $0.split(separator: "\n").first }
+            .flatMap { CodexTranscriptParser.parse(Data($0.utf8))?.cwd }
+
+        pendingAttempt = AttemptRecord(
+            sessionID: "codex:" + CodexRollout.sessionID(fromFileName: largest.url.lastPathComponent),
+            decidedAt: Date(), decision: "run(debug)", outcome: nil,
+            transcriptBytes: largest.size,
+            quotaFraction: SessionStore.shared.realQuota?.fiveHour.usedFraction,
+            quotaAgeSeconds: SessionStore.shared.realQuota
+                .map { Date().timeIntervalSince($0.receivedAt) })
+        var snapshot = SessionStore.Tracked(
+            id: "codex:" + CodexRollout.sessionID(fromFileName: largest.url.lastPathComponent),
+            cwd: cwd, transcriptPath: largest.url.path, phase: .ended, isSynthetic: false,
+            firstSeenAt: Date().addingTimeInterval(-3_600), lastEventAt: Date())
+        snapshot.userPromptCount = 5
+        Task { await run(Job(snapshot: snapshot, endedAt: Date(), forced: true,
+                             transcriptProvider: .codex)) }
+    }
+
+    func debugRunOnLargestTranscript(projectDirectory: String,
+                                     provider: AgentProvider = .claude) {
         guard !isBusy, pendingDelay == nil else {
             log.error("debug retro : un run ou une attente est déjà en cours")
             return
@@ -174,7 +267,8 @@ final class RetrospectiveRunner {
             firstSeenAt: Date().addingTimeInterval(-3_600),
             lastEventAt: Date()
         )
-        Task { await run(Job(snapshot: snapshot, endedAt: Date(), forced: true)) }
+        Task { await run(Job(snapshot: snapshot, endedAt: Date(), forced: true),
+                         provider: provider) }
     }
 
     /// Trigger debug : rétrospective sur la dernière session terminée, SANS
@@ -232,7 +326,31 @@ final class RetrospectiveRunner {
     }
 
     private func evaluateAndRun(_ job: Job) async {
-        let decision = gateDecision(for: job)
+        // ORDRE IMPÉRATIF : choisir le fournisseur, PUIS lui appliquer le gate
+        // avec SON quota. L'inverse évaluerait un plafond de fenêtre sur un
+        // compte qu'on ne va pas débiter — et refuserait un run que le second
+        // abonnement pouvait payer.
+        let failover = ProviderFailover.choose(
+            claude: claudeQuotaFacts(),
+            codex: CodexService.shared.quota,
+            config: LearningSettings.shared.failoverConfig
+        )
+        // ⚠️ GARDE-FOU, ET IL EST INDISPENSABLE. Sans fournisseur, le gate voit
+        // un quota vide — or « quota inconnu » n'est PAS un refus sec chez lui :
+        // il accorde `unknownQuotaMaxPerWindow` run(s) à l'aveugle. Il dirait
+        // donc `.run`, et ce run partirait sur le Claude qu'on vient justement
+        // de mesurer PLEIN. Le motif est celui de la régression trouvée dans le
+        // correctif de la v0.16.6 : la bonne décision prise, puis dépensée
+        // quand même faute d'une ligne dans la porte suivante.
+        let decision: LearningGate.Decision
+        if failover.provider == nil {
+            // La raison du gate reste FIDÈLE à ce qui bloque : « aucune mesure »
+            // et « les deux comptes sont pleins » ne se diagnostiquent pas
+            // pareil, et c'est le journal qui devra le dire dans un mois.
+            decision = .skip(failover.reason == .bothExhausted ? .quotaAboveThreshold : .quotaMissing)
+        } else {
+            decision = gateDecision(for: job, provider: failover.provider)
+        }
         let quota = SessionStore.shared.realQuota
         let transcriptBytes = job.snapshot.transcriptPath
             .flatMap { try? FileManager.default.attributesOfItem(atPath: $0)[.size] as? Int64 }
@@ -249,7 +367,9 @@ final class RetrospectiveRunner {
                 outcome: nil,
                 transcriptBytes: transcriptBytes,
                 quotaFraction: quota?.fiveHour.usedFraction,
-                quotaAgeSeconds: quota.map { Date().timeIntervalSince($0.receivedAt) }
+                quotaAgeSeconds: quota.map { Date().timeIntervalSince($0.receivedAt) },
+                provider: failover.provider?.rawValue,
+                providerReason: failover.reason.rawValue
             ))
             phase = .idle
             scheduleNext()
@@ -261,9 +381,11 @@ final class RetrospectiveRunner {
                 outcome: nil,
                 transcriptBytes: transcriptBytes,
                 quotaFraction: quota?.fiveHour.usedFraction,
-                quotaAgeSeconds: quota.map { Date().timeIntervalSince($0.receivedAt) }
+                quotaAgeSeconds: quota.map { Date().timeIntervalSince($0.receivedAt) },
+                provider: failover.provider?.rawValue,
+                providerReason: failover.reason.rawValue
             )
-            await run(job)
+            await run(job, provider: failover.provider ?? .claude)
         }
     }
 
@@ -276,7 +398,20 @@ final class RetrospectiveRunner {
         saveState(state)
     }
 
-    private func gateDecision(for job: Job) -> LearningGate.Decision {
+    /// Faits de quota Claude, tels que la statusline les a livrés.
+    private func claudeQuotaFacts() -> LearningGate.QuotaFacts {
+        LearningGate.QuotaFacts(
+            usedFraction: SessionStore.shared.realQuota?.fiveHour.usedFraction,
+            receivedAt: SessionStore.shared.rawQuotaReceivedAt,
+            resetsAt: SessionStore.shared.realQuota?.fiveHour.resetsAt
+        )
+    }
+
+    /// Le gate est évalué avec le quota DU FOURNISSEUR retenu : c'est le compte
+    /// qui va payer qu'il faut mesurer. `nil` n'arrive pas ici — l'appelant
+    /// intercepte ce cas avant, précisément parce que le gate ne refuserait pas
+    /// sec un quota inconnu.
+    private func gateDecision(for job: Job, provider: AgentProvider?) -> LearningGate.Decision {
         let snapshot = job.snapshot
         let transcriptSize = snapshot.transcriptPath
             .flatMap { try? FileManager.default.attributesOfItem(atPath: $0)[.size] as? Int64 }
@@ -290,11 +425,12 @@ final class RetrospectiveRunner {
             userPromptCount: snapshot.isSynthetic ? nil : snapshot.userPromptCount,
             isCurrentlyAlive: stillAlive
         )
-        let quota = LearningGate.QuotaFacts(
-            usedFraction: SessionStore.shared.realQuota?.fiveHour.usedFraction,
-            receivedAt: SessionStore.shared.rawQuotaReceivedAt,
-            resetsAt: SessionStore.shared.realQuota?.fiveHour.resetsAt
-        )
+        let quota: LearningGate.QuotaFacts
+        switch provider {
+        case .claude: quota = claudeQuotaFacts()
+        case .codex: quota = ProviderFailover.quotaFacts(of: CodexService.shared.quota)
+        case nil: quota = LearningGate.QuotaFacts(usedFraction: nil, receivedAt: nil, resetsAt: nil)
+        }
         return LearningGate.decide(session: facts, quota: quota,
                                    config: LearningSettings.shared.gateConfig,
                                    history: loadHistory(), now: Date())
@@ -302,7 +438,7 @@ final class RetrospectiveRunner {
 
     // MARK: - Run
 
-    private func run(_ job: Job) async {
+    private func run(_ job: Job, provider: AgentProvider = .claude) async {
         guard let transcriptPath = job.snapshot.transcriptPath else {
             phase = .idle
             scheduleNext()
@@ -341,8 +477,13 @@ final class RetrospectiveRunner {
         let sessionDirectory = job.snapshot.cwd.flatMap { path -> URL? in
             path.isEmpty ? nil : URL(fileURLWithPath: path, isDirectory: true)
         }
+        // ⚠️ LE PARSEUR SUIT LE FOURNISSEUR DU TRANSCRIPT. Un rollout Codex
+        // passé au parseur Claude rend ZÉRO entrée : le bilan partirait sur un
+        // condensé vide et paierait un run pour rien. Même motif que
+        // `byCoverage` juste au-dessus — le savoir dans le code, pas dans l'appel.
+        let transcriptProvider = job.transcriptProvider
         let prepared = await Task.detached(priority: .utility) {
-            (digest: Self.digest(ofTranscriptAt: transcriptPath),
+            (digest: Self.digest(ofTranscriptAt: transcriptPath, provider: transcriptProvider),
              capabilities: SkillCatalog(projectDirectory: sessionDirectory).summaryForPrompt())
         }.value
         // L'utilisateur a pu couper l'apprentissage PENDANT la préparation :
@@ -389,24 +530,48 @@ final class RetrospectiveRunner {
             existingNoteSlugs: existingNoteSlugs(),
             existingCapabilities: prepared.capabilities
         )
-        let arguments = RetrospectivePrompt.cliArguments(
-            model: LearningSettings.shared.model,
-            budgetUSD: LearningSettings.budgetUSD
-        ) + [userPrompt]
-
-        // Spawn via un shell de LOGIN (sinon le process est muet depuis une app
-        // GUI — piège vécu). L'unset APRÈS le sourcing du profil garantit
-        // l'auth par souscription. En revanche `claude` n'est PAS résolu par le
-        // PATH de ce shell — il est NON INTERACTIF, donc ~/.zshrc n'est jamais
-        // lu (exit 127 mesuré le 2026-08-24) : on lui passe un chemin absolu.
-        guard let claude = await ClaudeExecutable.resolve() else {
-            log.error("spawn rétrospective impossible : claude introuvable")
-            finish(job, outcome: "failed(claude)", transcriptBytes: 0)
+        // Le SEUL point du fichier où le fournisseur change quelque chose. Tout
+        // ce qui précède (condensé, prompt, antériorité) et tout ce qui suit
+        // (revalidation, écriture des fichiers) est commun : c'est la propriété
+        // qui rend la bascule sûre — Atoll écrit toujours lui-même, après ses
+        // propres contrôles, quel que soit le modèle qui a répondu.
+        let launch: CodexRun.Launch?
+        switch provider {
+        case .claude:
+            let arguments = RetrospectivePrompt.cliArguments(
+                model: LearningSettings.shared.model,
+                budgetUSD: LearningSettings.budgetUSD
+            ) + [userPrompt]
+            // Spawn via un shell de LOGIN (sinon le process est muet depuis une
+            // app GUI — piège vécu). L'unset APRÈS le sourcing du profil garantit
+            // l'auth par souscription. En revanche `claude` n'est PAS résolu par
+            // le PATH de ce shell — il est NON INTERACTIF, donc ~/.zshrc n'est
+            // jamais lu (exit 127 mesuré le 2026-08-24) : chemin absolu.
+            launch = await ClaudeExecutable.resolve().map { claude in
+                CodexRun.Launch(
+                    shellCommand: "unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN; exec "
+                        + FleetLaunch.shellQuote(claude) + " "
+                        + arguments.map(FleetLaunch.shellQuote).joined(separator: " "),
+                    outputFile: nil, workspace: nil)
+            }
+        case .codex:
+            launch = await CodexRun.prepare(
+                schema: RetrospectivePrompt.jsonSchema,
+                prompt: CodexExecPlan.fullPrompt(system: RetrospectivePrompt.systemPrompt,
+                                                 user: userPrompt),
+                workingDirectory: job.snapshot.cwd,
+                label: "retro")
+        }
+        guard let launch else {
+            log.error("spawn rétrospective impossible : \(provider.rawValue, privacy: .public) introuvable")
+            // `failed(...)` est INSCRIT dans la liste de `refundAttempt()` : cet
+            // échec précède toute dépense, il ne doit pas brûler un créneau de
+            // la fenêtre de 5 h (régression trouvée dans le correctif v0.16.6).
+            finish(job, outcome: "failed(\(provider.rawValue))", transcriptBytes: 0)
             return
         }
-        let shellCommand = "unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN; exec "
-            + FleetLaunch.shellQuote(claude) + " "
-            + arguments.map(FleetLaunch.shellQuote).joined(separator: " ")
+        defer { launch.cleanUp() }
+        let shellCommand = launch.shellCommand
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/zsh")
@@ -416,6 +581,10 @@ final class RetrospectiveRunner {
         process.environment = environment
         process.currentDirectoryURL = URL(fileURLWithPath: transcriptPath)
             .deletingLastPathComponent()
+        // NON NÉGOCIABLE sur le chemin Codex : `codex exec` lit stdin même
+        // quand le prompt est en argument, et attend EOF — mesuré le
+        // 2026-09-06 (« Reading additional input from stdin... »), soit dix
+        // minutes de watchdog par run. Voir `CodexExecPlan`.
         process.standardInput = FileHandle.nullDevice
         let stdout = Pipe()
         let stderr = Pipe()
@@ -494,12 +663,23 @@ final class RetrospectiveRunner {
             return
         }
 
-        // Un .zprofile bavard peut précéder le JSON sur stdout (shell de login) :
-        // au premier échec « pas du JSON », on retente depuis la première accolade.
-        var parsed = RetrospectiveReport.parse(cliOutput: output)
-        if case .failure(.notJSON) = parsed,
-           let brace = output.firstIndex(of: UInt8(ascii: "{")) {
-            parsed = RetrospectiveReport.parse(cliOutput: Data(output[brace...]))
+        // Codex n'imprime pas son rapport : il l'ÉCRIT dans le fichier demandé
+        // par `--output-last-message`. Lire stdout ici ne rendrait que son
+        // journal d'événements — c'est la différence de forme la plus
+        // importante entre les deux chemins, et la seule qui touche le parse.
+        var parsed: Result<RetrospectiveReport, RetrospectiveReport.ParseError>
+        if let outputFile = launch.outputFile {
+            let data = (try? Data(contentsOf: outputFile)) ?? Data()
+            parsed = RetrospectiveReport.parse(codexOutput: data)
+        } else {
+            // Un .zprofile bavard peut précéder le JSON sur stdout (shell de
+            // login) : au premier échec « pas du JSON », on retente depuis la
+            // première accolade.
+            parsed = RetrospectiveReport.parse(cliOutput: output)
+            if case .failure(.notJSON) = parsed,
+               let brace = output.firstIndex(of: UInt8(ascii: "{")) {
+                parsed = RetrospectiveReport.parse(cliOutput: Data(output[brace...]))
+            }
         }
         switch parsed {
         case .failure(let error):
@@ -594,7 +774,15 @@ final class RetrospectiveRunner {
         // 5 h pour rien — d'autant plus grave que le mode « quota inconnu »
         // n'en accorde qu'UN (revue adversariale du 2026-08-14, sur le lot qui
         // a introduit ce chemin).
-        if ["failed(digest)", "failed(spawn)", "failed(claude)", "failed(disabled)", "failed(resumed)"].contains(outcome) {
+        // `failed(codex)` est la jumelle de `failed(claude)` : « l'exécutable du
+        // fournisseur retenu est introuvable », donc AVANT toute dépense. Elle a
+        // été oubliée ici en première écriture du lot de bascule — exactement la
+        // régression que la revue du correctif v0.16.6 avait trouvée, au même
+        // endroit, six lignes sous l'avertissement qui la décrit. Ajouter un
+        // outcome d'échec sans passer par cette liste est le piège récurrent du
+        // fichier.
+        if ["failed(digest)", "failed(spawn)", "failed(claude)", "failed(codex)",
+            "failed(disabled)", "failed(resumed)"].contains(outcome) {
             refundAttempt()
         }
         if var attempt = pendingAttempt {
@@ -642,6 +830,16 @@ final class RetrospectiveRunner {
         var digestEntries: Int?
         var digestCharacters: Int?
         var digestTruncated: Bool?
+        /// Abonnement qui a payé ce run (`claude` / `codex`), et pourquoi.
+        /// OPTIONNEL À DESSEIN : une entrée écrite avant la bascule n'a pas la
+        /// clé, et le `Decodable` synthétisé ne lève pas sur un Optional absent
+        /// (contrairement au piège documenté pour `PersistedState`). Absent =
+        /// Claude, le seul fournisseur qui existait alors.
+        var provider: String?
+        /// Raison du choix (`ProviderFailover.Reason`) — sans elle, « ça n'a
+        /// pas basculé » est indiagnosticable, exactement le trou que le
+        /// journal de la Phase 12 existe pour fermer.
+        var providerReason: String?
     }
 
     private struct PersistedState: Codable {
@@ -733,7 +931,12 @@ final class RetrospectiveRunner {
     /// n'a rien à faire sur le MainActor. Bornes : on cesse de lire au-delà de
     /// `digestByteCap` (au-delà, c'est une session-fleuve dont le début suffit
     /// à caractériser les procédures) et au-delà de `digestLineCap` lignes.
-    nonisolated private static func digest(ofTranscriptAt path: String) -> TranscriptDigest.Result? {
+    /// `internal` (et non `private`) : la passation vers Codex a besoin du MÊME
+    /// condensé. En écrire un second aurait fait diverger deux lectures d'un
+    /// format que la règle n° 3 déclare instable.
+    nonisolated static func digest(ofTranscriptAt path: String,
+                                   budget: Int = TranscriptDigest.defaultCharacterBudget,
+                                   provider: AgentProvider = .claude) -> TranscriptDigest.Result? {
         guard let handle = FileHandle(forReadingAtPath: path) else { return nil }
         defer { try? handle.close() }
         var splitter = TranscriptLineSplitter(startOffset: 0)
@@ -743,11 +946,14 @@ final class RetrospectiveRunner {
               let chunk = try? handle.read(upToCount: 4 << 20), !chunk.isEmpty {
             readBytes += chunk.count
             for raw in splitter.consume(chunk) {
-                if let parsed = TranscriptLineParser.parse(raw.data) { lines.append(parsed) }
+                let parsed = provider == .codex
+                    ? CodexTranscriptParser.parse(raw.data)
+                    : TranscriptLineParser.parse(raw.data)
+                if let parsed { lines.append(parsed) }
                 if lines.count >= digestLineCap { break }
             }
         }
-        return TranscriptDigest.make(lines: lines)
+        return TranscriptDigest.make(lines: lines, budget: budget)
     }
 
     nonisolated private static let digestByteCap = 64 * 1024 * 1024

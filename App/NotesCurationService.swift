@@ -179,11 +179,35 @@ final class NotesCurationService {
         // premier tour du planificateur (juste après le lancement, avant la
         // première statusline) elle partait sans aucun garde-fou.
         let store = SessionStore.shared
-        let quota = LearningGate.QuotaFacts(
+        let claudeQuota = LearningGate.QuotaFacts(
             usedFraction: store.realQuota?.fiveHour.usedFraction,
             receivedAt: store.rawQuotaReceivedAt,
             resetsAt: store.realQuota?.fiveHour.resetsAt
         )
+        // ORDRE IMPÉRATIF, comme pour le bilan : choisir le compte qui paie,
+        // PUIS lui appliquer les refus de quota. `provider == nil` ⇒ aucun des
+        // deux ne peut payer, et on s'arrête AVANT `quotaRefusal` — celui-ci
+        // tolère un quota inconnu (une dépense par fenêtre), ce qui ferait
+        // repartir le run sur le Claude qu'on vient de mesurer plein.
+        let failover = ProviderFailover.choose(
+            claude: claudeQuota,
+            codex: CodexService.shared.quota,
+            config: LearningSettings.shared.failoverConfig
+        )
+        guard let provider = failover.provider else {
+            let motif = failover.reason == .bothExhausted
+                ? "les deux abonnements sont épuisés"
+                : "quota Codex indisponible"
+            log.info("curation reportée : \(motif, privacy: .public)")
+            phase = .idle
+            lastOutcome = "reportée (\(motif))"
+            Self.saveState(.init(lastRunAt: lastRunAt, lastOutcome: lastOutcome,
+                                 warnings: warnings))
+            return
+        }
+        let quota = provider == .codex
+            ? ProviderFailover.quotaFacts(of: CodexService.shared.quota)
+            : claudeQuota
         if let refusal = Self.quotaRefusal(quota, now: Date(), lastSpendAt: lastSpendAt) {
             log.info("curation reportée : \(refusal, privacy: .public)")
             phase = .idle
@@ -207,21 +231,43 @@ final class NotesCurationService {
             return
         }
 
-        let arguments = NotesCurationPrompt.cliArguments(
-            model: LearningSettings.shared.curationModel,
-            budgetUSD: LearningSettings.budgetUSD
-        ) + [NotesCurationPrompt.userPrompt(notes: notes)]
-
-        guard let output = await spawnClaude(arguments: arguments) else {
-            finish(outcome: spawnFailure ?? "échec du lancement de l'analyse", touched: false)
-            return
-        }
-
-        // Un .zprofile bavard peut précéder le JSON (shell de login) : on
-        // retente depuis la première accolade, comme la rétrospective.
-        var parsed = NotesCurationOutput.parse(cliOutput: output)
-        if parsed == nil, let brace = output.firstIndex(of: UInt8(ascii: "{")) {
-            parsed = NotesCurationOutput.parse(cliOutput: Data(output[brace...]))
+        let userPrompt = NotesCurationPrompt.userPrompt(notes: notes)
+        var parsed: NotesCurationOutput?
+        switch provider {
+        case .claude:
+            let arguments = NotesCurationPrompt.cliArguments(
+                model: LearningSettings.shared.curationModel,
+                budgetUSD: LearningSettings.budgetUSD
+            ) + [userPrompt]
+            guard let output = await spawnClaude(arguments: arguments) else {
+                finish(outcome: spawnFailure ?? "échec du lancement de l'analyse", touched: false)
+                return
+            }
+            // Un .zprofile bavard peut précéder le JSON (shell de login) : on
+            // retente depuis la première accolade, comme la rétrospective.
+            parsed = NotesCurationOutput.parse(cliOutput: output)
+            if parsed == nil, let brace = output.firstIndex(of: UInt8(ascii: "{")) {
+                parsed = NotesCurationOutput.parse(cliOutput: Data(output[brace...]))
+            }
+        case .codex:
+            // Codex ÉCRIT son rapport dans un fichier au lieu de l'imprimer :
+            // stdout ne porte que son journal d'événements.
+            guard let launch = await CodexRun.prepare(
+                schema: NotesCurationPrompt.jsonSchema,
+                prompt: CodexExecPlan.fullPrompt(system: NotesCurationPrompt.systemPrompt,
+                                                 user: userPrompt),
+                workingDirectory: nil, label: "curation")
+            else {
+                finish(outcome: CodexExecutable.notFoundMessage, touched: false)
+                return
+            }
+            defer { launch.cleanUp() }
+            guard await spawnShell(command: launch.shellCommand) != nil else {
+                finish(outcome: spawnFailure ?? "échec du lancement de l'analyse", touched: false)
+                return
+            }
+            let data = launch.outputFile.flatMap { try? Data(contentsOf: $0) } ?? Data()
+            parsed = NotesCurationOutput.parse(codexOutput: data)
         }
         guard let curation = parsed else {
             log.error("curation : sortie inexploitable")
@@ -574,7 +620,19 @@ final class NotesCurationService {
         let shellCommand = "unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN; exec "
             + FleetLaunch.shellQuote(claude) + " "
             + arguments.map(FleetLaunch.shellQuote).joined(separator: " ")
+        return await spawnShell(command: shellCommand)
+    }
 
+    /// Exécution proprement dite — identique quel que soit l'abonnement : même
+    /// shell de login, même watchdog, même drainage parallèle des deux pipes,
+    /// même comptabilisation de la dépense. Seule la COMMANDE change, et elle
+    /// est construite par l'appelant.
+    ///
+    /// Rend le stdout du process, ou `nil` sur échec. Sur le chemin Codex ce
+    /// stdout n'est qu'un journal d'événements — le rapport est dans le fichier
+    /// de `--output-last-message` —, mais le non-`nil` reste le signal
+    /// « le process est allé au bout avec exit 0 ».
+    private func spawnShell(command shellCommand: String) async -> Data? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/zsh")
         process.arguments = ["-l", "-c", shellCommand]
@@ -582,6 +640,10 @@ final class NotesCurationService {
         environment["ATOLL_RETROSPECTIVE"] = "1" // filtré par reconcile() : invisible dans l'îlot
         process.environment = environment
         process.currentDirectoryURL = BridgePaths.learningDirectory
+        // NON NÉGOCIABLE sur le chemin Codex : `codex exec` lit stdin même
+        // quand le prompt est en argument, et attend EOF — mesuré le
+        // 2026-09-06 (« Reading additional input from stdin... »), soit dix
+        // minutes de watchdog par run. Voir `CodexExecPlan`.
         process.standardInput = FileHandle.nullDevice
         let stdout = Pipe()
         let stderr = Pipe()
@@ -596,7 +658,7 @@ final class NotesCurationService {
             try process.run()
         } catch {
             log.error("spawn curation impossible : \(error.localizedDescription)")
-            spawnFailure = "claude n'a pas pu être lancé (\(error.localizedDescription))"
+            spawnFailure = "l'analyse n'a pas pu être lancée (\(error.localizedDescription))"
             return nil
         }
         self.process = process

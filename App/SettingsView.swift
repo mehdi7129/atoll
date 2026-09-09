@@ -25,6 +25,9 @@ struct SettingsView: View {
             ClaudeCodePane()
                 .tabItem { Label("Claude Code", systemImage: "terminal") }
                 .tag("claude")
+            CodexSettingsPane()
+                .tabItem { Label("Codex", systemImage: "terminal.fill") }
+                .tag("codex")
             AutonomyPane()
                 .tabItem { Label("Autonomie", systemImage: "bolt") }
                 .tag("autonomie")

@@ -253,6 +253,15 @@ final class SessionStore {
     /// et doivent voir la donnée telle qu'elle est.
     var rawQuotaReceivedAt: Date? { realQuota?.receivedAt }
 
+    /// Chemin du transcript JSONL d'une session, s'il est connu.
+    ///
+    /// Exposé pour la passation vers Codex, qui doit en tirer un condensé. Rien
+    /// d'autre n'a le droit de LIRE ce fichier depuis l'UI : le format est
+    /// officiellement interne et instable (règle n° 3).
+    func transcriptPath(for id: String) -> String? {
+        sessions.first { $0.id == id }?.transcriptPath
+    }
+
     /// Ancre terminal d'une session (pour le jump-back).
     func terminalAnchor(for id: String) -> TerminalAnchor? {
         sessions.first { $0.id == id }?.terminalAnchor

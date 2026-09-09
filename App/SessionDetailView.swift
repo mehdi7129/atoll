@@ -12,15 +12,61 @@ struct SessionDetailView: View {
     @State private var needsPermissionApp: String?
     @State private var confirmingStop = false
     @State private var stopMessage: String?
+    @State private var handoffMessage: String?
+    @State private var preparingHandoff = false
+
+    /// Le relais vers Codex est proposé quand la bascule est armée, que `codex`
+    /// est réellement installé, et pour une session Claude — reprendre une
+    /// session Codex dans Codex n'a pas de sens.
+    ///
+    /// Il n'est PAS conditionné à un quota Claude épuisé : le geste est utile
+    /// avant la panne (préparer la reprise) autant qu'après. Ce qui suit le
+    /// quota, c'est le BANDEAU d'alerte, pas le bouton — un bouton qui apparaît
+    /// au moment où l'on en a besoin est un bouton qu'on ne trouve pas.
+    private var canHandOffToCodex: Bool {
+        session.provider == .claude
+            && LearningSettings.shared.isFailoverEnabled
+            && CodexExecutable.resolveCheap() != nil
+    }
+
+    /// Le quota Claude est-il épuisé au sens de la bascule ? Sert UNIQUEMENT à
+    /// afficher un bandeau : la décision de dépense, elle, est prise par
+    /// `ProviderFailover` avec les mêmes faits.
+    private var claudeIsExhausted: Bool {
+        let facts = LearningGate.QuotaFacts(
+            usedFraction: store.realQuota?.fiveHour.usedFraction,
+            receivedAt: store.rawQuotaReceivedAt,
+            resetsAt: store.realQuota?.fiveHour.resetsAt
+        )
+        let decision = ProviderFailover.choose(
+            claude: facts, codex: CodexService.shared.quota,
+            config: LearningSettings.shared.failoverConfig)
+        return decision.reason == .claudeExhausted || decision.reason == .bothExhausted
+    }
 
     /// `claude stop` ne peut agir que sur une session gérée par le daemon.
     /// Un simple `stat` sur un chemin : assez peu coûteux pour un `body`, et le
     /// détail n'affiche qu'une session à la fois.
     private var canStop: Bool {
-        FleetLaunch.hasJobDirectory(for: session.id, jobsRoot: BridgePaths.claudeJobsURL)
+        session.provider == .claude && FleetLaunch.hasJobDirectory(for: session.id, jobsRoot: BridgePaths.claudeJobsURL)
     }
 
     private var store: SessionStore { .shared }
+
+    /// L'ancre terminal, quel que soit le fournisseur.
+    ///
+    /// C'EST TOUT CE QUI SÉPARAIT CODEX DU JUMP-BACK. `focusIDE` n'utilise que
+    /// `cwd` et `bundleID` ; la PR #1 avait désactivé le bouton par prudence,
+    /// faute de savoir où Codex tournait. Mehdi a tranché le 2026-09-09 : Codex
+    /// tourne toujours dans un Cursor, comme Claude Code, et passer de l'un à
+    /// l'autre doit être transparent. Les deux fournisseurs partagent donc le
+    /// même geste — seule la SOURCE de l'ancre diffère, parce que les sessions
+    /// Codex ne vivent pas dans `SessionStore`.
+    private var anchor: TerminalAnchor? {
+        session.provider == .codex
+            ? CodexService.shared.anchor(for: session.id)
+            : store.terminalAnchor(for: session.id)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -102,10 +148,23 @@ struct SessionDetailView: View {
     /// Terminal) + retours (permission, échec).
     private var jumpBar: some View {
         VStack(alignment: .leading, spacing: 4) {
+            if session.provider == .codex {
+                // Ce qui reste VRAI et propre à Codex : la décision d'une
+                // autorisation appartient à son client. Le reste — ouvrir la
+                // fenêtre où la session vit — est identique aux deux.
+                Text(session.needsAttention
+                     ? "Autorisation à traiter dans Codex (pas dans Atoll)."
+                     : "Suivi Codex par hooks.")
+                    .font(AtollFont.mono(9)).foregroundStyle(colors.dim)
+            }
             HStack(spacing: 12) {
                 AsciiButton(label: openLabel, color: colors.accent, shortcut: nil) {
                     performJump()
                 }
+                // Désactivé par CAPACITÉ, plus par fournisseur : sans ancre il
+                // n'y a rien à ouvrir, et un bouton qui ne peut rien faire ne
+                // doit pas s'afficher actif (leçon du bouton ARRÊTER, v0.16.1).
+                .disabled(anchor == nil)
                 Spacer()
                 // Kill-switch par session (`claude stop`). CONFIRMATION obligatoire :
                 // le bouton s'affiche pour toute session vivante, y compris la tienne
@@ -113,11 +172,26 @@ struct SessionDetailView: View {
                 // …et SEULEMENT si le daemon a un job à arrêter : sans dossier
                 // dans ~/.claude/jobs, `claude stop` sort en 1 (« No job
                 // matching »). C'est le cas de toute session interactive.
+                if canHandOffToCodex {
+                    AsciiButton(label: preparingHandoff ? "PRÉPARATION…" : "CONTINUER DANS CODEX",
+                                color: claudeIsExhausted ? colors.warn : colors.dim,
+                                shortcut: nil) {
+                        performHandoff()
+                    }
+                    .disabled(preparingHandoff)
+                }
                 if session.status != .done, canStop {
                     AsciiButton(label: "ARRÊTER", color: colors.warn, shortcut: nil) {
                         confirmingStop = true
                     }
                 }
+            }
+            if canHandOffToCodex, claudeIsExhausted {
+                Text("Quota Claude épuisé — Codex peut prendre le relais.")
+                    .font(AtollFont.mono(9)).foregroundStyle(colors.warn)
+            }
+            if let handoffMessage {
+                Text(handoffMessage).font(AtollFont.mono(9)).foregroundStyle(colors.dim)
             }
             if let stopMessage {
                 Text(stopMessage).font(AtollFont.mono(9)).foregroundStyle(colors.warn)
@@ -143,16 +217,14 @@ struct SessionDetailView: View {
     /// CURSOR »), sinon générique. C'est l'action principale du détail — ouvrir
     /// la fenêtre où la session vit pour y travailler.
     private var openLabel: String {
-        guard let anchor = store.terminalAnchor(for: session.id) else {
-            return "ALLER AU TERMINAL ↵"
-        }
+        guard let anchor else { return "ALLER AU TERMINAL ↵" }
         return "OUVRIR DANS \(TerminalResolver.resolve(anchor).displayName.uppercased()) ↵"
     }
 
     private func performJump() {
         jumpMessage = "…"
         needsPermissionApp = nil
-        guard let anchor = store.terminalAnchor(for: session.id) else {
+        guard let anchor else {
             jumpMessage = "ancrage terminal indisponible"
             return
         }
@@ -169,8 +241,42 @@ struct SessionDetailView: View {
         }
     }
 
+    /// Prépare la reprise sur Codex : condensé HORS du fil principal (lire et
+    /// parser un JSONL de plusieurs dizaines de Mo n'a rien à faire sur le
+    /// MainActor), puis écriture des fichiers et ouverture du terminal.
+    private func performHandoff() {
+        guard !preparingHandoff else { return } // garde de ré-entrance (double-clic)
+        preparingHandoff = true
+        handoffMessage = nil
+        let transcript = session.provider == .codex
+            ? CodexService.shared.transcriptPath(for: session.id)
+            : store.transcriptPath(for: session.id)
+        let provider = session.provider
+        let session = session
+        Task {
+            // Budget RÉDUIT à dessein : c'est une reprise, pas une analyse. Les
+            // 150 000 caractères du bilan seraient payés au premier tour Codex.
+            let digest = await Task.detached(priority: .userInitiated) {
+                transcript.flatMap {
+                    RetrospectiveRunner.digest(ofTranscriptAt: $0, budget: 40_000,
+                                               provider: provider)
+                }?.text ?? ""
+            }.value
+            preparingHandoff = false
+            switch CodexHandoffService.start(session: session, digest: digest) {
+            case .opened:
+                handoffMessage = digest.isEmpty
+                    ? "Codex ouvert — transcript illisible, aucun contexte joint."
+                    : "Codex ouvert dans un terminal, contexte joint."
+            case .failed(let reason):
+                handoffMessage = reason
+            }
+        }
+    }
+
     private var grid: some View {
         VStack(alignment: .leading, spacing: 3) {
+            row("agent", session.provider.label)
             row("modèle", session.model.map { ModelName.display($0) } ?? "—")
             row("branche", session.gitBranch ?? "—")
             row("sous-agents", session.subagentCount > 0 ? "\(session.subagentCount) actifs" : "—")

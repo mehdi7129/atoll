@@ -1,9 +1,88 @@
 # CLAUDE.md — instructions projet Atoll
 
+> **v0.17.0 — ATOLL SUIT AUSSI CODEX** (2026-09-09). Première release depuis la
+> PR #1 de Codex, empilée de la BASCULE DE QUOTA demandée par Mehdi le 2026-09-06
+> (« si je n'ai plus de quota sur Claude, j'aimerais que ça passe sur mon compte
+> Codex »), puis de la PARITÉ COMPLÈTE qu'il a exigée ensuite : « ce que faisait
+> Atoll avec Claude Code doit fonctionner sur Codex ». Lire
+> [`docs/CODEX-INTEGRATION.md`](docs/CODEX-INTEGRATION.md) puis
+> [`docs/CODEX-FAILOVER.md`](docs/CODEX-FAILOVER.md).
+>
+> ⚠️ **CE QUI BASCULE N'EST PAS LE TRAVAIL DE MEHDI.** Atoll OBSERVE le CLI
+> `claude`, il ne le pilote pas : aucun hook, aucun réglage ne transforme une
+> session interactive en cours en session Codex. Ce qui bascule, ce sont les
+> DEUX dépenses d'Atoll lui-même (bilan de fin de session, rangement des notes).
+> Pour sa session à lui, le bouton « CONTINUER DANS CODEX » PRÉPARE la reprise —
+> un condensé sur disque et un terminal ouvert au bon endroit — et le geste
+> reste le sien. Ne pas laisser le mot « bascule » promettre l'inverse.
+>
+> ⚠️ **LE SCHÉMA JSON D'ATOLL EST REFUSÉ PAR OPENAI**, mesuré le 2026-09-07 au
+> premier vrai `codex exec` : HTTP 400 `invalid_json_schema` — « 'required' is
+> required to be supplied and to be an array including every key in properties.
+> Missing 'confidence' ». Anthropic tolère un `required` partiel, OpenAI
+> l'interdit (et refuse aussi `pattern`, `maxLength`, `maxItems`). Le lot de
+> bascule ne produisait donc RIEN, et **aucun test unitaire ne pouvait le dire** :
+> il fallait l'appel réel. D'où `CodexExecPlan.openAISchema(from:)`. Retirer ces
+> bornes est sans danger parce que `RetrospectiveReport` et `NotesCurationOutput`
+> revalident tout en Swift « indépendamment du `--json-schema` du CLI » — le
+> schéma guide le modèle, il n'a jamais été ce qui protège Atoll. Après
+> correctif : bilan **exit 0 en 7 s**, curation **exit 0**, les deux rapports
+> réels figés verbatim en test.
+>
+> ⚠️ **LE LANCEUR DE HOOKS EST UN SUPERVISEUR, ET SA FORME EST MESURÉE.** Deux
+> écritures « évidentes » ont échoué avant elle, le 2026-09-09 :
+> - `exec "$BIN"` fait REMPLACER le shell par le worker — tuer le worker devient
+>   alors la mort du hook, que Codex affiche comme un ÉCHEC au lieu d'une
+>   abstention, et plus personne ne peut la convertir en « exit 0, stdout vide » ;
+> - en avant-plan, le shell annonce cette mort sur SON stderr (« line 4: 47645
+>   Terminated: 15 ») — contrat respecté, mais du texte part vers une TUI dont
+>   Mehdi a déjà reproché le bruit ;
+> - **`&` SEUL CASSE LE CHEMIN NOMINAL** : un job d'arrière-plan reçoit
+>   `/dev/null` sur stdin, donc le worker ne lit PLUS LE PAYLOAD du hook. Mesuré.
+>
+> D'où `exec 3<&0` / `<&3 &` / `wait $! 2>/dev/null` — la redirection portant sur
+> `wait` SEUL, jamais sur le stderr du worker. C'est le même piège que le
+> veilleur d'EOF de la veille : **réparer un cas de faute en cassant le nominal.**
+>
+> ⚠️ **UN ARTEFACT INSTALLÉ NE REÇOIT JAMAIS LES CORRECTIFS.** Ce lanceur n'était
+> écrit qu'à l'INSTALLATION : le superviseur corrigé dans le générateur est resté
+> un `exec` sur le disque, et personne ne l'aurait vu. Pire, il porte le chemin
+> ABSOLU du bundle — une app DÉPLACÉE rendait l'intégration Codex morte EN
+> SILENCE, sa garde `[ -x "$BIN" ] || exit 0` faisant exactement son travail.
+> D'où `CodexHookInstallation.refreshWrapper` au démarrage, idempotent par
+> comparaison d'octets. Et le script ne vit plus qu'à UN endroit : l'avoir eu en
+> deux exemplaires est ce qui a produit le défaut. Se demander, pour tout fichier
+> qu'Atoll pose hors de son bundle : **qui le réécrit quand il change ?**
+>
+> ⚠️ **UN PID SEUL N'EST PAS UNE IDENTITÉ DE PROCESSUS.** Recyclé avant le
+> passage du minuteur, `kill(pid, 0)` valide un processus ÉTRANGER et une carte
+> d'autorisation survit à son helper. L'identité est le couple `(pid, instant de
+> démarrage)`. Voir `CodexCardReaper` — et noter que l'EOF ne prouve RIEN ici :
+> le helper fait un `shutdown(SHUT_WR)` normal après son envoi.
+>
+> Les PAYLOADS de hooks Codex sont eux aussi validés sur pièces (capture dans un
+> `CODEX_HOME` jetable) : `cwd`, `turn_id`, `model`, `prompt`, `tool_name`,
+> `tool_input`, `session_id` sont tous présents, six événements dans un run
+> simple. ⚠️ **Les strings du binaire ne le disaient PAS** — on n'y trouve ni
+> `cwd` ni `turn_id` près des champs de hook, et j'en avais déduit un risque qui
+> n'existait pas. Fouiller un binaire ORIENTE une hypothèse, il ne la tranche
+> jamais : c'est la capture qui décide.
+>
+> Le format de `hooks.json` de la PR #1 est VALIDÉ SUR PIÈCES depuis le
+> 2026-09-06 : soumis au RPC `hooks/list` d'un `codex app-server` lancé sur un
+> `CODEX_HOME` jetable, ses 10 événements sont tous reconnus par
+> `codex-cli 0.153.4`, et un événement INCONNU y est ignoré sans invalider le
+> fichier — donc un renommage côté OpenAI ne casserait pas la configuration
+> Codex de l'utilisateur.
+> ⚠️ **`codex exec` LIT STDIN même quand le prompt est en argument** : sans
+> `/dev/null`, il attend EOF, soit dix minutes de watchdog par run (mesuré).
+> Les deux lanceurs posent `standardInput = .nullDevice` — ne pas le retirer en
+> croyant que « le prompt est déjà passé en argument ».
+
 > 📌 **REPRISE DE DEV : lire `docs/HANDOFF.md` en premier** — état exact, méthode de
 > travail, et TOUS les pièges appris à la dure.
 >
-> **Version publiée : v0.16.6** — un seul défaut fermé, aucune fonction ajoutée,
+> **v0.16.6** — un seul défaut fermé, aucune fonction ajoutée,
 > mais il rendait MUETTES les deux seules dépenses de quota du projet.
 > `NotesCurationService` et `RetrospectiveRunner` lançaient
 > `zsh -l -c "… exec claude …"` en comptant sur le PATH du shell — et leur
@@ -1340,6 +1419,15 @@ tenue à jour avec `App/AppDelegate.swift` :
   `settings`, `onboarding`, `retro` (rétrospective sur la dernière session terminée),
   `retroBig` (rétrospective sur le PLUS GROS transcript du projet, sans passer par
   le gate — ~0,87 $ le run ; c'est LUI qui a prouvé la boucle d'apprentissage),
+  `retroCodex` (LE MÊME run, mais payé par l'abonnement Codex : prouve le chemin
+  `codex exec` → schéma → fichier de sortie → revalidation, sans attendre que le
+  quota Claude soit réellement épuisé),
+  `retroCodexRollout` (bilan sur le plus gros ROLLOUT Codex : prouve l'autre
+  moitié — rollout → parseur Codex → condensé → notes —, sans attendre qu'une
+  vraie session Codex longue se termine),
+  `codexAllow` / `codexDeny` / `codexHandBack` (résolvent la première carte
+  d'autorisation CODEX par les mêmes chemins que les boutons — pendant de
+  `allow`/`deny`, et seul moyen de valider la matrice de fautes sans souris),
   `curation` (curation des notes),
   `plugins` (inventaire réel via `claude plugin list --json`, catégorie de log
   `plugins`) / `pluginSearch` (recherche d'un plugin — consomme du quota),

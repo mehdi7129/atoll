@@ -210,11 +210,41 @@ private actor MemoryIndexWorker {
     func scanAll() async {
         guard let index = openIndexIfNeeded() else { return }
         let fm = FileManager.default
-        guard let projectDirs = try? fm.contentsOfDirectory(
+        // ⚠️ DEUX SOURCES INDÉPENDANTES. Ce `guard` faisait un `return` sec :
+        // sans `~/.claude/projects`, la passe entière s'arrêtait AVANT le scan
+        // Codex — donc un utilisateur CODEX SEUL n'indexait rien du tout.
+        // C'est précisément le cas d'usage de Mehdi (« utiliser l'un sans
+        // l'autre ») et une violation directe de l'isolation. Trouvé par Codex
+        // en revue. L'absence d'une source rend une liste vide POUR ELLE,
+        // jamais l'annulation de l'autre.
+        let projectDirs = (try? fm.contentsOfDirectory(
             at: BridgePaths.claudeProjectsURL,
             includingPropertiesForKeys: [.isDirectoryKey],
             options: [.skipsHiddenFiles]
-        ) else { return }
+        )) ?? []
+
+        // ⚠️ ON NE DÉCLARE DISPARU QUE CE QU'ON A RÉELLEMENT REGARDÉ.
+        //
+        // Le `return` sec ci-dessus protégeait, par accident, contre un second
+        // défaut : un dossier MOMENTANÉMENT ILLISIBLE (volume réseau, iCloud
+        // qui rapatrie, permissions en cours de changement) rend exactement la
+        // même chose qu'un dossier absent — `nil`. Continuer avec une liste
+        // vide ferait passer TOUTE la base par `markMissing` en fin de passe.
+        // Les messages survivraient (c'est un drapeau, pas une suppression),
+        // mais Atoll annoncerait disparu ce qu'il n'a pas pu lire.
+        //
+        // Le dépôt porte déjà cette leçon quinze lignes plus bas, pour les
+        // notes : « un dossier momentanément illisible ne doit rien effacer ».
+        // Chaque source n'autorise donc le ménage QUE sur son propre préfixe,
+        // et seulement si son listage a réussi.
+        // ⚠️ LE PRÉFIXE EST CELUI DES DOSSIERS RÉELLEMENT LUS, PAS DE LA RACINE.
+        // Poser la racine promettait plus que le code ne tient : si la racine se
+        // liste mais qu'un SOUS-DOSSIER devient illisible pendant le parcours,
+        // ses fichiers retombaient sous le préfixe et étaient déclarés disparus.
+        // Constat de Codex, revue du 2026-09-09 — « la promesse est plus large
+        // que le code ». Chaque dossier ajoute donc le sien après un listage
+        // réussi, plus bas dans la boucle.
+        var scannedPrefixes: [String] = []
 
         var seenPaths = Set<String>()
         for dir in projectDirs {
@@ -226,17 +256,32 @@ private actor MemoryIndexWorker {
                   isDirectory.boolValue,
                   let entries = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)
             else { continue }
+            scannedPrefixes.append(dir.path + "/")
             for file in entries where file.pathExtension == "jsonl" {
                 if Task.isCancelled { return }
                 seenPaths.insert(file.path)
                 await indexFile(at: file, projectDir: dir.lastPathComponent, index: index)
             }
         }
+        // ⚠️ LES CHEMINS CODEX DOIVENT ENTRER DANS `seenPaths`. Sans cela, la
+        // fin de passe les traite tous comme DISPARUS : `markMissing` puis
+        // retrait de `lastSeen`, et la passe suivante les réindexe pour les
+        // remarquer manquants — une boucle d'écritures SQLite toutes les 30 s,
+        // qui neutralise au passage tout le scan incrémental côté Codex.
+        // Trouvé par Codex en revue ; les messages restaient cherchables, donc
+        // la preuve « 714 indexés » ne le contredisait pas.
+        let codex = await scanCodexRollouts(index: index)
+        seenPaths.formUnion(codex.paths)
+        if codex.listed {
+            scannedPrefixes.append(BridgePaths.codexSessionsURL.path + "/")
+        }
+
         // Notes d'apprentissage (7b) : re-scannées ici pour survivre à une
         // reconstruction de la base (revue : indexées seulement à l'écriture,
         // un rebuild les orphelinait de recall pour toujours).
         if let notes = try? fm.contentsOfDirectory(
             at: BridgePaths.learningNotesDirectory, includingPropertiesForKeys: nil) {
+            scannedPrefixes.append(BridgePaths.learningNotesDirectory.path + "/")
             var seenNotes = Set<String>()
             for note in notes where note.pathExtension == "md" {
                 if Task.isCancelled { return }
@@ -260,8 +305,10 @@ private actor MemoryIndexWorker {
         }
 
         // Disparus depuis le dernier scan : marqués missing, lignes CONSERVÉES
-        // (le purge 30 j de Claude Code ne doit pas amnésier Atoll).
-        for path in lastSeen.keys where !seenPaths.contains(path) {
+        // (le purge 30 j de Claude Code ne doit pas amnésier Atoll). Bornée aux
+        // sources effectivement listées — voir `scannedPrefixes`.
+        for path in lastSeen.keys where !seenPaths.contains(path)
+            && scannedPrefixes.contains(where: { path.hasPrefix($0) }) {
             try? index.markMissing(path: path)
             lastSeen[path] = nil
         }
@@ -297,6 +344,67 @@ private actor MemoryIndexWorker {
         }
     }
 
+    /// Rollouts Codex — `~/.codex/sessions/<année>/<mois>/<jour>/*.jsonl`.
+    ///
+    /// POURQUOI : sans cela, une session Codex ne laisse AUCUNE trace en
+    /// mémoire. Mehdi a tranché le 2026-09-09 — « quand j'utilise Codex ou
+    /// Claude Code, Atoll doit fonctionner de la même manière » — et
+    /// « se souvenir » est l'un des trois verbes de la vision du projet.
+    ///
+    /// L'arborescence est datée, donc RÉCURSIVE, contrairement au scan Claude
+    /// qui est plat par construction. On la borne quand même : un dossier de
+    /// sessions accumule des années, et `skipsHiddenFiles` évite les sidecars.
+    /// Rend les chemins RENCONTRÉS — y compris ceux que le plafond de la passe
+    /// n'a pas indexés : ils existent, et les déclarer disparus serait faux —
+    /// et `listed` dit si le dossier a pu être PARCOURU. Sans ce second
+    /// booléen, un `~/.codex/sessions` illisible serait indiscernable d'un
+    /// dossier vide, et la fin de passe déclarerait tous les rollouts disparus.
+    private func scanCodexRollouts(index: MemoryIndex) async -> (paths: Set<String>, listed: Bool) {
+        let fm = FileManager.default
+        let root = BridgePaths.codexSessionsURL
+        var seen = Set<String>()
+        // ⚠️ UN ÉNUMÉRATEUR RÉCURSIF SAUTE EN SILENCE CE QU'IL NE PEUT PAS LIRE.
+        // Sans `errorHandler`, un sous-dossier illisible ne se distingue pas
+        // d'un sous-dossier vide : la passe se croirait complète et déclarerait
+        // ses rollouts disparus. Le handler rend `false` pour ARRÊTER le
+        // parcours, et `listed` devient faux — donc aucun marquage. Constat de
+        // Codex, revue du 2026-09-09.
+        var readable = true
+        guard fm.fileExists(atPath: root.path),
+              let walker = fm.enumerator(at: root, includingPropertiesForKeys: [.isRegularFileKey],
+                                         options: [.skipsHiddenFiles],
+                                         errorHandler: { _, _ in readable = false; return false })
+        else { return (seen, false) }
+        var scanned = 0
+        for case let file as URL in walker {
+            if Task.isCancelled { return (seen, readable) }
+            guard file.pathExtension == "jsonl" else { continue }
+            // Compté comme VU quoi qu'il arrive : le fichier existe, et le
+            // déclarer disparu serait faux.
+            seen.insert(file.path)
+            guard scanned < Self.codexRolloutCap else { continue }
+            // ⚠️ LE PLAFOND NE COMPTE QUE LE TRAVAIL RÉEL. Il comptait AUSSI les
+            // fichiers inchangés, qui ressortent pourtant d'`indexFile` en
+            // quelques microsecondes grâce à `lastSeen` : les 400 premiers
+            // consommaient donc toutes les places à chaque passe, et le 401e
+            // n'était jamais indexé — pas « reporté », JAMAIS. L'énumérateur
+            // repartant du début, la famine était permanente. Trouvé par Codex,
+            // qui l'avait signalée dès sa première revue.
+            // Le dossier du jour sert de « projet » : c'est ce qui apparaîtra
+            // dans les statistiques, faute de notion de projet dans un rollout.
+            let worked = await indexFile(
+                at: file, projectDir: file.deletingLastPathComponent().lastPathComponent,
+                index: index, provider: .codex)
+            if worked { scanned += 1 }
+        }
+        return (seen, readable)
+    }
+
+    /// Plafond de rollouts par passe. Le scan tourne toutes les 30 s : borner
+    /// évite qu'un backfill initial monopolise le worker, sans rien perdre —
+    /// la passe suivante reprend là où l'offset s'est arrêté.
+    private static let codexRolloutCap = 400
+
     /// Indexe une note d'apprentissage (fichier .md complet, pas du JSONL) :
     /// une pseudo-session « atoll-note-<slug> » avec un unique fragment `note`.
     func indexNoteFile(url: URL, slug: String) {
@@ -319,25 +427,42 @@ private actor MemoryIndexWorker {
 
     // MARK: - Lecture incrémentale d'un fichier
 
-    private func indexFile(at url: URL, projectDir: String, index: MemoryIndex) async {
+    /// Rend `true` si la passe a RÉELLEMENT eu du travail à faire.
+    ///
+    /// ⚠️ CE BOOLÉEN EXISTE POUR LE PLAFOND DE ROLLOUTS CODEX, et il est rendu
+    /// ICI plutôt que recalculé par l'appelant : le critère « inchangé » est
+    /// celui de `lastSeen`, six lignes plus bas. Le dupliquer chez l'appelant
+    /// poserait deux définitions de « inchangé » à deux endroits, promises à
+    /// diverger — le motif même qui a produit un wrapper Codex corrigé dans le
+    /// générateur et périmé sur le disque.
+    @discardableResult
+    private func indexFile(at url: URL, projectDir: String, index: MemoryIndex,
+                           provider: AgentProvider = .claude) async -> Bool {
         let path = url.path
-        guard let attrs = try? FileManager.default.attributesOfItem(atPath: path) else { return }
+        guard let attrs = try? FileManager.default.attributesOfItem(atPath: path) else { return false }
         let inode = (attrs[.systemFileNumber] as? UInt64) ?? 0
         let size = (attrs[.size] as? Int64) ?? 0
         let mtime = (attrs[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
-        if let cached = lastSeen[path], cached == (inode, size, mtime) { return }
+        if let cached = lastSeen[path], cached == (inode, size, mtime) { return false }
 
         // openFile purge et remet l'offset à 0 si le fichier a été remplacé
         // (inode) ou tronqué (size < offset stocké).
-        guard let state = try? index.openFile(path: path, inode: inode, size: size) else { return }
+        guard let state = try? index.openFile(path: path, inode: inode, size: size) else { return false }
         guard state.offset < size, let handle = FileHandle(forReadingAtPath: path) else {
             lastSeen[path] = (inode, size, mtime)
-            return
+            return true
         }
         defer { try? handle.close() }
         try? handle.seek(toOffset: UInt64(state.offset))
 
-        let sessionID = url.deletingPathExtension().lastPathComponent
+        // Identifiant de session. Côté Codex le fichier s'appelle
+        // `rollout-<horodatage>-<uuid>.jsonl` : on en extrait l'uuid et on le
+        // préfixe `codex:`, EXACTEMENT comme `CodexSessions`. Sans ce préfixe
+        // commun, l'exclusion de la session courante par le recall proactif ne
+        // reconnaîtrait pas la session qui vient de poser la question.
+        let sessionID = provider == .codex
+            ? "codex:" + CodexRollout.sessionID(fromFileName: url.lastPathComponent)
+            : url.deletingPathExtension().lastPathComponent
         var splitter = TranscriptLineSplitter(startOffset: state.offset)
         var batch: [(line: TranscriptLine, syntheticUUID: String)] = []
         var skillUses: [SkillInvocation] = [] // invocations de skills pour les stats (7c)
@@ -368,14 +493,22 @@ private actor MemoryIndexWorker {
         }
 
         while true {
-            if Task.isCancelled { return } // sans lastSeen : sera repris
+            if Task.isCancelled { return true } // sans lastSeen : sera repris
             guard let chunk = try? handle.read(upToCount: Self.chunkSize), !chunk.isEmpty else { break }
             for line in splitter.consume(chunk) {
-                if let parsed = TranscriptLineParser.parse(line.data) {
+                let parsed = provider == .codex
+                    ? CodexTranscriptParser.parse(line.data)
+                    : TranscriptLineParser.parse(line.data)
+                if let parsed {
                     batch.append((parsed, "line-\(line.startOffset)"))
                 }
-                skillUses.append(contentsOf: SkillUsageParser.invocations(inLine: line.data))
-                if batch.count >= Self.batchSize, !flush() { return }
+                // Les invocations de skills sont un format Claude Code : les
+                // chercher dans un rollout Codex ne rendrait jamais rien, et
+                // fausserait les statistiques d'usage si le format collisionnait.
+                if provider == .claude {
+                    skillUses.append(contentsOf: SkillUsageParser.invocations(inLine: line.data))
+                }
+                if batch.count >= Self.batchSize, !flush() { return true }
             }
             await Task.yield() // backfill de centaines de Mo sans monopoliser un cœur
         }
@@ -385,6 +518,7 @@ private actor MemoryIndexWorker {
         if flush() {
             lastSeen[path] = (inode, size, mtime)
         }
+        return true
     }
 
     // MARK: - Connexion

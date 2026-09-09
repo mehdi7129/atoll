@@ -9,9 +9,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var rebuildTask: Task<Void, Never>?
     private var lastScreenSignature = ""
     private var bridgeServer: BridgeServer?
+    private var codexBridgeServer: BridgeServer?
     private var debugTokens: [Int32] = []
     private var onboardingController: OnboardingWindowController?
     private var skillReviewController: SkillReviewWindowController?
+    private var codexPreviewWindow: NSWindow?
 
     /// Affiche la fenêtre de revue des skills — recréée à neuf (comme l'onboarding).
     func showSkillReview() {
@@ -31,6 +33,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if CodexPreview.enabled {
+            codexPreviewWindow = CodexPreview.makeWindow()
+            return
+        }
         ThemeManager.applyStored()
         InteractionCenter.migrateAutonomyIfNeeded()
 
@@ -104,6 +110,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         try? server.start()
         store.start()
 
+        // LE LANCEUR DES HOOKS CODEX EST REMIS EN ACCORD AVEC CETTE VERSION.
+        //
+        // Deux pannes que rien ne signale : un correctif du wrapper n'atteignait
+        // jamais un poste déjà installé (celui du superviseur, le 2026-09-09,
+        // serait resté un `exec` chez tout le monde) ; et une app DÉPLACÉE
+        // laissait l'intégration morte en silence, le wrapper portant le chemin
+        // absolu de l'ancien bundle. Idempotent : sans différence réelle, rien
+        // n'est écrit, et rien n'est posé si les hooks ne sont pas installés.
+        do {
+            let refresh = try CodexHookInstallation.refreshWrapper(
+                settingsURL: CodexPaths.hooksURL,
+                binDirectory: BridgePaths.binDirectory,
+                helperURL: HookInstaller.helperURL)
+            if case .rewritten = refresh {
+                Logger(subsystem: "dev.mehdiguiard.atoll", category: "codex")
+                    .info("lanceur de hooks Codex remis à jour")
+            }
+        } catch {
+            // Fail-open (règle n° 1) : un lanceur qu'on n'a pas pu réécrire
+            // reste celui d'avant — Atoll ne doit pas refuser de démarrer pour
+            // ça.
+            Logger(subsystem: "dev.mehdiguiard.atoll", category: "codex")
+                .error("lanceur Codex non mis à jour: \(error.localizedDescription, privacy: .public)")
+        }
+
+        CodexService.shared.start()
+        let codexServer = BridgeServer(onEvent: { _, _ in }, onStatusline: { _ in },
+                                      onStateChange: { _ in }, onCodexEvent: { event, requestID, helperPid in
+            Task { @MainActor in
+                CodexService.shared.apply(event)
+                // Une demande d'autorisation laisse le helper BLOQUÉ sur son
+                // descripteur : elle va dans le centre Codex, jamais dans
+                // `InteractionCenter` — donc jamais dans Rockstar.
+                if let requestID {
+                    CodexInteractionCenter.shared.register(event: event, requestID: requestID,
+                                                          helperPid: helperPid)
+                }
+            }
+        }, onPendingExpired: { requestID in
+            // L'attente a expiré côté serveur : la carte n'a plus personne
+            // derrière elle. Sans ce rappel elle restait affichée, et un clic
+            // envoyait une décision dans le vide (constat de Codex en revue).
+            Task { @MainActor in CodexInteractionCenter.shared.handBack(requestID) }
+        }, socketPath: CodexPaths.socketPath)
+        codexBridgeServer = codexServer
+        CodexInteractionCenter.shared.server = codexServer
+        try? codexServer.start()
+
         // Découverte de la flotte sur interface SUPPORTÉE (`claude agents --json`) :
         // autorité de découverte des sessions, le scan de processus n'est plus
         // qu'un repli (le daemon d'arrière-plan casse le scan).
@@ -159,6 +213,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        guard !CodexPreview.enabled else { return }
+        CodexService.shared.stop()
         FleetPoller.shared.stop()
         RetrospectiveRunner.shared.terminateActive()
         // Une curation en vol est un `claude -p` facturé : ne pas le laisser
@@ -168,6 +224,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NotesCurationService.shared.cancel()
         PluginInventory.shared.cancel()
         bridgeServer?.stop()
+        codexBridgeServer?.stop()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -288,6 +345,71 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         debugTokens.append(retroBigToken)
+
+        // MÊME run, sur l'abonnement CODEX : prouve le chemin complet
+        // `codex exec` → schéma → fichier de sortie → revalidation Swift, sans
+        // attendre que le quota Claude soit réellement épuisé. Le gate est
+        // court-circuité ; le quota Codex, lui, ne l'est pas — un compte plein
+        // rendra `failed(exit 1)`, ce qui est l'information qu'on cherche.
+        var retroCodexToken: Int32 = 0
+        notify_register_dispatch("dev.mehdiguiard.atoll.debug.retroCodex", &retroCodexToken, DispatchQueue.main) { _ in
+            MainActor.assumeIsolated {
+                RetrospectiveRunner.shared.debugRunOnLargestTranscript(
+                    projectDirectory: "-Users-mehdiguiard-Desktop-Dynamic-Island",
+                    provider: .codex)
+            }
+        }
+        debugTokens.append(retroCodexToken)
+
+        // Bilan forcé sur le PLUS GROS ROLLOUT CODEX : prouve la chaîne
+        // complète rollout → parseur Codex → condensé → analyse → notes, sans
+        // attendre qu'une vraie session Codex longue se termine.
+        var retroCodexRolloutToken: Int32 = 0
+        notify_register_dispatch("dev.mehdiguiard.atoll.debug.retroCodexRollout",
+                                 &retroCodexRolloutToken, DispatchQueue.main) { _ in
+            MainActor.assumeIsolated { RetrospectiveRunner.shared.debugRunOnLargestCodexRollout() }
+        }
+        debugTokens.append(retroCodexRolloutToken)
+
+        // Résolution de la première carte CODEX en attente, par les mêmes
+        // chemins que les boutons. Pendant de `allow`/`deny` côté Claude, et
+        // seul moyen de valider la matrice de fautes sans souris.
+        //
+        // ⚠️ NOMS ÉCRITS EN CLAIR, jamais construits par interpolation :
+        // `Scripts/check-docs.py` confronte cette liste à CLAUDE.md en cherchant
+        // des LITTÉRAUX. Une boucle rendrait ces triggers invisibles au
+        // contrôle — et un trigger qui échappe au contrôle finit par dériver.
+        var codexAllowToken: Int32 = 0
+        notify_register_dispatch("dev.mehdiguiard.atoll.debug.codexAllow",
+                                 &codexAllowToken, DispatchQueue.main) { _ in
+            MainActor.assumeIsolated {
+                guard let card = CodexInteractionCenter.shared.current else { return }
+                CodexInteractionCenter.shared.decide(card.id, .allow)
+            }
+        }
+        debugTokens.append(codexAllowToken)
+
+        var codexDenyToken: Int32 = 0
+        notify_register_dispatch("dev.mehdiguiard.atoll.debug.codexDeny",
+                                 &codexDenyToken, DispatchQueue.main) { _ in
+            MainActor.assumeIsolated {
+                guard let card = CodexInteractionCenter.shared.current else { return }
+                CodexInteractionCenter.shared.decide(card.id, .deny(message: "refusé depuis Atoll"))
+            }
+        }
+        debugTokens.append(codexDenyToken)
+
+        // Rendre la main à Codex sans décider — le chemin du bouton
+        // « DÉCIDER DANS CODEX », qui doit faire apparaître l'invite native.
+        var codexHandBackToken: Int32 = 0
+        notify_register_dispatch("dev.mehdiguiard.atoll.debug.codexHandBack",
+                                 &codexHandBackToken, DispatchQueue.main) { _ in
+            MainActor.assumeIsolated {
+                guard let card = CodexInteractionCenter.shared.current else { return }
+                CodexInteractionCenter.shared.handBack(card.id)
+            }
+        }
+        debugTokens.append(codexHandBackToken)
 
         // Inventaire des plugins : rafraîchit et journalise ce que la CLI rend
         // (vérification du chemin complet spawn → décodage → état observable).

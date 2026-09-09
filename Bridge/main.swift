@@ -34,7 +34,8 @@ struct SocketOutcome {
     static let unreachable = SocketOutcome(reached: false, reply: nil)
 }
 
-func sendToSocket(_ data: Data, path: String, awaitReply: Bool = false) -> SocketOutcome {
+func sendToSocket(_ data: Data, path: String, awaitReply: Bool = false,
+                  replyDeadline: TimeInterval? = nil) -> SocketOutcome {
     let fd = socket(AF_UNIX, SOCK_STREAM, 0)
     guard fd >= 0 else { return .unreachable }
     defer { close(fd) }
@@ -43,6 +44,14 @@ func sendToSocket(_ data: Data, path: String, awaitReply: Bool = false) -> Socke
     setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
     if !awaitReply {
         setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
+    } else if let replyDeadline {
+        // DEADLINE DE RÉCEPTION BORNÉE — le chemin Codex. Côté Claude l'attente
+        // est illimitée et c'est le timeout du hook (86 400 s) qui borne ; côté
+        // Codex on doit rendre la main AVANT que le CLI ne tue le hook, sinon
+        // il affiche un échec de timeout là où une abstention silencieuse doit
+        // simplement laisser apparaître son invite native.
+        var deadline = timeval(tv_sec: Int(replyDeadline), tv_usec: 0)
+        setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &deadline, socklen_t(MemoryLayout<timeval>.size))
     }
     // L'app peut fermer pendant l'écriture : sans ceci, SIGPIPE tuerait le
     // helper (statut 141) — violation du fail-open.
@@ -153,16 +162,9 @@ func forwardHookEvent() {
     if let entrypoint = environment["CLAUDE_CODE_ENTRYPOINT"] {
         enrich["entrypoint"] = entrypoint
     }
-    // Instantané d'environnement pour le jump-back (Phase 4).
-    var subset: [String: String] = [:]
-    for key in [
-        "TERM_PROGRAM", "TERM_PROGRAM_VERSION", "ITERM_SESSION_ID", "TMUX", "TMUX_PANE",
-        "KITTY_WINDOW_ID", "KITTY_LISTEN_ON", "WEZTERM_PANE", "GHOSTTY_RESOURCES_DIR",
-        "ALACRITTY_WINDOW_ID", "VSCODE_INJECTION", "CURSOR_TRACE_ID", "WARP_SESSION_ID",
-        "__CFBundleIdentifier", "CLAUDE_CODE_ENTRYPOINT",
-    ] {
-        if let value = environment[key] { subset[key] = value }
-    }
+    // Instantané d'environnement pour le jump-back (Phase 4). La liste vit dans
+    // `TerminalAnchor` : le helper Codex consomme la MÊME.
+    let subset = TerminalAnchor.capture(from: environment)
     if !subset.isEmpty { enrich["env"] = subset }
 
     let eventName = payload["hook_event_name"] as? String
@@ -804,6 +806,13 @@ enum BridgeCLI {
 signal(SIGPIPE, SIG_IGN)
 
 switch CommandLine.arguments.dropFirst().first {
+case "codex-hook":
+    CodexBridge.forward()
+    exit(0)
+case "install-codex":
+    exit(CodexBridge.configure(install: true))
+case "uninstall-codex":
+    exit(CodexBridge.configure(install: false))
 case "install":
     exit(BridgeCLI.install())
 case "uninstall":
