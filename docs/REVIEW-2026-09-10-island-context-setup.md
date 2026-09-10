@@ -1,10 +1,16 @@
 # Compact d'origine, contexte et configuration Codex
 
 Validation du **10 septembre 2026**, branche `codex/island-context-setup`, base
-`25132e3`, après le retour de Mehdi sur v0.18.0. Correctifs testés, **non publiés**.
+`25132e3`, après le retour de Mehdi sur v0.18.0. État de fin de recette :
+correctifs testés, **non encore publiés**.
 Le [plan et sa seconde lecture](PLAN-2026-09-10-island-context-setup.md) précèdent
 l'implémentation. Cette passe relit les diffs et leurs appelants ; elle ne
 prétend pas refaire un audit complet du dépôt.
+
+> **Livraison ultérieure, 2026-09-10 :** Mehdi a autorisé la fusion de la PR #3
+> et la publication. Les correctifs sont livrés en **v0.18.1, build 36**, tag
+> sur `ec6708a`. Les [preuves de distribution](releases/0.18.1.json) complètent
+> les résultats de recette ci-dessous, qui conservent leur état historique.
 
 ## Corrections et preuves
 
@@ -84,7 +90,8 @@ Empreintes avant/après identiques pour les réglages Claude, `config.toml`,
 `hooks.json` et les deux lanceurs Atoll. La copie stable reste **v0.18.0 / 35**.
 Pour bénéficier du correctif sur les sessions réelles, il faut le nouveau
 helper puis un événement du CLI ; approuver les deux hooks ne corrige pas
-l'ancien parseur. Ni nouvelle release ni remplacement de l'app stable.
+l'ancien parseur. Au terme de cette recette, aucune publication ni remplacement
+de l'app stable n'avait été effectué.
 
 Les anciennes limites Claude authentifié et retour GUI au terminal restent
 documentées dans [HANDOFF.md](HANDOFF.md). Cette passe ne relance pas de

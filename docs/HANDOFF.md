@@ -8,26 +8,26 @@ les mesures et pièges historiques, sans faire autorité sur l'état actuel.
 
 | Élément | État vérifié |
 |---|---|
-| Version publiée | **[v0.18.0, build 35](https://github.com/mehdi7129/atoll/releases/tag/v0.18.0)** |
-| Fusion / source | [PR #2](https://github.com/mehdi7129/atoll/pull/2) fusionnée ; tag sur `37178a4` ; accord de Mehdi avec les deux recettes différées ci-dessous |
+| Version publiée | **[v0.18.1, build 36](https://github.com/mehdi7129/atoll/releases/tag/v0.18.1)** |
+| Fusion / source | [PR #3](https://github.com/mehdi7129/atoll/pull/3) fusionnée ; tag sur `ec6708a` ; fusion et publication demandées par Mehdi |
 | Distribution | Universelle arm64 / x86_64 ; app et DMG signés Developer ID, notarisés, staplés et acceptés par Gatekeeper |
-| Mise à jour | Appcast poussé après les assets (`dbe47f0`) et identique au flux servi ; 19 URL disponibles, SHA256 des sept fichiers publiés vérifiés |
-| Référence précédente | v0.17.2, build 34 ; `main` avant PR #2 : `1b08ebd` |
-| Tests fonctionnels | 1 014 tests Core, 1 skip live opt-in, 0 échec ; 60 scénarios runtime |
-| Recettes | Codex authentifié : autoriser, refuser, rendre la décision au CLI, interrompre/reprendre ; VoiceOver natif, sons entendus, 24 variantes et quatre films relus |
+| Mise à jour | Appcast poussé après les assets (`b54a144`) et identique au flux servi ; 19 URL disponibles, SHA256 des sept fichiers publiés et six signatures EdDSA vérifiés |
+| Référence précédente | v0.18.0, build 35 ; `main` avant PR #3 : `25132e3` |
+| Tests fonctionnels | 1 020 tests Core, 1 skip live opt-in, 0 échec ; 60 scénarios runtime |
+| Recettes | PR #3 : 19 cas UI relus et sabotages détectés, trois TUI réels identifiés. Codex authentifié, VoiceOver et sons validés en v0.18.0 ; non répétés pour ce patch |
 | Installation de travail | `~/Applications/Atoll.app` **v0.18.0, build 35**, vérifiée après le retour de Mehdi ; la procédure de release ne l'a pas remplacée |
 
 Vérifier l'état réel avant toute action : `git status --short --branch`,
 `git log -5 --oneline`, `git worktree list`, puis `gh release view`.
 Une source publiée et une app installée peuvent avoir des versions différentes.
-Le [relevé de livraison](releases/0.18.0.json) conserve les commits, identifiants
+Le [relevé de livraison](releases/0.18.1.json) conserve les commits, identifiants
 de notarisation, résultats et empreintes des fichiers distribués.
 
 ## Correctifs après le retour sur v0.18.0
 
 Branche `codex/island-context-setup`, base `25132e3`, correctifs `88ecbb2`.
-**v0.18.1, build 36 en préparation** : Mehdi autorise la fusion de la
-[PR #3](https://github.com/mehdi7129/atoll/pull/3) et sa publication.
+**Livrés en v0.18.1, build 36**, après fusion de la
+[PR #3](https://github.com/mehdi7129/atoll/pull/3) et publication autorisées par Mehdi.
 Il a confirmé le retour au compact d'origine : activité à gauche, quota à droite,
 couleurs du CLI, choix du fournisseur uniquement dans le panneau ouvert.
 
@@ -46,7 +46,8 @@ Leur approbation seule ne corrige pas le rejet de `--yolo` dans l'ancienne app.
 Le helper corrigé doit être utilisé, puis un nouvel événement reçu.
 
 Preuves, limites et captures : [rapport de validation](REVIEW-2026-09-10-island-context-setup.md).
-La copie stable n'a pas été remplacée, aucune nouvelle release n'est publiée.
+La procédure de release ne remplace pas la copie stable. La mise à jour se fait
+depuis Réglages → Mises à jour ou depuis le DMG publié.
 
 ## Comportement du code actuel
 

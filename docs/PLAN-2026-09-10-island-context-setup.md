@@ -62,4 +62,7 @@ Les six étapes sont terminées. Builds Debug/Release, 1 020 tests Core,
 60 scénarios runtime, 19 cas UI et sabotages vérifiés : voir le
 [rapport avec captures et limites](REVIEW-2026-09-10-island-context-setup.md).
 La seconde revue du diff confirme les choix ci-dessus. Les corrections sont
-prêtes à relire ; aucune nouvelle version n'a été publiée.
+prêtes à relire à la fin de cette recette.
+
+**Livraison ultérieure, 2026-09-10 :** PR #3 fusionnée et v0.18.1, build 36
+publiée à la demande de Mehdi. [Preuves de distribution](releases/0.18.1.json).

@@ -1,0 +1,119 @@
+{
+  "version": "0.18.1",
+  "build": "36",
+  "sourceCommit": "ec6708a8a96e6dc17e6c76d221343e9f35b3b5c2",
+  "architectures": [
+    "x86_64",
+    "arm64"
+  ],
+  "checks": {
+    "app": "Developer ID verified",
+    "helper": "Developer ID verified",
+    "sparkle-framework": "Developer ID verified",
+    "sparkle-autoupdate": "Developer ID verified",
+    "sparkle-updater": "Developer ID verified",
+    "sparkle-downloader": "Developer ID verified",
+    "sparkle-installer": "Developer ID verified",
+    "dmg": "Developer ID verified",
+    "appStaple": "valid",
+    "dmgStaple": "valid",
+    "gatekeeper": "app and dmg accepted",
+    "sparkleEdDSA": "6 enclosures verified with embedded public key",
+    "deliveredZip": "version/build, signature and staple verified"
+  },
+  "assets": [
+    {
+      "name": "Atoll-0.18.1.zip",
+      "bytes": 7737968,
+      "sha256": "0396195ab4f897b8e3b13f8af29a3641db995a623b7104cd95a91a370c3d86bd",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.18.1/Atoll-0.18.1.zip"
+    },
+    {
+      "name": "Atoll36-35.delta",
+      "bytes": 1039554,
+      "sha256": "d500882b57d77c18f98a5d632d3ca6a3daad6ffbb251aea60cb07ff7bc912de7",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.18.1/Atoll36-35.delta"
+    },
+    {
+      "name": "Atoll36-34.delta",
+      "bytes": 2678486,
+      "sha256": "243f05f79f57c0559defc6155804fb09a88e4e622178f5d4abd2cfb409e7aa1c",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.18.1/Atoll36-34.delta"
+    },
+    {
+      "name": "Atoll36-33.delta",
+      "bytes": 2712226,
+      "sha256": "3d12ee471b284add82ce979c9bbb856108a680a20391aa597dac96d2a3625db8",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.18.1/Atoll36-33.delta"
+    },
+    {
+      "name": "Atoll36-32.delta",
+      "bytes": 2727630,
+      "sha256": "1351c4792640017289d8c35c64c8a786d4a5bd61c6ecfb23d0ff7d2db8dcde63",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.18.1/Atoll36-32.delta"
+    },
+    {
+      "name": "Atoll36-31.delta",
+      "bytes": 2946394,
+      "sha256": "42d2342e327a19dce8a6ffc10d8c70e138604a1404487fe71f9206b4bb7c687b",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.18.1/Atoll36-31.delta"
+    },
+    {
+      "name": "Atoll-0.18.1.dmg",
+      "bytes": 8555048,
+      "sha256": "935abd260e5a0f5321b8d2042deb1e7dedbd9b470384124acb1a6d562472775e",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.18.1/Atoll-0.18.1.dmg"
+    }
+  ],
+  "notarization": {
+    "app": {
+      "submissionID": "ff65cefa-9641-457b-b242-f973cfa9e97c",
+      "status": "Accepted"
+    },
+    "dmg": {
+      "submissionID": "84d20d28-c88b-489e-8b04-e49cb721c9c0",
+      "status": "Accepted"
+    }
+  },
+  "releaseURL": "https://github.com/mehdi7129/atoll/releases/tag/v0.18.1",
+  "publishedAt": "2026-09-10T19:16:36Z",
+  "pullRequest": "https://github.com/mehdi7129/atoll/pull/3",
+  "publicDownloads": {
+    "checkedAt": "2026-09-10T19:17:34.210686+00:00",
+    "enclosuresHTTP200": 18,
+    "dmgHTTP200": true,
+    "downloadedSHA256Matches": 7
+  },
+  "appcast": {
+    "url": "https://mehdi7129.github.io/atoll/appcast.xml",
+    "commit": "b54a14406da89db2baf03103cbb2858f95620fb1",
+    "sha256": "b78241349ce22a3a5332d483d4446130b602db2ce05a54244119ff03684ed754",
+    "servedBytesEqualRepository": true
+  },
+  "validation": {
+    "featureCodeCommit": "88ecbb2ef53c04d2351e7cadd14bf7c281a6bfda",
+    "featureCodeUnchangedAtRelease": true,
+    "core": {
+      "executed": 1020,
+      "skipped": 1,
+      "failures": 0
+    },
+    "runtimeScenariosPassed": 60,
+    "uiCasesPassed": 19,
+    "coreSabotagesDetected": 4,
+    "uiSabotagesDetected": 3,
+    "featureEvidence": "../REVIEW-2026-09-10-island-context-setup.md",
+    "deferred": [
+      "Recette Claude authentifiée : abonnement absent sur la machine de test.",
+      "Retour visuel dans un onglet de terminal : refus du pilotage GUI par l’outil ; aucun défaut du bouton établi."
+    ]
+  },
+  "localVerification": {
+    "personalConfigurationsUnchanged": true,
+    "stableAppUnchanged": true,
+    "debugBuildPreserved": true,
+    "stableVersionObserved": "0.18.0",
+    "stableBuildObserved": "35"
+  },
+  "verifiedAt": "2026-09-10T19:21:07.210467+00:00"
+}

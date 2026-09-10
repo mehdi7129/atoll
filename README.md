@@ -183,8 +183,8 @@ Le home Codex (`~/.codex` par défaut) est son dossier de configuration. Son cho
 la réparation et le chemin de l'exécutable sont dans « Configuration avancée ».
 
 **Version courante : v0.18.1.** [Notes de version](https://github.com/mehdi7129/atoll/releases/tag/v0.18.1).
-Release en préparation : compact d'origine, contexte chiffré et diagnostic Codex
-simplifié ; voir leur [validation](docs/REVIEW-2026-09-10-island-context-setup.md).
+Cette version rétablit le compact d'origine, affiche le contexte chiffré et simplifie
+le diagnostic Codex ; voir la [validation](docs/REVIEW-2026-09-10-island-context-setup.md).
 
 ---
 

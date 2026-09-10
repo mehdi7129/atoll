@@ -2,7 +2,7 @@
 
 État du code au **2026-09-10**. L'intégration a été publiée en v0.18.0.
 Le retour au compact d'origine, le contexte chiffré et le diagnostic simplifié
-sont des corrections ultérieures, **non publiées** : voir leur
+sont publiés dans **v0.18.1, build 36** : voir leur
 [validation](REVIEW-2026-09-10-island-context-setup.md). L'[audit initial](AUDIT-2026-09-09-codex-claude.md)
 et le [rapport PR #2](REVIEW-2026-09-10-pr2-corrections.md) sont historiques.
 
