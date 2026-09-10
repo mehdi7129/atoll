@@ -26,6 +26,7 @@ public struct AgentSession: Identifiable, Equatable, Sendable {
     public var mcpServers: [String]
     public var contextUsedFraction: Double?
     public var contextMeasuredAt: Date?
+    public var contextTokenUsage: ContextTokenUsage?
     public var costUSD: Double?
     /// Souvenirs joints au dernier prompt par le recall proactif (0 = aucun,
     /// fonction éteinte ou rien trouvé). Rendu visible dans le détail : le bloc

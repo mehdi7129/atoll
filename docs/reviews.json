@@ -567,6 +567,34 @@
         "Scripts/test-voiceover.py",
         "Shared/ProcessInspector.swift"
       ]
+    },
+    {
+      "date": "2026-09-10",
+      "document": "docs/REVIEW-2026-09-10-island-context-setup.md",
+      "depth": "sweep",
+      "note": "Retour utilisateur après v0.18.0 : diffs et appelants du compact, des métadonnées et de la configuration Codex ; lecture native des identités, Core/runtime, sabotages et captures. Seconde revue, sans relecture exhaustive du dépôt ni répétition des parcours authentifiés/VoiceOver.",
+      "files": [
+        "App/CodexCatalogSection.swift",
+        "App/CodexPreview.swift",
+        "App/CodexService.swift",
+        "App/CodexSettingsPane.swift",
+        "App/CompactView.swift",
+        "App/NotchViewModel.swift",
+        "App/ProviderSelector.swift",
+        "App/SessionDetailView.swift",
+        "AtollCore/Sources/AtollCore/CodexHookDiagnostics.swift",
+        "AtollCore/Sources/AtollCore/CodexIntegration.swift",
+        "AtollCore/Sources/AtollCore/CodexProcessKind.swift",
+        "AtollCore/Sources/AtollCore/CodexSessionMetadata.swift",
+        "AtollCore/Sources/AtollCore/ContextTokenUsage.swift",
+        "AtollCore/Sources/AtollCore/SessionModel.swift",
+        "AtollCore/Tests/AtollCoreTests/CodexProcessKindTests.swift",
+        "AtollCore/Tests/AtollCoreTests/CodexSessionMetadataTests.swift",
+        "AtollCore/Tests/AtollCoreTests/CodexSetupTests.swift",
+        "Scripts/test-island-context-sabotage.py",
+        "Scripts/test-ui.py",
+        "Shared/ProcessInspector.swift"
+      ]
     }
   ]
 }

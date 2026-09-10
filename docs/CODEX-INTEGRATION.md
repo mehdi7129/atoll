@@ -1,7 +1,10 @@
 # Atoll avec Codex CLI et Claude Code
 
-État du code au **2026-09-10**, développé sur `1b08ebd` (v0.17.2).
-Ces changements ne sont **pas encore publiés**. Voir le [rapport de correction](REVIEW-2026-09-10-pr2-corrections.md) pour les preuves et les vérifications restantes, et l'[audit initial](AUDIT-2026-09-09-codex-claude.md) pour les défauts de la base.
+État du code au **2026-09-10**. L'intégration a été publiée en v0.18.0.
+Le retour au compact d'origine, le contexte chiffré et le diagnostic simplifié
+sont des corrections ultérieures, **non publiées** : voir leur
+[validation](REVIEW-2026-09-10-island-context-setup.md). L'[audit initial](AUDIT-2026-09-09-codex-claude.md)
+et le [rapport PR #2](REVIEW-2026-09-10-pr2-corrections.md) sont historiques.
 
 ## Périmètre et choix de fournisseur
 
@@ -17,6 +20,8 @@ la palette. Les deux collecteurs continuent d'observer leurs intégrations.
 Claude garde son accent orange ; Codex reçoit un accent cyan. Les palettes sont
 personnalisables séparément. Le bouton ne change ni l'abonnement des analyses,
 ni la destination d'un skill, ni le fournisseur d'une conversation existante.
+Le choix se trouve dans le panneau ouvert. En compact : une ligne, activité à
+gauche et quota à droite, sans préfixe « CL/CX ». La couleur porte le fournisseur.
 Sans activité ni Rockstar, l'îlot est invisible. La liste étendue est bornée
 par le budget de rangées, sélecteur compris, avec « +N autres » pour le surplus.
 Le quota garde sa place fixe. Les cartes et leurs contrôles défilants restent
@@ -30,14 +35,16 @@ retrouve le fournisseur choisi. Les compteurs signalent aussi les demandes de
 l'autre fournisseur.
 
 Rockstar appartient à Claude. Son réglage n'est pas changé par le sélecteur.
-S'il reste actif pendant que Codex est affiché, **CLAUDE · ROCKSTAR** reste
-visible, y compris en compact et sans session Claude.
-Le quota est affiché simultanément, sur une seconde ligne en compact.
+S'il reste actif pendant que Codex est affiché, un **losange rouge** reste visible
+avec le quota compact, même sans session Claude. Son libellé d'accessibilité
+nomme Claude Rockstar ; le panneau ouvert conserve **CLAUDE · ROCKSTAR**.
 
 ## Matrice du code actuel
 
-Le rendu a été vérifié sur une copie isolée ; les tests natifs en TUI et
-VoiceOver restant à faire sont explicités dans le rapport.
+Le rendu a été vérifié sur une copie isolée. Les parcours Codex authentifiés,
+VoiceOver et sons de v0.18.0 sont documentés dans la
+[validation finale PR #2](REVIEW-2026-09-10-skills-validation.md).
+Claude authentifié et le retour à un terminal visible restent différés.
 
 | Capacité | Claude Code | Codex CLI |
 |---|---|---|
@@ -60,8 +67,13 @@ VoiceOver restant à faire sont explicités dans le rapport.
 | Passation | Préparer un contexte pour Codex, si CLI et dossier existent | Préparer un contexte pour Claude, si CLI et dossier existent |
 
 Une valeur absente ne devient pas zéro. Le contexte Codex provient de la dernière
-mesure `last_token_usage`, jamais des tokens cumulés. La branche est celle du
-début du rollout. Ces enrichissements ne créent ni ne réaniment une session.
+mesure `last_token_usage.total_tokens` et de `model_context_window`, jamais des
+tokens cumulés. Le détail montre nombres, fraction et heure de mesure. Une
+compaction ou une nouvelle mesure invalide l'efface jusqu'au prochain relevé.
+La lecture existante au fil des événements et toutes les 30 s est conservée.
+La branche est celle du début du rollout. Ces enrichissements ne créent ni ne
+réaniment une session. L'identité TUI reconnaît notamment l'alias `--yolo` ;
+les processus auxiliaires du dossier Codex et les commandes headless sont exclus.
 Une issue d'outil sans verdict explicite reste inconnue dans le condensé.
 Aucun coût en dollars n'est déduit d'un abonnement.
 
@@ -70,6 +82,10 @@ Aucun coût en dollars n'est déduit d'un abonnement.
 L'onboarding installe l'agent choisi. Un poste Codex seul ne crée pas de
 configuration Claude. Réglages → Codex permet d'installer, réparer ou retirer
 l'intégration, de choisir le home et de consulter son état natif.
+Les premières étapes sont `/hooks`, le choix du **dossier du projet** et
+« Vérifier avec Codex ». Un nouveau message dans le CLI vérifie ensuite le suivi.
+Le home Codex et le projet sont deux réglages distincts ; les chemins, la
+réparation et le retrait se trouvent sous « Configuration avancée ».
 Installer un CLI ne change pas le moteur des analyses, même si la préférence
 est absente. L'accueil propose Réglages → Apprentissage ; cet onglet reste
 l'unique lieu de configuration du moteur et de son budget. Le catalogue et
@@ -95,7 +111,8 @@ le choix du modèle Codex restent dans Réglages → Codex.
 - `config.toml` et le trust restent gérés par Codex. **Ouvrir /hooks, relire
   et approuver les définitions dans le CLI.** Le diagnostic `hooks/list`
   distingue présence, ancien schéma, désactivation, absence de confiance et
-  événement effectivement reçu.
+  événement effectivement reçu. En cas de confiance partielle, il indique le
+  nombre de hooks actifs et les noms exacts des événements à approuver.
 - Retirer Codex conserve les hooks étrangers et la mémoire commune. Le recall
   modifié personnellement est conservé. Les skills gérés sont isolés par
   destination et par home. Un dossier hors manifest avec un SKILL.md différent

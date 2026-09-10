@@ -48,6 +48,10 @@ liste bornée et l'annonce « +N autres ». Le contexte s'affiche lorsqu'une mes
 et leurs resets viennent des serveurs : **lus, jamais estimés**. Le schéma ci-dessus
 illustre les informations disponibles ; la vue choisit celles du fournisseur sélectionné.
 
+En compact, une seule ligne : activité à gauche, quota à droite. La couleur distingue
+Claude de Codex ; le choix du CLI se trouve dans le panneau ouvert. Le détail Codex
+montre aussi les tokens de contexte utilisés, la capacité et l'heure de la dernière mesure.
+
 Un clic ouvre le détail d'une session. Le retour au terminal utilise l'origine capturée
 — Cursor, VS Code, Terminal.app, iTerm2 — avec un repli si l'onglet exact n'est pas identifiable.
 
@@ -166,10 +170,21 @@ configuration Claude.
 Atoll vit dans la barre de menus et autour de l'encoche. Survoler l'îlot l'étend, cliquer
 l'épingle, cliquer ailleurs le referme.
 
-La seconde intégration peut être installée séparément dans les réglages. Réglages › Codex
-affiche aussi le home utilisé et vérifie les définitions et leur confiance avec le CLI.
+La seconde intégration peut être installée séparément dans les réglages. Pour Codex :
+
+1. Installe l'intégration dans Réglages › Codex.
+2. Dans ton terminal Codex, ouvre `/hooks`, relis et approuve les hooks Atoll.
+3. Choisis le **dossier de ton projet** dans les réglages, puis « Vérifier avec Codex ».
+   Le diagnostic nomme les hooks qui restent à approuver.
+4. Envoie un message dans Codex. Si le CLI était ouvert avant l'installation,
+   reprends-le avec `codex resume` ; la session apparaît au prochain événement.
+
+Le home Codex (`~/.codex` par défaut) est son dossier de configuration. Son choix,
+la réparation et le chemin de l'exécutable sont dans « Configuration avancée ».
 
 **Version courante : v0.18.0.** [Notes de version](https://github.com/mehdi7129/atoll/releases/tag/v0.18.0).
+Les corrections du compact, du contexte chiffré et du diagnostic décrites ici sont
+dans le code suivant cette release ; voir leur [validation](docs/REVIEW-2026-09-10-island-context-setup.md).
 
 ---
 
@@ -246,8 +261,9 @@ mode, au lancement suivant de l'app, à la désinstallation — et par le helper
 l'app se ferme ou plante en cours de route.
 
 Tant que Rockstar est actif, l'îlot reste visible en permanence : on ne désarme pas une
-machine en silence. L'indicateur `CLAUDE · ROCKSTAR` reste visible pendant que tu regardes
-Codex, y compris en compact. Changer de vue ne modifie pas cette préférence.
+machine en silence. Un losange rouge accompagne le quota compact ; le panneau ouvert
+nomme `CLAUDE · ROCKSTAR`, même quand Codex est sélectionné. Changer de vue ne modifie
+pas cette préférence.
 
 </details>
 

@@ -15,7 +15,7 @@ les mesures et pièges historiques, sans faire autorité sur l'état actuel.
 | Référence précédente | v0.17.2, build 34 ; `main` avant PR #2 : `1b08ebd` |
 | Tests fonctionnels | 1 014 tests Core, 1 skip live opt-in, 0 échec ; 60 scénarios runtime |
 | Recettes | Codex authentifié : autoriser, refuser, rendre la décision au CLI, interrompre/reprendre ; VoiceOver natif, sons entendus, 24 variantes et quatre films relus |
-| Installation de travail | `~/Applications/Atoll.app` v0.17.2 au dernier contrôle ; elle n'est pas remplacée par la procédure de release |
+| Installation de travail | `~/Applications/Atoll.app` **v0.18.0, build 35**, vérifiée après le retour de Mehdi ; la procédure de release ne l'a pas remplacée |
 
 Vérifier l'état réel avant toute action : `git status --short --branch`,
 `git log -5 --oneline`, `git worktree list`, puis `gh release view`.
@@ -23,7 +23,30 @@ Une source publiée et une app installée peuvent avoir des versions différente
 Le [relevé de livraison](releases/0.18.0.json) conserve les commits, identifiants
 de notarisation, résultats et empreintes des fichiers distribués.
 
-## Ce qui est livré dans le code
+## Correctifs après le retour sur v0.18.0
+
+Branche `codex/island-context-setup`, base `25132e3`, **non publiée**. Mehdi a
+confirmé le retour au compact d'origine : activité à gauche, quota à droite,
+couleurs du CLI, choix du fournisseur uniquement dans le panneau ouvert.
+
+- Compact sur une ligne, police 10, aucun « CL/CX ». Le marqueur Rockstar est
+  un losange rouge, avec son nom complet pour l'accessibilité.
+- Détection des trois vrais CLI `codex --yolo` corrigée ; les auxiliaires du
+  même dossier et les app-servers sont exclus. Les hooks restent l'autorité.
+- Détail du contexte : tokens utilisés / capacité, pourcentage et date de mesure.
+  Les tokens cumulés ne mesurent pas le contexte ; une compaction l'efface.
+- Réglages guidés : `/hooks`, choix du dossier du projet, diagnostic qui nomme
+  les hooks à approuver. Chemins, réparation et retrait dans les options avancées.
+
+Sur le poste lors du diagnostic, **10/12 hooks étaient actifs** ; seuls
+`SubagentStart` et `SubagentStop` attendaient la confiance dans `/hooks`.
+Leur approbation seule ne corrige pas le rejet de `--yolo` dans l'ancienne app.
+Le helper corrigé doit être utilisé, puis un nouvel événement reçu.
+
+Preuves, limites et captures : [rapport de validation](REVIEW-2026-09-10-island-context-setup.md).
+La copie stable n'a pas été remplacée, aucune nouvelle release n'est publiée.
+
+## Comportement du code actuel
 
 - Atoll suit **Codex CLI dans le terminal**, Claude Code, ou les deux. Le bouton
   choisit les sessions affichées, la palette et le quota. Les deux collecteurs
@@ -31,7 +54,7 @@ de notarisation, résultats et empreintes des fichiers distribués.
 - Le moteur des trois analyses et la destination des skills sont deux choix
   distincts du bouton d'affichage. Apprentissage et failover sont opt-in.
 - Îlot invisible sans activité ni Rockstar ; liste bornée avec « +N autres » ;
-  sélecteur compact cliquable ; Rockstar exclusivement Claude, marqueur et quota
+  sélecteur dans le panneau ouvert ; Rockstar exclusivement Claude, marqueur et quota
   simultanés. Questions, plans et interruption Codex restent dans le terminal.
 - Hooks Codex migrés avec sauvegarde, retraits et personnalisations respectés ;
   réparation complète explicite. `config.toml` n'est jamais écrit par Atoll.
@@ -119,6 +142,7 @@ sans les intégrer au build ni supprimer un changement distinct.
 ## Références utiles
 
 - [Validation finale, preuves et P3](REVIEW-2026-09-10-skills-validation.md)
+- [Correction du compact, contexte et configuration](REVIEW-2026-09-10-island-context-setup.md)
 - [Plan skills et seconde analyse](PLAN-2026-09-10-final-validation-skills.md)
 - [Corrections R01–R11](REVIEW-2026-09-10-pr2-corrections.md)
 - [Contrat Codex / Claude](CODEX-INTEGRATION.md), [analyses et passation](CODEX-FAILOVER.md)

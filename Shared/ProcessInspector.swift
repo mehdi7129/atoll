@@ -154,8 +154,7 @@ enum ProcessInspector {
     /// 2026-09-09 : chercher « codex » par `proc_name` ne le trouvait pas.
     static func isCodexProcess(_ pid: pid_t) -> Bool {
         guard let path = executablePath(of: pid) else { return false }
-        if (path as NSString).lastPathComponent == "codex" { return true }
-        return path.contains("/.codex/packages/")
+        return CodexProcessKind.isExecutable(path: path)
     }
 
     static func identity(of pid: pid_t) -> ProcessIdentity? {

@@ -25,6 +25,8 @@ final class CodexSessionMetadataTests: XCTestCase {
         XCTAssertEqual(value.branchAtStart, "main")
         XCTAssertEqual(value.model, "fixture-model")
         XCTAssertEqual(value.contextFraction, 0.25)
+        XCTAssertEqual(value.contextUsage?.usedTokens, 25)
+        XCTAssertEqual(value.contextUsage?.windowTokens, 100)
         XCTAssertNotNil(value.contextAt)
         XCTAssertNil(try read([token(25, window: 100)], id: "child"))
     }
@@ -56,12 +58,41 @@ final class CodexSessionMetadataTests: XCTestCase {
     }
 
     func testJSONBooleansAreNotTokenMeasurements() throws {
-        for (used, window): (Any, Any) in [(true, 100), (1, true), (false, 100), ("1", 100)] {
+        for (used, window): (Any, Any) in [(true, 100), (1, true), (false, 100), ("1", 100), (1.5, 100), (1, 100.5), (1, 1e100)] {
             let malformed: [String: Any] = ["type": "event_msg", "payload": ["type": "token_count", "info": [
                 "last_token_usage": ["total_tokens": used], "model_context_window": window]]]
             let value = try XCTUnwrap(read([token(25, window: 100), malformed]))
             XCTAssertNil(value.contextFraction)
+            XCTAssertNil(value.contextUsage)
             XCTAssertNil(value.contextAt)
         }
+    }
+
+    func testNativeTokenCountsReachTheSessionAndCompactionClearsThem() throws {
+        let metadata = try XCTUnwrap(read([token(173_617, window: 258_400)]))
+        XCTAssertEqual(metadata.contextUsage, ContextTokenUsage(usedTokens: 173_617, windowTokens: 258_400))
+        var sessions = CodexSessions()
+        let process = try XCTUnwrap(ProcessIdentity(pid: 4242, startedAt: 100))
+        let event = try XCTUnwrap(CodexHookEvent(envelope: ["provider": "codex",
+            "payload": ["session_id": "parent", "hook_event_name": "SessionStart"],
+            "enrich": ["sessionPid": Int32(4242), "sessionStartTime": 100.0] as [String: Any]]))
+        XCTAssertEqual(event.process, process)
+        sessions.apply(event)
+        sessions.enrich(metadata, sessionID: "codex:parent", process: process)
+        XCTAssertEqual(sessions.sessions().first?.contextTokenUsage?.usedTokens, 173_617)
+        XCTAssertEqual(sessions.sessions().first?.contextTokenUsage?.windowTokens, 258_400)
+        let compacted = try XCTUnwrap(read([token(173_617, window: 258_400), ["type": "compacted", "payload": ["message": ""]]]))
+        sessions.enrich(compacted, sessionID: "codex:parent", process: process)
+        XCTAssertNil(sessions.sessions().first?.contextTokenUsage)
+        XCTAssertNil(sessions.sessions().first?.contextUsedFraction)
+        XCTAssertNil(sessions.sessions().first?.contextMeasuredAt)
+    }
+
+    func testImpossibleContextSizesRemainUnknownInsteadOfBeingClamped() {
+        for (used, window) in [(-1, 100), (0, 0), (1, -1), (101, 100)] {
+            XCTAssertNil(ContextTokenUsage(usedTokens: used, windowTokens: window))
+        }
+        XCTAssertEqual(ContextTokenUsage(usedTokens: 0, windowTokens: 100)?.fraction, 0)
+        XCTAssertEqual(ContextTokenUsage(usedTokens: 100, windowTokens: 100)?.fraction, 1)
     }
 }

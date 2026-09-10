@@ -11,38 +11,40 @@ struct CodexCatalogSection: View {
     @State private var query = ""
 
     var body: some View {
-        Section("Skills et plugins Codex") {
-            Text("Recall : invoque $atoll-recall dans Codex après installation des hooks. Sa disponibilité dans ce projet est vérifiée dans le catalogue ci-dessous. Le recall proactif Codex reste désactivé ; aucune injection async n'est supposée transmise au modèle.")
-                .font(.caption).foregroundStyle(.secondary)
-            Text("Les skills appris sont proposés pour une destination explicite, puis installés après revue. Leur usage Codex reste non mesuré.")
-                .font(.caption).foregroundStyle(.secondary)
-            Button(reading ? "Lecture du catalogue…" : "Lire le catalogue natif de ce projet") { refresh() }
-                .disabled(reading || !projectPath.hasPrefix("/") || CodexPaths.configurationError != nil)
-            Text(message).font(.caption).textSelection(.enabled)
-            if !skills.isEmpty || plugins != nil {
-                TextField("Rechercher localement un nom ou une description", text: $query)
-                ForEach(skills.filter { matches("\($0.id) \($0.description)") }, id: \.path) { entry in
-                    VStack(alignment: .leading) {
-                        Text("\(entry.name) · \(entry.isAvailable ? "activé" : "désactivé")")
-                        Text("\(entry.origin) · \(entry.path.path)").font(.caption).foregroundStyle(.secondary)
+        Section {
+            DisclosureGroup("Skills et plugins Codex") {
+                Text("Invoque $atoll-recall dans Codex pour retrouver un souvenir. Le catalogue ci-dessous vérifie sa disponibilité dans le projet choisi.")
+                    .font(.caption).foregroundStyle(.secondary)
+                Text("Les skills appris sont proposés pour une destination explicite, puis installés après revue. Leur usage Codex reste non mesuré.")
+                    .font(.caption).foregroundStyle(.secondary)
+                Button(reading ? "Lecture du catalogue…" : "Lire le catalogue natif de ce projet") { refresh() }
+                    .disabled(reading || !projectPath.hasPrefix("/") || CodexPaths.configurationError != nil)
+                Text(message).font(.caption).textSelection(.enabled)
+                if !skills.isEmpty || plugins != nil {
+                    TextField("Rechercher localement un nom ou une description", text: $query)
+                    ForEach(skills.filter { matches("\($0.id) \($0.description)") }, id: \.path) { entry in
+                        VStack(alignment: .leading) {
+                            Text("\(entry.name) · \(entry.isAvailable ? "activé" : "désactivé")")
+                            Text("\(entry.origin) · \(entry.path.path)").font(.caption).foregroundStyle(.secondary)
+                        }
                     }
-                }
-                if let plugins {
-                    ForEach(plugins.marketplaces.indices, id: \.self) { index in
-                        let market = plugins.marketplaces[index]
-                        ForEach(market.plugins.filter { matches($0.name) }, id: \.id) { plugin in
-                            VStack(alignment: .leading) {
-                                Text("\(plugin.name) · \(plugin.installed ? "installé" : "disponible") · \(plugin.enabled ? "activé" : "désactivé")")
-                                Text(market.name + (plugin.availability == "DISABLED_BY_ADMIN" ? " · indisponible par décision administrateur" : "")
-                                     + (plugin.disabledReason.map { " · \($0)" } ?? ""))
-                                    .font(.caption).foregroundStyle(.secondary)
+                    if let plugins {
+                        ForEach(plugins.marketplaces.indices, id: \.self) { index in
+                            let market = plugins.marketplaces[index]
+                            ForEach(market.plugins.filter { matches($0.name) }, id: \.id) { plugin in
+                                VStack(alignment: .leading) {
+                                    Text("\(plugin.name) · \(plugin.installed ? "installé" : "disponible") · \(plugin.enabled ? "activé" : "désactivé")")
+                                    Text(market.name + (plugin.availability == "DISABLED_BY_ADMIN" ? " · indisponible par décision administrateur" : "")
+                                         + (plugin.disabledReason.map { " · \($0)" } ?? ""))
+                                        .font(.caption).foregroundStyle(.secondary)
+                                }
                             }
                         }
                     }
                 }
+                Text("Gère les plugins dans Codex avec /plugins. Ce catalogue est local. Le recall proactif Codex reste désactivé.")
+                    .font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
             }
-            Text("Installation, retrait, activation et catalogue distant : utilise /plugins dans la TUI Codex, ou codex plugin --help. Ce panneau lit les marketplaces locales de Codex ; la recherche IA de plugins dans Atoll vise le catalogue Claude.")
-                .font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
         }
         .onChange(of: projectPath) { _, _ in invalidate() }
         .onChange(of: executableOverride) { _, _ in invalidate() }
