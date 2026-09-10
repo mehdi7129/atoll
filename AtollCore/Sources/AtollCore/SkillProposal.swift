@@ -52,6 +52,15 @@ public struct SkillProposal: Identifiable, Equatable, Sendable {
     /// Identité stable pour l'UI de revue : le nom du dossier sur disque.
     public var id: String { "\(destination.rawValue):\(directoryURL.lastPathComponent)" }
 
+    /// Après une décision, poursuivre au même rang, puis au précédent si le
+    /// dernier élément a disparu. Une sélection encore présente reste stable.
+    public static func nextSelection(_ selected: ID?, previous: [ID], current: [ID]) -> ID? {
+        guard !current.isEmpty else { return nil }
+        if let selected, current.contains(selected) { return selected }
+        let index = selected.flatMap { previous.firstIndex(of: $0) } ?? 0
+        return current[min(index, current.count - 1)]
+    }
+
     public init(
         slug: String,
         title: String,

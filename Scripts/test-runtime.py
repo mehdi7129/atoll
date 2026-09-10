@@ -43,6 +43,9 @@ with tempfile.TemporaryDirectory(prefix="atoll-runtime-") as directory:
         command[command.index(str(original))] = str(sabotaged)
     expected_failure = None
     mutations = {
+        "--sabotage-oversize-diagnostic": (
+            "App/RetrospectiveRunner.swift", "if !report.rejectedSkills.isEmpty {", "if false {",
+            "skill trop long écarté sans trace persistée"),
         "--sabotage-launch-retro": (
             "App/RetrospectiveRunner.swift", "try AnalysisBudget.shared.prepareToLaunch(lease)", "",
             "intention de spawn non persistée : retro-claude-nominal"),

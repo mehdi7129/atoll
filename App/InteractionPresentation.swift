@@ -1,4 +1,5 @@
 import Observation
+import Foundation
 import AtollCore
 
 @MainActor
@@ -6,6 +7,8 @@ import AtollCore
 final class InteractionPresentation {
     static let shared = InteractionPresentation()
     private var presentation = RequestPresentation()
+    private var graceTask: Task<Void, Never>?
+    private var graceElapsed = true
 
     var items: [RequestPresentation.Item] {
         InteractionCenter.shared.pending.map {
@@ -16,6 +19,21 @@ final class InteractionPresentation {
     }
 
     var current: RequestPresentation.ID? { presentation.current(in: items) }
-    func refresh() { presentation.update(items) }
-    func move(_ offset: Int) { presentation.move(offset, in: items) }
+    var mayDecide: Bool { graceElapsed && presentation.mayDecide(in: items) }
+    func refresh() {
+        presentation.update(items)
+        graceTask?.cancel()
+        graceElapsed = presentation.mayDecide(in: items)
+        guard !graceElapsed, current != nil else { return }
+        graceTask = Task {
+            try? await Task.sleep(for: .milliseconds(410))
+            guard !Task.isCancelled else { return }
+            graceElapsed = true
+        }
+    }
+    func move(_ offset: Int) {
+        graceTask?.cancel()
+        presentation.move(offset, in: items)
+        graceElapsed = true
+    }
 }

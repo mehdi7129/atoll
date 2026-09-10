@@ -19,6 +19,7 @@ public struct RequestPresentation: Sendable {
         }
     }
     public private(set) var pinned: ID?
+    private var decisionAfter = Date.distantPast
     public init() {}
 
     public func ordered(_ items: [Item]) -> [Item] {
@@ -34,10 +35,22 @@ public struct RequestPresentation: Sendable {
         return ordered(items).first?.id
     }
 
-    public mutating func update(_ items: [Item]) { pinned = current(in: items) }
+    public mutating func update(_ items: [Item], now: Date = Date()) {
+        let next = current(in: items)
+        if let pinned, pinned != next, next != nil { decisionAfter = now.addingTimeInterval(0.4) }
+        self.pinned = next
+    }
+
+    /// La résolution externe d'une carte ne doit pas transmettre une frappe
+    /// déjà engagée à sa remplaçante. Le clic volontaire de navigation annule
+    /// cette courte grâce, mais une arrivée en file ne change pas la cible.
+    public func mayDecide(in items: [Item], now: Date = Date()) -> Bool {
+        pinned != nil && pinned == current(in: items) && now >= decisionAfter
+    }
 
     /// Navigation volontaire seulement ; aucune requête n'est résolue ici.
     public mutating func move(_ offset: Int, in items: [Item]) {
+        decisionAfter = .distantPast
         let order = ordered(items)
         guard !order.isEmpty else { pinned = nil; return }
         let index = order.firstIndex(where: { $0.id == current(in: items) }) ?? 0

@@ -41,6 +41,8 @@ final class SkillReviewCenter {
     private(set) var installed: [InstalledSkillRow] = []
     private(set) var reconcileNotes: [String] = []
     private(set) var lastError: String?
+    private(set) var catalogLoading: SkillProposal.ID?
+    @ObservationIgnored private var catalogTicket = UUID()
 
     var pendingCount: Int { proposals.count }
 
@@ -66,6 +68,7 @@ final class SkillReviewCenter {
 
     /// Recharge propositions + skills installés + stats d'usage.
     func refresh() {
+        if CodexPreview.enabled { return }
         let problems = AgentProvider.allCases.compactMap { provider in
             store(for: provider).manifestProblem().map { "\(provider.label) : \($0)" }
         }
@@ -91,6 +94,7 @@ final class SkillReviewCenter {
     }
 
     func approve(_ proposal: SkillProposal, force: Bool = false) {
+        if CodexPreview.enabled { proposals.removeAll { $0.id == proposal.id }; return }
         guard approving == nil else { return }
         guard proposals.contains(proposal) else {
             lastError = "La proposition a changé : relis-la avant de confirmer l'installation."
@@ -108,11 +112,7 @@ final class SkillReviewCenter {
                 let entries = try await target.catalog(project: project)
                 guard target == (try self.target(for: proposal.destination)),
                       proposals.contains(proposal) else { throw AnalysisExecution.Failure("La destination ou la proposition a changé : relis la proposition.") }
-                let twin = target.store.skillsRoot.appendingPathComponent(SkillSlug.dirName(for: proposal.slug)).appendingPathComponent("SKILL.md").resolvingSymlinksInPath()
-                let candidates = entries.filter { $0.path.resolvingSymlinksInPath() != twin }
-                let match = SkillCatalog().closestMatch(slug: proposal.slug, title: proposal.title,
-                    description: proposal.description, catalog: candidates)
-                let label = match.map { self.label(for: $0) }
+                let label = similarity(for: proposal, entries: entries, target: target)
                 if let label, similarByProposal[id] != label {
                     similarByProposal[id] = label
                     lastError = "Le catalogue contient « \(label) ». Relis cette antériorité avant de confirmer l'installation."
@@ -133,6 +133,7 @@ final class SkillReviewCenter {
     }
 
     func reject(_ id: SkillProposal.ID) {
+        if CodexPreview.enabled { proposals.removeAll { $0.id == id }; return }
         guard let proposal = proposals.first(where: { $0.id == id }) else { return }
         do {
             try store(for: proposal.destination).reject(proposal)
@@ -165,7 +166,8 @@ final class SkillReviewCenter {
     /// la main (audit : elle affichait « (nouveau) », alors que le calcul
     /// d'antériorité exclut justement le jumeau en comptant sur cette mention).
     func isUpdateOfInstalledSkill(_ proposal: SkillProposal) -> Bool {
-        installed.contains { $0.skill.slug == proposal.slug && $0.skill.destination == proposal.destination }
+        if CodexPreview.enabled { return true }
+        return installed.contains { $0.skill.slug == proposal.slug && $0.skill.destination == proposal.destination }
     }
 
     /// Antériorités calculées UNE fois par `refresh()` (jamais dans le corps
@@ -177,6 +179,47 @@ final class SkillReviewCenter {
     /// Ce que l'utilisateur peut DÉJÀ invoquer et qui recoupe cette proposition.
     func similarCapability(for proposal: SkillProposal) -> String? {
         similarByProposal[proposal.id]
+    }
+
+    /// Lecture à la sélection, hors du body. Une réponse issue d'une ancienne
+    /// destination ou d'une sélection annulée ne modifie jamais la revue.
+    func preloadCatalog(for proposal: SkillProposal) async {
+        guard !CodexPreview.enabled else { return }
+        let ticket = UUID()
+        catalogTicket = ticket
+        catalogLoading = proposal.id
+        defer { if catalogTicket == ticket { catalogLoading = nil } }
+        let target: SkillDestination
+        do { target = try self.target(for: proposal.destination) }
+        catch { lastError = error.localizedDescription; return }
+        do {
+            let entries = try await target.catalog(project: proposal.sourceProject.map { URL(fileURLWithPath: $0) })
+            guard !Task.isCancelled, proposals.contains(proposal), target == (try self.target(for: proposal.destination)) else { return }
+            similarByProposal[proposal.id] = similarity(for: proposal, entries: entries, target: target)
+            lastError = nil
+        } catch {
+            guard !Task.isCancelled, proposals.contains(proposal), target == (try? self.target(for: proposal.destination)) else { return }
+            lastError = error.localizedDescription
+        }
+    }
+
+    private func similarity(for proposal: SkillProposal, entries: [CatalogEntry], target: SkillDestination) -> String? {
+        let twin = target.store.skillsRoot.appendingPathComponent(SkillSlug.dirName(for: proposal.slug))
+            .appendingPathComponent("SKILL.md").resolvingSymlinksInPath()
+        let candidates = entries.filter { $0.path.resolvingSymlinksInPath() != twin }
+        let declared = candidates.first { $0.id == proposal.similarExisting }
+        let match = declared ?? SkillCatalog().closestMatch(slug: proposal.slug, title: proposal.title,
+            description: proposal.description, catalog: candidates)
+        return match.map { label(for: $0) }
+    }
+
+    /// Comparaison en lecture seule, bornée, avec l'installation de ce slug.
+    func installedContent(for proposal: SkillProposal) -> String? {
+        if CodexPreview.enabled { return "# Conversion antérieure\n\nExporter les positions en mètres.\n" }
+        guard isUpdateOfInstalledSkill(proposal), SkillSlug.validate(proposal.slug) != nil else { return nil }
+        let file = store(for: proposal.destination).skillsRoot
+            .appendingPathComponent(SkillSlug.dirName(for: proposal.slug)).appendingPathComponent("SKILL.md")
+        return BoundedProcessOutput.file(at: file, cap: 65_536).flatMap { String(data: $0, encoding: .utf8) }
     }
 
     /// Calcule les antériorités du lot courant.
@@ -236,6 +279,20 @@ final class SkillReviewCenter {
     }
 
     #if DEBUG
+    func seedPreviewProposals() {
+        guard CodexPreview.enabled else { return }
+        proposals = (1...3).map { i in
+            SkillProposal(slug: "conversion-\(i)", title: "Conversion \(i)",
+                description: "Convertir les axes du simulateur avant un export vers le format cible.",
+                rationale: "Un changement de signe a été reproduit, corrigé et vérifié sur un point connu.",
+                sourceSession: "preview", sourceProject: "/atoll-preview/conversion", createdAt: Date(),
+                status: .proposed, directoryURL: URL(fileURLWithPath: "/atoll-preview/conversion-\(i)"),
+                skillMD: "# Conversion \(i)\n\nConvertir chaque position (x, y, z) en (-y, z, x), en mètres.\n\nAvant l'export, vérifier que (1, 2, 3) devient (-2, 3, 1). Conserver les identifiants et horodatages.\n",
+                destination: i == 1 ? .claude : .codex)
+        }
+        for proposal in proposals { similarByProposal[proposal.id] = "conversion-axes [fixture]" }
+    }
+
     /// Sème une proposition factice complète (vérification visuelle du flux).
     func debugSeedProposal() {
         let slug = "test-skill"

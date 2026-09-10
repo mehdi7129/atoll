@@ -1,18 +1,28 @@
 # HANDOFF — reprise du développement d'Atoll
 
-> **PR #2 — correctifs de relecture, 2026-09-10.** Les cinq arbitrages de
+> **PR #2 — générateur et validation, 2026-09-10.** Les cinq arbitrages de
 > Mehdi sont appliqués : invisible au repos, liste bornée et surplus annoncé,
 > Rockstar + quota, migration respectueuse des personnalisations, accueil sans
-> changement automatique du moteur. Lire le
-> [rapport de correction](REVIEW-2026-09-10-pr2-corrections.md), puis
-> [la passation de Claude](../codex/MESSAGE-DE-CLAUDE.md) pour les preuves initiales.
-> Les captures sont possibles et ont été relues ; navigation entre cartes,
-> brouillon et ⌘N ont été exercés en aperçu. Un cycle de transition avec encoche
-> a été filmé et relu image par image. VoiceOver et les deux TUI authentifiées
-> restent des recettes distinctes, non déclarées réussies.
+> changement automatique du moteur. Le générateur propose seulement des
+> procédures utiles et concises ; la revue conserve la position et compare
+> proposition et installation. Lire le
+> [dernier rapport](REVIEW-2026-09-10-skills-validation.md) et le
+> [plan relu](PLAN-2026-09-10-final-validation-skills.md), puis le
+> [rapport de correction initial](REVIEW-2026-09-10-pr2-corrections.md).
+> 1 014 tests Core (1 skip), 60 scénarios runtime, builds Debug/Release et
+> sabotages vérifiés. Codex authentifié : autorisation, refus, retour de la
+> décision au CLI, interruption et reprise exercés. VoiceOver : annonces réelles
+> et action native vérifiées ; ses deux réglages temporaires sont restaurés.
+> 24 variantes visuelles et quatre films de transition relus.
+> Restent avant fusion : parcours Claude bloqué par un refus d'abonnement de
+> l'organisation (403), écoute des sons non effectuée par Mehdi, retour au
+> panneau d'un terminal visible non exercé. Les limites P3 conservatrices sont
+> décrites dans le rapport ; elles ne sont pas déclarées corrigées.
 > PR en brouillon, aucune release ; bundle stable v0.17.2 non remplacé.
 > Pour une nouvelle copie de recette, utiliser `Scripts/prepare-preview.py` :
-> elle reste en aperçu même si un outil la rouvre sans arguments.
+> elle reste en aperçu même si un outil la rouvre sans arguments. La recette
+> CLI authentifiée utilise `Scripts/prepare-cli-validation.py`, avec racines
+> privées obligatoires ; fermer l'Atoll normal avant de lancer cette copie.
 
 > **LE RENDEZ-VOUS DU RECALL EST ÉCHU, ET TRANCHÉ (v0.17.2, 2026-09-09).**
 > Le mois de mesure a rendu : 1 062 passages, 66 % d'injection, **46 % des
@@ -57,7 +67,7 @@
 
 > Document de continuité pour reprendre le dev après un compactage de conversation.
 > **À lire en premier** avec `CLAUDE.md` (règles) et `PLAN.md` (plan produit).
-> Dernière mise à jour : **2026-09-09** (v0.17.1).
+> Dernière mise à jour : **2026-09-10** (PR #2, stable v0.17.2).
 >
 > Le **14 août** : un **audit complet** (`docs/AUDIT-2026-08-14.md`, 18 défauts
 > corrigés dont trois chemins destructeurs), **deux outils de continuité**, **deux

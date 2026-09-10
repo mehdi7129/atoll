@@ -1,0 +1,14 @@
+[
+  {
+    "provider": "codex",
+    "passed": true,
+    "announcements": 24,
+    "decorationsExpected": false
+  },
+  {
+    "provider": "claude",
+    "passed": true,
+    "announcements": 23,
+    "decorationsExpected": false
+  }
+]

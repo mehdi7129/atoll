@@ -249,7 +249,7 @@ final class NotesCurationService {
                 schema: NotesCurationPrompt.jsonSchema,
                 prompt: CodexExecPlan.fullPrompt(system: NotesCurationPrompt.systemPrompt,
                                                  user: userPrompt),
-                workingDirectory: nil, label: "curation", home: execution.home, model: execution.model,
+                label: "curation", home: execution.home, model: execution.model,
                 executableOverride: execution.executableOverride)
             else {
                 guard runGeneration == generation else { return }
@@ -650,7 +650,7 @@ final class NotesCurationService {
         // tolérance « quota inconnu ».
         do {
             try AnalysisBudget.shared.prepareToLaunch(lease)
-            try process.run()
+            processIdentity = try ProcessInspector.launchOwned(process)
         } catch {
             log.error("spawn curation impossible : \(error.localizedDescription)")
             spawnFailure = "l'analyse n'a pas pu être lancée (\(error.localizedDescription))"
@@ -660,7 +660,6 @@ final class NotesCurationService {
         runLaunched = true
         AnalysisBudget.shared.launched(lease)
         self.process = process
-        processIdentity = ProcessInspector.identity(of: process.processIdentifier)
         let identity = processIdentity
         let pid = process.processIdentifier
         SessionStore.shared.registerInternalPid(pid)

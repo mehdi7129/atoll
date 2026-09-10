@@ -11,8 +11,9 @@
 
 > **Développement du 10 septembre 2026, non publié :** le code ajoute le choix
 > Claude Code / Codex CLI, les palettes séparées et les analyses avec l'un ou
-> l'autre abonnement. La release disponible reste v0.17.2. Les preuves et la
-> recette GUI restante sont dans le [rapport de correction](docs/REVIEW-2026-09-10-pr2-corrections.md).
+> l'autre abonnement. La release disponible reste v0.17.2. Le générateur de
+> skills a été allégé ; les tests Codex authentifiés, VoiceOver et les limites
+> avant fusion sont dans le [rapport de validation](docs/REVIEW-2026-09-10-skills-validation.md).
 
 Trois sessions tournent : un `claude` dans un onglet Cursor, un `codex` dans un iTerm passé
 derrière le navigateur, un troisième en arrière-plan lancé il y a vingt minutes. L'un des
@@ -190,11 +191,18 @@ analyse **en lecture seule** relit la session et en extrait ce qui dure :
 - des **notes mémoire**, indexées et citées par les recherches suivantes ;
 - des **procédures rejouables**, proposées pour une destination Claude Code ou Codex CLI.
 
+Le générateur garde l'essentiel : connaissances non évidentes, commandes vérifiées et
+contrôles utiles. Une tâche banale ou déjà couverte ne produit pas de skill. Le texte
+vise généralement 200–600 tokens ; une procédure trop longue est écartée et signalée,
+jamais coupée au milieu d'une commande.
+
 Les skills proposés arrivent en **quarantaine** : tu lis le `SKILL.md` complet dans une
 fenêtre dédiée, tu approuves (⌘⏎) ou tu rejettes (⌘⌫). Rien n'est actif sans ton accord. Un
 skill approuvé vit dans les skills de sa destination : `~/.claude/skills` pour Claude,
 ou le dossier `skills` du home choisi pour Codex. La destination est affichée et figée
 dans la proposition ; le bouton d'affichage ne la change pas.
+La revue affiche le nombre de mots et, pour une mise à jour, le texte installé à côté
+de la proposition. Après une décision, elle conserve ta position dans la liste.
 
 Atoll compare le besoin au catalogue de la destination et le vérifie de nouveau avant
 l'approbation. Pour Codex, il utilise le catalogue natif `skills/list`. Une erreur de

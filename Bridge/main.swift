@@ -516,19 +516,24 @@ enum BridgeCLI {
         // Skills APPRIS (7c) : retrait piloté par le manifeste UNIQUEMENT
         // (préfixe atoll- + entrée listée), fail-closed si illisible. Les
         // DONNÉES d'apprentissage (~/.atoll/learning) sont conservées.
-        if let report = try? LearnedSkillStore().uninstallAll(), !report.removed.isEmpty {
-            print("skills appris retirés : \(report.removed.joined(separator: ", "))")
+        var skillRestoreFailed = false
+        do {
+            let report = try LearnedSkillStore().uninstallAll()
+            if !report.removed.isEmpty { print("skills appris retirés : \(report.removed.joined(separator: ", "))") }
+        } catch {
+            skillRestoreFailed = true
+            FileHandle.standardError.write(Data("skills appris conservés : retrait impossible — \(error.localizedDescription)\n".utf8))
         }
         do {
             guard let current = try readSettings() else {
                 print("aucun settings.json — rien à désinstaller")
-                return (denyRestoreFailed || soundRestoreFailed) ? 1 : 0
+                return (denyRestoreFailed || soundRestoreFailed || skillRestoreFailed) ? 1 : 0
             }
             guard HookSettingsEditor.isInstalled(in: current) ||
                   StatusLineEditor.isInstalled(in: current) ||
                   String(decoding: current, as: UTF8.self).contains("/.atoll/bin/") else {
                 print("hooks non installés — rien à faire")
-                return (denyRestoreFailed || soundRestoreFailed) ? 1 : 0
+                return (denyRestoreFailed || soundRestoreFailed || skillRestoreFailed) ? 1 : 0
             }
             // Restaurer la statusline d'origine AVANT de retirer les hooks : la
             // désinstallation doit rendre le settings.json tel qu'il était.
@@ -539,7 +544,7 @@ enum BridgeCLI {
             // Les wrappers restent en place : les sessions Claude déjà ouvertes les
             // référencent encore, et ils sont fail-open (exit 0 sans binaire).
             print("hooks + statusline désinstallés")
-            return (denyRestoreFailed || soundRestoreFailed) ? 1 : 0
+            return (denyRestoreFailed || soundRestoreFailed || skillRestoreFailed) ? 1 : 0
         } catch {
             FileHandle.standardError.write(Data("échec de la désinstallation : \(error)\n".utf8))
             return 1

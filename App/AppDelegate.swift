@@ -241,7 +241,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        guard !CodexPreview.enabled else { return }
+        guard !CodexPreview.enabled else { CodexPreview.clearPreferences(); return }
         CodexService.shared.stop()
         FleetPoller.shared.stop()
         RetrospectiveRunner.shared.terminateActive()

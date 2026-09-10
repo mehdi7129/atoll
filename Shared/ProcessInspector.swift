@@ -162,6 +162,10 @@ enum ProcessInspector {
         ProcessIdentity.current(of: pid)
     }
 
+    static func launchOwned(_ process: Process) throws -> ProcessIdentity? {
+        try ProcessIdentity.launch(process)
+    }
+
     /// Une sonde illisible n'autorise pas un signal vers un PID inconnu.
     @discardableResult
     static func signal(_ signal: Int32, to identity: ProcessIdentity) -> Bool {

@@ -2,6 +2,35 @@ import XCTest
 @testable import AtollCore
 
 final class RequestPresentationTests: XCTestCase {
+    func testExternalResolutionCannotRetargetAnImmediateDecision() {
+        var presentation = RequestPresentation()
+        let now = Date(timeIntervalSince1970: 100)
+        let a = RequestPresentation.Item(provider: .claude, requestID: "a", receivedAt: now)
+        let b = RequestPresentation.Item(provider: .codex, requestID: "b", receivedAt: now)
+        presentation.update([a, b], now: now)
+        XCTAssertTrue(presentation.mayDecide(in: [a, b], now: now))
+        XCTAssertFalse(presentation.mayDecide(in: [b], now: now))
+        presentation.update([b], now: now)
+        XCTAssertFalse(presentation.mayDecide(in: [b], now: now.addingTimeInterval(0.2)))
+        XCTAssertTrue(presentation.mayDecide(in: [b], now: now.addingTimeInterval(0.5)))
+        presentation.update([b], now: now.addingTimeInterval(0.6))
+        XCTAssertTrue(presentation.mayDecide(in: [b], now: now.addingTimeInterval(0.6)))
+        presentation.update([], now: now)
+        XCTAssertFalse(presentation.mayDecide(in: [], now: now))
+    }
+
+    func testVoluntaryNavigationDoesNotWaitForTheExternalReplacementGrace() {
+        var presentation = RequestPresentation()
+        let now = Date(timeIntervalSince1970: 100)
+        let items = (1...3).map { RequestPresentation.Item(provider: .codex, requestID: "\($0)", receivedAt: now) }
+        presentation.update(items, now: now)
+        presentation.update(Array(items.dropFirst()), now: now)
+        XCTAssertFalse(presentation.mayDecide(in: Array(items.dropFirst()), now: now))
+        presentation.move(1, in: Array(items.dropFirst()))
+        XCTAssertEqual(presentation.current(in: items), items[2].id)
+        XCTAssertTrue(presentation.mayDecide(in: items, now: now))
+    }
+
     func testCodexFirstIsNotPreemptedByClaudeEvenWithAnOlderDate() {
         var presentation = RequestPresentation()
         let codex = RequestPresentation.Item(provider: .codex, requestID: "same", receivedAt: Date(timeIntervalSince1970: 20))

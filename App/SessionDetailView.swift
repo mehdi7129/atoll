@@ -25,7 +25,8 @@ struct SessionDetailView: View {
     /// au moment où l'on en a besoin est un bouton qu'on ne trouve pas.
     private var handoffDestination: AgentProvider { session.provider == .claude ? .codex : .claude }
     private var canHandOff: Bool {
-        SessionHandoff.isAvailable(workingDirectory: session.cwd, executable: handoffExecutable)
+        if CodexPreview.enabled { return false }
+        return SessionHandoff.isAvailable(workingDirectory: session.cwd, executable: handoffExecutable)
     }
 
     /// Le quota Claude est-il épuisé au sens de la bascule ? Sert UNIQUEMENT à

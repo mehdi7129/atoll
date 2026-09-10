@@ -1,0 +1,24 @@
+[
+  {
+    "case": "skills",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "skills-position",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "selector-hover",
+    "passed": false,
+    "failures": [
+      "27%"
+    ]
+  },
+  {
+    "case": "preview-preferences",
+    "passed": true,
+    "failures": []
+  }
+]

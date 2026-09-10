@@ -449,7 +449,7 @@ final class PluginInventory {
         if execution.provider == .codex {
             launch = await CodexRun.prepare(schema: PluginSearchPrompt.jsonSchema,
                 prompt: CodexExecPlan.fullPrompt(system: PluginSearchPrompt.systemPrompt, user: prompt),
-                workingDirectory: nil, label: "plugins", home: execution.home, model: execution.model,
+                label: "plugins", home: execution.home, model: execution.model,
                 executableOverride: execution.executableOverride)
         } else {
             launch = await CodexRun.prepareClaude(arguments:

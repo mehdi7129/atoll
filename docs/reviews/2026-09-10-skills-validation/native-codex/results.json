@@ -1,0 +1,19 @@
+{
+  "provider": "codex",
+  "cliVersion": "0.154.0",
+  "model": "gpt-6-astra",
+  "sessionID": "01a08c27-eb81-7db2-a7be-4bcd814ab1bf",
+  "helperCodeMatchesDebugBuild": true,
+  "helperUnsignedSHA256": "15502d859e2895dd5b3bd485f6a57ccb9714a0abd5a5248467e2d4056381301a",
+  "allow": true,
+  "deny": true,
+  "handback": true,
+  "interrupt": true,
+  "resume": {
+    "response": "REPRIS2",
+    "newProcessRegistered": true,
+    "anchorKind": "vscode"
+  },
+  "terminalJump": "not exercised: test PTY does not identify a visible IDE terminal pane",
+  "audio": "human listening not confirmed"
+}

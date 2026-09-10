@@ -1,0 +1,27 @@
+[
+  {
+    "case": "selector-hover",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "motion-pill",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "motion-pill-reduced",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "motion-notch",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "motion-notch-reduced",
+    "passed": true,
+    "failures": []
+  }
+]

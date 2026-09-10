@@ -65,6 +65,7 @@ struct InteractionCardView: View {
         // temps écoulé. C'est un en-tête à métadonnées, pas un séparateur.
         HStack(spacing: 6) {
             Text(AsciiArt.sectionHeader("CLAUDE · \(headerTitle)", width: 30))
+                .accessibilityLabel("Claude, \(headerTitle.lowercased())")
                 .lineLimit(1)
                 .foregroundStyle(colors.warn)
             Text(request.projectName)

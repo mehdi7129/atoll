@@ -37,7 +37,7 @@ enum CodexRun {
     /// dont la sortie serait de la prose et le rapport perdu.
     @MainActor
     static func prepare(schema: String, prompt: String,
-                        workingDirectory: String?, label: String, home: URL = CodexPaths.homeURL,
+                        label: String, home: URL = CodexPaths.homeURL,
                         model: String, executableOverride: String) async -> Launch? {
         lastFailure = nil
         guard let codex = await CodexExecutable.resolve(overridePath: executableOverride) else {
@@ -45,9 +45,13 @@ enum CodexRun {
             log.error("codex introuvable — \(CodexExecutable.notFoundMessage, privacy: .public)")
             return nil
         }
-        let models = await Task.detached(priority: .utility) {
-            readModels(executable: URL(fileURLWithPath: codex), home: home)
+        let catalog = await Task.detached(priority: .utility) {
+            readModelCatalog(executable: URL(fileURLWithPath: codex), home: home)
         }.value
+        guard case .available(let models) = catalog else {
+            if case .unavailable(let reason) = catalog { lastFailure = "Catalogue Codex indisponible : \(reason)" }
+            return nil
+        }
         guard models.contains(where: { $0.model == model && !$0.hidden }) else {
             lastFailure = "Modèle Codex non validé : actualise les modèles dans Réglages → Codex."
             return nil
@@ -111,19 +115,9 @@ enum CodexRun {
                       outputFile: nil, workspace: workspace)
     }
 
-    static func readModels(executable: URL, home: URL) -> [CodexModel] {
-        var cursor: String?
-        var models: [CodexModel] = []
-        let deadline = Date().addingTimeInterval(20)
-        for _ in 0..<5 {
-            guard Date() < deadline,
-                  case .available(let data) = CodexReadClient.read(.models(cursor: cursor),
-                    executable: executable, home: home, timeout: max(0.1, deadline.timeIntervalSinceNow)),
-                  let page = try? JSONDecoder().decode(CodexModel.Page.self, from: data) else { return [] }
-            models += page.data
-            guard let next = page.nextCursor, next != cursor else { return models }
-            cursor = next
+    static func readModelCatalog(executable: URL, home: URL) -> CodexModel.Catalog {
+        CodexModel.readCatalog { cursor, remaining in
+            CodexReadClient.read(.models(cursor: cursor), executable: executable, home: home, timeout: remaining)
         }
-        return [] // catalogue incomplet : pas de validation supposée
     }
 }

@@ -1,0 +1,7 @@
+{
+  "is_error": true,
+  "api_error_status": 403,
+  "result": "Your organization has disabled Claude subscription access for Claude Code · Use an Anthropic API key instead, or ask your admin to enable access",
+  "total_cost_usd": 0,
+  "modelUsage": {}
+}

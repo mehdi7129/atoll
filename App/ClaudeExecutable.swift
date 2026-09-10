@@ -61,8 +61,9 @@ enum ClaudeExecutable {
             process.standardOutput = pipe
             process.standardError = FileHandle.nullDevice
             process.standardInput = FileHandle.nullDevice
-            guard (try? process.run()) != nil else { return nil }
-            armWatchdog(process)
+            let identity: ProcessIdentity?
+            do { identity = try ProcessInspector.launchOwned(process) } catch { return nil }
+            armWatchdog(process, identity: identity)
             let data = BoundedProcessOutput.drain(pipe.fileHandleForReading, cap: 16_384)
             process.waitUntilExit()
             let path = String(decoding: data, as: UTF8.self)
@@ -76,8 +77,8 @@ enum ClaudeExecutable {
 
     /// Tue un process qui dépasse `loginResolveTimeout` (SIGTERM puis SIGKILL) :
     /// un profil qui pend ne doit pas geler le lanceur.
-    nonisolated private static func armWatchdog(_ process: Process) {
-        guard let identity = ProcessInspector.identity(of: process.processIdentifier) else { return }
+    nonisolated private static func armWatchdog(_ process: Process, identity: ProcessIdentity?) {
+        guard let identity else { return }
         DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + loginResolveTimeout) {
             guard process.isRunning else { return }
             ProcessInspector.signal(SIGTERM, to: identity)

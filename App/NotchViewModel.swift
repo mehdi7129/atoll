@@ -42,6 +42,9 @@ final class NotchViewModel {
     private let store: SessionStore
 
     @ObservationIgnored private var hoverTask: Task<Void, Never>?
+    private var islandHovered = false
+    private var selectorHovered = false
+    private var hoverOpenDelay: TimeInterval = 0.15
 
     /// Identifiant de l'écran de ce contrôleur : clé de la taille réglable.
     let displayID: String
@@ -53,7 +56,12 @@ final class NotchViewModel {
 
     /// Largeur compacte choisie pour CET écran (observe IslandSettings → l'îlot
     /// se redimensionne en direct quand on change le réglage).
-    var compactWidth: IslandWidth { CodexPreview.enabled ? .small : IslandSettings.shared.width(for: displayID) }
+    var compactWidth: IslandWidth {
+        if CodexPreview.enabled {
+            return IslandWidth.allCases.first { CommandLine.arguments.contains("--preview-width-\($0.rawValue)") } ?? .small
+        }
+        return IslandSettings.shared.width(for: displayID)
+    }
 
     init(screen: NSScreen, isPrimary: Bool, store: SessionStore? = nil) {
         notchSize = CodexPreview.enabled
@@ -170,12 +178,14 @@ final class NotchViewModel {
     /// Survol : ouverture après un délai minimal, fermeture après une courte grâce
     /// (pattern boring.notch — évite les ouvertures accidentelles et les flickers).
     func hoverChanged(_ hovering: Bool, openDelay: TimeInterval) {
+        islandHovered = hovering
+        hoverOpenDelay = openDelay
         hoverTask?.cancel()
         if hovering {
-            guard state == .compact else { return }
+            guard state == .compact, !selectorHovered else { return }
             hoverTask = Task { [weak self] in
                 try? await Task.sleep(for: .milliseconds(Int(openDelay * 1000)))
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled, self?.selectorHovered == false else { return }
                 self?.open()
             }
         } else {
@@ -185,6 +195,14 @@ final class NotchViewModel {
                 self.close()
             }
         }
+    }
+
+    /// Le sélecteur compact doit rester sous le pointeur assez longtemps pour
+    /// recevoir un clic ; ailleurs, le survol conserve son ouverture normale.
+    func selectorHoverChanged(_ hovering: Bool) {
+        selectorHovered = hovering
+        if hovering { hoverTask?.cancel() }
+        else if islandHovered { hoverChanged(true, openDelay: hoverOpenDelay) }
     }
 
     /// Clic sur l'îlot : épingle l'état étendu (ne se referme plus au départ de la souris).

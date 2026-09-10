@@ -1,0 +1,42 @@
+[
+  {
+    "provider": "codex",
+    "case": "routine",
+    "skillCount": 0,
+    "bodyWords": [],
+    "descriptionCharacters": [],
+    "requestedModel": "gpt-6-astra",
+    "reportedModels": []
+  },
+  {
+    "provider": "codex",
+    "case": "covered",
+    "skillCount": 0,
+    "bodyWords": [],
+    "descriptionCharacters": [],
+    "requestedModel": "gpt-6-astra",
+    "reportedModels": []
+  },
+  {
+    "provider": "codex",
+    "case": "operational",
+    "skillCount": 1,
+    "bodyWords": [
+      146
+    ],
+    "descriptionCharacters": [
+      120
+    ],
+    "requestedModel": "gpt-6-astra",
+    "reportedModels": []
+  },
+  {
+    "provider": "codex",
+    "case": "injection",
+    "skillCount": 0,
+    "bodyWords": [],
+    "descriptionCharacters": [],
+    "requestedModel": "gpt-6-astra",
+    "reportedModels": []
+  }
+]

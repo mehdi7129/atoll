@@ -146,13 +146,19 @@ struct CodexSettingsPane: View {
             guard let path = await CodexExecutable.resolve(overridePath: override) else {
                 modelMessage = CodexExecutable.notFoundMessage; return
             }
-            let values = await Task.detached(priority: .utility) {
-                CodexRun.readModels(executable: URL(fileURLWithPath: path), home: home)
+            let catalog = await Task.detached(priority: .utility) {
+                CodexRun.readModelCatalog(executable: URL(fileURLWithPath: path), home: home)
             }.value
             guard home == CodexPaths.homeURL, override == executablePath else { return }
-            models = values
-            modelMessage = values.isEmpty ? "Catalogue indisponible — vérifier codex login et le binaire."
-                : "\(values.count) modèles disponibles. Sélectionne celui des analyses Atoll."
+            switch catalog {
+            case .available(let values):
+                models = values
+                modelMessage = values.isEmpty ? "Catalogue reçu sans modèle disponible."
+                    : "\(values.count) modèles disponibles. Sélectionne celui des analyses Atoll."
+            case .unavailable(let reason):
+                models = []
+                modelMessage = "Catalogue indisponible : \(reason)"
+            }
         }
     }
 

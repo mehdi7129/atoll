@@ -622,14 +622,14 @@ final class RetrospectiveRunner {
                 schema: RetrospectivePrompt.jsonSchema,
                 prompt: CodexExecPlan.fullPrompt(system: RetrospectivePrompt.systemPrompt,
                                                  user: userPrompt),
-                workingDirectory: job.snapshot.cwd,
                 label: "retro", home: codexHome, model: model,
                 executableOverride: execution.executableOverride)
         }
         guard let launch else {
-            log.error("spawn rétrospective impossible : \(provider.rawValue, privacy: .public) introuvable")
+            let reason = CodexRun.lastFailure ?? "Préparation de l'analyse impossible."
+            log.error("spawn rétrospective impossible : \(reason, privacy: .public)")
             // Aucun spawn : AnalysisBudget rendra la réservation sans dépense.
-            finish(job, outcome: "failed(\(provider.rawValue))", transcriptBytes: 0)
+            finish(job, outcome: "failed(\(provider.rawValue)) · \(reason)", transcriptBytes: 0)
             return
         }
         defer { launch.cleanUp() }
@@ -662,7 +662,7 @@ final class RetrospectiveRunner {
 
         do {
             try AnalysisBudget.shared.prepareToLaunch(lease)
-            try process.run()
+            processIdentity = try ProcessInspector.launchOwned(process)
         } catch {
             log.error("spawn rétrospective impossible : \(error.localizedDescription)")
             finish(job, outcome: "failed(spawn)", transcriptBytes: 0)
@@ -671,7 +671,6 @@ final class RetrospectiveRunner {
         self.process = process
         runLaunched = true
         AnalysisBudget.shared.launched(lease)
-        processIdentity = ProcessInspector.identity(of: process.processIdentifier)
         let identity = processIdentity
         let pid = process.processIdentifier
         SessionStore.shared.registerInternalPid(pid)
@@ -763,8 +762,11 @@ final class RetrospectiveRunner {
             finish(job, outcome: "failed(parse)", transcriptBytes: transcriptBytes)
         case .success(let report):
             apply(report, for: job, destination: destination)
-            let outcome = report.nothingLearned ? "nothing_learned"
+            var outcome = report.nothingLearned ? "nothing_learned"
                 : "success(\(report.notes.count)n/\(report.skills.count)s)"
+            if !report.rejectedSkills.isEmpty {
+                outcome += " · \(report.rejectedSkills.count) skill(s) trop long(s), non proposé(s)"
+            }
             if let cost = report.costUSD {
                 log.info("rétrospective terminée : \(outcome, privacy: .public), coût \(cost) $")
             }

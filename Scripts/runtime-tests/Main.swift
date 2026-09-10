@@ -21,7 +21,7 @@ import AtollCore
         try check(records.last?["launchAttemptAt"] != nil, "intention de spawn non persistée : \(name)")
     }
 
-    @MainActor static func fixture(_ name: String, curation: Bool, blockCLI: Bool, search: Bool = false) throws {
+    @MainActor static func fixture(_ name: String, curation: Bool, blockCLI: Bool, search: Bool = false, oversizedSkill: Bool = false) throws {
         let base = URL(fileURLWithPath: ProcessInfo.processInfo.environment["ATOLL_RUNTIME_TEST_ROOT"]!)
         BridgePaths.root = base.appendingPathComponent(name)
         let fm = FileManager.default
@@ -44,6 +44,10 @@ import AtollCore
         } else {
             payload = ["session_summary": "Test", "nothing_learned": false, "skills": [],
                        "notes": [["slug": "verified", "content": content, "category": "pitfall", "confidence": "high"]]]
+            if oversizedSkill {
+                payload["skills"] = [["slug": "too-long", "title": "Procédure", "description": "Procédure vérifiée.",
+                    "skill_md": String(repeating: "Instruction. ", count: 700), "rationale": "Piège reproduit", "confidence": "high"]]
+            }
         }
         try JSONSerialization.data(withJSONObject: payload).write(to: BridgePaths.root.appendingPathComponent("report.json"))
         let envelope: [String: Any] = ["type": "result", "subtype": "success", "is_error": false, "structured_output": payload]
@@ -102,6 +106,19 @@ import AtollCore
                 print("PASS \(name)")
                 cases += 1
             }
+        }
+        for provider in AgentProvider.allCases {
+            try fixture("retro-\(provider.rawValue)-oversized", curation: false, blockCLI: false, oversizedSkill: true)
+            RetrospectiveRunner.shared.debugRunOnLargestTranscript(projectDirectory: "fixture", provider: provider)
+            try await waitFor { Resolver.entered }
+            try await waitFor { RetrospectiveRunner.shared.phase == .idle && RetrospectiveRunner.shared.lastOutcome != nil }
+            let notes = try fm.contentsOfDirectory(atPath: BridgePaths.learningNotesDirectory.path)
+            let proposals = try fm.contentsOfDirectory(atPath: BridgePaths.learningProposedDirectory.path)
+            try check(notes.count == 1 && proposals.isEmpty, "skill trop long installé ou note valide perdue")
+            let journal = try String(contentsOf: BridgePaths.learningDirectory.appendingPathComponent("retrospectives.json"), encoding: .utf8)
+            try check(journal.contains("trop long"), "skill trop long écarté sans trace persistée")
+            print("PASS retro-\(provider.rawValue)-oversized : note conservée, skill refusé et trace persistée")
+            cases += 1
         }
         for provider in AgentProvider.allCases {
         SessionStore.shared.realQuota = provider == .codex ? nil : SessionStore.Quota()

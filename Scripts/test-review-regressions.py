@@ -15,6 +15,18 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--only", action="append")
 args = parser.parse_args()
 mutations = {
+    "review-position": ("SkillProposal.swift", "current[min(index, current.count - 1)]", "current[0]",
+                        "SkillReviewSelectionTests/testDecisionInTheMiddleContinuesAtSameRankThenPreviousAtEnd"),
+    "replacement-grace": ("RequestPresentation.swift", "decisionAfter = now.addingTimeInterval(0.4)", "decisionAfter = now",
+                          "RequestPresentationTests/testExternalResolutionCannotRetargetAnImmediateDecision"),
+    "identity-retry": ("ProcessIdentity.swift", "for attempt in 0..<3 {", "for attempt in 0..<1 {",
+                       "ProcessIdentityTests/testCaptureRetriesTransientFailureWithoutAdoptingRecycledPID"),
+    "identity-birth": ("ProcessIdentity.swift", "startedBetween.contains(identity.startedAt)", "true",
+                       "ProcessIdentityTests/testCaptureRetriesTransientFailureWithoutAdoptingRecycledPID"),
+    "oversized-skill": ("RetrospectiveReport.swift", "guard skillMD.count <= Limit.skillMD else {", "guard true else {",
+                        "RetrospectiveReportTests/testOversizedSkillIsRejectedWithoutLosingValidNotes"),
+    "model-pagination": ("CodexModel.swift", "guard visited.insert(next).inserted else {", "guard visited.insert(next).inserted else { return .available(models); /*",
+                         "CodexModelTests/testPaginationRequiresAllPagesAndRejectsRepeatedCursor"),
     "finder-metadata": ("LearnedSkillStore.swift", 'return $0 == ".DS_Store" &&', 'return $0 == ".never-allowed" &&',
                         "SkillDestinationTests/testFinderMetadataDoesNotBlockApprovalButIsNeverInstalled"),
     "quota-freshness": ("ProviderFailover.swift", "freshnessSeconds: TimeInterval = 600,", "freshnessSeconds: TimeInterval = 900,",
@@ -63,6 +75,8 @@ with tempfile.TemporaryDirectory(prefix="atoll-review-sabotage-") as folder:
         if original.count(needle) != 1:
             raise SystemExit("Couture introuvable ou ambiguë : " + name)
         changed = original.replace(needle, replacement)
+        if name == "model-pagination":
+            changed = changed.replace('return .unavailable("Catalogue incomplet : pagination répétée.")', 'return .unavailable("Catalogue incomplet : pagination répétée.") */')
         if name == "handoff-installation":
             changed = changed.replace("return fm.isExecutableFile(atPath: executable)", "return fm.isExecutableFile(atPath: executable) */")
         try:

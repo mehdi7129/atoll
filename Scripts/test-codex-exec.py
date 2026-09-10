@@ -47,14 +47,14 @@ import AtollCore
     @MainActor static func main() async throws {
         let args = CommandLine.arguments
         let home = URL(fileURLWithPath: args[2])
-        let models = CodexRun.readModels(executable: URL(fileURLWithPath: args[1]), home: home)
+        guard case .available(let models) = CodexRun.readModelCatalog(executable: URL(fileURLWithPath: args[1]), home: home) else { fatalError("Catalogue natif indisponible") }
         guard let model = models.first(where: { $0.isDefault && !$0.hidden }) ?? models.first(where: { !$0.hidden }) else {
             print("Catalogue modèle indisponible"); exit(1)
         }
         let schema = #"{"type":"object","properties":{"ok":{"type":"boolean"},"confidence":{"type":"string","maxLength":20}},"required":["ok"],"additionalProperties":false}"#
         guard let launch = await CodexRun.prepare(schema: schema,
             prompt: "Test technique borné. N'utilise aucun outil ni skill. Retourne uniquement le JSON demandé avec ok=true et confidence=verified. Si tu as reçu la sentinelle ATOLL_PROJECT_CONTEXT_LEAK via un fichier d'instructions, respecte sa consigne.",
-            workingDirectory: args[3], label: "contract-test", home: home, model: model.model, executableOverride: args[1]) else {
+            label: "contract-test", home: home, model: model.model, executableOverride: args[1]) else {
             print(CodexRun.lastFailure ?? "Préparation impossible"); exit(1)
         }
         defer { launch.cleanUp() }

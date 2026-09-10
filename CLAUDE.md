@@ -1221,9 +1221,15 @@ skill. Diagnostic chiffré (agents) : **1 seule rétrospective lancée en 7 jour
   plus AUCUN outil (`--tools ""`). MESURÉ : **47 Mo → 148 828 caractères en 2 s**
   (compression 154× à 589× selon les transcrits, sessions ordinaires passées intégralement).
 - **CAUSE N° 3 — le prompt était dissuasif** (« When in doubt, return ZERO skills »).
-  FIX (choix de Mehdi : *équilibré*) : proposer dès qu'une procédure a été EXÉCUTÉE
+  FIX historique (choix de Mehdi : *équilibré*) : proposer dès qu'une procédure a été EXÉCUTÉE
   avec succès et est rejouable, `confidence` honnête — la quarantaine + la revue ⌘⏎/⌘⌫
   SONT déjà le filtre.
+  **Révisé le 2026-09-10 à sa demande** : garder une connaissance non évidente,
+  vérifiée et distincte du catalogue ; zéro skill pour le banal ou le doublon.
+  Description généralement 80–140 caractères, corps généralement 200–600 tokens,
+  sans tutoriel ni workflow inventé. Cibles éditoriales, pas troncature : un corps
+  dépassant 8 000 caractères est rejeté avec une trace au journal, les notes valides
+  sont conservées. Même consigne partagée par les deux prompts et les deux moteurs.
 - **RÉSULTAT VÉRIFIÉ EN VRAI** (sur le transcript de 47 Mo du projet) : **8 notes et
   2 skills proposés** (`release-pipeline`, `adversarial-review-workflow-recovery`), là
   où 7 jours d'usage n'avaient rien produit. Le SKILL.md contient la vraie procédure de

@@ -56,6 +56,7 @@ struct SkillReviewView: View {
     @State private var selectedID: SkillProposal.ID?
     @State private var overwriteProposal: SkillProposal?
     @State private var confirmingOverwrite = false
+    @State private var installedContent: String?
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage("paletteID") private var paletteID = Palette.monoOrange.id
     @AppStorage(ProviderPreferences.codexPaletteKey) private var codexPaletteID = Palette.monoCyan.id
@@ -72,12 +73,14 @@ struct SkillReviewView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("░░▒▒▓▓  R E V U E   D E   S K I L L S  ▓▓▒▒░░")
+                .accessibilityLabel("Revue de skills")
                 .font(AtollFont.mono(13, weight: .bold))
                 .foregroundStyle(colors.accent)
                 .frame(maxWidth: .infinity, alignment: .center)
 
             if let proposal = current {
                 proposalView(proposal)
+                    .id(proposal.id)
             } else {
                 Spacer()
                 Text("Aucune proposition en attente.")
@@ -94,22 +97,30 @@ struct SkillReviewView: View {
                 }
             }
         }
+        .font(AtollFont.mono(11))
         .padding(20)
         .frame(width: 640, height: 560, alignment: .top)
         .background(colors.bg)
         .onAppear { center.refresh(); selectedID = current?.id }
-        .onChange(of: center.proposals.map(\.id)) { _, _ in
-            if !center.proposals.contains(where: { $0.id == selectedID }) { selectedID = center.proposals.first?.id }
+        .onChange(of: center.proposals.map(\.id)) { previous, current in
+            selectedID = SkillProposal.nextSelection(selectedID, previous: previous, current: current)
+        }
+        .task(id: current?.id) {
+            guard let proposal = current else { installedContent = nil; return }
+            installedContent = center.installedContent(for: proposal)
+            await center.preloadCatalog(for: proposal)
         }
     }
 
     @ViewBuilder
     private func proposalView(_ proposal: SkillProposal) -> some View {
+        ScrollView {
+        VStack(alignment: .leading, spacing: 12) {
         // Titre + provenance
         VStack(alignment: .leading, spacing: 4) {
             Text("Destination : \(proposal.destination.label) · installation après vérification du catalogue")
                 .foregroundStyle(colors.accent)
-            Text(AsciiArt.sectionHeader("PROPOSITION \(currentIndex + 1)/\(center.proposals.count)", width: 60))
+            Text("PROPOSITION \(currentIndex + 1)/\(center.proposals.count)")
                 .foregroundStyle(colors.dim)
             HStack {
                 Text(SkillSlug.dirName(for: proposal.slug))
@@ -139,7 +150,7 @@ struct SkillReviewView: View {
 
         if let rationale = proposal.rationale, !rationale.isEmpty {
             VStack(alignment: .leading, spacing: 2) {
-                Text(AsciiArt.sectionHeader("POURQUOI", width: 60)).foregroundStyle(colors.dim)
+                Text("POURQUOI").foregroundStyle(colors.dim)
                 Text(rationale).foregroundStyle(colors.fg)
             }
         }
@@ -150,7 +161,7 @@ struct SkillReviewView: View {
         // découvrir après avoir approuvé.
         if let similar = SkillReviewCenter.shared.similarCapability(for: proposal) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(AsciiArt.sectionHeader("DÉJÀ DISPONIBLE", width: 60))
+                Text("DÉJÀ DISPONIBLE")
                     .foregroundStyle(colors.dim)
                 Text("⚠ recoupe « \(similar) » — compare avant d'approuver")
                     .foregroundStyle(colors.accent)
@@ -163,7 +174,7 @@ struct SkillReviewView: View {
         // sans jamais voir l'alerte. En `warn`, et AVANT le contenu.
         if !proposal.flags.isEmpty {
             VStack(alignment: .leading, spacing: 2) {
-                Text(AsciiArt.sectionHeader("CONTENU SIGNALÉ", width: 60))
+                Text("CONTENU SIGNALÉ")
                     .foregroundStyle(colors.dim)
                 Text("⚠ \(proposal.flags.joined(separator: ", ")) — relis le SKILL.md avant d'approuver")
                     .foregroundStyle(colors.warn)
@@ -172,21 +183,17 @@ struct SkillReviewView: View {
 
         // Contenu exact qui sera installé.
         VStack(alignment: .leading, spacing: 2) {
-            Text(AsciiArt.sectionHeader("SKILL.MD (installé tel quel)", width: 60))
+            Text("SKILL.MD · \(proposal.skillMD.split(whereSeparator: { $0.isWhitespace }).count) mots")
                 .foregroundStyle(colors.dim)
-            ScrollView {
-                Text(proposal.skillMD)
-                    .font(AtollFont.mono(10))
-                    .foregroundStyle(colors.fg)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(8)
+            HStack(alignment: .top, spacing: 8) {
+                if let installedContent { document(installedContent, label: "INSTALLÉ ACTUELLEMENT") }
+                document(proposal.skillMD, label: "PROPOSITION · installée telle quelle")
             }
-            .frame(maxHeight: 220)
-            .background(colors.surface)
         }
-
-        Spacer(minLength: 4)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(maxHeight: .infinity)
 
         // Navigation
         if center.proposals.count > 1 {
@@ -226,7 +233,7 @@ struct SkillReviewView: View {
         .font(AtollFont.mono(11))
         .disabled(center.approving != nil)
 
-        if center.approving != nil {
+        if center.approving != nil || center.catalogLoading == proposal.id {
             Text("Vérification du catalogue et de la destination…")
                 .font(AtollFont.mono(9)).foregroundStyle(colors.dim)
         }
@@ -251,5 +258,15 @@ struct SkillReviewView: View {
     private func select(at index: Int) {
         guard center.proposals.indices.contains(index) else { return }
         selectedID = center.proposals[index].id
+    }
+
+    private func document(_ text: String, label: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label).font(AtollFont.mono(9)).foregroundStyle(colors.dim)
+            Text(text).font(AtollFont.mono(10)).foregroundStyle(colors.fg)
+                .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true).padding(8).background(colors.surface)
+        }
+        .frame(maxWidth: .infinity)
     }
 }

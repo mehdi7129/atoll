@@ -28,6 +28,7 @@ struct CodexInteractionCardView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Text("!")
+                    .accessibilityHidden(true)
                     .fontWeight(.bold)
                     .foregroundStyle(colors.warn)
                 // Le badge fournisseur EN TÊTE : sur un îlot qui montre les deux
@@ -40,6 +41,7 @@ struct CodexInteractionCardView: View {
                     .lineLimit(1)
                 Spacer()
                 Text(AsciiArt.rule(12))
+                    .accessibilityHidden(true)
                     .foregroundStyle(colors.dim)
             }
             .font(AtollFont.mono(11))

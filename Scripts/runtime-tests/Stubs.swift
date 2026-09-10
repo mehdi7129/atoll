@@ -131,7 +131,7 @@ enum CodexRun {
         let workspace: URL?
         func cleanUp() {}
     }
-    @MainActor static func prepare(schema: String, prompt: String, workingDirectory: String?, label: String,
+    @MainActor static func prepare(schema: String, prompt: String, label: String,
                                   home: URL = CodexPaths.homeURL, model: String, executableOverride: String) async -> Launch? {
         await Resolver.resolve(.codex)
         return Launch(shellCommand: "exec " + FleetLaunch.shellQuote(BridgePaths.root.appendingPathComponent("fake-cli").path),
@@ -146,6 +146,10 @@ enum CodexRun {
 // Simulation du refus d'un signal : le faux CLI termine quand le test lui
 // rend sa réponse. Cela force le cas important « annulé, puis exit 0 ».
 enum ProcessInspector {
+    static func launchOwned(_ process: Process) throws -> ProcessIdentity? {
+        try process.run()
+        return identity(of: process.processIdentifier)
+    }
     static func identity(of pid: Int32) -> ProcessIdentity? { ProcessIdentity(pid: pid, startedAt: 123) }
     static func signal(_ signal: Int32, to identity: ProcessIdentity) {}
     static var dead: Set<Int32> = []

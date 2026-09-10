@@ -36,5 +36,7 @@ struct ProviderSelector: View {
                 .help("Afficher \(provider.label) ; les deux agents restent suivis")
             }
         }
+        .onHover { if compact { viewModel.selectorHoverChanged($0) } }
+        .onDisappear { if compact { viewModel.selectorHoverChanged(false) } }
     }
 }

@@ -4,17 +4,42 @@ import AtollCore
 
 /// Recette des vraies vues, sans socket, installation, analyse ou connexion.
 enum CodexPreview {
+    // Un domaine par copie, réinitialisé au prochain lancement même après
+    // SIGKILL. Ne jamais balayer les domaines d'autres processus ou apps.
+    static var preferenceDomain: String {
+        "dev.mehdiguiard.atoll.preview." + (Bundle.main.bundleIdentifier ?? "local-debug")
+    }
+
+    static func clearPreferences() {
+        guard enabled else { return }
+        UserDefaults.standard.removePersistentDomain(forName: preferenceDomain)
+    }
+
     static var enabled: Bool {
         #if DEBUG
-        CommandLine.arguments.contains("--codex-preview")
+        if let fixtureHome = Bundle.main.object(forInfoDictionaryKey: "AtollValidationHome") as? String,
+           let fixtureCodex = Bundle.main.object(forInfoDictionaryKey: "AtollValidationCodexHome") as? String {
+            // Une copie de recette native rouverte depuis Finder redevient un
+            // aperçu : seul le lanceur avec les DEUX racines isolées peut
+            // démarrer les services réels, jamais sur le home personnel.
+            let rootMatches = BridgePaths.homeDirectory.resolvingSymlinksInPath().path
+                == URL(fileURLWithPath: fixtureHome).resolvingSymlinksInPath().path
+            let codexMatches = CodexPaths.homeURL.resolvingSymlinksInPath().path
+                == URL(fileURLWithPath: fixtureCodex).resolvingSymlinksInPath().path
+            return !rootMatches || !codexMatches || CommandLine.arguments.contains("--codex-preview")
+        }
+        return CommandLine.arguments.contains("--codex-preview")
             || Bundle.main.object(forInfoDictionaryKey: "AtollPreviewOnly") as? Bool == true
         #else
-        false
+        return false
         #endif
     }
 
     @MainActor static func makeWindow() -> NSWindow {
         #if DEBUG
+        if Bundle.main.object(forInfoDictionaryKey: "AtollValidationHome") != nil {
+            fputs("Recette native en aperçu : home=\(BridgePaths.homeDirectory.path), codex=\(CodexPaths.homeURL.path)\n", stderr)
+        }
         let args = CommandLine.arguments
         let screen = NSScreen.screens.dropFirst().first ?? NSScreen.screens[0]
         let model = NotchViewModel(screen: screen, isPrimary: true)
@@ -32,13 +57,15 @@ enum CodexPreview {
             CodexInteractionCenter.shared.seedPreviewRequests()
             if args.contains("--preview-codex-card") { InteractionPresentation.shared.move(1) }
         }
+        if args.contains("--preview-skills") { SkillReviewCenter.shared.seedPreviewProposals() }
         model.state = args.contains("--preview-compact") ? .compact : .expanded
         model.isPinned = model.state == .expanded
         if args.contains("--preview-detail") { model.selectedSessionID = model.sessions.first?.id }
 
         // Domaine dédié aux seuls @AppStorage des vues : aucune écriture dans
         // les préférences d'Atoll, même en testant le regroupement des sessions.
-        let domain = "dev.mehdiguiard.atoll.preview.\(getpid())"
+        let domain = preferenceDomain
+        clearPreferences()
         let defaults = UserDefaults(suiteName: domain)!
         defaults.register(defaults: [
             "paletteID": Palette.monoOrange.id,
@@ -48,6 +75,8 @@ enum CodexPreview {
         let content = Group {
             if args.contains("--preview-onboarding") {
                 OnboardingView(onDone: {})
+            } else if args.contains("--preview-skills") {
+                SkillReviewView(onClose: {})
             } else if args.contains("--preview-codex-settings") {
                 // Recette de rendu seulement : les callbacks de ce panneau
                 // changent le home suivi et démarrent des lectures natives.
@@ -77,7 +106,7 @@ enum CodexPreview {
 private struct PreviewContent: View {
     let model: NotchViewModel
     @State var light: Bool
-    @State private var reduceMotion = false
+    @State private var reduceMotion = CommandLine.arguments.contains("--preview-reduce-motion")
     @State private var cycling = false
 
     var body: some View {

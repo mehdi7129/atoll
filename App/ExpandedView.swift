@@ -46,9 +46,11 @@ struct ExpandedView: View {
                 if selected.provider == .claude,
                    let request = InteractionCenter.shared.pending.first(where: { $0.id == selected.requestID }) {
                     InteractionCardView(request: request, colors: colors).id(selected)
+                        .disabled(!InteractionPresentation.shared.mayDecide)
                 } else if selected.provider == .codex,
                           let request = CodexInteractionCenter.shared.pending.first(where: { $0.id == selected.requestID }) {
                     CodexInteractionCardView(request: request, colors: colors).id(selected)
+                        .disabled(!InteractionPresentation.shared.mayDecide)
                 }
                 if InteractionPresentation.shared.items.count > 1 {
                     HStack {
@@ -105,6 +107,7 @@ struct ExpandedView: View {
     private var header: some View {
         HStack(spacing: 8) {
             Text("░▒▓")
+                .accessibilityHidden(true)
                 .foregroundStyle(colors.accent)
             Text("ATOLL")
                 .fontWeight(.bold)
@@ -134,7 +137,8 @@ struct ExpandedView: View {
                 // que 0,38 pt de marge sur 548 — la moindre variation d'avance
                 // monospace, sur une autre version de macOS, tronquait l'en-tête
                 // principal de l'îlot avec une ellipse. 68 laisse 13,6 pt.
-                Text(AsciiArt.sectionHeader("SESSIONS", width: 68))
+            Text(AsciiArt.sectionHeader("SESSIONS", width: 68))
+                .accessibilityLabel("Sessions")
                     .lineLimit(1)
                     .foregroundStyle(colors.dim)
                 Spacer(minLength: 4)
@@ -313,6 +317,7 @@ struct ExpandedView: View {
     private var learningBanner: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(AsciiArt.sectionHeader("APPRENTISSAGE", width: 79))
+                .accessibilityLabel("Apprentissage")
                 .lineLimit(1)
                 .foregroundStyle(colors.dim)
             HStack(spacing: 8) {
@@ -352,6 +357,7 @@ struct ExpandedView: View {
     private var footerBody: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(AsciiArt.sectionHeader(viewModel.selectedProvider == .codex ? "QUOTAS · CODEX" : "QUOTAS · CLAUDE", width: 79))
+                .accessibilityLabel(viewModel.selectedProvider == .codex ? "Quotas Codex" : "Quotas Claude")
                 .lineLimit(1)
                 .foregroundStyle(colors.dim)
 
@@ -421,6 +427,7 @@ struct ExpandedView: View {
             Text(label)
                 .foregroundStyle(colors.dim)
             Text(AsciiArt.progressBar(fraction: fraction, cells: 10))
+                .accessibilityHidden(true)
                 .foregroundStyle(fraction > 0.85 ? colors.warn : colors.accent)
             Text("\(Int(fraction * 100))%")
                 .foregroundStyle(colors.fg)

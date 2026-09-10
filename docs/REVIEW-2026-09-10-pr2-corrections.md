@@ -1,5 +1,9 @@
 # PR #2 — corrections après la relecture de Claude
 
+> État de cette première passe. La validation suivante, les P3 supplémentaires
+> et les limites actuelles avant fusion sont dans le
+> [rapport skills et validation native](REVIEW-2026-09-10-skills-validation.md).
+
 État du **10 septembre 2026**, branche `codex/claude-codex-compatibility`.
 La [PR #2](https://github.com/mehdi7129/atoll/pull/2) reste en brouillon pour
 relecture par Mehdi. Aucune release ni remplacement de l'app stable.
