@@ -25,8 +25,10 @@ de notarisation, résultats et empreintes des fichiers distribués.
 
 ## Correctifs après le retour sur v0.18.0
 
-Branche `codex/island-context-setup`, base `25132e3`, **non publiée**. Mehdi a
-confirmé le retour au compact d'origine : activité à gauche, quota à droite,
+Branche `codex/island-context-setup`, base `25132e3`, correctifs `88ecbb2`.
+**v0.18.1, build 36 en préparation** : Mehdi autorise la fusion de la
+[PR #3](https://github.com/mehdi7129/atoll/pull/3) et sa publication.
+Il a confirmé le retour au compact d'origine : activité à gauche, quota à droite,
 couleurs du CLI, choix du fournisseur uniquement dans le panneau ouvert.
 
 - Compact sur une ligne, police 10, aucun « CL/CX ». Le marqueur Rockstar est

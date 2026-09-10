@@ -1,6 +1,6 @@
 # CLAUDE.md — instructions projet Atoll
 
-> **Retour après v0.18.0, 2026-09-10 — correctifs non publiés.** Mehdi demande
+> **v0.18.1, build 36 — préparation autorisée le 2026-09-10, PR #3.** Mehdi demande
 > le compact d'origine : activité à gauche, quota à droite, une ligne en police
 > 10. La couleur distingue les CLI ; aucun « CL/CX », choix dans le panneau ouvert.
 > Le losange rouge Rockstar reste avec le quota, nommé pour l'accessibilité.

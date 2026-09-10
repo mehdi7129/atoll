@@ -182,9 +182,9 @@ La seconde intégration peut être installée séparément dans les réglages. P
 Le home Codex (`~/.codex` par défaut) est son dossier de configuration. Son choix,
 la réparation et le chemin de l'exécutable sont dans « Configuration avancée ».
 
-**Version courante : v0.18.0.** [Notes de version](https://github.com/mehdi7129/atoll/releases/tag/v0.18.0).
-Les corrections du compact, du contexte chiffré et du diagnostic décrites ici sont
-dans le code suivant cette release ; voir leur [validation](docs/REVIEW-2026-09-10-island-context-setup.md).
+**Version courante : v0.18.1.** [Notes de version](https://github.com/mehdi7129/atoll/releases/tag/v0.18.1).
+Release en préparation : compact d'origine, contexte chiffré et diagnostic Codex
+simplifié ; voir leur [validation](docs/REVIEW-2026-09-10-island-context-setup.md).
 
 ---
 
