@@ -4,6 +4,11 @@ Demande de Mehdi du 10 septembre 2026 : terminer les recettes CLI, VoiceOver et
 les P3, puis faire produire au générateur des skills courts, précis et utiles.
 Base : `32f034a`. Les cinq arbitrages précédents restent acquis.
 
+> **Mise à jour de livraison :** après la seconde analyse et les recettes,
+> Mehdi a autorisé la fusion et la release v0.18.0. Sons confirmés ; abonnement
+> Claude désormais absent. Les recettes Claude authentifiée et retour GUI au
+> terminal restent différées. Voir [HANDOFF.md](HANDOFF.md) pour l'état courant.
+
 ## 1. Générateur : soustraire avant d'ajouter
 
 - Partir de la note `atoll-generation-guidance.md` du projet `skills-question`
@@ -80,7 +85,7 @@ ligne par ligne.
 | P3 actionnables | Position et antériorité des skills, comparaison, sélecteur compact, délai clavier, catalogue modèle, identité du processus et diagnostic de retrait corrigés et testés |
 | VoiceOver / visuel | Annonces et action VoiceOver réelles vérifiées, paramètres restaurés ; 24 variantes relues, quatre transitions filmées. L'OCR n'est pas une preuve de voix ni un substitut à la lecture visuelle |
 | CLI natifs | Codex : permettre, refuser, rendre la décision au CLI, interrompre et reprendre vérifiés avec le helper du build. Sons entendus, confirmation ultérieure de Mehdi. Claude et retour à un panneau de terminal visible restent à valider |
-| Publication | Commit/push et mise à jour de la PR #2 autorisés ; conserver son état brouillon et les réserves avant fusion |
+| Publication | Commit/push réalisés ; Mehdi a ensuite autorisé la fusion et la release, avec les deux recettes différées consignées |
 
 La relecture a amélioré le plan sur six points concrets :
 

@@ -2,10 +2,15 @@
 
 Passe du 10 septembre 2026 après `32f034a`, selon le
 [plan relu](PLAN-2026-09-10-final-validation-skills.md). La
-[PR #2](https://github.com/mehdi7129/atoll/pull/2) reste en brouillon : les
+[PR #2](https://github.com/mehdi7129/atoll/pull/2) était maintenue en brouillon à la fin des tests : les
 correctifs et la recette Codex sont vérifiés, mais le parcours Claude et le
 retour à un terminal visible restent à valider. Mehdi a confirmé avoir entendu
 les sons après son retour devant le Mac.
+
+> **Décision de livraison ultérieure, 2026-09-10 :** Mehdi a confirmé ne plus
+> disposer d'un abonnement Claude, puis autorisé la fusion et la release avec
+> les deux recettes différées. Leur statut reste non vérifié ; elles ne bloquent
+> plus cette publication autorisée. État courant : [HANDOFF.md](HANDOFF.md).
 
 Les [corrections R01–R11 et leurs preuves](REVIEW-2026-09-10-pr2-corrections.md)
 restent acquises. Cette passe est un balayage des diffs et de leurs appelants,
@@ -210,7 +215,7 @@ La seconde analyse du plan a aussi validé le maintien des protections suivantes
 - Permission non représentable dans l'îlot : décision dans le terminal ; les
   deux API de diagnostic signalées par le contrôle documentaire restent testées.
 
-Avant fusion restent deux recettes concrètes : **Claude authentifié avec un
+Restent deux recettes différées : **Claude authentifié avec un
 contexte de connexion fonctionnel, retour vers un terminal visible**. Les
 améliorations de code et les validations possibles dans l'environnement présent
-sont réalisées ; la PR reste à examiner par Mehdi.
+sont réalisées ; Mehdi a autorisé leur livraison avec ces limites documentées.

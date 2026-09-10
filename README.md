@@ -9,12 +9,6 @@
 
 **Une Dynamic Island pour Claude Code et Codex, dans l'encoche de ton MacBook.**
 
-> **Développement du 10 septembre 2026, non publié :** le code ajoute le choix
-> Claude Code / Codex CLI, les palettes séparées et les analyses avec l'un ou
-> l'autre abonnement. La release disponible reste v0.17.2. Le générateur de
-> skills a été allégé ; les tests Codex authentifiés, VoiceOver et les limites
-> avant fusion sont dans le [rapport de validation](docs/REVIEW-2026-09-10-skills-validation.md).
-
 Trois sessions tournent : un `claude` dans un onglet Cursor, un `codex` dans un iTerm passé
 derrière le navigateur, un troisième en arrière-plan lancé il y a vingt minutes. L'un des
 trois est bloqué depuis huit minutes sur une demande de permission — tu ne sais pas lequel.
@@ -50,12 +44,12 @@ Tu descends la souris vers l'encoche, l'îlot se déplie :
 Les boutons **CLAUDE CODE / CODEX** choisissent les sessions affichées, leur palette
 et le quota principal. Les deux collecteurs restent actifs ; leurs compteurs signalent
 les demandes en attente. Les sessions sont regroupées par dépôt ou par état, avec une
-liste défilante. Le contexte s'affiche lorsqu'une mesure existe ; les fenêtres de quota
+liste bornée et l'annonce « +N autres ». Le contexte s'affiche lorsqu'une mesure existe ; les fenêtres de quota
 et leurs resets viennent des serveurs : **lus, jamais estimés**. Le schéma ci-dessus
 illustre les informations disponibles ; la vue choisit celles du fournisseur sélectionné.
 
-Un clic ouvre le détail d'une session, un autre ramène la fenêtre du terminal exact d'où
-elle vient — Cursor, VS Code, Terminal.app, iTerm2. Fin de la chasse à l'onglet.
+Un clic ouvre le détail d'une session. Le retour au terminal utilise l'origine capturée
+— Cursor, VS Code, Terminal.app, iTerm2 — avec un repli si l'onglet exact n'est pas identifiable.
 
 ## Répondre sans changer de fenêtre
 
@@ -146,26 +140,25 @@ automatiquement à la désinstallation.
 
 ## Ce qu'Atoll ne fait pas — volontairement
 
-- **Il ne lance pas d'agents et n'orchestre rien.** `claude --bg` et `claude agents` le
-  font, et le font mieux. Atoll observe ; il ne double pas l'outil.
-- **Il ne décide d'aucune permission à ta place** par une politique maison. `claude
-  auto-mode` est natif, actif par défaut, et bien plus complet que ce qu'on écrirait ici.
+- **Il n'orchestre pas ton travail.** Tu lances tes sessions dans leur CLI ; Atoll les
+  observe. Ses analyses facultatives servent uniquement à la mémoire et aux skills.
+- **Il laisse les politiques de permissions aux CLI.** Les cartes transmettent ta
+  décision ; le mode Rockstar Claude reste un choix explicite, décrit plus bas.
 - **Il ne collecte rien.** Pas de télémétrie, pas de compte, pas de serveur, pas d'Electron.
 - **Il ne peut pas casser ton CLI.** Règle absolue du projet : Atoll fermé, lent ou planté,
-  `claude` fonctionne exactement comme avant. La désinstallation restitue ta configuration
+  Claude Code et Codex continuent. La désinstallation restitue ta configuration
   d'origine.
 
-La découverte des sessions passe par l'interface **supportée** `claude agents --json`, pas
-par du reverse-engineering : les mises à jour de Claude Code profitent à Atoll au lieu de le
-casser.
+Claude est découvert par `claude agents --json`, complété par ses hooks. Codex utilise ses
+hooks, l'identité de son processus et les rollouts locaux ; chaque intégration reste distincte.
 
 ## Installer
 
 Télécharge le dernier `Atoll-x.y.z.dmg` depuis les
 [Releases](https://github.com/mehdi7129/atoll/releases) et glisse Atoll dans Applications.
 
-L'app est signée Developer ID et notarisée par Apple ; les mises à jour arrivent ensuite
-toutes seules (Sparkle). Dans la version en développement, l'accueil propose de choisir
+L'app est signée Developer ID et notarisée par Apple. Les mises à jour passent par Sparkle,
+avec une vérification automatique activable dans les réglages. L'accueil propose de choisir
 Claude Code ou Codex CLI et installe cette seule intégration. Les hooks existants sont
 préservés et la configuration modifiée est sauvegardée. Codex seul ne crée pas de
 configuration Claude.
@@ -176,7 +169,7 @@ l'épingle, cliquer ailleurs le referme.
 La seconde intégration peut être installée séparément dans les réglages. Réglages › Codex
 affiche aussi le home utilisé et vérifie les définitions et leur confiance avec le CLI.
 
-**Version courante : v0.17.2.**
+**Version courante : v0.18.0.** Publication en préparation.
 
 ---
 
@@ -263,16 +256,17 @@ Codex, y compris en compact. Changer de vue ne modifie pas cette préférence.
 
 <br>
 
-- **Thème** clair / sombre / auto, 4 palettes, et taille de la barre compacte réglable **par
+- **Thème** clair / sombre / auto, 5 palettes, et taille de la barre compacte réglable **par
   écran** (large sur le moniteur externe, moyen sur le MacBook).
 - **Liquid Glass** (macOS 26) sur le panneau déployé, curseur d'intensité et onde discrète à
-  l'ouverture — qui respecte « Réduire les animations ». Repli sobre sur macOS 14 et 15.
+  l'ouverture. « Réduire les animations » désactive l'onde ; les fondus et transitions de
+  taille demeurent. Repli sobre sur macOS 14 et 15.
 - **Tes plugins, lisibles** : combien installés, combien réellement activés, lesquels sont
   cassés, et ce qu'ils coûtent en tokens à chaque session. Activer, désactiver ou installer
   passe toujours par la commande officielle `claude plugin`, sur ton geste explicite —
   jamais automatiquement.
-- **Modèle par tâche** : Haiku pour chercher, Sonnet pour analyser, Opus ou Fable si tu
-  préfères — réglable séparément pour chaque travail d'arrière-plan.
+- **Modèles d'analyse** : choix par tâche côté Claude ; modèle choisi dans le catalogue
+  natif côté Codex. Le moteur d'analyse se règle dans Apprentissage, séparément de la vue.
 
 </details>
 
@@ -292,12 +286,15 @@ xcodegen generate
 DD="$HOME/Library/Developer/Atoll-DerivedData"
 xcodebuild -project Atoll.xcodeproj -scheme Atoll -configuration Debug \
   -derivedDataPath "$DD" build
-ditto "$DD/Build/Products/Debug/Atoll.app" ~/Applications/Atoll.app
-open ~/Applications/Atoll.app
+PREVIEW="/private/tmp/Atoll-preview-$(uuidgen).app"
+python3 Scripts/prepare-preview.py "$DD/Build/Products/Debug/Atoll.app" "$PREVIEW"
+open "$PREVIEW"
 ```
 
 DerivedData hors du projet : si le dépôt vit dans un dossier synchronisé iCloud ou Dropbox,
 les attributs étendus du file provider cassent la signature.
+La copie ci-dessus montre des données fictives et préserve l'installation stable. Pour
+tester les CLI réels, les scripts et précautions sont dans [la fiche de reprise](docs/HANDOFF.md).
 
 Tests du cœur : `cd AtollCore && swift test`
 
@@ -308,9 +305,10 @@ Bridge/      helper CLI appelé par les hooks Claude Code et Codex, par socket U
 docs/        recherche et documents de conception
 ```
 
-Le plan produit est dans [PLAN.md](PLAN.md), les règles de contribution dans
-[CLAUDE.md](CLAUDE.md), la direction du projet dans
-[docs/VISION-2026-08.md](docs/VISION-2026-08.md).
+Pour reprendre le développement : [fiche de reprise](docs/HANDOFF.md),
+[règles du projet](CLAUDE.md) et [direction produit](docs/VISION-2026-08.md).
+[PLAN.md](PLAN.md) conserve le plan initial historique. Les résultats mesurés et les
+limites de validation sont dans [le rapport de recette](docs/REVIEW-2026-09-10-skills-validation.md).
 
 </details>
 

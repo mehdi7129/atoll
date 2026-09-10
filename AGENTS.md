@@ -7,10 +7,11 @@ La seule source de vérité des règles, des pièges et des arbitrages est
 le 9 septembre 2026 ; elle affirmait des faits faux (chemins, quotas, rôle
 d'Atoll). Un `AGENTS.md` long est cette copie : il ne fait pas foi.
 
-**Passation en cours (2026-09-10).** La relecture de la PR #2 par Claude, avec
-chaque constat, sa preuve, sa direction de correctif et la méthode de recette
-visuelle, est dans `codex/MESSAGE-DE-CLAUDE.md`. Lis-la avant de toucher au
-code de la branche `codex/claude-codex-compatibility`.
+**Reprise après la PR #2 (2026-09-10).** `docs/HANDOFF.md` porte l'état courant,
+les validations, les limites connues et les commandes de recette. L'ancienne
+relecture dans `codex/MESSAGE-DE-CLAUDE.md` est un historique : ses constats
+ne doivent pas être considérés comme encore ouverts sans lire les rapports de
+correction liés dans la fiche de reprise.
 
 Règles minimales, toutes détaillées dans `CLAUDE.md` :
 

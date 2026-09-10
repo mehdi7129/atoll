@@ -1,7 +1,8 @@
 # ATOLL — Plan détaillé
 
 > ⚠️ **Document HISTORIQUE (plan initial du 2026-07-18).** L'app est livrée et publiée
-> — version courante **v0.16.5** (2026-08-16). Les phases 1 à 14 sont faites.
+> — voir [la fiche de reprise](docs/HANDOFF.md) pour la version courante.
+> Les phases 1 à 14 sont faites.
 > **§5 N'EST PAS TENU À JOUR** (il l'a longtemps prétendu) : il s'arrête à la
 > Phase 13, dans un ordre qui n'est pas le sien, et ne porte pas la Phase 14
 > « Arêtes franches » (v0.15.0). Il porte en revanche bien le RETRAIT du cockpit

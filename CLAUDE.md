@@ -1,6 +1,14 @@
 # CLAUDE.md — instructions projet Atoll
 
-> **PR #2 — relecture corrigée, non publiée (2026-09-10).** Mehdi a tranché :
+> **v0.18.0, build 35 — publication autorisée, en préparation (2026-09-10).**
+> Mehdi a autorisé la fusion de la PR #2 et la release. La fiche courante est
+> [docs/HANDOFF.md](docs/HANDOFF.md) ; les relevés anciens y sont archivés.
+> Le générateur vise des skills utiles et concis ; la recette Codex, VoiceOver
+> et l'écoute des sons sont vérifiés. La recette Claude authentifiée demeure
+> différée (abonnement absent sur la machine de test), ainsi que le retour GUI
+> à un terminal visible. Ces limites ont été exposées avant l'accord de release.
+>
+> **Arbitrages de la PR #2 conservés.** Mehdi a tranché :
 > îlot invisible sans activité ni Rockstar ; liste bornée avec « +N autres » ;
 > marqueur Claude Rockstar ET quota compact ; migration des anciens hooks
 > respectant les retraits/personnalisations ; accueil qui PROPOSE le moteur
@@ -30,8 +38,8 @@
 > et marque `AtollPreviewOnly`. Les captures et tests utilisent cette copie.
 > Ne jamais ouvrir un ancien aperçu non protégé par un outil qui peut le lancer.
 >
-> Preuves, limites restantes et incident de recette :
-> [rapport de correction](docs/REVIEW-2026-09-10-pr2-corrections.md).
+> Preuves et seconde analyse : [validation finale](docs/REVIEW-2026-09-10-skills-validation.md).
+> Origine des correctifs : [rapport de correction](docs/REVIEW-2026-09-10-pr2-corrections.md).
 
 > **v0.17.2 — LE RENDEZ-VOUS DU RECALL EST TRANCHÉ, ET ATOLL CESSE DE SE
 > REGARDER TRAVAILLER** (2026-09-09). Un mois de mesure servait à décider ; la
@@ -544,10 +552,10 @@ documentation — et un numéro de version faux depuis trois releases.
   (`DENY ⌘N` / `ALLOW ⌘Y`). Un README qui montre une UI inexistante est pire qu'un
   README ennuyeux.
 - **Ne jamais référencer une image absente** : `![…](assets/ilot.png)` sur un fichier
-  qui n'existe pas affiche une image cassée sur la page d'accueil du dépôt. Il n'y a
-  AUCUNE capture dans le dépôt à ce jour — en ajouter une demande la permission
-  « Enregistrement de l'écran » (voir plus haut), et de vérifier qu'aucun nom de projet
-  client n'y figure : le dépôt est PUBLIC.
+  qui n'existe pas affiche une image cassée sur la page d'accueil du dépôt. Les
+  captures et films de recette sont dans `docs/reviews/`. Toute nouvelle capture
+  exige l'accès écran et une vérification de son contenu : le dépôt est PUBLIC,
+  aucun nom de projet client ni secret ne doit y figurer.
 
 ## Règles critiques
 

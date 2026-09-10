@@ -35,6 +35,14 @@ DIST="$ROOT/dist/$VERSION"
 # archives précédentes → appcast multi-entrées + deltas incrémentaux.
 UPDATES="$ROOT/dist/updates"
 
+# Un ancien artefact et le staging restent récupérables. Ces chemins sont
+# créés par ce script ; les archives persistantes de mises à jour sont exclues.
+trash_owned_path() {
+  if [[ -e "$1" || -L "$1" ]]; then
+    /usr/bin/trash --stopOnError "$1"
+  fi
+}
+
 # ── PRÉFLIGHT (quelques secondes) — AVANT les ~8 minutes de build et les deux
 # notarisations. C'est là que le piège de la v0.14.0 se serait vu : bouger
 # MARKETING_VERSION sans bouger CURRENT_PROJECT_VERSION fait échouer
@@ -51,7 +59,7 @@ if ! python3 "$ROOT/Scripts/check-docs.py" --no-tests --preflight; then
   exit 1
 fi
 
-rm -rf "$DIST"
+trash_owned_path "$DIST"
 mkdir -p "$DIST" "$UPDATES"
 
 echo "── Atoll $VERSION — build Release signé"
@@ -98,7 +106,7 @@ xcrun notarytool submit "$ZIP" --keychain-profile "$PROFILE" --wait | tee "$DIST
 grep -q "status: Accepted" "$DIST/notary-app.log" || { echo "✗ notarisation refusée (voir notarytool log)"; exit 1; }
 xcrun stapler staple "$APP"
 # Re-zip de l'app STAPLÉE : c'est l'artefact de mise à jour Sparkle.
-rm -f "$ZIP"
+trash_owned_path "$ZIP"
 ditto -c -k --keepParent "$APP" "$ZIP"
 cp "$ZIP" "$UPDATES/"
 
@@ -108,7 +116,7 @@ STAGE="$(mktemp -d /tmp/atoll-dmg.XXXXXX)"
 ditto "$APP" "$STAGE/Atoll.app"
 ln -s /Applications "$STAGE/Applications"
 hdiutil create -volname "Atoll $VERSION" -srcfolder "$STAGE" -ov -format UDZO "$DMG" >/dev/null
-rm -rf "$STAGE"
+trash_owned_path "$STAGE"
 codesign --sign "$IDENTITY" --timestamp "$DMG"
 xcrun notarytool submit "$DMG" --keychain-profile "$PROFILE" --wait | tee "$DIST/notary-dmg.log"
 grep -q "status: Accepted" "$DIST/notary-dmg.log" || { echo "✗ notarisation du DMG refusée"; exit 1; }
