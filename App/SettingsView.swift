@@ -726,6 +726,9 @@ private struct LearningPane: View {
                             Text(attemptDetail(attempt))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
+                            if let reason = attempt.failureReason {
+                                Text(reason).font(.caption).foregroundStyle(.secondary)
+                            }
                         }
                     }
                 }

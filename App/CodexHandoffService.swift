@@ -29,6 +29,12 @@ enum CodexHandoffService {
         BridgePaths.homeDirectory.appendingPathComponent(".atoll/handoff", isDirectory: true)
     }
 
+    static func resolveExecutable(for destination: AgentProvider) async -> String? {
+        let override = UserDefaults.standard.string(forKey: CodexExecutable.overrideKey) ?? ""
+        return destination == .codex
+            ? await CodexExecutable.resolve(overridePath: override) : await ClaudeExecutable.resolve()
+    }
+
     /// Écrit les deux fichiers puis ouvre le script avec Terminal.app.
     ///
     /// `digest` est calculé par l'appelant : c'est lui qui sait lire le
@@ -40,10 +46,10 @@ enum CodexHandoffService {
         let home: URL?
         do { home = destination == .codex ? try CodexPaths.validatedHome() : nil }
         catch { return .failed(error.localizedDescription) }
-        let override = UserDefaults.standard.string(forKey: CodexExecutable.overrideKey) ?? ""
-        let executable = destination == .codex
-            ? await CodexExecutable.resolve(overridePath: override) : await ClaudeExecutable.resolve()
-        guard let executable else { return .failed("\(destination.label) introuvable : vérifie son installation.") }
+        let executable = await resolveExecutable(for: destination)
+        guard SessionHandoff.isAvailable(workingDirectory: cwd, executable: executable), let executable else {
+            return .failed("\(destination.label) ou le dossier de travail est indisponible : vérifie son installation.")
+        }
         if destination == .codex, home != CodexPaths.homeURL { return .failed("Le dossier Codex a changé : relance la passation.") }
         // Une reprise déjà ouverte conserve son contexte, même si une autre
         // fenêtre prépare la même session pendant l'ouverture de Terminal.

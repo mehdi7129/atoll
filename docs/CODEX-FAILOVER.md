@@ -1,7 +1,7 @@
 # Exécuteur des analyses et passation entre CLI
 
 État du code au **2026-09-10**, développé sur v0.17.2, **non publié**.
-Le [rapport de mise en œuvre](IMPLEMENTATION-2026-09-10-codex-claude.md) distingue
+Le [rapport de correction](REVIEW-2026-09-10-pr2-corrections.md) distingue
 tests exécutés et parcours encore à vérifier.
 
 ## Trois choix indépendants
@@ -9,8 +9,8 @@ tests exécutés et parcours encore à vérifier.
 | Choix | Où | Effet |
 |---|---|---|
 | Fournisseur affiché | Boutons Claude Code / Codex | Liste, quota, palette |
-| Exécuteur des analyses | Réglages → Apprentissage ou Codex | Abonnement et modèle des dépenses Atoll |
-| Destination des skills | Réglages → Abonnement des analyses Atoll | Catalogue, proposition et installation Claude ou Codex |
+| Exécuteur des analyses | Réglages → Apprentissage ; modèle dans Réglages → Codex | Abonnement et modèle des dépenses Atoll |
+| Destination des skills | Réglages → Apprentissage → Abonnement des analyses Atoll | Catalogue, proposition et installation Claude ou Codex |
 
 Changer de vue ne change jamais l'exécuteur. L'origine d'un transcript reste
 sa provenance, quel que soit l'agent qui l'analyse.
@@ -23,14 +23,17 @@ La recherche locale de plugins ne consomme rien ; le catalogue ciblé demeure
 Claude même quand son classement IA est effectué par Codex.
 
 Un poste Codex seul peut choisir Codex sans binaire ni quota Claude.
-L'onboarding préselectionne l'agent choisi si aucun moteur n'a encore été défini,
-sans activer l'apprentissage. Le modèle Codex doit être choisi dans le catalogue
+L'onboarding propose d'ouvrir les réglages du moteur ; installer un CLI ne
+modifie jamais le moteur existant, même si sa clé n'avait pas encore été écrite.
+L'apprentissage reste un choix distinct. Le modèle Codex doit être choisi dans le catalogue
 natif et est revalidé avant chaque lancement.
 
 Le failover vers l'autre abonnement est **désactivé par défaut**. Son activation
 ne suffit pas : il faut une mesure fraîche et applicable prouvant l'épuisement
 du moteur choisi et une mesure fraîche et disponible pour l'autre. Il peut aller
 dans les deux sens. Un quota inconnu ou ambigu ne provoque jamais une bascule.
+La fraîcheur maximale utilisée par défaut est 600 s pour Claude, 300 s pour
+Codex, en accord avec le budget des analyses.
 
 La tolérance historique « quota inconnu : une tentative interne par 5 h » est
 affichée et désactivable. Elle porte seulement sur le moteur choisi. Le plafond
@@ -63,13 +66,16 @@ résultat. Il contient moteur, modèle, type d'analyse, origine, destination et
 snapshot du quota avec fraction, fraîcheur, reset, catégorie et raison lorsque
 disponibles ; pas le contenu des prompts ni les secrets de connexion.
 Un lancement impossible rend son créneau ; un processus lancé puis en échec
-compte comme tentative. Une réservation interrompue par un crash est traitée
-conservativement au redémarrage.
+compte comme tentative. Au redémarrage, une simple préparation est libérée.
+L’intention de spawn, persistée immédiatement avant `process.run()`, ou un
+lancement confirmé sont comptés : le crash a pu survenir après une dépense.
+Les refus de capture sont aussi journalisés dans `retrospectives.json` avec
+leur cause ; les évaluations admises y conservent modèle et raison du quota inconnu.
 
-Un échec de préparation ou de spawn du rangement, après admission au budget,
-applique un backoff de 30 minutes et n'avance pas la date du dernier vrai
-lancement. Un refus antérieur de configuration ou de budget (modèle absent,
-autre analyse en cours) reste évalué par le minuteur ordinaire de 15 minutes.
+Un échec de préparation ou de spawn du rangement applique un backoff de
+30 minutes et persiste sa cause, y compris un refus de configuration ou de
+budget. Moins de deux notes ou un corpus trop volumineux clôturent l'évaluation
+pour la cadence normale ; ces refus ne bouclent plus toutes les 30 minutes.
 Le bouton manuel reste possible.
 Le minuteur des bilans recontrôle la tête de file après les awaits ; une autre
 session terminée pendant la préparation ne reprend pas un délai périmé.
@@ -86,8 +92,9 @@ Les jobs travaillent dans un dossier temporaire contrôlé. Leur contexte est
 fourni explicitement ; le projet analysé n'est pas leur cwd. Le marqueur
 `ATOLL_RETROSPECTIVE=1` neutralise l'observation interne. Les sorties et rapports
 sont bornés ; l'escalade des signaux recontrôle le PID et son instant de
-démarrage. Le mot « error » dans un fichier lu ne devient pas un verdict d'échec
-d'outil : le condensé conserve l'issue inconnue en l'absence de preuve.
+démarrage. Pour Codex, le mot « error » dans une sortie ne devient pas un
+verdict d'échec : l'issue reste inconnue. Le parseur Claude historique conserve
+encore une heuristique textuelle lorsque `isError` manque ; voir le rapport.
 
 Le schéma produit pour OpenAI est adapté au contrat strict : propriétés requises,
 objets fermés et retrait des bornes non acceptées. La validation Swift reste
@@ -105,7 +112,9 @@ fournisseur de cette conversation ou de cette analyse.
 ## Continuer une session dans l'autre CLI
 
 Les détails de session proposent **CONTINUER DANS CODEX** ou **CONTINUER DANS
-CLAUDE** selon leur origine, indépendamment du réglage de failover.
+CLAUDE** selon leur origine, indépendamment du réglage de failover, seulement
+si le dossier et l’exécutable de destination existent. Les chemins sont
+revalidés au clic, notamment après une désinstallation du CLI.
 
 Atoll prépare un condensé dans un dossier unique de passation, avec fichiers
 privés, puis ouvre un script de terminal. Ce script utilise un exécutable résolu,
@@ -131,9 +140,10 @@ de permission d'un agent à l'autre.
   Il consomme une génération ; il n'est pas lancé par la suite ordinaire.
 - Les scripts de passation dans les deux sens ont été exécutés avec de faux
   CLI : chemin avec espaces/apostrophe, cwd, home et contexte absolu corrects.
-- L'ouverture de Terminal.app avec un CLI authentifié, le clic réel des cartes
-  et la non-régression GUI Claude restent à valider. Une Release signée testée
-  et la recette de publication restent nécessaires avant diffusion.
+- Les captures, la navigation native entre cartes, le brouillon et ⌘N ont été
+  vérifiés en aperçu isolé. L'ouverture de Terminal.app avec un CLI authentifié,
+  VoiceOver et la recette des deux TUI réelles restent à valider avant diffusion.
+  Le [rapport de correction](REVIEW-2026-09-10-pr2-corrections.md) précise les preuves.
 
 Le protocole d'installation, les capacités natives et la recette visuelle sont
 dans [CODEX-INTEGRATION.md](CODEX-INTEGRATION.md).

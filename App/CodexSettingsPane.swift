@@ -62,7 +62,7 @@ struct CodexSettingsPane: View {
                     LabeledContent("Dernier événement reçu", value: date.formatted(date: .omitted, time: .standard))
                 } else { Text("Aucun événement reçu dans ce lancement d'Atoll.").font(.caption).foregroundStyle(.secondary) }
                 if let message { Text(message).font(.caption).textSelection(.enabled) }
-                Text("Installation indépendante de Claude : définitions Atoll sauvegardées dans hooks.json.atoll-backup, lanceur et skill manuel atoll-recall. Le trust et config.toml restent gérés par Codex. Le retrait conserve la mémoire commune et les fichiers personnels. Un seul home Codex est observé à la fois.")
+                Text("Avant une écriture, Atoll conserve une sauvegarde des hooks : copie initiale, puis copie datée pour chaque migration. Les retraits et personnalisations manuels sont préservés au démarrage ; « Réparer » réinstalle les définitions Atoll. Les autorisations restent gérées dans Codex. Un seul dossier Codex est suivi : changer de dossier ne retire pas l'intégration de l'ancien.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Quota de l'abonnement ChatGPT / Codex") {
@@ -96,7 +96,11 @@ struct CodexSettingsPane: View {
                 Text("Utilise la connexion de ton CLI (codex login) et son app-server officiel. Aucun message généré, aucun jeton de connexion extrait par Atoll. Les comptes API et les quotas absents ne sont pas affichés comme un abonnement à 0 %. Les durées viennent de Codex, elles ne sont pas supposées être 5 h / 7 j.")
                     .font(.caption).foregroundStyle(.secondary)
             }
-            AnalysisSettingsSection()
+            Section("Analyses Atoll") {
+                Button("Choisir le moteur et les limites dans Apprentissage") {
+                    UserDefaults.standard.set("apprentissage", forKey: "settingsTab")
+                }
+            }
             CodexCatalogSection(projectPath: projectPath, executableOverride: executablePath)
             Section("Modèle des analyses Codex") {
                 Picker("Modèle", selection: $analysisModel) {

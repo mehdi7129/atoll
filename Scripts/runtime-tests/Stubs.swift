@@ -2,6 +2,15 @@
 import Foundation
 import AtollCore
 enum CodexPreview { static let enabled = false }
+enum CodexPaths {
+    static var invalidHome = false
+    static var cliHomeURL: URL { BridgePaths.root }
+    static var homeURL: URL { cliHomeURL }
+    static func validatedHome() throws -> URL {
+        if invalidHome { throw CocoaError(.fileReadCorruptFile) }
+        return cliHomeURL
+    }
+}
 struct SkillDestination {
     let provider: AgentProvider
     static func capture(origin: AgentProvider) throws -> Self { .init(provider: origin) }

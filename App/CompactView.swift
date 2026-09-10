@@ -10,31 +10,30 @@ struct CompactView: View {
     private var activityIsRockstar: Bool { rockstar && viewModel.selectedProvider == .claude }
 
     var body: some View {
-        if let notch = viewModel.notchSize {
-            HStack(spacing: 0) {
-                VStack(spacing: 1) {
-                    ProviderSelector(viewModel: viewModel, colors: colors, compact: true)
-                    activityLabel
+        if viewModel.hasActivity || rockstar {
+            if let notch = viewModel.notchSize {
+                HStack(spacing: 0) {
+                    VStack(spacing: 1) {
+                        ProviderSelector(viewModel: viewModel, colors: colors, compact: true)
+                        activityLabel
+                    }
+                    .frame(width: viewModel.compactWidth.wingWidth)
+                    Color.clear.frame(width: notch.width)
+                    rightSide.padding(.trailing, 8).frame(width: viewModel.compactWidth.wingWidth)
                 }
-                .frame(width: viewModel.compactWidth.wingWidth)
-                Color.clear.frame(width: notch.width)
-                rightSide.frame(width: viewModel.compactWidth.wingWidth)
-            }
-            .frame(height: notch.height)
-        } else {
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 8) {
-                    ProviderSelector(viewModel: viewModel, colors: colors, compact: true)
-                    activityLabel
+                .frame(height: notch.height)
+            } else {
+                HStack(spacing: 4) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ProviderSelector(viewModel: viewModel, colors: colors, compact: true)
+                        activityLabel
+                    }
+                    Spacer(minLength: 0)
                     rightSide
                 }
-                HStack(spacing: 6) {
-                    ProviderSelector(viewModel: viewModel, colors: colors, compact: true)
-                    rightSide
-                }
+                .padding(.horizontal, 8)
+                .frame(height: max(viewModel.menuBarHeight, IslandGeometry.minimumPillHeight))
             }
-            .padding(.horizontal, 8)
-            .frame(height: max(viewModel.menuBarHeight, IslandGeometry.minimumPillHeight))
         }
     }
 
@@ -53,28 +52,24 @@ struct CompactView: View {
     }
 
     private var rightSide: some View {
-        Group {
+        VStack(spacing: 0) {
             if rockstar {
-                VStack(spacing: 0) {
-                    Text("CLAUDE")
-                    Text("◆ ROCKSTAR")
-                }
-                .font(AtollFont.mono(8, weight: .bold))
+                Text("CLAUDE◆ROCKSTAR")
+                .font(AtollFont.mono(7, weight: .bold))
                 .foregroundStyle(Color(hex: 0xFF3B30))
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Claude Rockstar actif, y compris en arrière-plan")
                 .help("Rockstar reste actif pour Claude ; Codex conserve ses autorisations")
-            } else {
-                TimelineView(.periodic(from: .now, by: 30)) { _ in
-                    if let quota = compactQuota {
-                        Text("\(quota.label) \(Int(quota.fraction * 100))%")
-                            .foregroundStyle(colors.dim)
-                    } else {
-                        Text("\(viewModel.selectedProvider.label) · —").foregroundStyle(colors.dim)
-                    }
-                }
-                .font(AtollFont.mono(9))
             }
+            TimelineView(.periodic(from: .now, by: 30)) { _ in
+                if let quota = compactQuota {
+                    Text("\(quota.label) \(Int(quota.fraction * 100))%")
+                        .foregroundStyle(colors.dim)
+                } else {
+                    Text("\(viewModel.selectedProvider == .codex ? "CX" : "CL") · —").foregroundStyle(colors.dim)
+                }
+            }
+            .font(AtollFont.mono(8))
         }
         .lineLimit(1)
         .fixedSize()
@@ -83,9 +78,12 @@ struct CompactView: View {
     private var compactQuota: (label: String, fraction: Double)? {
         if viewModel.selectedProvider == .codex {
             guard let quota = CodexService.shared.quota, quota.isFresh(at: Date()),
-                  let bucket = quota.buckets.first(where: { $0.id == "codex" }),
+                  let bucket = quota.primaryBucket,
                   let window = bucket.windows.first, window.isCurrent(at: Date()) else { return nil }
-            return ("CX \(window.label)", window.usedFraction)
+            // Sans durée connue, ne pas inventer une fenêtre ni faire déborder
+            // l'aile avec « principale » / « secondaire » : le détail la nomme.
+            let label = window.label == "principale" || window.label == "secondaire" ? "CX" : "CX \(window.label)"
+            return (label, window.usedFraction)
         }
         guard viewModel.hasFreshFiveHour else { return nil }
         return ("CL 5h", viewModel.usage.fiveHourFraction)
@@ -97,6 +95,9 @@ struct CompactView: View {
         } else if viewModel.workingCount > 0 {
             AsciiSpinnerView(color: activityIsRockstar ? Color(hex: 0xFF3B30) : colors.accent)
         } else { Text("·").foregroundStyle(colors.dim) }
+        if !CodexPreview.enabled && SkillReviewCenter.shared.pendingCount > 0 {
+            Text("+").foregroundStyle(colors.accent).accessibilityLabel("Skill proposé")
+        }
     }
 }
 

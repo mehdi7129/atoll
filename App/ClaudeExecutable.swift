@@ -40,7 +40,8 @@ enum ClaudeExecutable {
 
     /// Chemin absolu exécutable, ou `nil` si `claude` reste introuvable.
     static func resolve() async -> String? {
-        if let cached { return cached }
+        if let cached, FileManager.default.isExecutableFile(atPath: cached) { return cached }
+        cached = nil
         // Chemin usuel de l'installeur natif : vérif CHEAP (pas de shell),
         // retentée à chaque appel — claude peut apparaître après coup.
         let common = ("~/.local/bin/claude" as NSString).expandingTildeInPath

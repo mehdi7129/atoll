@@ -87,10 +87,9 @@ final class RetrospectiveRunner {
     /// qui se terminait pendant cette fenêtre déclenchait un SECOND `claude -p`
     /// payant en parallèle (audit du 2026-07-27).
     @ObservationIgnored private var preparing = false
-    /// La session du run en cours est-elle repartie PENDANT la préparation ?
-    /// `sessionResumed` n'a alors ni job en file ni processus à arrêter : c'est
-    /// le seul moyen d'annuler avant le spawn. Remis à false à chaque run.
-    @ObservationIgnored private var resumedDuringPreparation = false
+    /// Identité de la préparation courante, invalidée aussi avant le spawn.
+    /// `sessionResumed` n'a alors ni job en file ni processus à arrêter : les
+    /// gardes de génération après les awaits empêchent un lancement tardif.
     @ObservationIgnored private var runGeneration = UUID()
     @ObservationIgnored private var runLaunched = false
     @ObservationIgnored private var processIdentity: ProcessIdentity?
@@ -135,8 +134,8 @@ final class RetrospectiveRunner {
             // ce `terminate()` ne portait sur rien et le `claude -p` partait
             // ensuite, à ~0,87 $, sur une session qui venait de repartir. Pire,
             // `recordProcessed` la marquait « traitée », donc sa VRAIE fin de
-            // session ne serait plus analysée. Le drapeau est lu après l'await.
-            resumedDuringPreparation = true
+            // session ne serait plus analysée. La génération est revérifiée
+            // après chaque await.
             runGeneration = UUID()
             terminateWithEscalation()
         }
@@ -314,7 +313,7 @@ final class RetrospectiveRunner {
                     self.phase = .idle
                     return
                 }
-                self.phase = .waiting(head.snapshot.id)
+                if self.phase != .waiting(head.snapshot.id) { self.phase = .waiting(head.snapshot.id) }
                 let age = Date().timeIntervalSince(head.endedAt)
                 if age < Self.startDelaySeconds {
                     try? await Task.sleep(for: .seconds(Self.startDelaySeconds - age))
@@ -336,7 +335,7 @@ final class RetrospectiveRunner {
         }
     }
 
-    private func evaluateAndRun(_ job: Job) async {
+    func evaluateAndRun(_ job: Job) async {
         // ORDRE IMPÉRATIF : choisir le fournisseur, PUIS lui appliquer le gate
         // avec SON quota. L'inverse évaluerait un plafond de fenêtre sur un
         // compte qu'on ne va pas débiter — et refuserait un run que le second
@@ -344,7 +343,12 @@ final class RetrospectiveRunner {
         let execution: AnalysisExecution
         do { execution = try AnalysisExecution.capture(kind: .retrospective) }
         catch {
-            lastOutcome = error.localizedDescription
+            lastOutcome = "skip(configuration)"
+            journal(AttemptRecord(sessionID: job.snapshot.id, decidedAt: Date(),
+                decision: "skip(configuration)", outcome: nil,
+                transcriptBytes: job.snapshot.transcriptPath.flatMap {
+                    (try? FileManager.default.attributesOfItem(atPath: $0)[.size] as? NSNumber)?.intValue
+                }, quotaFraction: nil, quotaAgeSeconds: nil, failureReason: error.localizedDescription))
             phase = .idle
             scheduleNext()
             return
@@ -383,7 +387,8 @@ final class RetrospectiveRunner {
                 quotaFraction: quota.usedFraction,
                 quotaAgeSeconds: quota.receivedAt.map { Date().timeIntervalSince($0) },
                 provider: execution.provider.rawValue,
-                providerReason: execution.reason
+                providerReason: execution.reason, model: execution.model,
+                quotaUnknownReason: execution.quota.unknownReason
             ))
             phase = .idle
             scheduleNext()
@@ -397,7 +402,8 @@ final class RetrospectiveRunner {
                 quotaFraction: quota.usedFraction,
                 quotaAgeSeconds: quota.receivedAt.map { Date().timeIntervalSince($0) },
                 provider: execution.provider.rawValue,
-                providerReason: execution.reason
+                providerReason: execution.reason, model: execution.model,
+                quotaUnknownReason: execution.quota.unknownReason
             )
             await run(job, execution: execution)
         }
@@ -504,13 +510,10 @@ final class RetrospectiveRunner {
             activeOrigin = nil
             activeDestination = nil
         }
-        // La TENTATIVE compte pour le plafond (persistée AVANT le spawn) :
-        // un claude en panne ne peut pas boucler.
-        recordAttempt()
+        // Le budget commun persiste la préparation puis l’intention de spawn.
         phase = .running(job.snapshot.id)
         lastOutcome = nil
         preparing = true
-        resumedDuringPreparation = false
         let generation = UUID()
         runGeneration = generation
         runLaunched = false
@@ -625,9 +628,7 @@ final class RetrospectiveRunner {
         }
         guard let launch else {
             log.error("spawn rétrospective impossible : \(provider.rawValue, privacy: .public) introuvable")
-            // `failed(...)` est INSCRIT dans la liste de `refundAttempt()` : cet
-            // échec précède toute dépense, il ne doit pas brûler un créneau de
-            // la fenêtre de 5 h (régression trouvée dans le correctif v0.16.6).
+            // Aucun spawn : AnalysisBudget rendra la réservation sans dépense.
             finish(job, outcome: "failed(\(provider.rawValue))", transcriptBytes: 0)
             return
         }
@@ -660,6 +661,7 @@ final class RetrospectiveRunner {
         process.standardError = stderr
 
         do {
+            try AnalysisBudget.shared.prepareToLaunch(lease)
             try process.run()
         } catch {
             log.error("spawn rétrospective impossible : \(error.localizedDescription)")
@@ -839,27 +841,6 @@ final class RetrospectiveRunner {
         if !failed {
             recordProcessed(sessionID: job.snapshot.id, transcriptBytes: transcriptBytes)
         }
-        // Échec AVANT toute dépense (condensé vide, spawn impossible) : la
-        // tentative est retirée du plafond de la fenêtre. Sinon une seule
-        // session cassée neutralisait la rétrospective pendant 5 h pour toutes
-        // les autres — d'autant plus grave que le mode « quota inconnu »
-        // n'accorde qu'UN créneau (revue).
-        // `failed(resumed)` en fait partie : l'annulation « la session est
-        // repartie pendant la préparation » ne lance AUCUN `claude -p`. Oublier
-        // de l'inscrire ici lui faisait consommer un créneau de la fenêtre de
-        // 5 h pour rien — d'autant plus grave que le mode « quota inconnu »
-        // n'en accorde qu'UN (revue adversariale du 2026-08-14, sur le lot qui
-        // a introduit ce chemin).
-        // `failed(codex)` est la jumelle de `failed(claude)` : « l'exécutable du
-        // fournisseur retenu est introuvable », donc AVANT toute dépense. Elle a
-        // été oubliée ici en première écriture du lot de bascule — exactement la
-        // régression que la revue du correctif v0.16.6 avait trouvée, au même
-        // endroit, six lignes sous l'avertissement qui la décrit. Ajouter un
-        // outcome d'échec sans passer par cette liste est le piège récurrent du
-        // fichier.
-        if !runLaunched {
-            refundAttempt()
-        }
         if var attempt = pendingAttempt {
             attempt.outcome = outcome
             // L'entrée a pu être journalisée au départ : on la remplace au lieu
@@ -915,10 +896,15 @@ final class RetrospectiveRunner {
         /// pas basculé » est indiagnosticable, exactement le trou que le
         /// journal de la Phase 12 existe pour fermer.
         var providerReason: String?
+        /// Le refus de préparation doit rester lisible après relancement.
+        var failureReason: String?
+        var model: String?
+        var quotaUnknownReason: String?
     }
 
     private struct PersistedState: Codable {
         var processed: [LearningGate.History.Processed] = []
+        // Lecture des dépenses d’avant analysis-jobs-v2 ; plus aucun nouvel ajout.
         var runTimestamps: [Date] = []
         /// Journal des évaluations (cap 100) — affiché dans les Réglages.
         var attempts: [AttemptRecord] = []
@@ -976,19 +962,6 @@ final class RetrospectiveRunner {
         let state = loadState()
         // Le plafond est commun aux trois consommateurs dans AnalysisBudget.
         return LearningGate.History(processed: state.processed, runTimestamps: [])
-    }
-
-    private func recordAttempt() {
-        var state = loadState()
-        state.runTimestamps.append(Date())
-        saveState(state)
-    }
-
-    /// Retire la dernière tentative du plafond : elle n'a rien coûté.
-    private func refundAttempt() {
-        var state = loadState()
-        if !state.runTimestamps.isEmpty { state.runTimestamps.removeLast() }
-        saveState(state)
     }
 
     private func recordProcessed(sessionID: String, transcriptBytes: Int) {

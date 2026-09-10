@@ -164,6 +164,9 @@ public struct CodexSessions: Sendable {
         let at: Date
     }
     private var closedSessions: [String: ClosedSession] = [:]
+    // Au-delà des délais des hooks (600 s), conserver une clôture une heure
+    // couvre les retards sans condamner une reprise anonyme jusqu'au redémarrage.
+    private static let closedSessionRetention: TimeInterval = 3_600
     public init() {}
 
     public func process(for sessionID: String) -> ProcessIdentity? { entries[sessionID]?.process }
@@ -286,12 +289,15 @@ public struct CodexSessions: Sendable {
 
     @discardableResult
     public mutating func applyEvent(_ event: CodexHookEvent, now: Date = Date()) -> Applied {
+        expireClosures(now: now)
         if let closed = closedSessions[event.sessionID] {
             // Seul un démarrage explicite d'une NOUVELLE incarnation permet
             // une reprise. Un prompt async et un scan ancien ne le peuvent pas.
             let newerProcess = event.process.map { $0.startedAt > (closed.process?.startedAt ?? closed.at.timeIntervalSince1970) } ?? false
             guard event.agentID == nil, event.kind == .sessionStart, newerProcess else {
-                return Applied(turn: newerProcess ? .unknown : .closed)
+                let certainlyClosed = event.process != nil && !newerProcess
+                    || (event.process == nil && event.observedAt.map { $0 < closed.at } == true)
+                return Applied(turn: certainlyClosed ? .closed : .unknown)
             }
             closedSessions.removeValue(forKey: event.sessionID)
         }
@@ -514,6 +520,11 @@ public struct CodexSessions: Sendable {
 
     public mutating func prune(now: Date = Date()) {
         entries = entries.filter { $0.value.process != nil || now.timeIntervalSince($0.value.lastEvent) < 86_400 }
+        expireClosures(now: now)
+    }
+
+    private mutating func expireClosures(now: Date) {
+        closedSessions = closedSessions.filter { now.timeIntervalSince($0.value.at) < Self.closedSessionRetention }
     }
 
     /// La mort attestée du processus termine la session exactement une fois.
@@ -644,8 +655,57 @@ public enum CodexHookSettingsEditor {
     }
 
     public static func needsMigration(_ data: Data?) -> Bool {
-        guard let data, hasManagedHooks(data), let updated = try? edit(data, install: true) else { return false }
+        guard let data, hasManagedHooks(data), let updated = try? migrate(data) else { return false }
         return !sameJSON(data, updated)
+    }
+
+    /// Mise à niveau des formes livrées autrefois, sur place. Une absence est
+    /// un retrait, pas une invitation à réinstaller. Matchers, ordre et clés
+    /// personnelles restent intacts. Une valeur personnalisée n'est pas périmée.
+    static func migrate(_ data: Data) throws -> Data {
+        _ = try edit(data, install: false) // validation sans écriture
+        var root = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        var hooks = root["hooks"] as? [String: Any] ?? [:]
+        for kind in CodexHookEvent.Kind.allCases {
+            guard var groups = hooks[kind.rawValue] as? [[String: Any]] else { continue }
+            for groupIndex in groups.indices {
+                var handlers = groups[groupIndex]["hooks"] as! [[String: Any]]
+                for index in handlers.indices where handlers[index]["command"] as? String == command {
+                    var handler = handlers[index]
+                    let timeout = handler["timeout"] as? Int
+                    let telemetryFields: Set<String> = ["type", "command", "timeout", "async"]
+                    let oldTelemetryShape = Set(handler.keys).isSubset(of: telemetryFields)
+                        && (handler["type"] == nil || handler["type"] as? String == "command")
+                        && (handler["async"] == nil || (handler["async"] as? NSNumber)?.doubleValue == 1)
+                    // L'ancienne permission était un simple hook de télémétrie
+                    // (3 s), avant l'ajout des cartes. Un message, un async false
+                    // ou une clé personnelle distingue une personnalisation.
+                    if kind == .permissionRequest {
+                        if timeout == 3 && oldTelemetryShape {
+                            handler["timeout"] = permissionTimeoutSeconds
+                            handler.removeValue(forKey: "async")
+                            handler["statusMessage"] = permissionStatusMessage
+                        }
+                    } else if timeout == 3 {
+                        if synchronousEvents.contains(kind), handler["async"] as? Bool == true {
+                            handler.removeValue(forKey: "async")
+                        } else if !synchronousEvents.contains(kind), handler["async"] == nil {
+                            handler["async"] = true
+                        }
+                    }
+                    // Ancien booléen sérialisé comme 1 : réparer le type JSON,
+                    // sans confondre un false personnel avec une absence.
+                    if let value = handler["async"] as? NSNumber, value.doubleValue == 1 {
+                        handler["async"] = true
+                    }
+                    handlers[index] = handler
+                }
+                groups[groupIndex]["hooks"] = handlers
+            }
+            hooks[kind.rawValue] = groups
+        }
+        root["hooks"] = hooks
+        return try JSONSerialization.data(withJSONObject: root, options: [.prettyPrinted, .sortedKeys])
     }
 
     static func sameJSON(_ left: Data, _ right: Data) -> Bool {

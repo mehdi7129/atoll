@@ -175,6 +175,8 @@ public enum LearningGate {
         case quotaStale
         case quotaAboveThreshold
         case windowCapReached
+        /// Le budget commun n'a pas pu vérifier les dépenses déjà enregistrées.
+        case analysisJournalUnreadable
     }
 
     /// Décide si une rétrospective doit être lancée. Première raison qui matche

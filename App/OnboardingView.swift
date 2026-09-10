@@ -67,6 +67,7 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
 }
 
 struct OnboardingView: View {
+    @Environment(\.openSettings) private var openSettings
     let onDone: () -> Void
 
     @AppStorage("paletteID") private var paletteID = Palette.monoOrange.id
@@ -127,7 +128,16 @@ struct OnboardingView: View {
                 body: provider == .claude
                     ? "Dans ≋ → Réglages : Manuel ou Rockstar. Rockstar désactive les protections Claude."
                     : "Les commandes, patchs et outils MCP peuvent demander une décision dans l'îlot. Les questions et les plans restent dans le terminal. Rockstar concerne uniquement Claude."
-            ) { EmptyView() }
+            ) {
+                Button("Choisir le moteur des analyses dans les réglages…") {
+                    UserDefaults.standard.set("apprentissage", forKey: "settingsTab")
+                    guard !CodexPreview.enabled else { return }
+                    openSettings()
+                }
+                .buttonStyle(.plain)
+                .font(AtollFont.mono(10))
+                .foregroundStyle(colors.accent)
+            }
 
             step(
                 number: "3",
@@ -180,14 +190,13 @@ struct OnboardingView: View {
             if provider == .codex { try HookInstaller.configureCodex(install: true) }
             else { try HookInstaller.install() }
             ProviderPreferences.shared.selection = provider
-            // Proposition explicite initiale ; ne pas activer l'apprentissage.
-            if UserDefaults.standard.string(forKey: "analysisProvider") == nil {
-                UserDefaults.standard.set(provider.rawValue, forKey: "analysisProvider")
-            }
+            // Installer un CLI ne choisit jamais l'abonnement qui paie les
+            // analyses, même si l'ancienne version n'avait pas cette clé.
         } catch {
             hookError = error.localizedDescription
         }
         refreshInstalled()
+        if CodexPreview.enabled { hooksInstalled = true }
         // Même chemin que les Réglages : le parking des règles deny suit la
         // disponibilité des hooks (ex. niveau Rockstar déjà choisi).
         if provider == .claude {
@@ -196,6 +205,7 @@ struct OnboardingView: View {
     }
 
     private func refreshInstalled() {
+        guard !CodexPreview.enabled else { hooksInstalled = false; return }
         hooksInstalled = provider == .claude ? HookInstaller.isInstalled
             : CodexHookSettingsEditor.isInstalled(try? Data(contentsOf: CodexPaths.hooksURL))
     }

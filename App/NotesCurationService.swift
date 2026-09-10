@@ -187,7 +187,7 @@ final class NotesCurationService {
         Self.sweepStagingLeaks() // débris d'un run interrompu
         let notes = Self.readNotes()
         guard notes.count >= 2 else {
-            finish(outcome: "rien à consolider (\(notes.count) note(s))", touched: false)
+            finish(outcome: "rien à consolider (\(notes.count) note(s))", touched: false, retry: false)
             return
         }
         guard NotesCurationPrompt.fitsBudget(notes: notes) else {
@@ -196,7 +196,7 @@ final class NotesCurationService {
             let size = NotesCurationPrompt.corpusCharacterCount(notes: notes)
             log.error("corpus de notes trop volumineux (\(size) caractères) — curation refusée")
             finish(outcome: "corpus trop volumineux (\(size) caractères) — curation refusée",
-                   touched: false)
+                   touched: false, retry: false)
             return
         }
         let execution: AnalysisExecution
@@ -205,8 +205,7 @@ final class NotesCurationService {
             execution = try AnalysisExecution.capture(kind: .curation)
             lease = try AnalysisBudget.shared.begin(execution, kind: .curation)
         } catch {
-            lastOutcome = error.localizedDescription
-            phase = .idle
+            finish(outcome: error.localizedDescription, touched: false)
             return
         }
         activeExecution = execution
@@ -590,18 +589,16 @@ final class NotesCurationService {
         }
     }
 
-    /// L'échéance avance dès qu'un cycle est allé au bout de son évaluation,
-    /// qu'il ait remplacé quelque chose ou non : un corpus trop gros, une
-    /// sortie inexploitable ou un `claude` introuvable ne doivent pas
-    /// relancer un cycle toutes les 6 heures. Seuls les REPORTS (quota
-    /// inconnu, périmé, trop consommé, rétrospective en cours) laissent
-    /// `lastRunAt` en arrière — et ils sortent avant d'arriver ici.
+    /// Un lancement ou un refus durable (rien à consolider, corpus trop gros)
+    /// avance l'échéance normale. Un échec de préparation conserve l'échéance
+    /// mais impose 30 minutes avant un nouvel essai. Les reports de quota ou
+    /// d'analyse concurrente sortent avant d'arriver ici.
     ///
     /// `touched` ne sert qu'à savoir si les avertissements affichés
     /// (contradictions) proviennent de ce cycle ou doivent être effacés.
-    private func finish(outcome: String, touched: Bool) {
+    private func finish(outcome: String, touched: Bool, retry: Bool = true) {
         let now = Date()
-        if runLaunched || touched {
+        if runLaunched || touched || !retry {
             lastRunAt = now
             retryAt = nil
         } else {
@@ -652,6 +649,7 @@ final class NotesCurationService {
         // La dépense commence ICI, pas au cycle : c'est ce qui borne la
         // tolérance « quota inconnu ».
         do {
+            try AnalysisBudget.shared.prepareToLaunch(lease)
             try process.run()
         } catch {
             log.error("spawn curation impossible : \(error.localizedDescription)")

@@ -99,6 +99,9 @@ enum HookInstaller {
     }
 
     private static func runHelper(_ verb: String) throws {
+        // Les boutons de recette parcourent le flux UI, jamais les réglages
+        // réels du CLI ni le helper qui les écrit.
+        guard !CodexPreview.enabled else { return }
         guard FileManager.default.isExecutableFile(atPath: helperURL.path) else {
             throw InstallerError.helperMissing
         }

@@ -340,7 +340,7 @@ public final class MemoryIndex {
                         """, binds: [.int(id), .int(Int64(index)), .text(fragment.text)])
                 }
             }
-            try run("INSERT OR REPLACE INTO atoll_content_migrations(name, last_id) VALUES('codex-instructions-v1', ?1)",
+            try run("INSERT OR REPLACE INTO atoll_content_migrations(name, last_id) VALUES('codex-instructions-v2', ?1)",
                     binds: [.int(high)])
         }
         return changes.count
@@ -348,24 +348,45 @@ public final class MemoryIndex {
 
     private func snapshotBeforeCodexHygiene() throws {
         let target = url.deletingLastPathComponent().appendingPathComponent("memory-before-codex-hygiene-\(UUID().uuidString).sqlite")
-        let destination = try Self.openHandle(path: target.path, flags: SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE)
-        defer { sqlite3_close_v2(destination) }
+        try Self.writeCodexHygieneSnapshot(to: target) { destination in
+            guard let backup = sqlite3_backup_init(destination, "main", try handle(), "main") else {
+                throw MemoryIndexError.sqlite(code: sqlite3_errcode(destination), message: "Impossible de sauvegarder l'index avant migration Codex")
+            }
+            let result = sqlite3_backup_step(backup, -1)
+            let finished = sqlite3_backup_finish(backup)
+            guard result == SQLITE_DONE, finished == SQLITE_OK else {
+                throw MemoryIndexError.sqlite(code: result, message: "Sauvegarde incomplète : migration Codex annulée")
+            }
+        }
+    }
+
+    /// Crée un fichier exclusivement possédé par cette tentative. En cas
+    /// d'échec, fermer SQLite puis retirer ce fichier et ses journaux évite
+    /// une nouvelle copie partielle de l'index à chaque lancement.
+    static func writeCodexHygieneSnapshot(to target: URL, copy: (OpaquePointer) throws -> Void) throws {
+        try Data().write(to: target, options: .withoutOverwriting)
+        var destination: OpaquePointer?
+        var complete = false
+        defer {
+            if let destination { sqlite3_close_v2(destination) }
+            if !complete {
+                for suffix in ["", "-wal", "-shm", "-journal"] {
+                    try? FileManager.default.removeItem(atPath: target.path + suffix)
+                }
+            }
+        }
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: target.path)
-        guard let backup = sqlite3_backup_init(destination, "main", try handle(), "main") else {
-            throw MemoryIndexError.sqlite(code: sqlite3_errcode(destination), message: "Impossible de sauvegarder l'index avant migration Codex")
-        }
-        let result = sqlite3_backup_step(backup, -1)
-        let finished = sqlite3_backup_finish(backup)
-        guard result == SQLITE_DONE, finished == SQLITE_OK else {
-            throw MemoryIndexError.sqlite(code: result, message: "Sauvegarde incomplète : migration Codex annulée")
-        }
+        let opened = try Self.openHandle(path: target.path, flags: SQLITE_OPEN_READWRITE)
+        destination = opened
+        try copy(opened)
         // Le backup hérite du journal_mode WAL de la source. Le convertir en
         // fichier autonome avant fermeture permet sa réouverture read-only,
         // sans avoir besoin de créer des fichiers auxiliaires -wal/-shm.
-        let standalone = sqlite3_exec(destination, "PRAGMA journal_mode=DELETE", nil, nil, nil)
+        let standalone = sqlite3_exec(opened, "PRAGMA journal_mode=DELETE", nil, nil, nil)
         guard standalone == SQLITE_OK else {
             throw MemoryIndexError.sqlite(code: standalone, message: "Sauvegarde non autonome : migration Codex annulée")
         }
+        complete = true
     }
 
     /// Nettoyage des seules sauvegardes gérées lors d'une suppression explicite

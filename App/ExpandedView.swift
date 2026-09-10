@@ -5,6 +5,8 @@ import AtollCore
 struct ExpandedView: View {
     let viewModel: NotchViewModel
     let colors: ThemeColors
+    var rippleTrigger = 0
+    var rippleEnabled = false
     @Environment(\.openSettings) private var openSettings
 
     @AppStorage(InteractionCenter.autonomyKey) private var autonomyRaw = AutonomyLevel.manual.rawValue
@@ -31,12 +33,16 @@ struct ExpandedView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            header
-            ProviderSelector(viewModel: viewModel, colors: colors)
+            // L'onde reste sur le chrome SwiftUI. Les scrolls et champs AppKit
+            // des cartes ne supportent pas cette couche (vérifié en capture).
+            VStack(alignment: .leading, spacing: 10) {
+                header
+                ProviderSelector(viewModel: viewModel, colors: colors)
+            }
+            .expansionRipple(trigger: rippleTrigger, active: rippleEnabled)
 
             if let selected = InteractionPresentation.shared.current {
                 // Une demande en attente prend toute la place (priorité maximale).
-                ScrollView {
                 if selected.provider == .claude,
                    let request = InteractionCenter.shared.pending.first(where: { $0.id == selected.requestID }) {
                     InteractionCardView(request: request, colors: colors).id(selected)
@@ -44,8 +50,6 @@ struct ExpandedView: View {
                           let request = CodexInteractionCenter.shared.pending.first(where: { $0.id == selected.requestID }) {
                     CodexInteractionCardView(request: request, colors: colors).id(selected)
                 }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 if InteractionPresentation.shared.items.count > 1 {
                     HStack {
                         AsciiButton(label: "← DEMANDE", color: colors.dim, shortcut: nil) {
@@ -63,14 +67,15 @@ struct ExpandedView: View {
                 }
             } else if let session = viewModel.selectedSession {
                 // Détail d'une session (clic sur une ligne).
-                ScrollView {
-                    SessionDetailView(session: session, colors: colors) {
-                        viewModel.clearSelection()
-                    }
+                SessionDetailView(session: session, colors: colors) {
+                    viewModel.clearSelection()
                 }
             } else {
-                ScrollView { sessionList }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                // Un ScrollView englobant sous layerEffect rend le corps vide
+                // avec l'onde active. Seuls les détails des cartes défilent.
+                sessionList
+                    .expansionRipple(trigger: rippleTrigger, active: rippleEnabled)
+                Spacer(minLength: 0)
                 // Bannière passive : jamais par-dessus une carte de permission
                 // (branche else uniquement), aucune ouverture forcée.
                 if !CodexPreview.enabled && SkillReviewCenter.shared.pendingCount > 0 {
@@ -82,6 +87,7 @@ struct ExpandedView: View {
                 // c'est la LISTE qui cède — jamais le quota, qui disparaissait
                 // en silence (audit du 2026-07-27).
                 footer
+                    .expansionRipple(trigger: rippleTrigger, active: rippleEnabled)
                     .layoutPriority(1)
             }
         }
@@ -118,7 +124,7 @@ struct ExpandedView: View {
     }
 
     private var sessionList: some View {
-        LazyVStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 6) {
             // En-tête + bascule de mode. Le titre rétrécit pour laisser la
             // place au sélecteur (la grille ASCII reste sur une ligne).
             HStack(spacing: 6) {
@@ -164,7 +170,7 @@ struct ExpandedView: View {
                     // Même règle que la vue par état : ce qui ne tient pas est
                     // ANNONCÉ. Une liste tronquée en silence ferait croire à
                     // une flotte plus petite qu'elle n'est.
-                    Text("· +\(plan.hiddenCount) autre\(plan.hiddenCount > 1 ? "s" : "") — replie un dossier pour les voir")
+                    Text("· +\(plan.hiddenCount) autre\(plan.hiddenCount > 1 ? "s" : "")")
                         .font(AtollFont.mono(9))
                         .foregroundStyle(colors.dim)
                 } else {
@@ -236,17 +242,11 @@ struct ExpandedView: View {
     /// Une bannière occupe-t-elle le bas du panneau ? Elle coûte ~66 pt, donc
     /// autant de rangées en moins pour la liste.
     private var bannerShown: Bool {
-        SkillReviewCenter.shared.pendingCount > 0
+        !CodexPreview.enabled && SkillReviewCenter.shared.pendingCount > 0
     }
 
     /// Rangées DESSINABLES sans pousser le quota hors du cadre. Les deux modes
     /// d'affichage partagent ce budget : la vue par projet n'en avait aucun.
-    /// Le pied Codex n'est dessiné que si sa lecture est activée : sans cela,
-    /// on retirerait une rangée de sessions à tous ceux qui n'ont pas Codex.
-    private var codexQuotaShown: Bool {
-        UserDefaults.standard.bool(forKey: CodexService.quotaEnabledKey)
-    }
-
     /// ⚠️ LE PLANCHER EST À DEUX, PAS À UN, et ça n'est pas de la prudence :
     /// MESURÉ le 2026-09-08, un budget de 1 rend `byState` **entièrement vide**
     /// — 0 groupe, 0 session, toutes annoncées « cachées ». Un groupe coûte son
@@ -255,9 +255,8 @@ struct ExpandedView: View {
     /// et du négatif, ce qui ne suffisait pas dès qu'un coût s'ajoutait
     /// (bannière + quota Codex tombaient ensemble à 1).
     private var rowBudget: Int {
-        // La viewport est bornée par le VStack parent. Toutes les rangées
-        // restent accessibles par défilement, quelle que soit la bannière.
-        max(3, viewModel.sessions.count * 2 + 3)
+        // Un seul quota à la fois ; le sélecteur occupe désormais une rangée.
+        max(2, IslandRowBudget.rows(bannerShown: bannerShown, providerSelectorShown: true))
     }
 
     /// Sessions regroupées par PROJET (racine `.git`), ordre de première apparition

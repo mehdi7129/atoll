@@ -75,6 +75,7 @@ final class AnalysisBudget {
         let quota: LearningGate.QuotaFacts
         let providerReason: String
         let preparedAt: Date
+        var launchAttemptAt: Date?
         var launchedAt: Date?
         var outcome: String
     }
@@ -106,12 +107,15 @@ final class AnalysisBudget {
         switch refusalReason(for: context, now: now) {
         case .windowCapReached: return "Plafond interne atteint pour \(context.provider.label) (5 h glissantes)."
         case .quotaAboveThreshold: return "Quota \(context.provider.label) au-dessus du seuil d'analyse."
+        case .analysisJournalUnreadable: return loadError
         case .some: return "Quota \(context.provider.label) inconnu : tentative interne non autorisée."
         case nil: return nil
         }
     }
 
     func refusalReason(for context: AnalysisExecution, now: Date = Date()) -> LearningGate.Reason? {
+        do { try load() }
+        catch { return .analysisJournalUnreadable }
         let recent = records.filter {
             $0.provider == context.provider && $0.launchedAt.map { now.timeIntervalSince($0) < LearningGate.runWindowSeconds } == true
         }.count + legacySpends.filter { now.timeIntervalSince($0) < LearningGate.runWindowSeconds }.count
@@ -145,11 +149,24 @@ final class AnalysisBudget {
         return refusal(for: context) == nil
     }
 
+    /// Persisté juste avant process.run(), sans await jusqu'au spawn : après
+    /// crash seule cette courte zone d'incertitude compte, pas le condensé ou
+    /// l'attente du catalogue. Si l'écriture échoue, l'appelant ne lance rien.
+    func prepareToLaunch(_ id: UUID) throws {
+        guard active == id, let index = records.firstIndex(where: { $0.id == id }) else {
+            throw AnalysisExecution.Failure("Réservation d'analyse absente.")
+        }
+        records[index].outcome = "launching"
+        records[index].launchAttemptAt = Date()
+        try save()
+    }
+
     func launched(_ id: UUID) {
         guard active == id, let index = records.firstIndex(where: { $0.id == id }) else { return }
         records[index].launchedAt = Date()
         records[index].outcome = "running"
-        // La réservation est déjà persistée : après crash, elle compte par prudence.
+        // L'intention de spawn est déjà persistée ; elle couvre un crash entre
+        // process.run() et cette confirmation, même si save échoue ici.
         try? save()
     }
 
@@ -177,8 +194,10 @@ final class AnalysisBudget {
                 guard state.version == 1 else { throw CocoaError(.fileReadCorruptFile) }
                 records = state.records
                 legacySpends = state.legacySpends
-                for i in records.indices where records[i].outcome == "preparing" || records[i].outcome == "running" {
-                    records[i].launchedAt = records[i].launchedAt ?? records[i].preparedAt
+                for i in records.indices where ["preparing", "launching", "running"].contains(records[i].outcome) {
+                    if records[i].outcome != "preparing" {
+                        records[i].launchedAt = records[i].launchedAt ?? records[i].launchAttemptAt ?? records[i].preparedAt
+                    }
                     records[i].outcome = "interrupted"
                 }
             } else if FileManager.default.fileExists(atPath: BridgePaths.learningStateURL.path) {
@@ -193,7 +212,7 @@ final class AnalysisBudget {
                 legacySpends = legacySpends.filter { Date().timeIntervalSince($0) < LearningGate.runWindowSeconds }
             }
         } catch {
-            loadError = "Journal des analyses illisible : aucune nouvelle dépense."
+            loadError = "Journal des analyses illisible (\(url.path)) : aucune nouvelle dépense. Corrige le fichier puis relance Atoll."
             throw AnalysisExecution.Failure(loadError!)
         }
     }

@@ -9,15 +9,38 @@ final class CodexReliabilityTests: XCTestCase {
         return CodexHookEvent(envelope: ["provider": "codex", "payload": payload])!
     }
 
-    func testSessionEndRejectsEveryLateActivityIncludingPrompts() {
+    func testSessionEndKeepsAnonymousActivityUnknownWithoutResurrectingState() {
         var sessions = CodexSessions()
         sessions.apply(event("UserPromptSubmit", turn: "t1"))
         XCTAssertNotNil(sessions.apply(event("SessionEnd")))
-        for kind in ["PreToolUse", "PostToolUse", "PermissionRequest", "UserPromptSubmit", "Stop"] {
-            XCTAssertTrue(sessions.applyEvent(event(kind, turn: "t1")).cardIsStale, kind)
+        for kind in ["SessionStart", "PreToolUse", "PostToolUse", "PermissionRequest", "UserPromptSubmit", "Stop"] {
+            XCTAssertEqual(sessions.applyEvent(event(kind, turn: "t1")).turn, .unknown, kind)
             XCTAssertTrue(sessions.sessions().isEmpty, kind)
         }
         XCTAssertNil(sessions.apply(event("SessionEnd")), "une seule fin doit déclencher le bilan")
+    }
+
+    func testAnonymousEventDatedBeforeClosureIsCertainlyStale() {
+        var sessions = CodexSessions()
+        let now = Date(timeIntervalSince1970: 1_000)
+        sessions.apply(event("SessionStart"), now: now)
+        sessions.apply(event("SessionEnd"), now: now)
+        for stamp in [999.0, 1001.0] {
+            let anonymous = CodexHookEvent(envelope: ["provider": "codex", "payload": [
+                "hook_event_name": "PermissionRequest", "session_id": "session"],
+                "enrich": ["observedAt": stamp]])!
+            XCTAssertEqual(sessions.applyEvent(anonymous, now: now).turn, stamp < 1000 ? .closed : .unknown)
+        }
+    }
+
+    func testAnonymousClosureExpiresWithoutResurrectingASessionByItself() {
+        var sessions = CodexSessions()
+        let now = Date(timeIntervalSince1970: 1_000)
+        sessions.apply(event("SessionStart"), now: now)
+        sessions.apply(event("SessionEnd"), now: now)
+        sessions.prune(now: now.addingTimeInterval(3_601))
+        XCTAssertFalse(sessions.contains("codex:session"))
+        XCTAssertTrue(sessions.applyEvent(event("SessionStart"), now: now.addingTimeInterval(3_602)).accepted)
     }
 
     func testLateScanCannotResurrectAnEndedSession() {

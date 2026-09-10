@@ -29,8 +29,9 @@ import Foundation
 public enum CodexTranscriptParser {
 
     /// Enveloppes machine injectées dans un message `user` : ce n'est pas
-    /// l'utilisateur qui parle, c'est le client qui se décrit. Discriminant
-    /// STRUCTUREL (préfixe de balise), jamais une recherche de mots.
+    /// l'utilisateur qui parle, c'est le client qui se décrit. Heuristique
+    /// textuelle ancrée, vérifiée sur les rollouts : leurs `UserMessage`
+    /// miroirs existent aussi pour ces enveloppes et ne les distinguent pas.
     /// ⚠️ `<recommended_plugins>` A ÉTÉ AJOUTÉ APRÈS COUP, sur constat de Codex
     /// qui a compté **5 enveloppes** de ce type indexées comme paroles de
     /// l'utilisateur dans les rollouts de cette machine — avec
@@ -40,6 +41,7 @@ public enum CodexTranscriptParser {
     private static let machineEnvelopePrefixes = [
         "<environment_context>", "<skills_instructions>", "<user_instructions>",
         "<plan_mode>", "<system-reminder>", "<recommended_plugins>",
+        "<task-notification>", "<realtime_delegation>",
     ]
 
     /// `nil` = ligne sans substance indexable (ou illisible). Jamais d'erreur :
@@ -149,6 +151,14 @@ public enum CodexTranscriptParser {
         var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         var result: [TranscriptLine.Fragment] = []
         while !text.isEmpty {
+            // Les commandes du client sont trois balises COMPLÈTES, avec le
+            // contenu sur la ligne d'ouverture. Une citation incomplète reste
+            // humaine ; le texte après l'enveloppe complète aussi.
+            if let end = inlineClientEnvelopeEnd(in: text) {
+                result.append(.init(role: .instruction, text: String(text[..<end])))
+                text = text[end...].trimmingCharacters(in: .whitespacesAndNewlines)
+                continue
+            }
             let close: String?
             if text.hasPrefix("# AGENTS.md instructions for /"),
                let newline = text.firstIndex(of: "\n"),
@@ -164,7 +174,10 @@ public enum CodexTranscriptParser {
                 break
             }
             guard let close, let end = closingLine(close, in: text) else {
-                result.append(.init(role: .instruction, text: text))
+                // Les deux nouvelles familles exigent leur fermeture. Sans
+                // elle, on ne peut pas séparer une notification d'une citation.
+                let requiresClosing = text.hasPrefix("<task-notification>") || text.hasPrefix("<realtime_delegation>")
+                result.append(.init(role: requiresClosing ? .user : .instruction, text: text))
                 break
             }
             result.append(.init(role: .instruction, text: String(text[..<end.upperBound])))
@@ -173,7 +186,25 @@ public enum CodexTranscriptParser {
         return result
     }
 
-    private static func closingLine(_ closing: String, in text: String) -> Range<String.Index>? {
+    private static func inlineClientEnvelopeEnd(in text: String) -> String.Index? {
+        let tags: [String]
+        if text.hasPrefix("<command-name>") {
+            tags = ["command-name", "command-message", "command-args"]
+        } else if text.hasPrefix("<local-command-stdout>") {
+            tags = ["local-command-stdout"]
+        } else { return nil }
+        var cursor = text.startIndex
+        for tag in tags {
+            while cursor < text.endIndex, text[cursor].isWhitespace { cursor = text.index(after: cursor) }
+            let remainder = String(text[cursor...])
+            guard remainder.hasPrefix("<\(tag)>"),
+                  let closing = closingLine("</\(tag)>", in: remainder, inline: true) else { return nil }
+            cursor = text.index(cursor, offsetBy: remainder.distance(from: remainder.startIndex, to: closing.upperBound))
+        }
+        return cursor
+    }
+
+    private static func closingLine(_ closing: String, in text: String, inline: Bool = false) -> Range<String.Index>? {
         var fence: Character?
         var fenceLength = 0
         var start = text.startIndex
@@ -188,7 +219,7 @@ public enum CodexTranscriptParser {
                 }
             }
             let end = text.index(start, offsetBy: raw.count)
-            if fence == nil, line == closing { return start..<end }
+            if fence == nil, line == closing || (inline && line.hasSuffix(closing)) { return start..<end }
             start = end == text.endIndex ? end : text.index(after: end)
         }
         return nil

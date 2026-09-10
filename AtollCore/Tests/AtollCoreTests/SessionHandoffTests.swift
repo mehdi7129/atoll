@@ -2,6 +2,22 @@ import XCTest
 @testable import AtollCore
 
 final class SessionHandoffTests: XCTestCase {
+    func testHandoffRequiresExistingDirectoryAndExecutableAndRechecksRemoval() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let cli = root.appendingPathComponent("cli")
+        XCTAssertFalse(SessionHandoff.isAvailable(workingDirectory: root.path, executable: cli.path), "CLI absent")
+        try Data("#!/bin/sh\nexit 0\n".utf8).write(to: cli)
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: cli.path)
+        XCTAssertFalse(SessionHandoff.isAvailable(workingDirectory: root.path, executable: cli.path), "non exécutable")
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: cli.path)
+        XCTAssertTrue(SessionHandoff.isAvailable(workingDirectory: root.path, executable: cli.path))
+        XCTAssertFalse(SessionHandoff.isAvailable(workingDirectory: cli.path, executable: cli.path), "dossier absent")
+        XCTAssertFalse(SessionHandoff.isAvailable(workingDirectory: root.path, executable: root.path), "un dossier n'est pas un CLI")
+        try FileManager.default.removeItem(at: cli)
+        XCTAssertFalse(SessionHandoff.isAvailable(workingDirectory: root.path, executable: cli.path), "CLI désinstallé")
+    }
 
     private let date = Date(timeIntervalSince1970: 1_800_000_000)
 

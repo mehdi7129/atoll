@@ -1,5 +1,38 @@
 # CLAUDE.md — instructions projet Atoll
 
+> **PR #2 — relecture corrigée, non publiée (2026-09-10).** Mehdi a tranché :
+> îlot invisible sans activité ni Rockstar ; liste bornée avec « +N autres » ;
+> marqueur Claude Rockstar ET quota compact ; migration des anciens hooks
+> respectant les retraits/personnalisations ; accueil qui PROPOSE le moteur
+> d'analyse sans le modifier. La clé absente n'autorise pas une migration du
+> choix : c'est aussi l'état normal des utilisateurs existants.
+>
+> **Le rendu compte autant que l'arbre SwiftUI.** Un `ScrollView` au niveau du
+> corps sous `layerEffect` rendait un panneau vide. Supprimer ce scroll ne suffit
+> pas : champs AppKit et cartes disparaissaient encore sous l'onde du parent.
+> L'onde est désormais limitée aux groupes dessinables (en-tête, liste, quota),
+> hors cartes et détails. `IslandRowBudget.rows` réserve la place du sélecteur.
+>
+> **Préparer n'est pas dépenser.** Le journal distingue `preparing`, `launching`
+> (persisté juste avant `process.run()`, sans await) et `running`. Après crash,
+> les deux derniers comptent par prudence, pas la préparation. Les trois
+> consommateurs passent par ce même protocole. Un refus de capture est tracé.
+>
+> **Migrer n'est pas réinstaller.** Au démarrage, aucun événement supprimé n'est
+> recréé. Seules les formes anciennes reconnues sont migrées, sur place, avec
+> sauvegarde datée ; « Réparer » est l'action explicite qui réinstalle les douze.
+> Un événement anonyme après clôture demeure incertain : `.unknown` conserve
+> la demande, `.closed` exige une preuve ; les tombstones expirent après 1 h.
+>
+> **L'aperçu doit rester un aperçu sans argument.** Un outil macOS peut rouvrir
+> une app fermée sans `--codex-preview`. Incident observé et corrigé : utiliser
+> `Scripts/prepare-preview.py`, qui fait le `ditto`, attribue un bundle ID privé
+> et marque `AtollPreviewOnly`. Les captures et tests utilisent cette copie.
+> Ne jamais ouvrir un ancien aperçu non protégé par un outil qui peut le lancer.
+>
+> Preuves, limites restantes et incident de recette :
+> [rapport de correction](docs/REVIEW-2026-09-10-pr2-corrections.md).
+
 > **v0.17.2 — LE RENDEZ-VOUS DU RECALL EST TRANCHÉ, ET ATOLL CESSE DE SE
 > REGARDER TRAVAILLER** (2026-09-09). Un mois de mesure servait à décider ; la
 > décision est prise sur ses chiffres, pas sur une intuition.
@@ -45,7 +78,7 @@
 > lancé par Atoll déclenchait donc les hooks comme n'importe quelle session.
 > Fermé aux DEUX bouts : le helper s'abstient **avant même de lire stdin**
 > (mesuré : le payload reste intact dans le tube, contre un tube vidé sur un run
-> normal), et `CodexSessionScanner` écarte les pids qui portent le marqueur.
+> normal), et `findCodexTUIAncestor` écarte les processus marqués côté helper.
 >
 > ⚠️ **UN DÉFAUT DANS CE CORRECTIF, TROUVÉ EN MESURANT ET PAS EN RELISANT.** Le
 > `cwd` d'une mémoire est lu dans un transcript frère — et je ne lisais que la
@@ -179,8 +212,9 @@
 > un `exec` sur le disque, et personne ne l'aurait vu. Pire, il porte le chemin
 > ABSOLU du bundle — une app DÉPLACÉE rendait l'intégration Codex morte EN
 > SILENCE, sa garde `[ -x "$BIN" ] || exit 0` faisant exactement son travail.
-> D'où `CodexHookInstallation.refreshWrapper` au démarrage, idempotent par
-> comparaison d'octets. Et le script ne vit plus qu'à UN endroit : l'avoir eu en
+> D'où `CodexHookInstallation.migrateIfInstalled` au démarrage, qui appelle
+> `refreshWrapper`, idempotent par comparaison d'octets même avec des hooks
+> partiellement retirés. Et le script ne vit plus qu'à UN endroit : l'avoir eu en
 > deux exemplaires est ce qui a produit le défaut. Se demander, pour tout fichier
 > qu'Atoll pose hors de son bundle : **qui le réécrit quand il change ?**
 >

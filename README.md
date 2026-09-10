@@ -12,7 +12,7 @@
 > **Développement du 10 septembre 2026, non publié :** le code ajoute le choix
 > Claude Code / Codex CLI, les palettes séparées et les analyses avec l'un ou
 > l'autre abonnement. La release disponible reste v0.17.2. Les preuves et la
-> recette GUI restante sont dans le [suivi de mise en œuvre](docs/IMPLEMENTATION-2026-09-10-codex-claude.md).
+> recette GUI restante sont dans le [rapport de correction](docs/REVIEW-2026-09-10-pr2-corrections.md).
 
 Trois sessions tournent : un `claude` dans un onglet Cursor, un `codex` dans un iTerm passé
 derrière le navigateur, un troisième en arrière-plan lancé il y a vingt minutes. L'un des
@@ -86,6 +86,9 @@ affichée garde son fournisseur jusqu'à sa résolution ; une nouvelle demande n
 pas. Le retour au terminal utilise l'ancre capturée et propose un repli lorsque l'onglet
 exact n'est pas identifiable.
 
+Sans activité ni Rockstar, l'îlot disparaît. La liste reste bornée et annonce les
+sessions supplémentaires. Rockstar conserve son marqueur Claude et le quota en compact.
+
 Le reste suit : les rollouts Codex entrent dans la même mémoire locale, le bilan de fin de
 session sait les relire, et les sons sonnent pareil.
 
@@ -102,6 +105,9 @@ commun, l'indexation se coupe dans Réglages → Mémoire — elle les coupe alo
 L'installation est distincte et facultative — Atoll marche très bien avec un seul des deux.
 Pour Codex, elle gère ses définitions dans `hooks.json`, leur lanceur et le skill manuel
 `atoll-recall`. Les hooks étrangers sont conservés et sauvegardés avant modification.
+Au démarrage, Atoll migre ses anciennes définitions en respectant les retraits et les
+personnalisations ; leur réinstallation complète passe par « Réparer ». Le choix du CLI
+à l'accueil conserve le moteur d'analyse existant et propose d'ouvrir ses réglages.
 `config.toml` et les choix de confiance restent gérés par Codex : les hooks doivent être
 relus et approuvés dans `/hooks`.
 

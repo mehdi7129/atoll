@@ -5,6 +5,12 @@ import XCTest
 /// pas par un initialiseur de test : une bascule qui marcherait sur un modèle
 /// fabriqué mais pas sur le JSON réel de l'app-server ne prouverait rien.
 final class ProviderFailoverTests: XCTestCase {
+    func testDefaultFailoverRejectsClaudeMeasurementsOlderThanTheAnalysisGate() {
+        let decision = ProviderFailover.choose(claude: claudeFacts(used: 1, age: 601),
+            codex: codexQuota(primary: 0), config: .init(enabled: true), now: now)
+        XCTAssertEqual(decision.reason, .claudeUnknown)
+        XCTAssertEqual(decision.provider, .claude)
+    }
     func testExplicitCodexDoesNotNeedClaudeOrFallBackWhenQuotaIsUnknown() {
         let missing = LearningGate.QuotaFacts(usedFraction: nil, receivedAt: nil, resetsAt: nil)
         let choice = ProviderFailover.choose(claude: missing, codex: nil,

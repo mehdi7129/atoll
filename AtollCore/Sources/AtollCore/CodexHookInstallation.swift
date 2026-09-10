@@ -5,16 +5,9 @@ import Darwin
 /// subscription, ~/.codex, ~/.claude or the recall measurement journal.
 public enum CodexHookInstallation {
     public static func apply(settingsURL: URL, binDirectory: URL, helperURL: URL, install: Bool) throws {
-        try apply(settingsURL: settingsURL, binDirectory: binDirectory, helperURL: helperURL,
-                  install: install, migrationSnapshot: nil)
-    }
-
-    private static func apply(settingsURL: URL, binDirectory: URL, helperURL: URL,
-                              install: Bool, migrationSnapshot: Data?) throws {
         let fm = FileManager.default
         let target = settingsURL.resolvingSymlinksInPath()
         let current = fm.fileExists(atPath: target.path) ? try Data(contentsOf: target) : nil
-        if let migrationSnapshot, current != migrationSnapshot { throw CocoaError(.fileWriteFileExists) }
         if !install && current == nil { return }
         let edited = try CodexHookSettingsEditor.edit(current, install: install)
         if install {
@@ -171,7 +164,7 @@ public enum CodexHookInstallation {
         let fm = FileManager.default
         let target = settingsURL.resolvingSymlinksInPath()
         let settings = fm.fileExists(atPath: target.path) ? try? Data(contentsOf: target) : nil
-        guard CodexHookSettingsEditor.isInstalled(settings) else { return .notInstalled }
+        guard CodexHookSettingsEditor.hasManagedHooks(settings) else { return .notInstalled }
 
         let url = wrapperURL(binDirectory: binDirectory)
         let wanted = wrapperScript(helperURL: helperURL)
@@ -186,8 +179,9 @@ public enum CodexHookInstallation {
         return .rewritten(previous: previous)
     }
 
-    /// Répare une installation existante, y compris partielle, sans installer
-    /// Codex chez quelqu'un qui ne l'a pas demandé. Le trust reste natif.
+    /// Migre les anciennes définitions encore présentes. Un retrait ou une
+    /// personnalisation reste choisi par l'utilisateur ; seul « Réparer »
+    /// explicitement demandé réinstalle la liste complète.
     @discardableResult
     public static func migrateIfInstalled(settingsURL: URL, binDirectory: URL,
                                           helperURL: URL) throws -> Bool {
@@ -197,9 +191,23 @@ public enum CodexHookInstallation {
         // Valider avant toute écriture ; un JSON invalide n'est pas « absent ».
         _ = try CodexHookSettingsEditor.edit(data, install: false)
         guard CodexHookSettingsEditor.hasManagedHooks(data) else { return false }
-        let changed = CodexHookSettingsEditor.needsMigration(data)
-        try apply(settingsURL: target, binDirectory: binDirectory, helperURL: helperURL,
-                  install: true, migrationSnapshot: data)
+        let edited = try CodexHookSettingsEditor.migrate(data)
+        let changed = !CodexHookSettingsEditor.sameJSON(data, edited)
+        if changed {
+            // Chaque vraie migration conserve SA copie, y compris après une
+            // personnalisation. La sauvegarde de première installation reste.
+            let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
+            let backup = target.appendingPathExtension("atoll-migration-\(stamp)-\(UUID().uuidString).json")
+            let fd = open(backup.path, O_WRONLY | O_CREAT | O_EXCL, 0o600)
+            guard fd >= 0 else { throw CocoaError(.fileWriteUnknown) }
+            let file = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
+            do { try file.write(contentsOf: data); try file.close() }
+            catch { try? file.close(); try? FileManager.default.removeItem(at: backup); throw error }
+            guard try Data(contentsOf: target) == data else { throw CocoaError(.fileWriteFileExists) }
+            try edited.write(to: target, options: .atomic)
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: target.path)
+        }
+        _ = try refreshWrapper(settingsURL: target, binDirectory: binDirectory, helperURL: helperURL)
         return changed
     }
 }

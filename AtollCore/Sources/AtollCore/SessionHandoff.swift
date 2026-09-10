@@ -17,6 +17,18 @@ import Foundation
 /// qu'il décide de lire.
 public enum SessionHandoff {
 
+    /// Un relais n'est proposé que si son dossier et son CLI existent encore.
+    /// Revalider les chemins évite un bouton actif après désinstallation.
+    public static func isAvailable(workingDirectory: String?, executable: String?) -> Bool {
+        guard let workingDirectory, workingDirectory.hasPrefix("/"),
+              let executable, executable.hasPrefix("/") else { return false }
+        let fm = FileManager.default
+        var directory: ObjCBool = false
+        guard fm.fileExists(atPath: workingDirectory, isDirectory: &directory), directory.boolValue else { return false }
+        guard fm.fileExists(atPath: executable, isDirectory: &directory), !directory.boolValue else { return false }
+        return fm.isExecutableFile(atPath: executable)
+    }
+
     /// Un handoff prêt à écrire : deux fichiers, aucun effet de bord ici.
     public struct Files: Equatable, Sendable {
         /// Contexte lisible par un humain comme par un modèle.

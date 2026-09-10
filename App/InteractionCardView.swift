@@ -64,7 +64,7 @@ struct InteractionCardView: View {
         // la rangée continue avec le nom du projet, le rang dans la file et le
         // temps écoulé. C'est un en-tête à métadonnées, pas un séparateur.
         HStack(spacing: 6) {
-            Text(AsciiArt.sectionHeader(headerTitle, width: 30))
+            Text(AsciiArt.sectionHeader("CLAUDE · \(headerTitle)", width: 30))
                 .lineLimit(1)
                 .foregroundStyle(colors.warn)
             Text(request.projectName)
@@ -133,7 +133,8 @@ struct InteractionCardView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .textSelection(.enabled)
             }
-            .frame(maxHeight: 150)
+            .frame(minHeight: 32, maxHeight: 120)
+            .layoutPriority(-1)
             .padding(8)
             .background(colors.surface)
 
@@ -184,7 +185,8 @@ struct InteractionCardView: View {
                     }
                 }
             }
-            .frame(maxHeight: 210)
+            .frame(minHeight: 32, maxHeight: 180)
+            .layoutPriority(-1)
 
             HStack(spacing: 10) {
                 AsciiButton(label: "TERMINAL", color: colors.dim, shortcut: nil) {

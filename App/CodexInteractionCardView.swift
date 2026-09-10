@@ -70,12 +70,14 @@ struct CodexInteractionCardView: View {
                     .fixedSize(horizontal: true, vertical: true)
                     .padding(6)
             }
-            .frame(height: 140)
+            .frame(minHeight: 32, maxHeight: 110)
+            .layoutPriority(-1)
             .accessibilityLabel("Détails complets de la demande Codex")
 
             Text("Codex attend ta décision. Elle ne vaut que pour cette demande.")
                 .font(AtollFont.mono(9))
                 .foregroundStyle(colors.dim)
+                .fixedSize(horizontal: false, vertical: true)
 
             HStack(spacing: 12) {
                 AsciiButton(label: "REFUSER ⌘N", color: colors.warn, shortcut: nil) {
@@ -92,6 +94,8 @@ struct CodexInteractionCardView: View {
                     center.handBack(request.id)
                 }
             }
+            .fixedSize(horizontal: false, vertical: true)
+            .layoutPriority(1)
 
             if center.pending.count > 1 {
                 // Deux outils peuvent demander en parallèle. On l'ANNONCE plutôt
@@ -102,6 +106,7 @@ struct CodexInteractionCardView: View {
                     .foregroundStyle(colors.dim)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .keyboardShortcut(.defaultAction)
         .background {
             // Raccourcis, comme la carte Claude : ⌘Y autorise, ⌘N refuse.

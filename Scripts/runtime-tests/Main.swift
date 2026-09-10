@@ -14,6 +14,13 @@ import AtollCore
         guard condition else { throw Failure(message: message) }
     }
 
+    @MainActor static func checkLaunchIntent(_ name: String) throws {
+        let data = try Data(contentsOf: BridgePaths.learningDirectory.appendingPathComponent("analysis-jobs-v2.json"))
+        let state = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        let records = state["records"] as! [[String: Any]]
+        try check(records.last?["launchAttemptAt"] != nil, "intention de spawn non persistée : \(name)")
+    }
+
     @MainActor static func fixture(_ name: String, curation: Bool, blockCLI: Bool, search: Bool = false) throws {
         let base = URL(fileURLWithPath: ProcessInfo.processInfo.environment["ATOLL_RUNTIME_TEST_ROOT"]!)
         BridgePaths.root = base.appendingPathComponent(name)
@@ -88,6 +95,7 @@ import AtollCore
                 let notes = try fm.contentsOfDirectory(atPath: BridgePaths.learningNotesDirectory.path)
                 try check(notes.count == (cancellation == "nominal" ? 1 : 0), "\(name) : note après annulation ou nominal muet")
                 try check(RetrospectiveRunner.shared.lastOutcome == (cancellation == "nominal" ? "success(1n/0s)" : "failed(cancelled)"), "\(name) : issue incorrecte")
+                if cancellation == "nominal" { try checkLaunchIntent(name) }
                 if Resolver.blocked {
                     try check(!fm.fileExists(atPath: BridgePaths.root.appendingPathComponent("launched").path), "\(name) : spawn après annulation")
                 }
@@ -125,6 +133,7 @@ import AtollCore
             }
             let notes = try fm.contentsOfDirectory(atPath: BridgePaths.learningNotesDirectory.path)
             try check(notes.count == (cancellation == "nominal" ? 1 : 2), "\(name) : corpus incorrect")
+            if cancellation == "nominal" { try checkLaunchIntent(name) }
             if Resolver.blocked {
                 try check(!fm.fileExists(atPath: BridgePaths.root.appendingPathComponent("launched").path), "\(name) : spawn après annulation")
             }
@@ -152,6 +161,7 @@ import AtollCore
                 }
                 let result = await search.value
                 try check(PluginInventory.shared.searchMatches.count == (cancellation == "nominal" ? 1 : 0), "\(name) : résultat après annulation ou nominal muet (\(result ?? "nil"))")
+                if cancellation == "nominal" { try checkLaunchIntent(name) }
                 if Resolver.blocked {
                     try check(!fm.fileExists(atPath: BridgePaths.root.appendingPathComponent("launched").path), "\(name) : spawn après annulation")
                 }
@@ -272,6 +282,70 @@ import AtollCore
         } catch is AnalysisExecution.Failure {}
         print("PASS budget : verrou commun, pré-spawn remboursé, échec lancé compté, abonnement distinct, plafond et persistance")
         cases += 6
+        for kind in [AnalysisExecution.Kind.retrospective, .curation, .pluginSearch] {
+            for stage in ["preparing", "launching", "running", "spawnFailed"] {
+                try fixture("restart-\(kind.rawValue)-\(stage)", curation: false, blockCLI: false)
+                let original = AnalysisBudget()
+                let lease = try original.begin(claudeUnknown, kind: kind)
+                if stage != "preparing" { try original.prepareToLaunch(lease) }
+                if stage == "running" { original.launched(lease) }
+                if stage == "spawnFailed" { original.finish(lease, outcome: "spawnFailed") }
+                let recovered = AnalysisBudget()
+                let expected: LearningGate.Reason? = stage == "launching" || stage == "running" ? .windowCapReached : nil
+                try check(recovered.refusalReason(for: claudeUnknown) == expected,
+                          "reprise du budget incorrecte : \(kind.rawValue)/\(stage)")
+                if expected == nil {
+                    let next = try recovered.begin(claudeUnknown, kind: kind)
+                    recovered.finish(next, outcome: "cancelled")
+                }
+                cases += 1
+            }
+        }
+        print("PASS redémarrage : préparation libérée, spawn incertain ou confirmé compté, échec remboursé")
+        for failure in ["modelMissing", "providerUnavailable", "homeInvalid"] {
+            try fixture("capture-\(failure)", curation: false, blockCLI: false)
+            let settings = LearningSettings.shared
+            settings.failoverConfig = .init(enabled: failure == "providerUnavailable",
+                                            preferred: failure == "providerUnavailable" ? .claude : .codex)
+            SessionStore.shared.realQuota = .init()
+            SessionStore.shared.realQuota?.fiveHour.usedFraction = 1
+            SessionStore.shared.rawQuotaReceivedAt = Date()
+            settings.codexModel = failure == "modelMissing" ? "" : "test-model"
+            CodexPaths.invalidHome = failure == "homeInvalid"
+            CodexService.shared.quota = failure == "providerUnavailable" ? nil : CodexQuota(result: [
+                "rateLimits": ["primary": ["usedPercent": 0, "resetsAt": Date().addingTimeInterval(3600).timeIntervalSince1970]]])
+            let snapshot = SessionStore.Tracked(id: "capture-\(failure)", cwd: nil, transcriptPath: nil,
+                phase: .ended, isSynthetic: false, firstSeenAt: Date(), lastEventAt: Date())
+            await RetrospectiveRunner.shared.evaluateAndRun(.init(snapshot: snapshot, endedAt: Date()))
+            let attempts = RetrospectiveRunner.shared.recentAttempts()
+            try check(attempts.count == 1 && attempts[0].decision == "skip(configuration)" && attempts[0].failureReason?.isEmpty == false,
+                      "capture refusée sans trace persistée : \(failure)")
+            try check(!fm.fileExists(atPath: BridgePaths.root.appendingPathComponent("launched").path), "capture refusée mais spawn effectué")
+            cases += 1
+        }
+        CodexPaths.invalidHome = false
+        print("PASS refus de capture journalisés : modèle absent, abonnement indisponible, home invalide")
+        for refusal in ["empty", "oversize", "configuration"] {
+            try fixture("curation-refusal-\(refusal)", curation: true, blockCLI: false)
+            LearningSettings.shared.failoverConfig = .init(enabled: false, preferred: .codex)
+            LearningSettings.shared.codexModel = ""
+            if refusal == "empty" {
+                for name in ["one.md", "two.md"] { try fm.removeItem(at: BridgePaths.learningNotesDirectory.appendingPathComponent(name)) }
+            } else if refusal == "oversize" {
+                try String(repeating: "connaissance ", count: 100_000).write(to: BridgePaths.learningNotesDirectory.appendingPathComponent("one.md"), atomically: true, encoding: .utf8)
+            }
+            NotesCurationService.shared.curateNow(manual: true)
+            try await waitFor { NotesCurationService.shared.phase == .idle }
+            let data = try Data(contentsOf: BridgePaths.learningDirectory.appendingPathComponent("curation.json"))
+            let state = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+            try check((state["lastOutcome"] as? String)?.isEmpty == false, "refus curation non persisté : \(refusal)")
+            if refusal != "configuration" {
+                try check(state["retryAt"] == nil && state["lastRunAt"] != nil, "curation sans travail relancée toutes les 30 minutes : \(refusal)")
+            }
+            try check(!Resolver.entered, "CLI résolu malgré un refus de curation")
+            cases += 1
+        }
+        print("PASS curation : évaluation sans travail clôturée, refus de préparation persisté")
         print("\(cases) scénarios des runners et cartes de production vérifiés, aucun appel IA.")
     }
 }

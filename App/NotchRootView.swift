@@ -293,8 +293,6 @@ struct NotchRootView: View {
             }
 
             content
-                .expansionRipple(trigger: rippleTrigger,
-                                 active: visualEffects && !reduceMotion)
         }
         .frame(width: size.width, height: size.height)
         .clipShape(shape)
@@ -352,7 +350,8 @@ struct NotchRootView: View {
         case .compact:
             CompactView(viewModel: viewModel, colors: capColors)
         case .expanded:
-            ExpandedView(viewModel: viewModel, colors: colors)
+            ExpandedView(viewModel: viewModel, colors: colors,
+                         rippleTrigger: rippleTrigger, rippleEnabled: visualEffects && !reduceMotion)
                 .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
         }
     }

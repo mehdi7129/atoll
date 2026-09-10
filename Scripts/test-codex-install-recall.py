@@ -46,6 +46,13 @@ with tempfile.TemporaryDirectory(prefix="atoll-install-recall-") as directory:
     stamp = settings.stat().st_mtime_ns
     run("install-codex")
     assert settings.read_bytes() == installed and settings.stat().st_mtime_ns == stamp, "installation non idempotente"
+    # argv[0] nu, cwd sans helper : le rappel doit garder son chemin réel.
+    bare = subprocess.run([helper.name, "install-codex"], executable=str(helper), cwd=root,
+                          env=environment, capture_output=True, text=True, timeout=10)
+    assert bare.returncode == 0, bare.stderr
+    assert str(helper) in skill.read_text(), "nom nu : helper réel perdu dans le recall"
+    assert str(root / helper.name) not in skill.read_text(), "nom nu : cwd gravé comme helper"
+    print("PASS installation avec argv[0] nu : chemin du helper réel conservé.")
     print("PASS helper installé deux fois : Codex seul, hooks étrangers préservés, aucune config Claude, idempotence.")
     source = root / "main.swift"
     source.write_text(r'''

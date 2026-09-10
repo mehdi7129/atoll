@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import OSLog
 import AtollCore
 
 @MainActor
@@ -94,8 +95,13 @@ final class CodexService {
     }
 
     func accepts(_ event: CodexHookEvent) -> Bool {
-        CodexPaths.configurationError == nil
+        let accepted = CodexPaths.configurationError == nil
             && (event.home.map { $0 == CodexPaths.homeURL } ?? (CodexPaths.configuredHome == nil))
+        if !accepted {
+            Logger(subsystem: "dev.mehdiguiard.atoll", category: "codex-service")
+                .info("Événement Codex ignoré : dossier du hook différent du dossier sélectionné ou configuration invalide.")
+        }
+        return accepted
     }
 
     func changeHome(to path: String?) throws {

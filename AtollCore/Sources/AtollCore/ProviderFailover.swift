@@ -47,7 +47,7 @@ public enum ProviderFailover {
             enabled: Bool = false,
             claudeExhaustedAt: Double = 0.95,
             codexExhaustedAt: Double = 0.95,
-            freshnessSeconds: TimeInterval = 900,
+            freshnessSeconds: TimeInterval = 600,
             preferred: AgentProvider = .claude
         ) {
             self.enabled = enabled

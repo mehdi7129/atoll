@@ -21,7 +21,7 @@ final class NotchViewModel {
     var isPinned = false
     /// Session ouverte en vue détaillée (clic sur une ligne). nil = liste.
     var selectedSessionID: String?
-    /// Populated only by the isolated visual preview, never persisted.
+    /// Alimenté seulement par la recette isolée, jamais persisté.
     var previewSessions: [AgentSession]?
     var previewUsage: UsageSnapshot?
 
@@ -152,7 +152,7 @@ final class NotchViewModel {
             return IslandGeometry.compactSize(
                 notch: notchSize,
                 menuBarHeight: menuBarHeight,
-                hasActivity: true,
+                hasActivity: hasActivity || rockstar,
                 width: compactWidth
             )
         case .expanded:

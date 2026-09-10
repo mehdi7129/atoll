@@ -463,8 +463,10 @@ final class PluginInventory {
         guard generation == searchGeneration, !Task.isCancelled else { return "Recherche annulée." }
         let outcome = await Self.run(arguments: [], claude: "", timeout: 120, launch: launch,
             beforeSpawn: {
-                generation == self.searchGeneration && !Task.isCancelled
-                    && AnalysisBudget.shared.mayLaunch(lease, context: execution)
+                guard generation == self.searchGeneration && !Task.isCancelled,
+                      AnalysisBudget.shared.mayLaunch(lease, context: execution) else { return false }
+                do { try AnalysisBudget.shared.prepareToLaunch(lease); return true }
+                catch { return false }
             }, onSpawn: { process in
                 AnalysisBudget.shared.launched(lease)
                 self.searchProcessIdentity = ProcessInspector.identity(of: process.processIdentifier)

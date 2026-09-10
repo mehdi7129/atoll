@@ -103,11 +103,17 @@ enum CodexBridge {
         }
         var hooksApplied = false
         do {
+            // argv[0] peut être un nom nu cherché dans PATH. Le noyau donne
+            // l'image réellement exécutée, indépendante du dossier courant.
+            guard let helperPath = ProcessInspector.executablePath(of: getpid()) else {
+                throw CocoaError(.fileReadUnknown)
+            }
+            let helperURL = URL(fileURLWithPath: helperPath)
             try CodexHookInstallation.apply(settingsURL: settingsURL, binDirectory: BridgePaths.binDirectory,
-                                            helperURL: URL(fileURLWithPath: CommandLine.arguments[0]), install: install)
+                                            helperURL: helperURL, install: install)
             hooksApplied = true
             if install {
-                try CodexRecallSkill.install(home: CodexPaths.homeURL, helperURL: URL(fileURLWithPath: CommandLine.arguments[0]))
+                try CodexRecallSkill.install(home: CodexPaths.homeURL, helperURL: helperURL)
             } else {
                 try CodexRecallSkill.uninstall(home: CodexPaths.homeURL)
                 _ = try LearnedSkillStore(destination: .codex).uninstallAll()

@@ -1,19 +1,26 @@
 # Atoll avec Codex CLI et Claude Code
 
 État du code au **2026-09-10**, développé sur `1b08ebd` (v0.17.2).
-Ces changements ne sont **pas encore publiés**. Voir le [rapport de mise en œuvre](IMPLEMENTATION-2026-09-10-codex-claude.md) pour les preuves et les vérifications restantes, et l'[audit initial](AUDIT-2026-09-09-codex-claude.md) pour les défauts de la base.
+Ces changements ne sont **pas encore publiés**. Voir le [rapport de correction](REVIEW-2026-09-10-pr2-corrections.md) pour les preuves et les vérifications restantes, et l'[audit initial](AUDIT-2026-09-09-codex-claude.md) pour les défauts de la base.
 
 ## Périmètre et choix de fournisseur
 
 Codex CLI dans un terminal, y compris le terminal intégré de Cursor ou VS Code.
 L'application Codex/ChatGPT, les extensions IDE, les sessions cloud et plusieurs
 `CODEX_HOME` simultanés ne sont pas pris en charge par cette intégration.
+Les rollouts Desktop présents dans le home sélectionné sont néanmoins indexés
+par la mémoire commune : absence d'intégration GUI ne veut pas dire exclusion
+du corpus. Leur contenu machine reçoit le même filtrage prudent.
 
 Les boutons **CLAUDE CODE / CODEX** sélectionnent la liste, le quota principal et
 la palette. Les deux collecteurs continuent d'observer leurs intégrations.
 Claude garde son accent orange ; Codex reçoit un accent cyan. Les palettes sont
 personnalisables séparément. Le bouton ne change ni l'abonnement des analyses,
 ni la destination d'un skill, ni le fournisseur d'une conversation existante.
+Sans activité ni Rockstar, l'îlot est invisible. La liste étendue est bornée
+par le budget de rangées, sélecteur compris, avec « +N autres » pour le surplus.
+Le quota garde sa place fixe. Les cartes et leurs contrôles défilants restent
+hors du `layerEffect` de l'onde ; seuls en-tête, liste et pied de quota le portent.
 
 Les demandes partagent une file de présentation, ordonnée par arrivée. La carte
 visible reste épinglée ; une arrivée ne la remplace pas. La navigation est
@@ -25,11 +32,12 @@ l'autre fournisseur.
 Rockstar appartient à Claude. Son réglage n'est pas changé par le sélecteur.
 S'il reste actif pendant que Codex est affiché, **CLAUDE · ROCKSTAR** reste
 visible, y compris en compact et sans session Claude.
+Le quota est affiché simultanément, sur une seconde ligne en compact.
 
 ## Matrice du code actuel
 
-« Implémenté » décrit le code et les tests cités ; le parcours GUI complet
-reste à valider, comme indiqué dans le rapport.
+Le rendu a été vérifié sur une copie isolée ; les tests natifs en TUI et
+VoiceOver restant à faire sont explicités dans le rapport.
 
 | Capacité | Claude Code | Codex CLI |
 |---|---|---|
@@ -46,10 +54,10 @@ reste à valider, comme indiqué dans le rapport.
 | Recall manuel | Skill Claude | Skill Codex installé avec le helper absolu |
 | Recall proactif | Hook Claude optionnel | Désactivé ; recall manuel explicite |
 | Skills appris | Destination Claude | Destination Codex, catalogue natif, validation avant installation |
-| Usage des skills | Observations disponibles, couverture partielle | Non mesuré ; aucune suggestion d'archivage sur un faux zéro |
+| Usage des skills | Observations disponibles, couverture partielle | Non mesuré |
 | Plugins | Catalogue et gestionnaire Claude | Catalogue local natif ; mutations dans le gestionnaire Codex |
 | Analyses internes | Exécuteur sélectionnable | Exécuteur sélectionnable, modèle natif revalidé |
-| Passation | Préparer un contexte pour Codex | Préparer un contexte pour Claude |
+| Passation | Préparer un contexte pour Codex, si CLI et dossier existent | Préparer un contexte pour Claude, si CLI et dossier existent |
 
 Une valeur absente ne devient pas zéro. Le contexte Codex provient de la dernière
 mesure `last_token_usage`, jamais des tokens cumulés. La branche est celle du
@@ -62,6 +70,10 @@ Aucun coût en dollars n'est déduit d'un abonnement.
 L'onboarding installe l'agent choisi. Un poste Codex seul ne crée pas de
 configuration Claude. Réglages → Codex permet d'installer, réparer ou retirer
 l'intégration, de choisir le home et de consulter son état natif.
+Installer un CLI ne change pas le moteur des analyses, même si la préférence
+est absente. L'accueil propose Réglages → Apprentissage ; cet onglet reste
+l'unique lieu de configuration du moteur et de son budget. Le catalogue et
+le choix du modèle Codex restent dans Réglages → Codex.
 
 - Le home sélectionné est enregistré dans le fichier Atoll `codex-home.json`.
   Sans choix explicite, la détection utilise l'environnement puis `~/.codex`.
@@ -70,6 +82,13 @@ l'intégration, de choisir le home et de consulter son état natif.
   `hooks.json`, avec sauvegarde avant changement et préservation des hooks
   étrangers. JSON vide/invalide : refus, sans reconstruction destructive.
   Une seconde installation identique évite les écritures inutiles.
+- Au démarrage, la migration ne recrée aucun événement retiré et ne réordonne
+  pas les groupes. Les formes anciennes reconnues sont mises à niveau sur
+  place ; les délais, messages et clés personnalisés sont conservés. Une
+  permission de 3 s accompagnée d'un message ou d'une clé personnelle n'est
+  pas assimilée à l'ancien hook de télémétrie. Si rien ne change, les octets
+  et la date de `hooks.json` restent identiques. Chaque vraie migration crée
+  sa sauvegarde datée 0600 ; la copie initiale n'est pas forcément pré-Atoll.
 - Le superviseur `atoll-codex-bridge` pointe vers le helper absolu du bundle ;
   il est rafraîchi au démarrage si l'intégration est déjà installée.
   Le recall manuel géré par Atoll reçoit aussi ce chemin.
@@ -83,6 +102,9 @@ l'intégration, de choisir le home et de consulter son état natif.
   provoque une collision. Un contenu strictement identique peut être adopté
   comme reprise d'une installation interrompue ; le dossier est archivé avant
   remplacement. Le recall applique aussi cette reprise au texte exact attendu.
+- Un changement de home conserve les artefacts de l'ancien home ; le retrait
+  vise le home actuellement choisi. Le panneau l'annonce. Un événement reçu
+  pour un autre home est refusé et journalisé.
 
 Les RPC de diagnostic ne créent aucun thread et ne modifient pas la confiance.
 Le quota reste un opt-in distinct. Une erreur de compte, une catégorie ambiguë,
@@ -101,6 +123,11 @@ Une reprise explicite peut rouvrir le même UUID avec une nouvelle identité,
 sans accepter les événements de l'ancien processus. Le registre permet de
 retrouver un processus encore vivant après redémarrage d'Atoll, même si son
 rollout date d'un autre jour.
+Sans identité après une clôture, un événement non daté ou plus récent reste
+`.unknown` : la demande est conservée, sans réanimer arbitrairement la session.
+Une preuve d'antériorité donne `.closed`. Les clôtures expirent après une heure.
+Une session anonyme sans nouvel événement passe à l'état non confirmé après
+15 minutes ; sa rétention maximale de 24 h ne prouve pas qu'elle travaille.
 
 Les enfants ont leur propre tour. Leurs événements ne remplacent jamais le
 rollout, le modèle ou l'outil du parent. Une clôture enfant ne retire que les
@@ -127,6 +154,19 @@ sont classées `instruction`, avec conservation du texte humain qui les suit.
 La correction d'un ancien index est ciblée et transactionnelle, précédée d'une
 sauvegarde SQLite autonome. Elle ne reconstruit pas l'index et conserve les
 sessions dont le transcript a été purgé.
+Le discriminant Codex reste une **heuristique textuelle**. Les quatre familles
+`task-notification`, `realtime_delegation`, `command-name` et
+`local-command-stdout` sont désormais reconnues lorsqu'elles sont complètes
+et en tête du texte ; citations et suffixes humains sont conservés. La
+migration `codex-instructions-v2` reprend l'index existant. Sur le corpus
+mesuré le 10 septembre, les 435 enveloppes de ces familles ont toutes un
+jumeau `event_msg` : ce jumeau ne permet donc pas de distinguer une consigne humaine.
+Un snapshot incomplet est retiré ; une sauvegarde complète est conservée.
+
+Les résultats d'outils Codex sans verdict fiable restent inconnus et conservés
+dans la limite du condensé. Ils ne fournissent pas une preuve de succès aux
+propositions de skills. Les suggestions d'archivage automatique sont inactives
+pour **les deux fournisseurs**, leur couverture d'usage étant insuffisante.
 
 Les notes fusionnées conservent des références de sources résolubles jusque dans
 les archives. Les propositions fixent leur destination avant l'analyse. Le
@@ -140,6 +180,8 @@ signalés en conflit. Le même slug peut exister pour les deux destinations.
 Une mise à jour archive l'installation précédente et conserve ses ressources.
 Les nouvelles ressources annexes d'une proposition sont refusées, car la revue
 actuelle ne montre que `SKILL.md` ; elles ne sont pas installées sans lecture.
+Seul un fichier `.DS_Store` ordinaire est toléré comme métadonnée Finder,
+jamais copié dans l'installation ; un lien ou dossier homonyme reste refusé.
 
 Le catalogue de plugins Codex utilise `plugin/list` limité aux marketplaces
 locales. Les mutations restent dans `/plugins` ou les commandes montrées par
@@ -148,14 +190,17 @@ Codex comme exécuteur ; elle demeure une recherche de plugins Claude.
 
 ## Vérifications relançables
 
-Version native vérifiée : **codex-cli 0.153.4**. Aucun minimum inférieur n'est
-déclaré compatible sur cette seule preuve.
+Versions natives vérifiées : **codex-cli 0.153.4** pour les fixtures initiales
+et le runner réel ; **0.154.0** pour les catalogues et le recall lors de cette
+relecture. Aucun minimum inférieur n'est déclaré compatible sur cette seule preuve.
 
 ```sh
 swift test --package-path AtollCore
 python3 Scripts/test-runtime.py
 python3 Scripts/test-runtime.py --sabotage-cancellation
 python3 Scripts/test-runtime.py --sabotage-quota-projection
+python3 Scripts/test-review-regressions.py
+python3 Scripts/audit-codex-envelopes.py
 python3 Scripts/test-codex-catalog.py
 xcodegen generate
 xcodebuild -project Atoll.xcodeproj -scheme Atoll -configuration Debug \
@@ -176,28 +221,38 @@ dossier de travail :
 python3 Scripts/test-codex-exec.py --live
 ```
 
-### Aperçu et recette GUI restante
+### Aperçu et recette GUI
 
 Toujours lancer une **copie**, jamais le produit de build :
 
 ```sh
-ditto /private/tmp/atoll-codex-build/Build/Products/Debug/Atoll.app /private/tmp/Atoll-preview.app
-open -n /private/tmp/Atoll-preview.app --args --codex-preview --preview-many --preview-cards
+python3 Scripts/prepare-preview.py \
+  /private/tmp/atoll-codex-build/Build/Products/Debug/Atoll.app \
+  /private/tmp/Atoll-review.app
+python3 Scripts/test-ui.py --app /private/tmp/Atoll-review.app \
+  --output /private/tmp/atoll-ui-review
 ```
 
 Preview Debug interactive, avec données fictives, préférences isolées et aucun
-service de production. Options : `--preview-claude`, `--preview-compact`,
+service de production. La copie reste dans ce mode même rouverte sans argument
+par un outil macOS. Ne pas réutiliser une ancienne copie non protégée.
+Options : `--preview-claude`, `--preview-compact`,
 `--preview-empty`, `--preview-light`, `--preview-rockstar`,
-`--preview-notch`. Les boutons permettent de changer la taille, rejouer les
+`--preview-notch`, `--preview-detail`, `--preview-codex-card`,
+`--preview-onboarding`, `--preview-codex-settings`. Les boutons permettent de changer la taille, rejouer les
 cartes et les transitions. Ce mode ne prouve pas une permission réelle.
 
-À terminer avec les permissions macOS nécessaires : capture **de la fenêtre de
-test**, lecture des images et film ; clair/sombre, encoche/pilule, libellés longs,
-défilement de toutes les sessions, carte+switch+quota+Rockstar, clavier,
-VoiceOver et réduction des animations. Puis vérifier une vraie TUI Codex et une
-vraie TUI Claude avec la copie de test, sans lancer deux Atoll normaux sur les
-mêmes sockets. Valider la carte cliquée, les sons app ouverte/fermée, fin/reprise
-et retour au terminal. Aucun de ces parcours GUI n'est déclaré réussi ici.
+Vérifié : 16 scénarios avec captures de fenêtre et lecture des images,
+clair/sombre, encoche/pilule, libellés longs, liste bornée, cartes, détail,
+Rockstar, accueil et conservation du moteur. Navigation native entre cartes,
+conservation du brouillon et refus au clavier ont été exercés ; un cycle de
+transition avec encoche a été filmé et relu. L'OCR complète cette lecture,
+il ne prouve ni le focus ni la qualité de l'animation.
+
+Restent à vérifier avant fusion : VoiceOver parlé, matrice complète de motion
+réduite/tailles et parcours authentifiés de permissions, sons, fin/reprise et
+retour au terminal avec les deux CLI. Cette recette native nécessite une seule
+instance normale d'Atoll ; le mode aperçu ne la remplace pas.
 
 Le contexte de passation et les analyses sont détaillés dans
 [CODEX-FAILOVER.md](CODEX-FAILOVER.md). L'historique de l'ancienne PR reste dans

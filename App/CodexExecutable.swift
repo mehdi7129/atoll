@@ -47,7 +47,8 @@ enum CodexExecutable {
             let path = (custom as NSString).expandingTildeInPath
             return FileManager.default.isExecutableFile(atPath: path) ? path : nil
         }
-        if let cached { return cached }
+        if let cached, FileManager.default.isExecutableFile(atPath: cached) { return cached }
+        cached = nil
 
         // Emplacements usuels : vérification CHEAP (aucun shell), retentée à
         // chaque appel — codex peut être installé après le lancement d'Atoll.

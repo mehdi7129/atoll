@@ -23,7 +23,7 @@ public enum LearnedSkillError: LocalizedError, Equatable {
         case .collisionWithUnmanagedDirectory(let dirName):
             return "Le dossier « \(dirName) » existe déjà dans la destination choisie et n'est pas géré par Atoll — rien n'a été touché."
         case .manifestUnreadable:
-            return "Manifeste des skills installés illisible — aucune suppression effectuée."
+            return "Manifeste des skills installés illisible — aucune modification effectuée."
         case .userModifiedWithoutForce(let slug):
             return "Le skill « \(slug) » a été modifié à la main — relancer avec force pour l'écraser (l'existant sera archivé)."
         case .illegalTransition:
@@ -175,7 +175,14 @@ public struct LearnedSkillStore {
         guard owns(proposal), loadProposal(in: proposal.directoryURL) == proposal else { throw LearnedSkillError.illegalTransition }
         // Le producteur écrit seulement ces deux fichiers, et la revue ne
         // montre que SKILL.md. Aucune annexe non relue ne devient exécutable.
-        guard try fm.contentsOfDirectory(atPath: proposal.directoryURL.path).allSatisfy({ ["SKILL.md", "meta.json"].contains($0) }) else {
+        guard try fm.contentsOfDirectory(atPath: proposal.directoryURL.path).allSatisfy({
+            if ["SKILL.md", "meta.json"].contains($0) { return true }
+            // Métadonnée Finder : archivée avec la proposition, jamais copiée
+            // vers le skill installé. Un dossier/lien homonyme reste refusé.
+            let url = proposal.directoryURL.appendingPathComponent($0)
+            return $0 == ".DS_Store" && (try? url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey]))
+                .map { $0.isRegularFile == true && $0.isSymbolicLink != true } == true
+        }) else {
             throw LearnedSkillError.unreviewedResources
         }
         guard SkillProposal.canTransition(from: proposal.status, to: .approved) else {

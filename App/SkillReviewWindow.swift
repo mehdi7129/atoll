@@ -58,7 +58,7 @@ struct SkillReviewView: View {
     @State private var confirmingOverwrite = false
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage("paletteID") private var paletteID = Palette.monoOrange.id
-    @AppStorage("codexPaletteID") private var codexPaletteID = Palette.monoCyan.id
+    @AppStorage(ProviderPreferences.codexPaletteKey) private var codexPaletteID = Palette.monoCyan.id
 
     private var colors: ThemeColors {
         ThemeColors(paletteID: current?.destination == .codex ? codexPaletteID : paletteID, scheme: colorScheme)

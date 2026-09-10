@@ -1,5 +1,12 @@
 # Mise en œuvre du plan Codex CLI / Claude Code
 
+> **Rapport initial, conservé comme historique du commit `f25fee6`.** Les
+> constats et limites ci-dessous précèdent la relecture de la PR #2. L'état
+> corrigé, les décisions de Mehdi et les preuves actuelles sont dans
+> [REVIEW-2026-09-10-pr2-corrections.md](REVIEW-2026-09-10-pr2-corrections.md).
+> La permission de capture a depuis été accordée et utilisée.
+
+
 Plan approuvé : [PLAN-2026-09-09-codex-claude.md](PLAN-2026-09-09-codex-claude.md).
 Base : `1b08ebd`, Atoll 0.17.2, build 34. Relevé du **2026-09-10**.
 

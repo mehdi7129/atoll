@@ -2,6 +2,21 @@ import XCTest
 @testable import AtollCore
 
 final class SkillDestinationTests: XCTestCase {
+    func testFinderMetadataDoesNotBlockApprovalButIsNeverInstalled() throws {
+        let codex = store(.codex)
+        let candidate = try proposal(codex)
+        try Data("Finder metadata".utf8).write(to: candidate.directoryURL.appendingPathComponent(".DS_Store"))
+        let installed = try codex.approve(candidate)
+        let target = codex.skillsRoot.appendingPathComponent(installed.dirName)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: target.path), ["SKILL.md"])
+        for kind in ["directory", "symlink"] {
+            let next = try proposal(codex, slug: "finder-\(kind)")
+            let path = next.directoryURL.appendingPathComponent(".DS_Store")
+            if kind == "directory" { try FileManager.default.createDirectory(at: path, withIntermediateDirectories: true) }
+            else { try FileManager.default.createSymbolicLink(at: path, withDestinationURL: target.appendingPathComponent("SKILL.md")) }
+            XCTAssertThrowsError(try codex.approve(next)) { XCTAssertEqual($0 as? LearnedSkillError, .unreviewedResources) }
+        }
+    }
     private var root: URL!
     override func setUpWithError() throws {
         root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

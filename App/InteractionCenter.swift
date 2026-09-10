@@ -53,7 +53,7 @@ final class InteractionCenter {
         guard CodexPreview.enabled else { return }
         pending = [Pending(id: "preview-plan", sessionID: "preview-claude", projectName: "atoll",
                            kind: .plan("# Plan de test\n\n1. Vérifier les couleurs.\n2. Conserver le brouillon en changeant de demande.\n3. Tester le clavier."),
-                           toolName: "ExitPlanMode", toolSummary: "Plan de test", receivedAt: Date(timeIntervalSince1970: 1))]
+                           toolName: "ExitPlanMode", toolSummary: "Plan de test", receivedAt: Date().addingTimeInterval(-5))]
     }
     #endif
     /// Compteur des permissions approuvées automatiquement (mode auto-accept).

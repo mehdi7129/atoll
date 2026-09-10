@@ -7,7 +7,7 @@ import subprocess
 import tempfile
 
 repo = Path(__file__).resolve().parent.parent
-if "--sabotage-cancellation" in sys.argv and "--sabotage-quota-projection" in sys.argv:
+if sum(argument.startswith("--sabotage-") for argument in sys.argv) > 1:
     raise SystemExit("Tester un sabotage à la fois.")
 subprocess.run(["swift", "build", "--package-path", str(repo / "AtollCore")], check=True)
 build = Path(subprocess.check_output(
@@ -41,6 +41,51 @@ with tempfile.TemporaryDirectory(prefix="atoll-runtime-") as directory:
         sabotaged.write_text(content.replace(needle,
             "quota: provider == .codex ? (CodexService.shared.quota?.isFresh(at: Date()) == true ? ProviderFailover.quotaFacts(of: CodexService.shared.quota) : .init(usedFraction: nil, receivedAt: nil, resetsAt: nil)) : claude,"))
         command[command.index(str(original))] = str(sabotaged)
+    expected_failure = None
+    mutations = {
+        "--sabotage-launch-retro": (
+            "App/RetrospectiveRunner.swift", "try AnalysisBudget.shared.prepareToLaunch(lease)", "",
+            "intention de spawn non persistée : retro-claude-nominal"),
+        "--sabotage-launch-curation": (
+            "App/NotesCurationService.swift", "try AnalysisBudget.shared.prepareToLaunch(lease)", "",
+            "intention de spawn non persistée : curation-claude-nominal"),
+        "--sabotage-launch-search": (
+            "App/PluginInventory.swift", "try AnalysisBudget.shared.prepareToLaunch(lease)", "_ = lease",
+            "intention de spawn non persistée : search-claude-nominal"),
+        "--sabotage-curation-retry": (
+            "App/NotesCurationService.swift", "if runLaunched || touched || !retry {", "if runLaunched || touched {",
+            "curation sans travail relancée toutes les 30 minutes : empty"),
+        "--sabotage-curation-journal": (
+            "App/NotesCurationService.swift", "finish(outcome: error.localizedDescription, touched: false)", "phase = .idle",
+            "curation.json"),
+        "--sabotage-budget-recovery": (
+            "App/AnalysisExecution.swift",
+            'if records[i].outcome != "preparing" {', 'if true {',
+            "reprise du budget incorrecte : retrospective/preparing"),
+        "--sabotage-budget-admission": (
+            "App/AnalysisExecution.swift",
+            'do { try load() }\n        catch { return .analysisJournalUnreadable }', '',
+            "reprise du budget incorrecte : retrospective/launching"),
+        "--sabotage-capture-journal": (
+            "App/RetrospectiveRunner.swift",
+            '''journal(AttemptRecord(sessionID: job.snapshot.id, decidedAt: Date(),
+                decision: "skip(configuration)", outcome: nil,
+                transcriptBytes: job.snapshot.transcriptPath.flatMap {
+                    (try? FileManager.default.attributesOfItem(atPath: $0)[.size] as? NSNumber)?.intValue
+                }, quotaFraction: nil, quotaAgeSeconds: nil, failureReason: error.localizedDescription))''', '',
+            "capture refusée sans trace persistée : modelMissing"),
+    }
+    for flag, (relative, needle, replacement, diagnostic) in mutations.items():
+        if flag not in sys.argv:
+            continue
+        original = repo / relative
+        content = original.read_text()
+        if content.count(needle) != 1:
+            raise SystemExit("Couture de sabotage introuvable ou ambiguë : " + flag)
+        sabotaged = root / original.name
+        sabotaged.write_text(content.replace(needle, replacement))
+        command[command.index(str(original))] = str(sabotaged)
+        expected_failure = diagnostic
     command += [str(path) for path in sorted((build / "AtollCore.build").glob("*.o"))]
     subprocess.run(command + ["-o", str(binary)], check=True)
     environment = dict(os.environ, ATOLL_RUNTIME_TEST_ROOT=str(root), ZDOTDIR=str(root))
@@ -54,5 +99,9 @@ with tempfile.TemporaryDirectory(prefix="atoll-runtime-") as directory:
         if result.returncode == 0 or "capture a perdu le minorant Codex haut" not in result.stderr:
             raise SystemExit("Sabotage de projection non détecté par le scénario attendu : " + result.stderr)
         print("PASS sabotage : perte du minorant Codex détectée à la capture réelle, copie temporaire seulement.")
+    elif expected_failure:
+        if result.returncode == 0 or expected_failure not in result.stderr:
+            raise SystemExit("Sabotage non détecté par le scénario attendu : " + result.stderr)
+        print("PASS sabotage : " + expected_failure)
     elif result.returncode:
         raise SystemExit(result.stderr)

@@ -14,17 +14,19 @@ struct SessionDetailView: View {
     @State private var stopMessage: String?
     @State private var handoffMessage: String?
     @State private var preparingHandoff = false
+    @State private var handoffExecutable: String?
+    @AppStorage(CodexExecutable.overrideKey) private var codexExecutableOverride = ""
 
-    /// Le relais vers Codex est proposé quand la bascule est armée, que `codex`
-    /// est réellement installé, et pour une session Claude — reprendre une
-    /// session Codex dans Codex n'a pas de sens.
+    /// Relais explicite vers l'autre CLI, seulement si celui-ci est installé.
     ///
     /// Il n'est PAS conditionné à un quota Claude épuisé : le geste est utile
     /// avant la panne (préparer la reprise) autant qu'après. Ce qui suit le
     /// quota, c'est le BANDEAU d'alerte, pas le bouton — un bouton qui apparaît
     /// au moment où l'on en a besoin est un bouton qu'on ne trouve pas.
     private var handoffDestination: AgentProvider { session.provider == .claude ? .codex : .claude }
-    private var canHandOff: Bool { session.cwd != nil }
+    private var canHandOff: Bool {
+        SessionHandoff.isAvailable(workingDirectory: session.cwd, executable: handoffExecutable)
+    }
 
     /// Le quota Claude est-il épuisé au sens de la bascule ? Sert UNIQUEMENT à
     /// afficher un bandeau : la décision de dépense, elle, est prise par
@@ -112,7 +114,7 @@ struct SessionDetailView: View {
                 }
                 .font(AtollFont.mono(10))
                 if session.provider == .codex {
-                    Text(session.contextMeasuredAt.map { "Dernière mesure du rollout : \($0.formatted(date: .omitted, time: .standard))" } ?? "Mesure du rollout, date inconnue")
+                    Text(session.contextMeasuredAt.map { "Dernière mesure : \($0.formatted(date: .omitted, time: .standard))" } ?? "Mesure de contexte, date inconnue")
                         .font(AtollFont.mono(9)).foregroundStyle(colors.dim)
                 }
             }
@@ -142,6 +144,12 @@ struct SessionDetailView: View {
             }
         } message: {
             Text("« \(session.projectName) » sera arrêtée (claude stop). Son travail en cours s'interrompt.")
+        }
+        .task(id: "\(handoffDestination.rawValue):\(codexExecutableOverride)") {
+            handoffExecutable = nil
+            let executable = await CodexHandoffService.resolveExecutable(for: handoffDestination)
+            guard !Task.isCancelled else { return }
+            handoffExecutable = executable
         }
     }
 

@@ -25,13 +25,19 @@ final class CodexSetupTests: XCTestCase {
             XCTAssertTrue(try CodexHookInstallation.migrateIfInstalled(settingsURL: settings,
                 binDirectory: bin, helperURL: root.appendingPathComponent("l'app déplacée/helper")))
             let result = try Data(contentsOf: settings)
-            XCTAssertEqual(try Data(contentsOf: settings.appendingPathExtension("atoll-backup")), original)
+            let backups = try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)
+                .filter { $0.lastPathComponent.hasPrefix("hooks.json.atoll-migration-") }
+            XCTAssertEqual(backups.count, 1)
+            XCTAssertEqual(try Data(contentsOf: XCTUnwrap(backups.first)), original)
             XCTAssertFalse(CodexHookSettingsEditor.needsMigration(result))
             let json = try XCTUnwrap(JSONSerialization.jsonObject(with: result) as? [String: Any])
             let hooks = try XCTUnwrap(json["hooks"] as? [String: [[String: Any]]])
             let foreign = try XCTUnwrap(hooks["PermissionRequest"]?.first)
             XCTAssertEqual(foreign["matcher"] as? String, "Bash")
-            let handler = try XCTUnwrap((foreign["hooks"] as? [[String: Any]])?.first)
+            let handlers = try XCTUnwrap(foreign["hooks"] as? [[String: Any]])
+            XCTAssertEqual(handlers.count, 2)
+            XCTAssertEqual(handlers[0]["timeout"] as? Int, 600)
+            let handler = handlers[1]
             XCTAssertEqual(handler["command"] as? String, "echo personal")
             XCTAssertEqual(handler["enabled"] as? Bool, false)
             XCTAssertEqual(try String(contentsOf: config), "trust = 'untouched'")
@@ -64,6 +70,46 @@ final class CodexSetupTests: XCTestCase {
         let data = Data(raw.utf8)
         XCTAssertTrue(CodexHookSettingsEditor.needsMigration(data))
         XCTAssertFalse(CodexHookSettingsEditor.sameJSON(data, try CodexHookSettingsEditor.edit(data, install: true)))
+    }
+
+    func testMigrationPreservesRemovedEventsCustomTimeoutAndFormatting() throws {
+        try temporary { root in
+            let settings = root.appendingPathComponent("hooks.json")
+            var json = try JSONSerialization.jsonObject(with: CodexHookSettingsEditor.edit(nil, install: true)) as! [String: Any]
+            var hooks = json["hooks"] as! [String: [[String: Any]]]
+            hooks.removeValue(forKey: "Stop")
+            var group = hooks["PermissionRequest"]![0]
+            var handlers = group["hooks"] as! [[String: Any]]
+            handlers[0]["timeout"] = 999
+            handlers[0]["statusMessage"] = "Mon message"
+            group["hooks"] = handlers
+            hooks["PermissionRequest"] = [group]
+            json["hooks"] = hooks
+            let original = try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted])
+            try original.write(to: settings)
+            let before = try settings.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+            XCTAssertFalse(CodexHookSettingsEditor.needsMigration(original))
+            XCTAssertFalse(try CodexHookInstallation.migrateIfInstalled(settingsURL: settings,
+                binDirectory: root.appendingPathComponent("bin"), helperURL: root.appendingPathComponent("helper")))
+            XCTAssertEqual(try Data(contentsOf: settings), original)
+            XCTAssertEqual(try settings.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate, before)
+            XCTAssertTrue(FileManager.default.fileExists(atPath: root.appendingPathComponent("bin/atoll-codex-bridge").path))
+        }
+    }
+
+    func testMigrationPreservesShortTimeoutWhenHandlerIsCustomized() throws {
+        for customization: [String: Any] in [
+            ["statusMessage": "Mon attente courte"], ["async": false], ["customFlag": true]
+        ] {
+            var handler: [String: Any] = ["type": "command", "command": CodexHookSettingsEditor.command,
+                                          "timeout": 3]
+            handler.merge(customization) { _, new in new }
+            let original = try JSONSerialization.data(withJSONObject: [
+                "hooks": ["PermissionRequest": [["hooks": [handler]]]]
+            ])
+            XCTAssertFalse(CodexHookSettingsEditor.needsMigration(original), "\(customization)")
+            XCTAssertTrue(CodexHookSettingsEditor.sameJSON(original, try CodexHookSettingsEditor.migrate(original)))
+        }
     }
 
     func testHomeSelectionPrioritySymlinkIdempotenceAndInvalidSelection() throws {
