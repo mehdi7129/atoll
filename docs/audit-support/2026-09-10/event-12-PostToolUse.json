@@ -1,0 +1,22 @@
+{
+  "session_id": "fixture-id-1",
+  "turn_id": "fixture-id-6",
+  "transcript_path": "/private/fixture/atoll-contract/home/sessions/2026/09/10/rollout-2026-09-10T00-47-11-01a0885a-8f9f-7963-9983-3a650bde3968.jsonl",
+  "cwd": "/fixture/atoll-contract/project",
+  "hook_event_name": "PostToolUse",
+  "model": "gpt-6-astra",
+  "permission_mode": "default",
+  "tool_name": "collaborationspawn_agent",
+  "tool_input": {
+    "task_name": "contract_child",
+    "message": "gAAAAABqoeOgonQPylbbD1jf6WqnNgMIKjXc2wC2g-TiJHc9qW8EYzIHAzad0XQwy4BCTWXp7L9aizlo9uMcTn19i1C5adXgyiy68UUiIFKVByWhjy4y1cnBaTEWf1Tbw1XQ2Y19KPntWUZWST6ZyJ_iZPGILnbVvjUpxaWS3r8VLz_r2fI_Mf7Rf_olrkCCziRiyOSeB2dZqkUPe6rhy01ftqijZk2HhaSztT5rWnzbLITceL3AbLBh4-_JNiOA_5r_aiRcQyaahoQ3IgW5yWP3aMXUbtdlWgN6CUr4ePGMumCdmTF4LN24q0b_EDuv6B9j5ItWW54Yps1-Hz1LWvtGUkzPL_CRZ0eLBiDmc2llugxxvVWrAmf5pGy1hx47cyNvKcxoK6_MQt7pwwWcsCnT0d9go6uC-jXC7XMbLhURe5-lDROAFF8i1i8r7qfRyZrwBCoMHxEpRyMTOkq8pmx-4qI1hjt9Nbz4Je0QQf4lqVs9p8brPl9j6TykxHrZ-iYXb004V4J5R_XVa51Bznc6ryNZJLJqxBEKZ6CCplLZdbx89_sKRKHDvfpPsZkAhAdj30jZGjzSoZ8AE_1FH2LOEpImMJIM-A=="
+  },
+  "tool_response": "{\"task_name\":\"/root/contract_child\"}",
+  "tool_use_id": "fixture-id-7",
+  "_atoll_test_enrich": {
+    "sessionStartTime": 1788994012.272407,
+    "observedAt": 1788994464.584604,
+    "tty": "ttys033",
+    "sessionPid": 4242
+  }
+}

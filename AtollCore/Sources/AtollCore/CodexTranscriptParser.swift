@@ -29,8 +29,9 @@ import Foundation
 public enum CodexTranscriptParser {
 
     /// Enveloppes machine injectées dans un message `user` : ce n'est pas
-    /// l'utilisateur qui parle, c'est le client qui se décrit. Discriminant
-    /// STRUCTUREL (préfixe de balise), jamais une recherche de mots.
+    /// l'utilisateur qui parle, c'est le client qui se décrit. Heuristique
+    /// textuelle ancrée, vérifiée sur les rollouts : leurs `UserMessage`
+    /// miroirs existent aussi pour ces enveloppes et ne les distinguent pas.
     /// ⚠️ `<recommended_plugins>` A ÉTÉ AJOUTÉ APRÈS COUP, sur constat de Codex
     /// qui a compté **5 enveloppes** de ce type indexées comme paroles de
     /// l'utilisateur dans les rollouts de cette machine — avec
@@ -40,6 +41,7 @@ public enum CodexTranscriptParser {
     private static let machineEnvelopePrefixes = [
         "<environment_context>", "<skills_instructions>", "<user_instructions>",
         "<plan_mode>", "<system-reminder>", "<recommended_plugins>",
+        "<task-notification>", "<realtime_delegation>",
     ]
 
     /// `nil` = ligne sans substance indexable (ou illisible). Jamais d'erreur :
@@ -50,6 +52,15 @@ public enum CodexTranscriptParser {
         let kind = root["type"] as? String
 
         switch kind {
+        case "compacted":
+            // Les 18 captures locales du 10/09 ont message vide et un bloc
+            // compaction chiffré dans replacement_history. Ne pas réindexer
+            // cet historique (doublons), ni inventer un résumé en clair.
+            guard let text = payload["message"] as? String,
+                  !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+            return TranscriptLine(uuid: payload["compaction_response_id"] as? String,
+                sessionID: nil, timestamp: timestamp(root["timestamp"]), cwd: nil, gitBranch: nil,
+                fragments: [.init(role: .summary, text: text)])
         case "session_meta":
             // Aucun fragment : cette ligne porte le CONTEXTE (session, dossier),
             // que l'ingestion attache aux suivantes.
@@ -85,7 +96,7 @@ public enum CodexTranscriptParser {
             guard role == "user" || role == "assistant" else { return nil }
             let text = joinedText(payload["content"])
             guard !text.isEmpty else { return nil }
-            if role == "user", isMachineEnvelope(text) { return nil }
+            if role == "user" { return classifiedUserText(text) }
             return [.init(role: role == "user" ? .user : .assistant, text: text)]
 
         case "custom_tool_call", "function_call":
@@ -93,7 +104,7 @@ public enum CodexTranscriptParser {
             let input = (payload["input"] as? String) ?? (payload["arguments"] as? String) ?? ""
             let summary = input.isEmpty ? name : "\(name) · \(condensed(input))"
             return [.init(role: .tool, text: summary, isError: nil,
-                          toolUseID: payload["call_id"] as? String)]
+                          toolUseID: payload["call_id"] as? String, toolOutcome: .unknown)]
 
         case "custom_tool_call_output", "function_call_output":
             let text = joinedText(payload["output"])
@@ -103,7 +114,7 @@ public enum CodexTranscriptParser {
             // Le deviner en cherchant « error » dans la sortie a été mesuré à
             // 5× trop de faux positifs côté Claude ; on ne recommence pas.
             return [.init(role: .toolResult, text: condensed(text), isError: nil,
-                          toolUseID: payload["call_id"] as? String)]
+                          toolUseID: payload["call_id"] as? String, toolOutcome: .unknown)]
 
         case "reasoning":
             // JAMAIS `encrypted_content` (piège n° 2) : seul `summary` est du texte.
@@ -134,8 +145,84 @@ public enum CodexTranscriptParser {
         }
     }
 
-    private static func isMachineEnvelope(_ text: String) -> Bool {
-        machineEnvelopePrefixes.contains { text.hasPrefix($0) }
+    /// Contrat ancré : citer AGENTS.md dans une phrase reste une parole humaine.
+    /// Une consigne humaine après les balises est conservée séparément.
+    public static func classifiedUserText(_ raw: String) -> [TranscriptLine.Fragment] {
+        var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        var result: [TranscriptLine.Fragment] = []
+        while !text.isEmpty {
+            // Les commandes du client sont trois balises COMPLÈTES, avec le
+            // contenu sur la ligne d'ouverture. Une citation incomplète reste
+            // humaine ; le texte après l'enveloppe complète aussi.
+            if let end = inlineClientEnvelopeEnd(in: text) {
+                result.append(.init(role: .instruction, text: String(text[..<end])))
+                text = text[end...].trimmingCharacters(in: .whitespacesAndNewlines)
+                continue
+            }
+            let close: String?
+            if text.hasPrefix("# AGENTS.md instructions for /"),
+               let newline = text.firstIndex(of: "\n"),
+               text[newline...].trimmingCharacters(in: .whitespacesAndNewlines).components(separatedBy: "\n").first?
+                .trimmingCharacters(in: .whitespacesAndNewlines) == "<INSTRUCTIONS>" {
+                close = "</INSTRUCTIONS>"
+            } else if let prefix = machineEnvelopePrefixes.first(where: {
+                text.components(separatedBy: "\n").first?.trimmingCharacters(in: .whitespacesAndNewlines) == $0
+            }) {
+                close = "</" + prefix.dropFirst()
+            } else {
+                result.append(.init(role: .user, text: text))
+                break
+            }
+            guard let close, let end = closingLine(close, in: text) else {
+                // Les deux nouvelles familles exigent leur fermeture. Sans
+                // elle, on ne peut pas séparer une notification d'une citation.
+                let requiresClosing = text.hasPrefix("<task-notification>") || text.hasPrefix("<realtime_delegation>")
+                result.append(.init(role: requiresClosing ? .user : .instruction, text: text))
+                break
+            }
+            result.append(.init(role: .instruction, text: String(text[..<end.upperBound])))
+            text = text[end.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return result
+    }
+
+    private static func inlineClientEnvelopeEnd(in text: String) -> String.Index? {
+        let tags: [String]
+        if text.hasPrefix("<command-name>") {
+            tags = ["command-name", "command-message", "command-args"]
+        } else if text.hasPrefix("<local-command-stdout>") {
+            tags = ["local-command-stdout"]
+        } else { return nil }
+        var cursor = text.startIndex
+        for tag in tags {
+            while cursor < text.endIndex, text[cursor].isWhitespace { cursor = text.index(after: cursor) }
+            let remainder = String(text[cursor...])
+            guard remainder.hasPrefix("<\(tag)>"),
+                  let closing = closingLine("</\(tag)>", in: remainder, inline: true) else { return nil }
+            cursor = text.index(cursor, offsetBy: remainder.distance(from: remainder.startIndex, to: closing.upperBound))
+        }
+        return cursor
+    }
+
+    private static func closingLine(_ closing: String, in text: String, inline: Bool = false) -> Range<String.Index>? {
+        var fence: Character?
+        var fenceLength = 0
+        var start = text.startIndex
+        for raw in text.split(separator: "\n", omittingEmptySubsequences: false) {
+            let line = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let first = line.first, first == "`" || first == "~" {
+                let length = line.prefix { $0 == first }.count
+                if length >= 3 {
+                    if fence == nil { fence = first; fenceLength = length }
+                    else if fence == first && length >= fenceLength &&
+                            line.dropFirst(length).trimmingCharacters(in: .whitespaces).isEmpty { fence = nil }
+                }
+            }
+            let end = text.index(start, offsetBy: raw.count)
+            if fence == nil, line == closing || (inline && line.hasSuffix(closing)) { return start..<end }
+            start = end == text.endIndex ? end : text.index(after: end)
+        }
+        return nil
     }
 
     /// Borne un texte comme le fait le parseur Claude : un rollout peut porter

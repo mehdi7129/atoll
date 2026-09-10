@@ -73,10 +73,7 @@ public enum BridgePaths {
     /// Rollouts Codex : `~/.codex/sessions/<année>/<mois>/<jour>/rollout-*.jsonl`.
     /// `CODEX_HOME` est respecté quand il est ABSOLU, comme dans `CodexPaths`.
     public static var codexSessionsURL: URL {
-        let custom = ProcessInfo.processInfo.environment["CODEX_HOME"]
-        let home = custom.flatMap { $0.hasPrefix("/") ? URL(fileURLWithPath: $0) : nil }
-            ?? homeDirectory.appendingPathComponent(".codex")
-        return home.appendingPathComponent("sessions")
+        CodexPaths.homeURL.appendingPathComponent("sessions")
     }
 
     public static var claudeProjectsURL: URL {

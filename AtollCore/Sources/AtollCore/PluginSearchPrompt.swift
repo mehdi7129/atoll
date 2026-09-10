@@ -356,6 +356,13 @@ public struct PluginSearchResult: Equatable, Sendable {
         return PluginSearchResult(matches: validatedMatches(payload["matches"], knownIDs: knownIDs))
     }
 
+    public static func parse(codexOutput: Data, knownIDs: Set<String>) -> PluginSearchResult? {
+        guard codexOutput.count <= 1_048_576,
+              let payload = (try? JSONSerialization.jsonObject(with: codexOutput)) as? [String: Any],
+              payload["matches"] is [[String: Any]] else { return nil }
+        return PluginSearchResult(matches: validatedMatches(payload["matches"], knownIDs: knownIDs))
+    }
+
     private static func structuredPayload(of root: [String: Any]) -> [String: Any]? {
         if let structured = root["structured_output"] as? [String: Any] {
             return structured

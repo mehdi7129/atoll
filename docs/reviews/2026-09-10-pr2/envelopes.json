@@ -1,0 +1,15 @@
+{
+  "files": 109,
+  "malformedLines": 0,
+  "messages": {
+    "other:no-twin": 88,
+    "other:twin": 775,
+    "command-name:twin": 76,
+    "local-command-stdout:twin": 72,
+    "task-notification:twin": 280,
+    "realtime_delegation:twin": 7
+  },
+  "machineEnvelopeOrigins": {
+    "Codex Desktop": 435
+  }
+}

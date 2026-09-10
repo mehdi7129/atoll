@@ -152,7 +152,7 @@ final class RecallJournalTests: XCTestCase {
             XCTAssertFalse(outcome.searched, outcome.rawValue)
         }
         for outcome in [RecallJournal.Outcome.injected, .noHits, .noneAboveFloor,
-                        .emptyBlock, .indexUnavailable, .searchFailed] {
+                        .emptyBlock, .searchFailed] {
             XCTAssertTrue(outcome.searched, outcome.rawValue)
         }
     }

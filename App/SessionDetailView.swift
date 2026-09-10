@@ -14,19 +14,19 @@ struct SessionDetailView: View {
     @State private var stopMessage: String?
     @State private var handoffMessage: String?
     @State private var preparingHandoff = false
+    @State private var handoffExecutable: String?
+    @AppStorage(CodexExecutable.overrideKey) private var codexExecutableOverride = ""
 
-    /// Le relais vers Codex est proposé quand la bascule est armée, que `codex`
-    /// est réellement installé, et pour une session Claude — reprendre une
-    /// session Codex dans Codex n'a pas de sens.
+    /// Relais explicite vers l'autre CLI, seulement si celui-ci est installé.
     ///
     /// Il n'est PAS conditionné à un quota Claude épuisé : le geste est utile
     /// avant la panne (préparer la reprise) autant qu'après. Ce qui suit le
     /// quota, c'est le BANDEAU d'alerte, pas le bouton — un bouton qui apparaît
     /// au moment où l'on en a besoin est un bouton qu'on ne trouve pas.
-    private var canHandOffToCodex: Bool {
-        session.provider == .claude
-            && LearningSettings.shared.isFailoverEnabled
-            && CodexExecutable.resolveCheap() != nil
+    private var handoffDestination: AgentProvider { session.provider == .claude ? .codex : .claude }
+    private var canHandOff: Bool {
+        if CodexPreview.enabled { return false }
+        return SessionHandoff.isAvailable(workingDirectory: session.cwd, executable: handoffExecutable)
     }
 
     /// Le quota Claude est-il épuisé au sens de la bascule ? Sert UNIQUEMENT à
@@ -114,6 +114,10 @@ struct SessionDetailView: View {
                         .foregroundStyle(colors.fg)
                 }
                 .font(AtollFont.mono(10))
+                if session.provider == .codex {
+                    Text(session.contextMeasuredAt.map { "Dernière mesure : \($0.formatted(date: .omitted, time: .standard))" } ?? "Mesure de contexte, date inconnue")
+                        .font(AtollFont.mono(9)).foregroundStyle(colors.dim)
+                }
             }
 
             // Recall proactif : ce qui a été JOINT au dernier message. Sans
@@ -141,6 +145,12 @@ struct SessionDetailView: View {
             }
         } message: {
             Text("« \(session.projectName) » sera arrêtée (claude stop). Son travail en cours s'interrompt.")
+        }
+        .task(id: "\(handoffDestination.rawValue):\(codexExecutableOverride)") {
+            handoffExecutable = nil
+            let executable = await CodexHandoffService.resolveExecutable(for: handoffDestination)
+            guard !Task.isCancelled else { return }
+            handoffExecutable = executable
         }
     }
 
@@ -171,6 +181,8 @@ struct SessionDetailView: View {
                 // Codex qui demande — annoncer l'un pour l'autre ferait chercher
                 // une carte qui n'existe pas.
                 Text(codexHint).font(AtollFont.mono(9)).foregroundStyle(colors.dim)
+                Text("Questions, plans et interruption se traitent dans le terminal Codex.")
+                    .font(AtollFont.mono(9)).foregroundStyle(colors.dim)
             }
             HStack(spacing: 12) {
                 AsciiButton(label: openLabel, color: colors.accent, shortcut: nil) {
@@ -187,8 +199,8 @@ struct SessionDetailView: View {
                 // …et SEULEMENT si le daemon a un job à arrêter : sans dossier
                 // dans ~/.claude/jobs, `claude stop` sort en 1 (« No job
                 // matching »). C'est le cas de toute session interactive.
-                if canHandOffToCodex {
-                    AsciiButton(label: preparingHandoff ? "PRÉPARATION…" : "CONTINUER DANS CODEX",
+                if canHandOff {
+                    AsciiButton(label: preparingHandoff ? "PRÉPARATION…" : "CONTINUER DANS \(handoffDestination.label.uppercased())",
                                 color: claudeIsExhausted ? colors.warn : colors.dim,
                                 shortcut: nil) {
                         performHandoff()
@@ -201,7 +213,7 @@ struct SessionDetailView: View {
                     }
                 }
             }
-            if canHandOffToCodex, claudeIsExhausted {
+            if session.provider == .claude, canHandOff, claudeIsExhausted {
                 Text("Quota Claude épuisé — Codex peut prendre le relais.")
                     .font(AtollFont.mono(9)).foregroundStyle(colors.warn)
             }
@@ -284,11 +296,12 @@ struct SessionDetailView: View {
             // inverse. Constat de Codex sur ce correctif — c'est le même
             // défaut de ré-entrance que le double `claude --bg` de la Phase 9.
             defer { preparingHandoff = false }
-            switch await CodexHandoffService.start(session: session, digest: digest) {
+            let destination = provider == .claude ? AgentProvider.codex : .claude
+            switch await CodexHandoffService.start(session: session, digest: digest, destination: destination) {
             case .opened:
                 handoffMessage = digest.isEmpty
-                    ? "Codex ouvert — transcript illisible, aucun contexte joint."
-                    : "Codex ouvert dans un terminal, contexte joint."
+                    ? "Terminal ouvert pour \(destination.label) — aucun contexte lisible joint."
+                    : "Terminal ouvert pour \(destination.label), contexte préparé."
             case .failed(let reason):
                 handoffMessage = reason
             }
@@ -298,14 +311,19 @@ struct SessionDetailView: View {
     private var grid: some View {
         VStack(alignment: .leading, spacing: 3) {
             row("agent", session.provider.label)
-            row("modèle", session.model.map { ModelName.display($0) } ?? "—")
-            row("branche", session.gitBranch ?? "—")
-            row("sous-agents", session.subagentCount > 0 ? "\(session.subagentCount) actifs" : "—")
-            row("MCP", session.mcpServers.isEmpty ? "—" : session.mcpServers.joined(separator: ", "))
+            row("modèle", session.model.map { ModelName.display($0) } ?? "inconnu")
+            row(session.provider == .codex ? "branche init." : "branche", session.gitBranch ?? "non renseignée")
+            row("sous-agents", session.subagentCountIsKnown
+                ? "\(session.subagentCount) actifs\(session.provider == .codex ? " observés" : "")" : "non mesuré")
+            row("MCP", session.mcpServers.isEmpty ? "non renseigné" : session.mcpServers.joined(separator: ", "))
+            if session.contextUsedFraction == nil { row("contexte", "non mesuré") }
+            if session.provider == .codex {
+                row("état", session.stateConfirmedByHook ? "confirmé par hook" : "non confirmé récemment")
+            }
             if let cost = session.costUSD {
                 row("coût session", String(format: "$%.2f", cost))
             }
-            row("dossier", session.cwd ?? "—")
+            row("dossier", session.cwd ?? "inconnu")
         }
         .font(AtollFont.mono(10))
     }

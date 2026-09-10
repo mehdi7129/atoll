@@ -21,6 +21,17 @@ final class IslandRowPlanTests: XCTestCase {
 
     // MARK: - Le budget est tenu
 
+    func testProviderSelectorReservesSpaceAndAnnouncesOverflow() {
+        let groups = (0..<9).map { group("project-\($0)", 1) }
+        for banner in [false, true] {
+            let budget = IslandRowBudget.rows(bannerShown: banner, providerSelectorShown: true)
+            XCTAssertEqual(budget, banner ? 3 : 5)
+            let plan = IslandRowPlan.byProject(groups, rowBudget: budget, expanded: [])
+            XCTAssertEqual(plan.rows.count, banner ? 2 : 4)
+            XCTAssertEqual(plan.hiddenCount, banner ? 7 : 5)
+        }
+    }
+
     /// Le panneau a une HAUTEUR FIXE : dépasser ne coupe pas la liste, ça pousse
     /// le quota hors du cadre. La ligne de pied fait partie du budget.
     func testLeBudgetEstTenuPiedCompris() {

@@ -28,6 +28,7 @@ struct CodexInteractionCardView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Text("!")
+                    .accessibilityHidden(true)
                     .fontWeight(.bold)
                     .foregroundStyle(colors.warn)
                 // Le badge fournisseur EN TÊTE : sur un îlot qui montre les deux
@@ -40,6 +41,7 @@ struct CodexInteractionCardView: View {
                     .lineLimit(1)
                 Spacer()
                 Text(AsciiArt.rule(12))
+                    .accessibilityHidden(true)
                     .foregroundStyle(colors.dim)
             }
             .font(AtollFont.mono(11))
@@ -50,9 +52,34 @@ struct CodexInteractionCardView: View {
                 .lineLimit(3)
                 .fixedSize(horizontal: false, vertical: true)
 
+            Text(request.permission.cwd)
+                .font(AtollFont.mono(9))
+                .foregroundStyle(colors.dim)
+                .lineLimit(1)
+                .help(request.permission.cwd)
+
+            if let agent = request.agentID {
+                Text("Sous-agent \(agent) · session parente \(request.sessionID)")
+                    .font(AtollFont.mono(9)).foregroundStyle(colors.dim)
+                    .lineLimit(1).help("Sous-agent \(agent), parent \(request.sessionID)")
+            }
+
+            ScrollView([.vertical, .horizontal]) {
+                Text(request.permission.details)
+                    .font(AtollFont.mono(10))
+                    .foregroundStyle(colors.fg)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: true, vertical: true)
+                    .padding(6)
+            }
+            .frame(minHeight: 32, maxHeight: 110)
+            .layoutPriority(-1)
+            .accessibilityLabel("Détails complets de la demande Codex")
+
             Text("Codex attend ta décision. Elle ne vaut que pour cette demande.")
                 .font(AtollFont.mono(9))
                 .foregroundStyle(colors.dim)
+                .fixedSize(horizontal: false, vertical: true)
 
             HStack(spacing: 12) {
                 AsciiButton(label: "REFUSER ⌘N", color: colors.warn, shortcut: nil) {
@@ -69,6 +96,8 @@ struct CodexInteractionCardView: View {
                     center.handBack(request.id)
                 }
             }
+            .fixedSize(horizontal: false, vertical: true)
+            .layoutPriority(1)
 
             if center.pending.count > 1 {
                 // Deux outils peuvent demander en parallèle. On l'ANNONCE plutôt
@@ -79,6 +108,7 @@ struct CodexInteractionCardView: View {
                     .foregroundStyle(colors.dim)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .keyboardShortcut(.defaultAction)
         .background {
             // Raccourcis, comme la carte Claude : ⌘Y autorise, ⌘N refuse.

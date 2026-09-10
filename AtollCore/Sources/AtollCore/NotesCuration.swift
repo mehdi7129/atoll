@@ -263,6 +263,7 @@ public enum NotesCurationPlanner {
         /// Le volume proposé est < 50 % de l'existant (`ratio` = neuf/ancien) :
         /// un rétrécissement massif est suspect.
         case excessiveShrink(ratio: Double)
+        case untraceableSources
     }
 
     /// Seuil de rétrécissement : refus si `ratio` est STRICTEMENT inférieur.
@@ -271,7 +272,8 @@ public enum NotesCurationPlanner {
     public static func plan(
         existing: [(name: String, content: String)],
         output: NotesCurationOutput,
-        now: Date
+        now: Date,
+        archives: [(name: String, content: String)] = []
     ) -> Result<Plan, CurationRefusal> {
         // (1) Sortie vide sur entrée non vide : jamais d'effacement total —
         // testé sur la LISTE (même des fichiers vides méritent le refus).
@@ -302,6 +304,13 @@ public enum NotesCurationPlanner {
             }
         }
 
+        // Consolider suppose une filiation contrôlable. Ne pas publier une
+        // note sans source ou avec un nom inventé quand un corpus est fourni.
+        let knownSources = Set(existing.map(\.name))
+        if !existing.isEmpty && output.notes.contains(where: {
+            $0.sources.isEmpty || !Set($0.sources).isSubset(of: knownSources)
+        }) { return .failure(.untraceableSources) }
+
         // (3) Rendu des notes ; les contradictions deviennent des
         // avertissements, dans l'ordre de la sortie, et rien d'autre.
         // Les métadonnées des notes SOURCES (projet, catégorie, date de
@@ -311,7 +320,9 @@ public enum NotesCurationPlanner {
         let rendered = output.notes.enumerated().map { index, note in
             RenderedNote(
                 fileName: fileName(index: index, title: note.title),
-                content: renderedContents(of: note, now: now, heritage: heritage)
+                content: renderedContents(of: note, now: now, heritage: heritage,
+                    sessions: NoteProvenance.sessions(for: note.sources, existing: existing, archives: archives),
+                    references: NoteProvenance.references(for: note.sources, existing: existing))
             )
         }
         let warnings = output.contradictions.map { "⚠ contradiction : \($0.summary)" }
@@ -409,7 +420,7 @@ public enum NotesCurationPlanner {
     /// rétrospective ou par une curation.
     private static func renderedContents(of note: NotesCurationOutput.Note,
                                          now: Date,
-                                         heritage: Heritage) -> String {
+                                         heritage: Heritage, sessions: [String], references: String) -> String {
         var frontMatter = [
             "title: \(CurationRender.yamlScalar(note.title))",
         ]
@@ -423,6 +434,8 @@ public enum NotesCurationPlanner {
             frontMatter.append("created_at: \(CurationRender.yamlScalar(created))")
         }
         frontMatter.append("curated_at: \(CurationRender.iso8601(now))")
+        if !sessions.isEmpty { frontMatter.append("source_sessions: \(NoteProvenance.json(sessions))") }
+        if references != "[]" { frontMatter.append("source_notes: \(references)") }
         if !note.sources.isEmpty {
             frontMatter.append("sources:")
             frontMatter.append(contentsOf: note.sources.map {

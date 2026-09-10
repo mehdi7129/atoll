@@ -1,0 +1,258 @@
+[
+  {
+    "case": "preview-preferences",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "skills",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "skills-position",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "selector-hover",
+    "passed": false,
+    "failures": [
+      "CL 5h 27%"
+    ]
+  },
+  {
+    "case": "list-codex",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "list-claude",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "card-claude",
+    "passed": false,
+    "failures": [
+      "Vérifier les couleurs"
+    ]
+  },
+  {
+    "case": "card-codex",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "detail",
+    "passed": false,
+    "failures": [
+      "contexte"
+    ]
+  },
+  {
+    "case": "detail-cli-absent",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "onboarding-unset",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "onboarding-claude",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "onboarding-codex",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "onboarding-navigation",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-codex",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "idle-notch",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "rockstar",
+    "passed": false,
+    "failures": [
+      "18%"
+    ]
+  },
+  {
+    "case": "rockstar-notch",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "compact",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "light",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "matrix-small-pill-dark-motion",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "matrix-small-pill-dark-reduced",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "matrix-small-pill-light-motion",
+    "passed": false,
+    "failures": [
+      "projet-",
+      "18%"
+    ]
+  },
+  {
+    "case": "matrix-small-pill-light-reduced",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "matrix-small-notch-dark-motion",
+    "passed": false,
+    "failures": [
+      "projet-"
+    ]
+  },
+  {
+    "case": "matrix-small-notch-dark-reduced",
+    "passed": false,
+    "failures": [
+      "projet-"
+    ]
+  },
+  {
+    "case": "matrix-small-notch-light-motion",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "matrix-small-notch-light-reduced",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "matrix-medium-pill-dark-motion",
+    "passed": false,
+    "failures": [
+      "18%"
+    ]
+  },
+  {
+    "case": "matrix-medium-pill-dark-reduced",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "matrix-medium-pill-light-motion",
+    "passed": false,
+    "failures": [
+      "projet-"
+    ]
+  },
+  {
+    "case": "matrix-medium-pill-light-reduced",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "matrix-medium-notch-dark-motion",
+    "passed": false,
+    "failures": [
+      "projet-"
+    ]
+  },
+  {
+    "case": "matrix-medium-notch-dark-reduced",
+    "passed": false,
+    "failures": [
+      "projet-"
+    ]
+  },
+  {
+    "case": "matrix-medium-notch-light-motion",
+    "passed": false,
+    "failures": [
+      "projet-"
+    ]
+  },
+  {
+    "case": "matrix-medium-notch-light-reduced",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "matrix-large-pill-dark-motion",
+    "passed": false,
+    "failures": [
+      "18%"
+    ]
+  },
+  {
+    "case": "matrix-large-pill-dark-reduced",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "matrix-large-pill-light-motion",
+    "passed": false,
+    "failures": [
+      "projet-",
+      "18%"
+    ]
+  },
+  {
+    "case": "matrix-large-pill-light-reduced",
+    "passed": false,
+    "failures": [
+      "18%"
+    ]
+  },
+  {
+    "case": "matrix-large-notch-dark-motion",
+    "passed": false,
+    "failures": [
+      "projet-"
+    ]
+  },
+  {
+    "case": "matrix-large-notch-dark-reduced",
+    "passed": false,
+    "failures": [
+      "projet-"
+    ]
+  },
+  {
+    "case": "matrix-large-notch-light-motion",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "matrix-large-notch-light-reduced",
+    "passed": true,
+    "failures": []
+  }
+]

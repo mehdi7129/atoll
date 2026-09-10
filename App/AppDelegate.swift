@@ -119,13 +119,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // absolu de l'ancien bundle. Idempotent : sans différence réelle, rien
         // n'est écrit, et rien n'est posé si les hooks ne sont pas installés.
         do {
-            let refresh = try CodexHookInstallation.refreshWrapper(
+            let changed = try CodexHookInstallation.migrateIfInstalled(
                 settingsURL: CodexPaths.hooksURL,
                 binDirectory: BridgePaths.binDirectory,
                 helperURL: HookInstaller.helperURL)
-            if case .rewritten = refresh {
+            if changed {
                 Logger(subsystem: "dev.mehdiguiard.atoll", category: "codex")
-                    .info("lanceur de hooks Codex remis à jour")
+                    .info("définitions de hooks Codex remises à jour — confiance native à vérifier")
+            }
+            if CodexPaths.configurationError == nil,
+               CodexHookSettingsEditor.hasManagedHooks(try? Data(contentsOf: CodexPaths.hooksURL)) {
+                try CodexRecallSkill.install(home: CodexPaths.homeURL, helperURL: HookInstaller.helperURL)
             }
         } catch {
             // Fail-open (règle n° 1) : un lanceur qu'on n'a pas pu réécrire
@@ -137,8 +141,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         CodexService.shared.start()
         let codexServer = BridgeServer(onEvent: { _, _ in }, onStatusline: { _ in },
-                                      onStateChange: { _ in }, onCodexEvent: { event, requestID, helperPid in
+                                      onStateChange: { running in
+            Task { @MainActor in CodexService.shared.serverRunning = running }
+        }, onCodexEvent: { event, requestID, helperPid in
             Task { @MainActor in
+                guard CodexService.shared.accepts(event) else {
+                    if let requestID { CodexInteractionCenter.shared.handBack(requestID) }
+                    return
+                }
                 let applied = CodexService.shared.apply(event)
                 // Une demande d'autorisation laisse le helper BLOQUÉ sur son
                 // descripteur : elle va dans le centre Codex, jamais dans
@@ -231,7 +241,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        guard !CodexPreview.enabled else { return }
+        guard !CodexPreview.enabled else { CodexPreview.clearPreferences(); return }
         CodexService.shared.stop()
         FleetPoller.shared.stop()
         RetrospectiveRunner.shared.terminateActive()
@@ -489,7 +499,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         notify_register_dispatch("dev.mehdiguiard.atoll.debug.approveSkill", &approveSkillToken, DispatchQueue.main) { _ in
             MainActor.assumeIsolated {
                 if let first = SkillReviewCenter.shared.proposals.first {
-                    SkillReviewCenter.shared.approve(first.id)
+                    SkillReviewCenter.shared.approve(first)
                 }
             }
         }

@@ -1,0 +1,17 @@
+{
+  "session_id": "fixture-id-13",
+  "turn_id": "fixture-id-14",
+  "transcript_path": "/private/fixture/atoll-contract/home/sessions/2026/09/10/rollout-2026-09-10T01-00-25-01a08866-ac37-7790-ac75-f444f5c24153.jsonl",
+  "cwd": "/fixture/atoll-contract/project",
+  "hook_event_name": "Stop",
+  "model": "gpt-6-astra",
+  "permission_mode": "default",
+  "stop_hook_active": false,
+  "last_assistant_message": "Appel unique effectué avec `value = atoll-mcp-contract`. Refus du hook accepté, sans nouvelle tentative ni autre outil.",
+  "_atoll_test_enrich": {
+    "sessionStartTime": 1788994825.069077,
+    "observedAt": 1788994933.865562,
+    "tty": "ttys033",
+    "sessionPid": 4242
+  }
+}

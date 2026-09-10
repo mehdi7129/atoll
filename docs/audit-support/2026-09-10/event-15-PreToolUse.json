@@ -1,0 +1,22 @@
+{
+  "session_id": "fixture-id-1",
+  "turn_id": "fixture-id-8",
+  "agent_id": "fixture-id-9",
+  "agent_type": "default",
+  "transcript_path": "/private/fixture/atoll-contract/home/sessions/2026/09/10/rollout-2026-09-10T00-54-24-01a08861-2b08-7940-b2a9-1a09f16f563f.jsonl",
+  "cwd": "/fixture/atoll-contract/project",
+  "hook_event_name": "PreToolUse",
+  "model": "gpt-6-astra",
+  "permission_mode": "default",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "printf atoll-child-contract"
+  },
+  "tool_use_id": "fixture-id-11",
+  "_atoll_test_enrich": {
+    "sessionStartTime": 1788994012.272407,
+    "sessionPid": 4242,
+    "observedAt": 1788994476.394633,
+    "tty": "ttys033"
+  }
+}

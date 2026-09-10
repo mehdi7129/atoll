@@ -1,14 +1,10 @@
 import Foundation
 
-/// Décision PURE : quand le quota Claude est épuisé, faut-il basculer une
-/// dépense d'Atoll sur l'abonnement Codex ?
+/// Décision pure : conserver l'exécuteur choisi ou basculer une dépense Atoll
+/// vers l'autre abonnement sur une preuve fraîche d'épuisement.
 ///
-/// POURQUOI CE TYPE EXISTE. Atoll ne dépense du quota qu'à DEUX endroits — le
-/// bilan de fin de session (`RetrospectiveRunner`) et le rangement des notes
-/// (`NotesCurationService`). Les deux s'arrêtent net quand le quota Claude
-/// passe le seuil de `LearningGate`, et ne repartent qu'à la fenêtre suivante.
-/// Un second abonnement rend cet arrêt évitable. Cette porte décide, sur des
-/// faits fournis par l'appelant, LEQUEL des deux comptes paie.
+/// Bilan, rangement des notes et recherche IA de plugins partagent ce choix.
+/// Le gate décide ensuite si le job peut consommer le quota sélectionné.
 ///
 /// ⚠️ CE QU'ELLE NE DÉCIDE PAS : elle ne remplace pas `LearningGate`. Elle
 /// choisit le fournisseur ; le gate décide ensuite si la dépense vaut la peine,
@@ -17,7 +13,7 @@ import Foundation
 /// d'évaluer un plafond de fenêtre sur un compte qu'on ne va pas débiter.
 ///
 /// Invariants, dans l'esprit de `LearningGate` :
-/// - **Fail-safe par défaut** : dans le doute, on reste sur Claude. Basculer
+/// - **Fail-safe par défaut** : dans le doute, on garde le moteur choisi. Basculer
 ///   n'est jamais gratuit — c'est débiter un SECOND abonnement.
 /// - **Une donnée absente n'est pas un quota épuisé.** C'est la règle la plus
 ///   contre-intuitive du fichier, et la plus importante : un quota Claude
@@ -45,17 +41,20 @@ public enum ProviderFailover {
         public let codexExhaustedAt: Double
         /// Âge maximal d'une mesure pour être jugée fiable, des deux côtés.
         public let freshnessSeconds: TimeInterval
+        public let preferred: AgentProvider
 
         public init(
             enabled: Bool = false,
             claudeExhaustedAt: Double = 0.95,
             codexExhaustedAt: Double = 0.95,
-            freshnessSeconds: TimeInterval = 900
+            freshnessSeconds: TimeInterval = 600,
+            preferred: AgentProvider = .claude
         ) {
             self.enabled = enabled
             self.claudeExhaustedAt = claudeExhaustedAt
             self.codexExhaustedAt = codexExhaustedAt
             self.freshnessSeconds = freshnessSeconds
+            self.preferred = preferred
         }
     }
 
@@ -76,6 +75,7 @@ public enum ProviderFailover {
         case codexUnknown
         /// Les deux abonnements sont au-dessus de leur seuil.
         case bothExhausted
+        case codexSelected, codexAvailable, codexExhausted
     }
 
     public struct Decision: Equatable, Sendable {
@@ -99,7 +99,20 @@ public enum ProviderFailover {
     ) -> Decision {
         // 1. Bascule désactivée : comportement historique, à l'identique.
         guard config.enabled else {
-            return Decision(provider: .claude, reason: .failoverDisabled)
+            return Decision(provider: config.preferred,
+                            reason: config.preferred == .codex ? .codexSelected : .failoverDisabled)
+        }
+
+        if config.preferred == .codex {
+            guard let codex, codex.isFresh(at: now), let used = worstUsedFraction(codex, now: now) else {
+                return Decision(provider: .codex, reason: .codexUnknown)
+            }
+            guard used >= config.codexExhaustedAt else { return Decision(provider: .codex, reason: .codexAvailable) }
+            guard let other = usableFraction(claude, freshness: config.freshnessSeconds, now: now) else {
+                return Decision(provider: nil, reason: .claudeUnknown)
+            }
+            return Decision(provider: other < config.claudeExhaustedAt ? .claude : nil,
+                            reason: other < config.claudeExhaustedAt ? .codexExhausted : .bothExhausted)
         }
 
         // 2. Quota Claude inutilisable comme PREUVE d'épuisement. On reste sur
@@ -142,17 +155,10 @@ public enum ProviderFailover {
 
     /// La fenêtre Codex la PLUS contraignante parmi celles encore en cours.
     ///
-    /// Codex rend plusieurs fenêtres (5 h et 7 j chez Mehdi) et plusieurs
-    /// catégories. Prendre le maximum est le bon sens de l'erreur : une
-    /// hebdomadaire à 98 % interdit le run même si l'horaire est à 3 %, et
-    /// c'est bien elle qui bloquera au premier appel.
+    /// Une seule catégorie applicable, complète et fraîche. Une fenêtre basse
+    /// restante après le reset d'une autre ne prouve jamais la disponibilité.
     public static func worstUsedFraction(_ quota: CodexQuota, now: Date = Date()) -> Double? {
-        let fractions = quota.buckets
-            .flatMap(\.windows)
-            .filter { $0.isCurrent(at: now) }
-            .map(\.usedFraction)
-            .filter(\.isFinite)
-        return fractions.max()
+        quotaFacts(of: quota, now: now).usable(at: now, freshness: 300)
     }
 
     /// Projette un quota Codex dans les faits que `LearningGate` sait lire, pour
@@ -162,16 +168,31 @@ public enum ProviderFailover {
     /// `resetsAt` : la fin de fenêtre la plus PROCHE parmi celles en cours —
     /// c'est elle qui rendra la mesure caduque en premier.
     public static func quotaFacts(of quota: CodexQuota?, now: Date = Date()) -> LearningGate.QuotaFacts {
-        guard let quota, let worst = worstUsedFraction(quota, now: now) else {
-            return LearningGate.QuotaFacts(usedFraction: nil, receivedAt: nil, resetsAt: nil)
+        guard let quota, quota.receivedAt <= now else {
+            return LearningGate.QuotaFacts(usedFraction: nil, receivedAt: quota?.receivedAt, resetsAt: nil,
+                                          unknownReason: "quota Codex absent ou date invalide")
         }
-        let nextReset = quota.buckets
-            .flatMap(\.windows)
-            .filter { $0.isCurrent(at: now) }
-            .compactMap(\.resetsAt)
-            .min()
+        // model/list ne relie pas ses modèles aux limitId. Avec plusieurs
+        // catégories, on ne sait pas laquelle paie CE job : ne pas les fusionner.
+        guard quota.buckets.count == 1, let bucket = quota.buckets.first, bucket.id == "codex" else {
+            return LearningGate.QuotaFacts(usedFraction: nil, receivedAt: quota.receivedAt, resetsAt: nil,
+                                          unknownReason: "portée du quota non établie pour le modèle")
+        }
+        let current = bucket.windows.filter { $0.isCurrent(at: now) }
+        let complete = quota.isFresh(at: now) && current.count == bucket.windows.count
+        // Une mesure ancienne ou partielle n'établit pas la disponibilité,
+        // mais une fenêtre haute dont le reset est encore futur reste un
+        // minorant. Le conserver permet au budget de refuser sans failover.
+        let candidates = complete ? current : current.filter { $0.resetsAt != nil }
+        guard let limiting = candidates.max(by: { $0.usedFraction < $1.usedFraction }) else {
+            return LearningGate.QuotaFacts(usedFraction: nil, receivedAt: quota.receivedAt, resetsAt: nil,
+                                          unknownReason: "fenêtres réinitialisées ou reset inconnu")
+        }
+        let nextReset = complete ? current.compactMap(\.resetsAt).min() : limiting.resetsAt
         return LearningGate.QuotaFacts(
-            usedFraction: worst, receivedAt: quota.receivedAt, resetsAt: nextReset
+            usedFraction: limiting.usedFraction, receivedAt: quota.receivedAt, resetsAt: nextReset,
+            bucket: bucket.id, window: limiting.id,
+            unknownReason: complete ? nil : "quota Codex ancien ou partiel : minorant seulement"
         )
     }
 }

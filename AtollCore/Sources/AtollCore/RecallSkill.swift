@@ -23,13 +23,14 @@ public enum RecallSkill {
     public static let markdown = """
     ---
     name: atoll-recall
-    description: Recherche dans la mémoire longue durée de TOUTES les sessions Claude Code passées (tous projets), indexée localement par l'app Atoll. Utiliser dès que l'utilisateur fait référence à une conversation, décision, commande ou solution passée (« on avait dit », « la dernière fois », « retrouve quand », « déjà fait/réglé »), ou pour vérifier si un problème a déjà été résolu dans un autre projet.
+    description: Recherche dans la mémoire longue durée des sessions Claude Code et Codex CLI passées (tous projets), indexée localement par Atoll. Utiliser dès que l'utilisateur fait référence à une conversation, décision, commande ou solution passée (« on avait dit », « la dernière fois », « retrouve quand », « déjà fait/réglé »), ou pour vérifier si un problème a déjà été résolu dans un autre projet.
     ---
 
     # Rappel mémoire Atoll
 
-    Atoll indexe en continu les transcripts de `~/.claude/projects/` dans un index
-    plein-texte local (aucune donnée ne quitte la machine).
+    Atoll indexe les transcripts Claude et les rollouts du home Codex choisi dans
+    un index plein-texte local. La recherche est locale ; les extraits utilisés
+    dans une conversation sont ensuite traités par son fournisseur.
 
     ## Interroger
 
@@ -63,7 +64,8 @@ public enum RecallSkill {
     Chaque résultat donne : date, projet, titre de session, rôle (user/assistant/
     thinking/tool/résumé), extrait avec les termes en «…», et l'identifiant de
     session. Citer la date et le projet dans la réponse. Si le contexte complet est
-    nécessaire, proposer : `claude --resume <session-id>` (depuis le bon dossier).
+    nécessaire, suivre la commande indiquée dans le résultat :
+    `claude --resume <session-id>` ou `codex resume <session-id>` selon la source.
 
     ## Si la mémoire est indisponible
 

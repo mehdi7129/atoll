@@ -5,15 +5,18 @@ import AtollCore
 /// dessine l'îlot en haut au centre et anime ses transitions d'état.
 struct NotchRootView: View {
     let viewModel: NotchViewModel
+    var previewReduceMotion: Bool? = nil
 
     @AppStorage("paletteID") private var paletteID = Palette.monoOrange.id
+    @AppStorage(ProviderPreferences.codexPaletteKey) private var codexPaletteID = Palette.monoCyan.id
     @AppStorage("hoverDelay") private var hoverDelay = 0.15
     @AppStorage(VisualEffects.enabledKey) private var visualEffects = true
     @AppStorage(VisualEffects.glassIntensityKey) private var glassIntensity = VisualEffects.defaultGlassIntensity
     /// Rockstar élargit l'îlot même sans session : voir `islandSize(rockstar:)`.
     @AppStorage(InteractionCenter.autonomyKey) private var autonomyRaw = AutonomyLevel.manual.rawValue
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    private var reduceMotion: Bool { CodexPreview.enabled ? (previewReduceMotion ?? systemReduceMotion) : systemReduceMotion }
     /// Rejoue l'onde d'expansion : incrémenté à chaque passage → étendu.
     @State private var rippleTrigger = 0
     /// Dévoilement du verre : 0 = fond PLEIN, 1 = l'intensité réglée par
@@ -24,14 +27,19 @@ struct NotchRootView: View {
     #endif
 
     private var colors: ThemeColors {
-        ThemeColors(paletteID: paletteID, scheme: colorScheme)
+        ThemeColors(paletteID: displayedPalette, scheme: colorScheme)
+    }
+
+    private var displayedPalette: String {
+        let provider = InteractionPresentation.shared.current?.provider ?? viewModel.selectedProvider
+        return provider == .codex ? codexPaletteID : paletteID
     }
 
     /// Sur un écran à encoche, l'îlot compact prolonge le notch physique : il doit
     /// rester noir quel que soit le thème (le matériel, lui, ne change pas de couleur).
     /// Ses textes utilisent donc toujours la variante sombre de la palette.
     private var capColors: ThemeColors {
-        viewModel.hasNotch ? ThemeColors(variant: Palette.named(paletteID).dark) : colors
+        viewModel.hasNotch ? ThemeColors(variant: Palette.named(displayedPalette).dark) : colors
     }
 
     private var rockstar: Bool { AutonomyLevel(rawValue: autonomyRaw) == .rockstar }
@@ -147,7 +155,7 @@ struct NotchRootView: View {
     }
 
     private var pendingCount: Int {
-        InteractionCenter.shared.pending.count
+        InteractionPresentation.shared.items.count
     }
 
     /// L'îlot doit-il rester ouvert + prendre le clavier ? (carte en attente).
@@ -176,6 +184,9 @@ struct NotchRootView: View {
             }
         }
         #endif
+        .onChange(of: InteractionPresentation.shared.items) { _, _ in
+            InteractionPresentation.shared.refresh()
+        }
         .onChange(of: wantsFocus) { oldValue, newValue in
             // Carte en attente → l'îlot s'ouvre tout seul (écran principal) et
             // prend le clavier ; plus rien → il se replie et rend le focus au
@@ -234,6 +245,7 @@ struct NotchRootView: View {
             }
         }
         .onAppear {
+            InteractionPresentation.shared.refresh()
             // L'état est lu AVANT d'ouvrir quoi que ce soit.
             //
             // Le rattrapage ci-dessous existe pour le cas « la vue réapparaît
@@ -281,8 +293,6 @@ struct NotchRootView: View {
             }
 
             content
-                .expansionRipple(trigger: rippleTrigger,
-                                 active: visualEffects && !reduceMotion)
         }
         .frame(width: size.width, height: size.height)
         .clipShape(shape)
@@ -340,7 +350,8 @@ struct NotchRootView: View {
         case .compact:
             CompactView(viewModel: viewModel, colors: capColors)
         case .expanded:
-            ExpandedView(viewModel: viewModel, colors: colors)
+            ExpandedView(viewModel: viewModel, colors: colors,
+                         rippleTrigger: rippleTrigger, rippleEnabled: visualEffects && !reduceMotion)
                 .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
         }
     }

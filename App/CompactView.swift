@@ -1,172 +1,102 @@
 import SwiftUI
 import AtollCore
 
-/// État compact : ailes de part et d'autre du notch (ou pilule sur écran sans notch).
+/// Choix d'agent accessible aussi en compact ; le mode Claude reste identifié.
 struct CompactView: View {
     let viewModel: NotchViewModel
     let colors: ThemeColors
-
     @AppStorage(InteractionCenter.autonomyKey) private var autonomyRaw = AutonomyLevel.manual.rawValue
     private var rockstar: Bool { AutonomyLevel(rawValue: autonomyRaw) == .rockstar }
+    private var activityIsRockstar: Bool { rockstar && viewModel.selectedProvider == .claude }
 
     var body: some View {
-        if let notch = viewModel.notchSize {
-            // Écran à encoche : contenu dans les ailes, le centre reste vide
-            // (il est physiquement masqué par le notch).
-            // `|| rockstar` : au repos l'îlot reste invisible, SAUF quand
-            // Rockstar suspend les règles `permissions.deny` de l'utilisateur —
-            // le seul état qui mérite de rompre le silence (arbitrage du
-            // 2026-07-27, cf. `NotchViewModel.islandSize(rockstar:)`).
-            if viewModel.hasActivity || rockstar {
+        if viewModel.hasActivity || rockstar {
+            if let notch = viewModel.notchSize {
                 HStack(spacing: 0) {
-                    leftWing
-                        .frame(width: viewModel.compactWidth.wingWidth)
-                    Color.clear
-                        .frame(width: notch.width)
-                    rightWing
-                        .frame(width: viewModel.compactWidth.wingWidth)
+                    VStack(spacing: 1) {
+                        ProviderSelector(viewModel: viewModel, colors: colors, compact: true)
+                        activityLabel
+                    }
+                    .frame(width: viewModel.compactWidth.wingWidth)
+                    Color.clear.frame(width: notch.width)
+                    rightSide.padding(.trailing, 8).frame(width: viewModel.compactWidth.wingWidth)
                 }
                 .frame(height: notch.height)
-            }
-        } else {
-            // Pilule simulée (écran sans encoche) : tout le contenu est visible.
-            // Comme l'aile gauche du notch, elle nomme la session en cours / qui
-            // attend une décision — sinon le 2e écran n'indiquait rien.
-            HStack(spacing: 6) {
-                statusGlyph
-                if let session = focusSession {
-                    Text(shortName(session.projectName))
-                        .foregroundStyle(session.needsAttention ? colors.warn : colors.dim)
-                        .lineLimit(1)
-                    if viewModel.sessions.count > 1 {
-                        Text("+\(viewModel.sessions.count - 1)")
-                            .foregroundStyle(colors.dim)
-                    }
-                } else {
-                    Text("atoll")
-                        .foregroundStyle(colors.dim)
-                }
-                Spacer(minLength: 4)
-                TimelineView(.periodic(from: .now, by: 30)) { _ in
-                    if let quota = compactQuota {
-                        Text("\(quota.label) \(Int(quota.fraction * 100))%")
-                            .foregroundStyle(colors.dim)
-                    }
-                }
-            }
-            .font(AtollFont.mono(10))
-            .padding(.horizontal, 10)
-            .frame(height: pillHeight)
-        }
-    }
-
-    private var pillHeight: CGFloat {
-        IslandGeometry.compactSize(
-            notch: nil,
-            menuBarHeight: viewModel.menuBarHeight,
-            hasActivity: viewModel.hasActivity || rockstar
-        ).height
-    }
-
-    /// Session à mettre en avant sur le notch : une demande de permission
-    /// d'abord (urgent), sinon une session qui travaille. Les sessions DORMANTES
-    /// ne sont PAS mises en avant (sinon le notch afficherait le nom d'une
-    /// session inactive comme si quelque chose se passait).
-    private var focusSession: AgentSession? {
-        viewModel.sessions.first { $0.needsAttention }
-            ?? viewModel.sessions.first { $0.isActive }
-    }
-
-    private var leftWing: some View {
-        HStack(spacing: 5) {
-            statusGlyph
-            if let session = focusSession {
-                // Nom court de la session en cours / qui attend une décision.
-                Text(shortName(session.projectName))
-                    .foregroundStyle(session.needsAttention ? colors.warn : colors.dim)
-                    .lineLimit(1)
-                if viewModel.sessions.count > 1 {
-                    Text("+\(viewModel.sessions.count - 1)")
-                        .foregroundStyle(colors.dim)
-                        .lineLimit(1)
-                        .fixedSize()
-                }
-            }
-            Spacer(minLength: 0)
-        }
-        .font(AtollFont.mono(10))
-        .lineLimit(1)
-        .padding(.leading, 12)
-    }
-
-    /// Dernier segment du nom, tronqué pour tenir dans l'aile.
-    private func shortName(_ name: String) -> String {
-        let last = name.contains("/") ? String(name.split(separator: "/").last ?? "") : name
-        return last.count > 10 ? String(last.prefix(9)) + "…" : last
-    }
-
-    private var rightWing: some View {
-        // Même raison que le pied du panneau étendu : la péremption de la
-        // fenêtre 5 h est une affaire d'HEURE, pas de valeur observée.
-        TimelineView(.periodic(from: .now, by: 30)) { _ in
-            rightWingBody
-        }
-    }
-
-    private var rightWingBody: some View {
-        HStack(spacing: 4) {
-            Spacer(minLength: 0)
-            // Jamais de jauge factice : rien tant que le vrai quota n'est pas là.
-            if let quota = compactQuota {
-                Text(quota.label)
-                    .foregroundStyle(colors.dim)
-                Text("\(Int(quota.fraction * 100))%")
-                    .foregroundStyle(colors.dim)
             } else {
-                Text("·")
-                    .foregroundStyle(colors.dim)
+                HStack(spacing: 4) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ProviderSelector(viewModel: viewModel, colors: colors, compact: true)
+                        activityLabel
+                    }
+                    Spacer(minLength: 0)
+                    rightSide
+                }
+                .padding(.horizontal, 8)
+                .frame(height: max(viewModel.menuBarHeight, IslandGeometry.minimumPillHeight))
             }
         }
-        .font(AtollFont.mono(10))
-        .lineLimit(1)          // jamais de retour à la ligne (« 5h » resté entier)
-        .fixedSize()           // les chiffres du quota ne se compriment pas
-        .padding(.trailing, 12)
     }
 
-    // Follow the focused agent. Never show Claude's allowance next to a Codex
-    // session without labeling it; full windows live in the expanded panel.
+    private var focusSession: AgentSession? {
+        viewModel.sessions.first { $0.needsAttention } ?? viewModel.sessions.first { $0.isActive }
+    }
+
+    private var activityLabel: some View {
+        HStack(spacing: 3) {
+            statusGlyph
+            Text(focusSession.map { String($0.projectName.split(separator: "/").last ?? "").prefix(9) } ?? "au repos")
+                .lineLimit(1).foregroundStyle(colors.dim)
+        }
+        .font(AtollFont.mono(8))
+        .frame(maxWidth: .infinity)
+    }
+
+    private var rightSide: some View {
+        VStack(spacing: 0) {
+            if rockstar {
+                Text("CLAUDE◆ROCKSTAR")
+                .font(AtollFont.mono(7, weight: .bold))
+                .foregroundStyle(Color(hex: 0xFF3B30))
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Claude Rockstar actif, y compris en arrière-plan")
+                .help("Rockstar reste actif pour Claude ; Codex conserve ses autorisations")
+            }
+            TimelineView(.periodic(from: .now, by: 30)) { _ in
+                if let quota = compactQuota {
+                    Text("\(quota.label) \(Int(quota.fraction * 100))%")
+                        .foregroundStyle(colors.dim)
+                } else {
+                    Text("\(viewModel.selectedProvider == .codex ? "CX" : "CL") · —").foregroundStyle(colors.dim)
+                }
+            }
+            .font(AtollFont.mono(8))
+        }
+        .lineLimit(1)
+        .fixedSize()
+    }
+
     private var compactQuota: (label: String, fraction: Double)? {
-        let provider = focusSession?.provider
-            ?? (viewModel.sessions.contains { $0.provider == .codex } ? .codex : .claude)
-        if provider == .codex {
+        if viewModel.selectedProvider == .codex {
             guard let quota = CodexService.shared.quota, quota.isFresh(at: Date()),
-                  let window = quota.primaryBucket?.windows.first, window.isCurrent(at: Date()) else { return nil }
-            return ("Codex", window.usedFraction)
+                  let bucket = quota.primaryBucket,
+                  let window = bucket.windows.first, window.isCurrent(at: Date()) else { return nil }
+            // Sans durée connue, ne pas inventer une fenêtre ni faire déborder
+            // l'aile avec « principale » / « secondaire » : le détail la nomme.
+            let label = window.label == "principale" || window.label == "secondaire" ? "CX" : "CX \(window.label)"
+            return (label, window.usedFraction)
         }
         guard viewModel.hasFreshFiveHour else { return nil }
-        return ("Claude", viewModel.usage.fiveHourFraction)
+        return ("CL 5h", viewModel.usage.fiveHourFraction)
     }
 
-    // Rouge = mode rockstar actif (indicateur persistant permanent).
-    private var rockstarRed: Color { Color(hex: 0xFF3B30) }
-
-    @ViewBuilder
-    private var statusGlyph: some View {
-        if viewModel.workingCount > 0 {
-            // Le spinner tourne toujours (= travail) ; rouge s'il est en rockstar.
-            AsciiSpinnerView(color: rockstar ? rockstarRed : colors.accent)
-        } else if viewModel.attentionCount > 0 {
-            Text("?")
-                .foregroundStyle(rockstar ? rockstarRed : colors.warn)
-        } else if SkillReviewCenter.shared.pendingCount > 0 {
-            // Un skill appris attend une revue : « + » (quelque chose à ajouter),
-            // distinct du « ? » d'une permission. Rouge en rockstar par cohérence.
-            Text("+")
-                .foregroundStyle(rockstar ? rockstarRed : colors.accent)
-        } else {
-            // Au repos : losange rouge en rockstar, sinon point discret.
-            Text(rockstar ? "◆" : "·")
-                .foregroundStyle(rockstar ? rockstarRed : colors.dim)
+    @ViewBuilder private var statusGlyph: some View {
+        if viewModel.attentionCount > 0 {
+            Text("?").foregroundStyle(colors.warn)
+        } else if viewModel.workingCount > 0 {
+            AsciiSpinnerView(color: activityIsRockstar ? Color(hex: 0xFF3B30) : colors.accent)
+        } else { Text("·").foregroundStyle(colors.dim) }
+        if !CodexPreview.enabled && SkillReviewCenter.shared.pendingCount > 0 {
+            Text("+").foregroundStyle(colors.accent).accessibilityLabel("Skill proposé")
         }
     }
 }

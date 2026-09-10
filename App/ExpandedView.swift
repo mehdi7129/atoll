@@ -5,9 +5,12 @@ import AtollCore
 struct ExpandedView: View {
     let viewModel: NotchViewModel
     let colors: ThemeColors
+    var rippleTrigger = 0
+    var rippleEnabled = false
+    @Environment(\.openSettings) private var openSettings
 
     @AppStorage(InteractionCenter.autonomyKey) private var autonomyRaw = AutonomyLevel.manual.rawValue
-    private var level: AutonomyLevel { CodexPreview.enabled ? .manual : (AutonomyLevel(rawValue: autonomyRaw) ?? .manual) }
+    private var level: AutonomyLevel { AutonomyLevel(rawValue: autonomyRaw) ?? .manual }
 
     /// Projets dépliés (racines de projet). Les dossiers multi-sessions sont
     /// repliés par défaut : on voit un dossier par projet, on déplie pour voir
@@ -30,28 +33,50 @@ struct ExpandedView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            header
+            // L'onde reste sur le chrome SwiftUI. Les scrolls et champs AppKit
+            // des cartes ne supportent pas cette couche (vérifié en capture).
+            VStack(alignment: .leading, spacing: 10) {
+                header
+                ProviderSelector(viewModel: viewModel, colors: colors)
+            }
+            .expansionRipple(trigger: rippleTrigger, active: rippleEnabled)
 
-            if let request = InteractionCenter.shared.current {
+            if let selected = InteractionPresentation.shared.current {
                 // Une demande en attente prend toute la place (priorité maximale).
-                InteractionCardView(request: request, colors: colors)
-                    .id(request.id)
-                Spacer(minLength: 0)
-            } else if let codexRequest = CodexInteractionCenter.shared.current {
-                // Une demande CODEX, après celles de Claude : les deux centres
-                // sont séparés, et une demande Claude bloque le CLI de Mehdi de
-                // la même façon. L'ordre entre les deux est arbitraire ; ce qui
-                // ne l'est pas, c'est qu'aucune ne soit jamais perdue.
-                CodexInteractionCardView(request: codexRequest, colors: colors)
-                    .id(codexRequest.id)
-                Spacer(minLength: 0)
+                if selected.provider == .claude,
+                   let request = InteractionCenter.shared.pending.first(where: { $0.id == selected.requestID }) {
+                    InteractionCardView(request: request, colors: colors).id(selected)
+                        .disabled(!InteractionPresentation.shared.mayDecide)
+                } else if selected.provider == .codex,
+                          let request = CodexInteractionCenter.shared.pending.first(where: { $0.id == selected.requestID }) {
+                    CodexInteractionCardView(request: request, colors: colors).id(selected)
+                        .disabled(!InteractionPresentation.shared.mayDecide)
+                }
+                if InteractionPresentation.shared.items.count > 1 {
+                    HStack {
+                        AsciiButton(label: "← DEMANDE", color: colors.dim, shortcut: nil) {
+                            InteractionPresentation.shared.move(-1)
+                        }
+                        Spacer()
+                        Text("\(InteractionPresentation.shared.items.count) demandes · Claude / Codex")
+                            .foregroundStyle(colors.dim)
+                        Spacer()
+                        AsciiButton(label: "DEMANDE →", color: colors.dim, shortcut: nil) {
+                            InteractionPresentation.shared.move(1)
+                        }
+                    }
+                    .font(AtollFont.mono(9))
+                }
             } else if let session = viewModel.selectedSession {
                 // Détail d'une session (clic sur une ligne).
                 SessionDetailView(session: session, colors: colors) {
                     viewModel.clearSelection()
                 }
             } else {
+                // Un ScrollView englobant sous layerEffect rend le corps vide
+                // avec l'onde active. Seuls les détails des cartes défilent.
                 sessionList
+                    .expansionRipple(trigger: rippleTrigger, active: rippleEnabled)
                 Spacer(minLength: 0)
                 // Bannière passive : jamais par-dessus une carte de permission
                 // (branche else uniquement), aucune ouverture forcée.
@@ -64,6 +89,7 @@ struct ExpandedView: View {
                 // c'est la LISTE qui cède — jamais le quota, qui disparaissait
                 // en silence (audit du 2026-07-27).
                 footer
+                    .expansionRipple(trigger: rippleTrigger, active: rippleEnabled)
                     .layoutPriority(1)
             }
         }
@@ -81,6 +107,7 @@ struct ExpandedView: View {
     private var header: some View {
         HStack(spacing: 8) {
             Text("░▒▓")
+                .accessibilityHidden(true)
                 .foregroundStyle(colors.accent)
             Text("ATOLL")
                 .fontWeight(.bold)
@@ -110,7 +137,8 @@ struct ExpandedView: View {
                 // que 0,38 pt de marge sur 548 — la moindre variation d'avance
                 // monospace, sur une autre version de macOS, tronquait l'en-tête
                 // principal de l'îlot avec une ellipse. 68 laisse 13,6 pt.
-                Text(AsciiArt.sectionHeader("SESSIONS", width: 68))
+            Text(AsciiArt.sectionHeader("SESSIONS", width: 68))
+                .accessibilityLabel("Sessions")
                     .lineLimit(1)
                     .foregroundStyle(colors.dim)
                 Spacer(minLength: 4)
@@ -118,8 +146,15 @@ struct ExpandedView: View {
             }
 
             if viewModel.sessions.isEmpty {
-                Text("· aucune session — lance Claude ou Codex avec les hooks Atoll")
+                Text("· aucune session \(viewModel.selectedProvider.label) — lance le CLI avec les hooks Atoll")
                     .foregroundStyle(colors.dim)
+                Button("Configurer \(viewModel.selectedProvider.label)…") {
+                    guard !CodexPreview.enabled else { return }
+                    UserDefaults.standard.set(viewModel.selectedProvider.rawValue, forKey: "settingsTab")
+                    openSettings()
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(colors.accent)
             } else if groupByState {
                 stateGroupedList
             } else {
@@ -139,7 +174,7 @@ struct ExpandedView: View {
                     // Même règle que la vue par état : ce qui ne tient pas est
                     // ANNONCÉ. Une liste tronquée en silence ferait croire à
                     // une flotte plus petite qu'elle n'est.
-                    Text("· +\(plan.hiddenCount) autre\(plan.hiddenCount > 1 ? "s" : "") — replie un dossier pour les voir")
+                    Text("· +\(plan.hiddenCount) autre\(plan.hiddenCount > 1 ? "s" : "")")
                         .font(AtollFont.mono(9))
                         .foregroundStyle(colors.dim)
                 } else {
@@ -211,17 +246,11 @@ struct ExpandedView: View {
     /// Une bannière occupe-t-elle le bas du panneau ? Elle coûte ~66 pt, donc
     /// autant de rangées en moins pour la liste.
     private var bannerShown: Bool {
-        SkillReviewCenter.shared.pendingCount > 0
+        !CodexPreview.enabled && SkillReviewCenter.shared.pendingCount > 0
     }
 
     /// Rangées DESSINABLES sans pousser le quota hors du cadre. Les deux modes
     /// d'affichage partagent ce budget : la vue par projet n'en avait aucun.
-    /// Le pied Codex n'est dessiné que si sa lecture est activée : sans cela,
-    /// on retirerait une rangée de sessions à tous ceux qui n'ont pas Codex.
-    private var codexQuotaShown: Bool {
-        UserDefaults.standard.bool(forKey: CodexService.quotaEnabledKey)
-    }
-
     /// ⚠️ LE PLANCHER EST À DEUX, PAS À UN, et ça n'est pas de la prudence :
     /// MESURÉ le 2026-09-08, un budget de 1 rend `byState` **entièrement vide**
     /// — 0 groupe, 0 session, toutes annoncées « cachées ». Un groupe coûte son
@@ -230,8 +259,8 @@ struct ExpandedView: View {
     /// et du négatif, ce qui ne suffisait pas dès qu'un coût s'ajoutait
     /// (bannière + quota Codex tombaient ensemble à 1).
     private var rowBudget: Int {
-        max(2, IslandRowBudget.rows(bannerShown: bannerShown,
-                                    codexQuotaShown: codexQuotaShown) - 2)
+        // Un seul quota à la fois ; le sélecteur occupe désormais une rangée.
+        max(2, IslandRowBudget.rows(bannerShown: bannerShown, providerSelectorShown: true))
     }
 
     /// Sessions regroupées par PROJET (racine `.git`), ordre de première apparition
@@ -288,6 +317,7 @@ struct ExpandedView: View {
     private var learningBanner: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(AsciiArt.sectionHeader("APPRENTISSAGE", width: 79))
+                .accessibilityLabel("Apprentissage")
                 .lineLimit(1)
                 .foregroundStyle(colors.dim)
             HStack(spacing: 8) {
@@ -326,12 +356,15 @@ struct ExpandedView: View {
 
     private var footerBody: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(AsciiArt.sectionHeader("QUOTAS · CLAUDE", width: 79))
+            Text(AsciiArt.sectionHeader(viewModel.selectedProvider == .codex ? "QUOTAS · CODEX" : "QUOTAS · CLAUDE", width: 79))
+                .accessibilityLabel(viewModel.selectedProvider == .codex ? "Quotas Codex" : "Quotas Claude")
                 .lineLimit(1)
                 .foregroundStyle(colors.dim)
 
             // Jauges seulement avec de VRAIES données (jamais le mock de dev).
-            if viewModel.hasRealQuota {
+            if viewModel.selectedProvider == .codex {
+                codexQuotaRow
+            } else if viewModel.hasRealQuota {
                 HStack(spacing: 16) {
                     // La jauge 5 h disparaît quand SA fenêtre a tourné ; le 7 j
                     // et les jauges par modèle, eux, restent valides et
@@ -359,7 +392,6 @@ struct ExpandedView: View {
                     .font(AtollFont.mono(9))
                     .foregroundStyle(colors.dim)
             }
-            codexQuotaRow
         }
     }
 
@@ -395,6 +427,7 @@ struct ExpandedView: View {
             Text(label)
                 .foregroundStyle(colors.dim)
             Text(AsciiArt.progressBar(fraction: fraction, cells: 10))
+                .accessibilityHidden(true)
                 .foregroundStyle(fraction > 0.85 ? colors.warn : colors.accent)
             Text("\(Int(fraction * 100))%")
                 .foregroundStyle(colors.fg)

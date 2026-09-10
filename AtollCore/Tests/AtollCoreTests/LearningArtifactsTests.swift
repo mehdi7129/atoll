@@ -190,7 +190,7 @@ final class LearningArtifactsTests: XCTestCase {
             "meta.json doit être redécodable"
         )
 
-        XCTAssertEqual(object["v"] as? Int, 1)
+        XCTAssertEqual(object["v"] as? Int, 2)
         XCTAssertEqual(object["slug"] as? String, "notarize-dmg")
         XCTAssertEqual(object["title"] as? String, "Notariser un DMG")
         XCTAssertEqual(object["description"] as? String,

@@ -63,7 +63,7 @@ public enum RecallJournal {
         /// (le vrai signal sur la valeur de la base).
         public var searched: Bool {
             switch self {
-            case .promptTooShort, .promptIsCommand, .promptIsMachineEnvelope, .tooFewKeywords:
+            case .promptTooShort, .promptIsCommand, .promptIsMachineEnvelope, .tooFewKeywords, .indexUnavailable:
                 return false
             default:
                 return true

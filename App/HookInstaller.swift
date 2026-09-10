@@ -32,6 +32,7 @@ enum HookInstaller {
     }
 
     static func configureCodex(install: Bool) throws {
+        if let reason = CodexPaths.configurationError { throw InstallerError.helperFailed(reason) }
         try runHelper(install ? "install-codex" : "uninstall-codex")
     }
 
@@ -98,12 +99,19 @@ enum HookInstaller {
     }
 
     private static func runHelper(_ verb: String) throws {
+        // Les boutons de recette parcourent le flux UI, jamais les réglages
+        // réels du CLI ni le helper qui les écrit.
+        guard !CodexPreview.enabled else { return }
         guard FileManager.default.isExecutableFile(atPath: helperURL.path) else {
             throw InstallerError.helperMissing
         }
         let process = Process()
         process.executableURL = helperURL
         process.arguments = [verb]
+        var environment = ProcessInfo.processInfo.environment
+        environment["CODEX_HOME"] = CodexPaths.homeURL.path
+        process.environment = environment
+        process.standardInput = FileHandle.nullDevice
         let errorPipe = Pipe()
         process.standardOutput = Pipe()
         process.standardError = errorPipe

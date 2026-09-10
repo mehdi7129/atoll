@@ -26,9 +26,9 @@ import Foundation
 ///   nomme des fichiers d'après eux, aucun path traversal possible ;
 /// - `category` ∈ `Note.allowedCategories` (sinon « project-fact »),
 ///   `confidence` ∈ {low, medium, high} (sinon « low ») ;
-/// - longueurs plafonnées (troncature silencieuse) : summary 500, content 1200,
-///   title 80, description 300, skillMD 8000, rationale 500 ; ≤ 8 notes,
-///   ≤ 2 skills (les premiers items valides gagnent) ;
+/// - longueurs plafonnées : summary 500, content 1200, title 80,
+///   description 300, rationale 500 ; un skillMD > 8000 est rejeté et signalé,
+///   jamais tronqué ; ≤ 8 notes et ≤ 2 skills (premiers items valides) ;
 /// - item invalide (slug KO, champ requis manquant/vide) DROPPÉ silencieusement,
 ///   jamais d'échec global pour un item ; slugs de notes dupliqués → le premier
 ///   gagne ;
@@ -133,10 +133,14 @@ public struct RetrospectiveReport: Equatable, Sendable {
     /// slug de skill CONSERVÉ → raisons de suspicion (voir doc du type).
     public let flags: [String: [String]]
 
+    /// Les procédures dépassant la borne technique sont écartées, jamais
+    /// coupées au milieu d'une commande. Les notes du même rapport survivent.
+    public let rejectedSkills: [String]
+
     public init(sessionSummary: String, nothingLearned: Bool, notes: [Note],
                 skills: [SkillProposal], costUSD: Double?,
                 modelCosts: [ModelCost] = [],
-                flags: [String: [String]]) {
+                flags: [String: [String]], rejectedSkills: [String] = []) {
         self.sessionSummary = sessionSummary
         self.nothingLearned = nothingLearned
         self.notes = notes
@@ -144,6 +148,7 @@ public struct RetrospectiveReport: Equatable, Sendable {
         self.costUSD = costUSD
         self.modelCosts = modelCosts
         self.flags = flags
+        self.rejectedSkills = rejectedSkills
     }
 
     // MARK: - Parsing
@@ -201,7 +206,7 @@ public struct RetrospectiveReport: Equatable, Sendable {
         let summary = truncated(payload["session_summary"] as? String ?? "", to: Limit.sessionSummary)
         let nothingLearned = (payload["nothing_learned"] as? Bool) ?? false
         let notes = validatedNotes(payload["notes"])
-        let (skills, flags) = validatedSkills(payload["skills"])
+        let (skills, flags, rejectedSkills) = validatedSkills(payload["skills"])
         let costUSD = (root["total_cost_usd"] as? NSNumber)?.doubleValue
         // `modelUsage` : { "<modèle>": { costUSD, inputTokens, … } }. Décodage
         // défensif — clé absente, valeur d'un autre type, coût manquant : on
@@ -214,7 +219,7 @@ public struct RetrospectiveReport: Equatable, Sendable {
             }
             .sorted { $0.costUSD == $1.costUSD ? $0.model < $1.model : $0.costUSD > $1.costUSD }
 
-        if summary.isEmpty && notes.isEmpty && skills.isEmpty && !nothingLearned {
+        if summary.isEmpty && notes.isEmpty && skills.isEmpty && rejectedSkills.isEmpty && !nothingLearned {
             return .failure(.empty)
         }
 
@@ -225,7 +230,7 @@ public struct RetrospectiveReport: Equatable, Sendable {
             skills: skills,
             costUSD: costUSD,
             modelCosts: modelCosts,
-            flags: flags
+            flags: flags, rejectedSkills: rejectedSkills
         ))
     }
 
@@ -306,9 +311,10 @@ public struct RetrospectiveReport: Equatable, Sendable {
         return notes
     }
 
-    private static func validatedSkills(_ value: Any?) -> ([SkillProposal], [String: [String]]) {
+    private static func validatedSkills(_ value: Any?) -> ([SkillProposal], [String: [String]], [String]) {
         var skills: [SkillProposal] = []
         var flags: [String: [String]] = [:]
+        var rejected: [String] = []
         var seenSlugs = Set<String>()
         for entry in (value as? [Any]) ?? [] {
             guard skills.count < Limit.skills else { break }
@@ -317,7 +323,12 @@ public struct RetrospectiveReport: Equatable, Sendable {
                   let rawTitle = dict["title"] as? String,
                   let rawSkillMD = dict["skill_md"] as? String else { continue }
             let title = truncated(rawTitle, to: Limit.title)
-            let skillMD = truncated(rawSkillMD, to: Limit.skillMD)
+            let skillMD = rawSkillMD.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard skillMD.count <= Limit.skillMD else {
+                // Seul le slug validé sort au journal, pas le corps potentiellement sensible.
+                if rejected.count < Limit.skills { rejected.append(slug) }
+                continue
+            }
             guard !title.isEmpty, !skillMD.isEmpty,
                   seenSlugs.insert(slug).inserted else { continue }
             let rawDescription = dict["description"] as? String ?? ""
@@ -345,7 +356,7 @@ public struct RetrospectiveReport: Equatable, Sendable {
                 similarExisting: similar
             ))
         }
-        return (skills, flags)
+        return (skills, flags, rejected)
     }
 
     /// Slug sûr pour nommer un fichier : minuscules/chiffres/tirets simples,

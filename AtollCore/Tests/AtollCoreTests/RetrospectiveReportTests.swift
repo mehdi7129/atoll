@@ -234,7 +234,7 @@ final class RetrospectiveReportTests: XCTestCase {
         XCTAssertEqual(report.skills[0].confidence, "low")
     }
 
-    func testTruncatesOversizedContent() throws {
+    func testOversizedSkillIsRejectedWithoutLosingValidNotes() throws {
         // Textes à espaces pour ne pas ressembler à un blob base64.
         let longSummary = String(repeating: "phrase utile ", count: 60)          // 780
         let longContent = String(repeating: "mot ", count: 500)                  // 2000
@@ -253,10 +253,26 @@ final class RetrospectiveReportTests: XCTestCase {
 
         XCTAssertEqual(report.sessionSummary.count, 500)
         XCTAssertEqual(report.notes[0].content.count, 1200)
-        XCTAssertEqual(report.skills[0].title.count, 80)
-        XCTAssertEqual(report.skills[0].description.count, 300)
-        XCTAssertEqual(report.skills[0].skillMD.count, 8000)
-        XCTAssertEqual(report.skills[0].rationale.count, 500)
+        XCTAssertTrue(report.skills.isEmpty, "une commande ne doit jamais être tronquée en procédure approuvable")
+        XCTAssertEqual(report.rejectedSkills, ["skill-long"])
+    }
+
+    func testSkillAtTechnicalLimitKeepsItsLastCommandAndRejectedDuplicateDoesNotHideIt() throws {
+        let command = "\nverify-axis --expected=-y,z,x"
+        let body = String(repeating: "a", count: 8_000 - command.count) + command
+        let payload: [String: Any] = ["skills": [
+            ["slug": "axis-check", "title": "Axes", "skill_md": body + "x"],
+            ["slug": "axis-check", "title": "Axes", "skill_md": body]
+        ]]
+        let data = try JSONSerialization.data(withJSONObject: payload)
+        let report = try RetrospectiveReport.parse(codexOutput: data).get()
+        XCTAssertEqual(report.rejectedSkills, ["axis-check"])
+        XCTAssertEqual(report.skills.map(\.skillMD), [body])
+        XCTAssertTrue(report.skills[0].skillMD.hasSuffix(command))
+        let onlyRejected = try JSONSerialization.data(withJSONObject: ["skills": [
+            ["slug": "too-long", "title": "Axes", "skill_md": body + "x"]
+        ]])
+        XCTAssertEqual(try RetrospectiveReport.parse(codexOutput: onlyRejected).get().rejectedSkills, ["too-long"])
     }
 
     func testDropsDuplicateNoteSlugs() throws {

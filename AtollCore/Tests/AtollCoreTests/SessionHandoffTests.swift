@@ -2,6 +2,22 @@ import XCTest
 @testable import AtollCore
 
 final class SessionHandoffTests: XCTestCase {
+    func testHandoffRequiresExistingDirectoryAndExecutableAndRechecksRemoval() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let cli = root.appendingPathComponent("cli")
+        XCTAssertFalse(SessionHandoff.isAvailable(workingDirectory: root.path, executable: cli.path), "CLI absent")
+        try Data("#!/bin/sh\nexit 0\n".utf8).write(to: cli)
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: cli.path)
+        XCTAssertFalse(SessionHandoff.isAvailable(workingDirectory: root.path, executable: cli.path), "non exécutable")
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: cli.path)
+        XCTAssertTrue(SessionHandoff.isAvailable(workingDirectory: root.path, executable: cli.path))
+        XCTAssertFalse(SessionHandoff.isAvailable(workingDirectory: cli.path, executable: cli.path), "dossier absent")
+        XCTAssertFalse(SessionHandoff.isAvailable(workingDirectory: root.path, executable: root.path), "un dossier n'est pas un CLI")
+        try FileManager.default.removeItem(at: cli)
+        XCTAssertFalse(SessionHandoff.isAvailable(workingDirectory: root.path, executable: cli.path), "CLI désinstallé")
+    }
 
     private let date = Date(timeIntervalSince1970: 1_800_000_000)
 
@@ -121,5 +137,25 @@ final class SessionHandoffTests: XCTestCase {
     func testMissingBranchIsOmittedNotShownEmpty() {
         let markdown = make(branch: nil).contextMarkdown
         XCTAssertFalse(markdown.contains("Branche :"))
+    }
+
+    func testReverseHandoffNamesItsDestinationWithoutQuotaAssumption() {
+        let files = SessionHandoff.make(projectName: "fixture", workingDirectory: "/fixture", gitBranch: nil,
+            digest: "Donnée historique", contextPath: "/private/fixture/contexte.md", executable: "/bin/claude",
+            source: .codex, destination: .claude, codexHome: "/must-not-be-exported", endedAt: date)
+        XCTAssertTrue(files.contextMarkdown.contains("session Codex"))
+        XCTAssertTrue(files.contextMarkdown.contains("Destination : Claude"))
+        XCTAssertTrue(files.launcherScript.contains("exec '/bin/claude'"))
+        XCTAssertTrue(files.launcherScript.contains("/private/fixture/contexte.md"))
+        XCTAssertFalse(files.launcherScript.contains("CODEX_HOME"))
+        XCTAssertFalse(files.launcherScript.contains("faute de quota"))
+        XCTAssertFalse(files.launcherScript.contains("Donnée historique"))
+    }
+
+    func testForwardHandoffQuotesTheSelectedCodexHome() {
+        let files = SessionHandoff.make(projectName: "fixture", workingDirectory: "/fixture", gitBranch: nil,
+            digest: "", contextPath: "/private/fixture/contexte.md", executable: "/bin/codex",
+            codexHome: "/fixture/l'été $(nothing)", endedAt: date)
+        XCTAssertTrue(files.launcherScript.contains(#"export CODEX_HOME='/fixture/l'\''été $(nothing)'"#))
     }
 }

@@ -120,10 +120,12 @@ public enum LearningSkillProposalFile {
         sessionID: String,
         project: String?,
         date: Date,
-        flags: [String]
+        flags: [String],
+        destination: AgentProvider = .claude
     ) -> Data {
         var object: [String: Any] = [
-            "v": 1,
+            "v": 2,
+            "destination": destination.rawValue,
             "slug": proposal.slug,
             "title": proposal.title,
             "description": proposal.description,

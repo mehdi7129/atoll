@@ -33,10 +33,13 @@ struct InteractionCardView: View {
 
     private var center: InteractionCenter { .shared }
 
-    @State private var planFeedback = ""
-    @State private var planAcceptEdits = false
-    @State private var selectedOptions: [String: Set<String>] = [:]
-    @State private var freeTexts: [String: String] = [:]
+    @Bindable private var draft: InteractionCenter.Draft
+
+    init(request: InteractionCenter.Pending, colors: ThemeColors) {
+        self.request = request
+        self.colors = colors
+        draft = request.draft
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -61,7 +64,8 @@ struct InteractionCardView: View {
         // la rangée continue avec le nom du projet, le rang dans la file et le
         // temps écoulé. C'est un en-tête à métadonnées, pas un séparateur.
         HStack(spacing: 6) {
-            Text(AsciiArt.sectionHeader(headerTitle, width: 30))
+            Text(AsciiArt.sectionHeader("CLAUDE · \(headerTitle)", width: 30))
+                .accessibilityLabel("Claude, \(headerTitle.lowercased())")
                 .lineLimit(1)
                 .foregroundStyle(colors.warn)
             Text(request.projectName)
@@ -130,20 +134,21 @@ struct InteractionCardView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .textSelection(.enabled)
             }
-            .frame(maxHeight: 150)
+            .frame(minHeight: 32, maxHeight: 120)
+            .layoutPriority(-1)
             .padding(8)
             .background(colors.surface)
 
             Button {
-                planAcceptEdits.toggle()
+                draft.planAcceptEdits.toggle()
             } label: {
-                Text("\(planAcceptEdits ? "[x]" : "[ ]") auto-accepter les éditions ensuite")
+                Text("\(draft.planAcceptEdits ? "[x]" : "[ ]") auto-accepter les éditions ensuite")
                     .font(AtollFont.mono(10))
-                    .foregroundStyle(planAcceptEdits ? colors.accent : colors.dim)
+                    .foregroundStyle(draft.planAcceptEdits ? colors.accent : colors.dim)
             }
             .buttonStyle(.plain)
 
-            TextField("feedback si révision…", text: $planFeedback, axis: .vertical)
+            TextField("feedback si révision…", text: $draft.planFeedback, axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(AtollFont.mono(10))
                 .foregroundStyle(colors.fg)
@@ -153,11 +158,11 @@ struct InteractionCardView: View {
 
             HStack(spacing: 14) {
                 AsciiButton(label: "REVISE ⌘N", color: colors.warn, shortcut: "n") {
-                    center.rejectPlan(request.id, feedback: planFeedback)
+                    center.rejectPlan(request.id, feedback: draft.planFeedback)
                 }
                 Spacer()
                 AsciiButton(label: "APPROVE ⌘Y", color: colors.ok, shortcut: "y") {
-                    center.approvePlan(request.id, acceptEdits: planAcceptEdits)
+                    center.approvePlan(request.id, acceptEdits: draft.planAcceptEdits)
                 }
             }
         }
@@ -181,7 +186,8 @@ struct InteractionCardView: View {
                     }
                 }
             }
-            .frame(maxHeight: 210)
+            .frame(minHeight: 32, maxHeight: 180)
+            .layoutPriority(-1)
 
             HStack(spacing: 10) {
                 AsciiButton(label: "TERMINAL", color: colors.dim, shortcut: nil) {
@@ -228,7 +234,7 @@ struct InteractionCardView: View {
     }
 
     private func optionRow(question: ParsedHookEvent.AskQuestion, option: ParsedHookEvent.AskQuestion.Option) -> some View {
-        let isSelected = selectedOptions[question.question, default: []].contains(option.label)
+        let isSelected = draft.selectedOptions[question.question, default: []].contains(option.label)
         return Button {
             toggle(question: question, label: option.label)
         } label: {
@@ -252,24 +258,24 @@ struct InteractionCardView: View {
     }
 
     private func toggle(question: ParsedHookEvent.AskQuestion, label: String) {
-        var selection = selectedOptions[question.question, default: []]
+        var selection = draft.selectedOptions[question.question, default: []]
         if question.multiSelect {
             if selection.contains(label) { selection.remove(label) } else { selection.insert(label) }
         } else {
             selection = selection.contains(label) ? [] : [label]
         }
-        selectedOptions[question.question] = selection
+        draft.selectedOptions[question.question] = selection
         // Options et texte libre s'excluent : ce qui est affiché est ce qui sera
         // envoyé (le texte libre ne doit pas écraser silencieusement une sélection).
-        if !selection.isEmpty { freeTexts[question.question] = "" }
+        if !selection.isEmpty { draft.freeTexts[question.question] = "" }
     }
 
     private func freeTextBinding(_ question: String) -> Binding<String> {
         Binding(
-            get: { freeTexts[question] ?? "" },
+            get: { draft.freeTexts[question] ?? "" },
             set: { newValue in
-                freeTexts[question] = newValue
-                if !newValue.isEmpty { selectedOptions[question] = [] }
+                draft.freeTexts[question] = newValue
+                if !newValue.isEmpty { draft.selectedOptions[question] = [] }
             }
         )
     }
@@ -277,16 +283,16 @@ struct InteractionCardView: View {
     /// Chaque question a-t-elle une réponse (sélection ou texte libre) ?
     private func allAnswered(_ questions: [ParsedHookEvent.AskQuestion]) -> Bool {
         questions.allSatisfy { question in
-            !(freeTexts[question.question] ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                || !selectedOptions[question.question, default: []].isEmpty
+            !(draft.freeTexts[question.question] ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                || !draft.selectedOptions[question.question, default: []].isEmpty
         }
     }
 
     private func sendAnswers(_ questions: [ParsedHookEvent.AskQuestion]) {
         var answers: [String: String] = [:]
         for question in questions {
-            let free = (freeTexts[question.question] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            let selected = selectedOptions[question.question, default: []]
+            let free = (draft.freeTexts[question.question] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let selected = draft.selectedOptions[question.question, default: []]
             if !free.isEmpty {
                 answers[question.question] = free
             } else if !selected.isEmpty {

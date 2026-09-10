@@ -1,280 +1,260 @@
-# Codex + Claude — plan révisé et protocole de test
+# Atoll avec Codex CLI et Claude Code
 
-État : **PR expérimentale, non publiée**, 2026-09-06.
-Branche : `codex/codex-support-dual-quotas`, base `main` / v0.16.6.
-Demande : utiliser Atoll avec Codex, distinguer les quotas des deux abonnements,
-et faire relire/tester le changement avant toute intégration dans `main`.
+État du code au **2026-09-10**, développé sur `1b08ebd` (v0.17.2).
+Ces changements ne sont **pas encore publiés**. Voir le [rapport de correction](REVIEW-2026-09-10-pr2-corrections.md) pour les preuves et les vérifications restantes, et l'[audit initial](AUDIT-2026-09-09-codex-claude.md) pour les défauts de la base.
 
-## Décision après relecture
+## Périmètre et choix de fournisseur
 
-Une même interface, deux adaptateurs indépendants. Le suivi Claude existant
-reste propriétaire de ses transcripts, de sa flotte, de ses décisions et de sa
-mémoire. Codex est observé par ses hooks ; son quota vient de son app-server.
-Il n'est pas traité comme « Claude avec un autre exécutable ».
+Codex CLI dans un terminal, y compris le terminal intégré de Cursor ou VS Code.
+L'application Codex/ChatGPT, les extensions IDE, les sessions cloud et plusieurs
+`CODEX_HOME` simultanés ne sont pas pris en charge par cette intégration.
+Les rollouts Desktop présents dans le home sélectionné sont néanmoins indexés
+par la mémoire commune : absence d'intégration GUI ne veut pas dire exclusion
+du corpus. Leur contenu machine reçoit le même filtrage prudent.
 
-La documentation officielle OpenAI a guidé trois choix :
+Les boutons **CLAUDE CODE / CODEX** sélectionnent la liste, le quota principal et
+la palette. Les deux collecteurs continuent d'observer leurs intégrations.
+Claude garde son accent orange ; Codex reçoit un accent cyan. Les palettes sont
+personnalisables séparément. Le bouton ne change ni l'abonnement des analyses,
+ni la destination d'un skill, ni le fournisseur d'une conversation existante.
+Sans activité ni Rockstar, l'îlot est invisible. La liste étendue est bornée
+par le budget de rangées, sélecteur compris, avec « +N autres » pour le surplus.
+Le quota garde sa place fixe. Les cartes et leurs contrôles défilants restent
+hors du `layerEffect` de l'onde ; seuls en-tête, liste et pied de quota le portent.
 
-- [Hooks Codex](https://learn.chatgpt.com/docs/hooks) : installation explicite,
-  puis revue de confiance **par l'utilisateur dans `/hooks`**. Aucun contournement.
-- [App-server](https://learn.chatgpt.com/docs/app-server) : quota par RPC officiel,
-  fenêtres et catégories renvoyées par le serveur, pas d'estimation par tokens.
-- Le serveur lancé pour lire le quota ne découvre pas magiquement les sessions
-  actives d'un autre client. Aucune reprise de thread à des fins d'observation.
+Les demandes partagent une file de présentation, ordonnée par arrivée. La carte
+visible reste épinglée ; une arrivée ne la remplace pas. La navigation est
+volontaire. La carte conserve la palette de son fournisseur et les décisions
+passent par le centre et le socket d'origine. Après sa résolution, la vue
+retrouve le fournisseur choisi. Les compteurs signalent aussi les demandes de
+l'autre fournisseur.
 
-## Ce que cette PR implémente
+Rockstar appartient à Claude. Son réglage n'est pas changé par le sélecteur.
+S'il reste actif pendant que Codex est affiché, **CLAUDE · ROCKSTAR** reste
+visible, y compris en compact et sans session Claude.
+Le quota est affiché simultanément, sur une seconde ligne en compact.
 
-| Fonction | Claude | Codex expérimental |
+## Matrice du code actuel
+
+Le rendu a été vérifié sur une copie isolée ; les tests natifs en TUI et
+VoiceOver restant à faire sont explicités dans le rapport.
+
+| Capacité | Claude Code | Codex CLI |
 |---|---|---|
-| Sessions / état | Suivi existant inchangé | Hooks reçus depuis le lancement d'Atoll |
-| Identité | Identifiant existant | Identifiant préfixé `codex:` et badge fournisseur |
-| Quota | Statusline et jauges optionnelles existantes | App-server du CLI connecté à ChatGPT, opt-in |
-| Durées / reset | Comportement existant | Valeurs serveur, pas de durée supposée |
-| Autorisations | Cartes Atoll existantes | Signal visuel ; décision dans Codex |
-| Rockstar | Claude uniquement | Jamais appliqué |
-| Jump-back / arrêt | Existant | Non disponible dans cette PR |
-| Mémoire / skills / sons | Existant | Non branché dans cette PR |
+| Sessions et état | Collecteur existant | Hooks, identité TUI, registre et réconciliation |
+| Permissions | Cartes existantes | Cartes dédiées, payload complet borné, refus/autorisation/retour natif |
+| Questions et plans | Cartes Claude | Réponse dans le terminal |
+| Interruption | Contrôle Claude existant | Retour au terminal, interruption native |
+| Jump-back | Ancre terminal | Ancre capturée ; repli explicite lorsque l'onglet exact n'est pas identifiable |
+| Sous-agents | Suivi existant | Lifecycle par agent_id, compteur observé et permissions rattachées au parent |
+| Rockstar | Disponible | Non applicable |
+| Quota | Statusline / sources Claude | RPC officiel, opt-in, fenêtres et resets serveur |
+| Métadonnées | Sources Claude | Projet/modèle par hooks, branche initiale/prompt/contexte par rollout validé |
+| Mémoire | Corpus local partagé | Même corpus, provenance distincte et instructions machine filtrées |
+| Recall manuel | Skill Claude | Skill Codex installé avec le helper absolu |
+| Recall proactif | Hook Claude optionnel | Désactivé ; recall manuel explicite |
+| Skills appris | Destination Claude | Destination Codex, catalogue natif, validation avant installation |
+| Usage des skills | Observations disponibles, couverture partielle | Non mesuré |
+| Plugins | Catalogue et gestionnaire Claude | Catalogue local natif ; mutations dans le gestionnaire Codex |
+| Analyses internes | Exécuteur sélectionnable | Exécuteur sélectionnable, modèle natif revalidé |
+| Passation | Préparer un contexte pour Codex, si CLI et dossier existent | Préparer un contexte pour Claude, si CLI et dossier existent |
 
-Les quotas ne sont **jamais additionnés**. Un abonnement expiré, un compte API,
-une erreur de réseau ou une donnée manquante ne deviennent pas un faux « 0 % ».
-Le quota Claude n'est pas rendu plus autonome par cette PR : sa jauge principale
-continue à dépendre de la statusline ; sans données récentes, elle peut manquer.
+Une valeur absente ne devient pas zéro. Le contexte Codex provient de la dernière
+mesure `last_token_usage`, jamais des tokens cumulés. La branche est celle du
+début du rollout. Ces enrichissements ne créent ni ne réaniment une session.
+Une issue d'outil sans verdict explicite reste inconnue dans le condensé.
+Aucun coût en dollars n'est déduit d'un abonnement.
 
-### Architecture et protections
+## Installation et diagnostic
 
-- `AgentProvider` dans le modèle de présentation ; valeur Claude par défaut
-  pour conserver les appelants et les identifiants historiques.
-- `CodexHookEvent` / `CodexSessions` : projection dédiée, sans lecture des
-  transcripts internes, sans réconciliation par PID de daemon.
-- Socket Codex distinct : `/tmp/atoll-codex-<uid>.sock`. Un ancien Atoll
-  Claude-only ne recevra pas ces payloads. Le helper vérifie l'UID du pair ;
-  le serveur crée son socket en mode `0600`.
-- Les enveloppes de fournisseurs inconnus ne passent jamais dans le parseur
-  Claude ; le socket Codex refuse les enveloppes sans fournisseur Codex.
-- `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`,
-  `PermissionRequest`, `Stop`, `Interrupt`, `PreCompact`, `PostCompact`,
-  `SessionEnd`. Les payloads de sous-agents sont ignorés pour ne pas faire
-  terminer le parent par erreur. Pas de compteur de sous-agents inventé.
-- Hooks synchrones courts (3 secondes maximum configurées), sans sortie ni
-  décision. L'envoi socket a une deadline de 2 secondes ; app absente → exit 0.
-- Pas de hook Codex `PermissionDenied` exploité : après 2 min sans événement,
-  une attente devient **non confirmée**, pas une fausse demande permanente.
-  Même principe après 15 min pour les autres activités ; purge après 24 h.
-  Cela ne prouve pas qu'un outil long a fini : c'est une limite explicite du suivi.
-- Installation dans le `hooks.json` utilisateur ; `CODEX_HOME` absolu hérité
-  est respecté, sinon `~/.codex`. Le chemin réellement utilisé est montré.
-  `config.toml`, hooks étrangers, choix de confiance et réglages Claude préservés.
-- Merge idempotent, backup unique `hooks.json.atoll-backup`, liens symboliques
-  conservés. JSON illisible/invalide → erreur, aucune reconstruction destructive.
-  Détection des modifications concurrentes avant écriture (best effort, pas un CAS).
-- Lanceur propre `~/.atoll/bin/atoll-codex-bridge`. Retenu après désinstallation
-  pour les clients déjà ouverts ; bundle manquant → sortie silencieuse.
-- **C'est un SUPERVISEUR, et sa forme exacte a été mesurée, pas devinée**
-  (2026-09-09). Il lance le worker en arrière-plan, lui rend stdin par un
-  descripteur explicite, attend, et sort 0 quel que soit le sort du worker :
+L'onboarding installe l'agent choisi. Un poste Codex seul ne crée pas de
+configuration Claude. Réglages → Codex permet d'installer, réparer ou retirer
+l'intégration, de choisir le home et de consulter son état natif.
+Installer un CLI ne change pas le moteur des analyses, même si la préférence
+est absente. L'accueil propose Réglages → Apprentissage ; cet onglet reste
+l'unique lieu de configuration du moteur et de son budget. Le catalogue et
+le choix du modèle Codex restent dans Réglages → Codex.
 
-  ```sh
-  exec 3<&0
-  "$BIN" codex-hook <&3 &
-  wait $! 2>/dev/null
-  exit 0
-  ```
+- Le home sélectionné est enregistré dans le fichier Atoll `codex-home.json`.
+  Sans choix explicite, la détection utilise l'environnement puis `~/.codex`.
+  Le chemin effectif est affiché. Une sélection invalide bloque l'opération.
+- Installation et réparation mettent à jour les **12 définitions Atoll** de
+  `hooks.json`, avec sauvegarde avant changement et préservation des hooks
+  étrangers. JSON vide/invalide : refus, sans reconstruction destructive.
+  Une seconde installation identique évite les écritures inutiles.
+- Au démarrage, la migration ne recrée aucun événement retiré et ne réordonne
+  pas les groupes. Les formes anciennes reconnues sont mises à niveau sur
+  place ; les délais, messages et clés personnalisés sont conservés. Une
+  permission de 3 s accompagnée d'un message ou d'une clé personnelle n'est
+  pas assimilée à l'ancien hook de télémétrie. Si rien ne change, les octets
+  et la date de `hooks.json` restent identiques. Chaque vraie migration crée
+  sa sauvegarde datée 0600 ; la copie initiale n'est pas forcément pré-Atoll.
+- Le superviseur `atoll-codex-bridge` pointe vers le helper absolu du bundle ;
+  il est rafraîchi au démarrage si l'intégration est déjà installée.
+  Le recall manuel géré par Atoll reçoit aussi ce chemin.
+- `config.toml` et le trust restent gérés par Codex. **Ouvrir /hooks, relire
+  et approuver les définitions dans le CLI.** Le diagnostic `hooks/list`
+  distingue présence, ancien schéma, désactivation, absence de confiance et
+  événement effectivement reçu.
+- Retirer Codex conserve les hooks étrangers et la mémoire commune. Le recall
+  modifié personnellement est conservé. Les skills gérés sont isolés par
+  destination et par home. Un dossier hors manifest avec un SKILL.md différent
+  provoque une collision. Un contenu strictement identique peut être adopté
+  comme reprise d'une installation interrompue ; le dossier est archivé avant
+  remplacement. Le recall applique aussi cette reprise au texte exact attendu.
+- Un changement de home conserve les artefacts de l'ancien home ; le retrait
+  vise le home actuellement choisi. Le panneau l'annonce. Un événement reçu
+  pour un autre home est refusé et journalisé.
 
-  Chaque ligne répond à un essai qui a ÉCHOUÉ en mesure :
-  - `exec "$BIN"` (la forme évidente) fait remplacer le shell par le worker :
-    tuer le worker devient la mort du hook, que Codex affiche comme un ÉCHEC au
-    lieu d'une abstention. Sans superviseur, plus personne ne peut convertir
-    cette mort en « exit 0, stdout vide ».
-  - en avant-plan, le shell annonce la mort du worker sur SON stderr
-    (« line 4: 47645 Terminated: 15 ») — contrat respecté, mais du texte part
-    vers une TUI dont le bruit a déjà été reproché à Atoll. `2>/dev/null` porte
-    sur `wait` SEUL : le stderr du worker reste intact (mesuré).
-  - **`&` seul CASSE le chemin nominal** : un job d'arrière-plan reçoit
-    `/dev/null` sur stdin, donc le worker ne lit plus le payload du hook.
-    D'où `exec 3<&0` puis `<&3`. Mesuré : sans eux, `recu:` est vide.
+Les RPC de diagnostic ne créent aucun thread et ne modifient pas la confiance.
+Le quota reste un opt-in distinct. Une erreur de compte, une catégorie ambiguë,
+une mesure périmée ou un reset ne donnent pas un faux quota disponible.
 
-  MESURÉ sur les trois axes : worker tué par SIGTERM et par SIGKILL → exit 0,
-  stdout vide, stderr vide ; chemin nominal complet → la décision `allow`
-  ressort intacte sur stdout.
+## Identité, ordre et demandes
 
-  ⚠️ **LA GARANTIE PORTE SUR LE WORKER, PAS SUR TOUT SIGNAL.** Ce document a
-  d'abord écrit « sort toujours 0 » ; Codex l'a mesuré faux : un `SIGTERM`
-  adressé au SUPERVISEUR rend **143** et laisse le worker vivant — le shell
-  n'atteint pas sa dernière ligne, `wait` n'a rien à convertir. La formulation
-  juste est « le worker qui termine ou qui est tué devient une abstention ».
-  Un `SIGKILL` du superviseur reste de toute façon non garantissable. Rendre le
-  `SIGTERM` convertible demanderait un `trap` qui retransmet au worker puis
-  attend à nouveau : ce n'est pas fait, et la documentation officielle des hooks
-  ne dit pas à quel PID ou groupe Codex adresse ses annulations — on ne remplace
-  pas une forme mesurée de bout en bout par une supposition.
-- **Le lanceur est remis à jour au démarrage de l'app**
-  (`CodexHookInstallation.refreshWrapper`), et cela ferme deux pannes qui ne se
-  voient pas : une correction du lanceur n'atteignait JAMAIS un poste déjà
-  installé (le fichier n'était écrit qu'à l'installation), et une app déplacée
-  laissait l'intégration morte en silence — le lanceur garde le chemin absolu du
-  bundle, et sa garde `[ -x "$BIN" ] || exit 0` faisait exactement son travail.
-  Idempotent par comparaison d'octets : sans différence réelle, rien n'est écrit
-  (vérifié en réel, mtime inchangé au second lancement). Rien n'est posé si les
-  hooks ne sont pas installés.
-### La carte d'autorisation, et comment elle sait qu'on l'attend encore
+Le helper capture le processus **TUI** avec son PID et son instant de démarrage,
+le session ID, le rollout et l'ancre terminal. Le registre ne déduit jamais une
+session depuis le seul dossier ou la date d'un fichier. Les jobs internes
+marqués `ATOLL_RETROSPECTIVE=1` sont exclus.
 
-La carte affichée dans l'îlot correspond à un helper BLOQUÉ sur son descripteur.
-Tout le problème est de savoir quand plus personne n'attend derrière — sans quoi
-l'îlot montre un bouton qui n'agit sur rien.
+Fin de session et clôtures de tours gardent des tombstones bornées. Les scans
+asynchrones ont leur génération ; leurs résultats anciens sont rejetés.
+Une reprise explicite peut rouvrir le même UUID avec une nouvelle identité,
+sans accepter les événements de l'ancien processus. Le registre permet de
+retrouver un processus encore vivant après redémarrage d'Atoll, même si son
+rollout date d'un autre jour.
+Sans identité après une clôture, un événement non daté ou plus récent reste
+`.unknown` : la demande est conservée, sans réanimer arbitrairement la session.
+Une preuve d'antériorité donne `.closed`. Les clôtures expirent après une heure.
+Une session anonyme sans nouvel événement passe à l'état non confirmé après
+15 minutes ; sa rétention maximale de 24 h ne prouve pas qu'elle travaille.
 
-- **L'EOF ne vaut RIEN comme preuve de mort ici** : le helper fait un
-  `shutdown(SHUT_WR)` normal juste après son envoi. Un veilleur d'EOF confond
-  donc « a fini d'écrire » et « est mort » — mesuré le 2026-09-09, il refermait
-  la carte en 0 s et cassait le chemin nominal. La preuve, c'est le PROCESSUS
-  (`LOCAL_PEERPID` à la connexion).
-- **Un PID seul n'est pas une identité.** Recyclé avant le passage du minuteur,
-  il ferait valider un processus étranger. L'identité est le couple
-  `(pid, instant de démarrage)`.
-- **Une carte sans pid connu doit aussi pouvoir partir** : `LOCAL_PEERPID` peut
-  échouer, et l'ancien filtre « pid > 0 » excluait précisément ces cartes-là du
-  nettoyage — elles ne partaient jamais.
-- **Un filet absolu** ferme le cas restant : au-delà du plafond de Codex, le hook
-  a été tué, plus personne ne lit la réponse, quoi que dise la sonde.
-- **Fermer le descripteur ne suffit jamais** : l'expiration côté serveur PRÉVIENT
-  le centre d'interaction, qui retire la carte.
+Les enfants ont leur propre tour. Leurs événements ne remplacent jamais le
+rollout, le modèle ou l'outil du parent. Une clôture enfant ne retire que les
+cartes du même enfant, tour et processus. Une permission précoce d'un tour
+encore inconnu est conservée. Une reprise d'enfant exige un démarrage explicite
+daté ; ce cas est testé synthétiquement, sans capture native de reprise.
 
-Ce jugement vit dans `CodexCardReaper` (AtollCore, testé et **vérifié par
-sabotage** : six propriétés retirées une à une, six tests rouges), et non dans la
-vue — il n'était pas vérifiable tant qu'il était écrit contre `kill(2)`.
+Une carte correspond à un request ID et un helper encore en attente. Le
+contrôle du couple PID/démarrage, les clôtures certaines et l'expiration serveur
+la retirent ; un clic tardif est revalidé. L'EOF seul ne prouve pas la mort :
+le helper ferme normalement son côté écriture après l'envoi. Les payloads de
+permission trop grands ou non représentables retournent au CLI.
 
-MESURÉ sur la matrice de fautes :
-- app tuée par SIGKILL, carte ouverte → le helper rend la main aussitôt,
-  exit 0, stdout vide, et le redémarrage n'adopte AUCUNE carte (elles ne sont
-  pas persistées, donc aucune ne peut ressusciter) ;
-- deux demandes SIMULTANÉES et IDENTIQUES → répondre à l'une libère exactement
-  un helper, l'autre continue d'attendre ; aucune décision perdue, aucune
-  confusion (c'est pourquoi la corrélation se fait par UUID lié au descripteur,
-  jamais par nom d'outil).
+Le superviseur conserve stdin avec `exec 3<&0`, lance le worker avec
+`<&3 &`, attend par `wait $! 2>/dev/null`, puis sort 0. La mort du worker
+devient une abstention. Cette garantie ne couvre pas un signal qui tue le
+superviseur lui-même. Le timeout permission reste 600 s ; les autres événements
+gardent le contrat court ou async défini dans le générateur.
 
-- Le lecteur de quota lance **son propre** `codex app-server --listen stdio://` :
-  `initialize` → `initialized` → `account/read(refreshToken:false)` →
-  `account/rateLimits/read`. Rien d'autre : ni thread, ni turn, ni login/logout.
-  L'app-server gère sa propre authentification. Atoll ne lit pas `auth.json`,
-  n'extrait pas de jeton et ne journalise pas email ou messages d'erreur bruts.
-- Lecture au plus toutes les 2 min (hors actualisation manuelle), hors UI,
-  deadline 20 s, sortie plafonnée à 2 Mo, enfant terminé et récolté.
-  Désactivation → annulation ; pas de cache de compte persistant.
-- Données masquées après 5 min ou après le reset de leur fenêtre ; toutes les
-  catégories renvoyées par `rateLimitsByLimitId` sont consultables dans les réglages.
-  L'îlot privilégie la catégorie `codex`, le compact nomme l'agent concerné.
+## Mémoire, skills et plugins
 
-## Tester sans toucher à la version installée
+Le corpus est commun par projet et source. Les enveloppes machine reconnues
+sont classées `instruction`, avec conservation du texte humain qui les suit.
+La correction d'un ancien index est ciblée et transactionnelle, précédée d'une
+sauvegarde SQLite autonome. Elle ne reconstruit pas l'index et conserve les
+sessions dont le transcript a été purgé.
+Le discriminant Codex reste une **heuristique textuelle**. Les quatre familles
+`task-notification`, `realtime_delegation`, `command-name` et
+`local-command-stdout` sont désormais reconnues lorsqu'elles sont complètes
+et en tête du texte ; citations et suffixes humains sont conservés. La
+migration `codex-instructions-v2` reprend l'index existant. Sur le corpus
+mesuré le 10 septembre, les 435 enveloppes de ces familles ont toutes un
+jumeau `event_msg` : ce jumeau ne permet donc pas de distinguer une consigne humaine.
+Un snapshot incomplet est retiré ; une sauvegarde complète est conservée.
 
-### 1. Tests automatisés et compilation
+Les résultats d'outils Codex sans verdict fiable restent inconnus et conservés
+dans la limite du condensé. Ils ne fournissent pas une preuve de succès aux
+propositions de skills. Les suggestions d'archivage automatique sont inactives
+pour **les deux fournisseurs**, leur couverture d'usage étant insuffisante.
+
+Les notes fusionnées conservent des références de sources résolubles jusque dans
+les archives. Les propositions fixent leur destination avant l'analyse. Le
+catalogue Codex vient de `skills/list` : scopes, enablement, plugin et erreurs
+sont conservés. Une erreur de catalogue bloque l'approbation ; une nouvelle
+antériorité impose une relecture.
+
+Le manifest v2 vit séparément du v1 Claude. La migration ne déplace pas les
+skills ; les changements faits par une ancienne app sont réconciliés ou
+signalés en conflit. Le même slug peut exister pour les deux destinations.
+Une mise à jour archive l'installation précédente et conserve ses ressources.
+Les nouvelles ressources annexes d'une proposition sont refusées, car la revue
+actuelle ne montre que `SKILL.md` ; elles ne sont pas installées sans lecture.
+Seul un fichier `.DS_Store` ordinaire est toléré comme métadonnée Finder,
+jamais copié dans l'installation ; un lien ou dossier homonyme reste refusé.
+
+Le catalogue de plugins Codex utilise `plugin/list` limité aux marketplaces
+locales. Les mutations restent dans `/plugins` ou les commandes montrées par
+`codex plugin --help`. Une recherche IA sur le catalogue Claude peut employer
+Codex comme exécuteur ; elle demeure une recherche de plugins Claude.
+
+## Vérifications relançables
+
+Versions natives vérifiées : **codex-cli 0.153.4** pour les fixtures initiales
+et le runner réel ; **0.154.0** pour les catalogues et le recall lors de cette
+relecture. Aucun minimum inférieur n'est déclaré compatible sur cette seule preuve.
 
 ```sh
 swift test --package-path AtollCore
+python3 Scripts/test-runtime.py
+python3 Scripts/test-runtime.py --sabotage-cancellation
+python3 Scripts/test-runtime.py --sabotage-quota-projection
+python3 Scripts/test-review-regressions.py
+python3 Scripts/audit-codex-envelopes.py
+python3 Scripts/test-codex-catalog.py
 xcodegen generate
 xcodebuild -project Atoll.xcodeproj -scheme Atoll -configuration Debug \
-  -destination 'platform=macOS,arch=arm64' \
   -derivedDataPath /private/tmp/atoll-codex-build build
+python3 Scripts/test-codex-install-recall.py \
+  /private/tmp/atoll-codex-build/Build/Products/Debug/Atoll.app/Contents/Helpers/atoll-bridge
 ```
 
-Sur un Mac Intel, remplacer `arm64` par `x86_64`. Ne pas exécuter les commandes
-de copie du README de production : **ne pas remplacer `~/Applications/Atoll.app`**.
+La suite Core et le harness runtime utilisent des fixtures. Le test des catalogues
+lance le CLI réel en lecture seule dans un home temporaire, sans compte ni modèle.
+Le test helper utilise un home macOS de test, sans toucher aux réglages personnels.
 
-La suite ordinaire utilise de faux serveurs et des dossiers temporaires, pas les
-comptes ni les hooks personnels. Le test réel est désactivé par défaut :
+L'appel réel optionnel suivant **consomme une génération** et exige une connexion
+Codex existante ; il vérifie le runner App, le modèle, le schéma et l'isolation du
+dossier de travail :
 
 ```sh
-ATOLL_CODEX_LIVE_TEST=1 swift test --package-path AtollCore \
-  --filter CodexAccountClientTests.testLiveReadOnlyAccount
+python3 Scripts/test-codex-exec.py --live
 ```
 
-Il utilise `~/.local/bin/codex` ; `ATOLL_CODEX_EXECUTABLE` permet un autre chemin.
-C'est une lecture de quota réelle, pas un message généré.
+### Aperçu et recette GUI
 
-### 2. Aperçu visuel isolé
+Toujours lancer une **copie**, jamais le produit de build :
 
 ```sh
-open -n /private/tmp/atoll-codex-build/Build/Products/Debug/Atoll.app \
-  --args --codex-preview
+python3 Scripts/prepare-preview.py \
+  /private/tmp/atoll-codex-build/Build/Products/Debug/Atoll.app \
+  /private/tmp/Atoll-review.app
+python3 Scripts/test-ui.py --app /private/tmp/Atoll-review.app \
+  --output /private/tmp/atoll-ui-review
 ```
 
-Mode Debug uniquement, données **fictives et étiquetées**, fenêtre non interactive.
-Pas de socket, pas de réparation des hooks, pas de login, pas de réseau, pas de
-relecture/injection du journal de recall, réglages indisponibles. Cet aperçu peut
-coexister avec l'Atoll stable. Quitter via son menu « Quitter l'aperçu ».
+Preview Debug interactive, avec données fictives, préférences isolées et aucun
+service de production. La copie reste dans ce mode même rouverte sans argument
+par un outil macOS. Ne pas réutiliser une ancienne copie non protégée.
+Options : `--preview-claude`, `--preview-compact`,
+`--preview-empty`, `--preview-light`, `--preview-rockstar`,
+`--preview-notch`, `--preview-detail`, `--preview-codex-card`,
+`--preview-onboarding`, `--preview-codex-settings`. Les boutons permettent de changer la taille, rejouer les
+cartes et les transitions. Ce mode ne prouve pas une permission réelle.
 
-### 3. Essai fonctionnel explicite
+Vérifié : 16 scénarios avec captures de fenêtre et lecture des images,
+clair/sombre, encoche/pilule, libellés longs, liste bornée, cartes, détail,
+Rockstar, accueil et conservation du moteur. Navigation native entre cartes,
+conservation du brouillon et refus au clavier ont été exercés ; un cycle de
+transition avec encoche a été filmé et relu. L'OCR complète cette lecture,
+il ne prouve ni le focus ni la qualité de l'animation.
 
-> **CETTE SECTION A DIT « AVANT FUSION » APRÈS LA FUSION.** La PR #1 est dans
-> `main` depuis la v0.17.0 (2026-09-09) et l'app est installée chez son
-> utilisateur. Ce qui suit reste la procédure d'essai — elle vaut pour toute
-> reprise du sujet — mais ce n'est plus une condition de fusion.
->
-> **CE QUI A ÉTÉ EXERCÉ EN VRAI, au 2026-09-09** : hooks installés chez
-> l'utilisateur (10 événements), découverte d'une session `codex exec` vivante
-> et son affichage dans l'îlot à côté d'une session Claude (capture à l'appui),
-> migration automatique du lanceur de hooks vers l'app installée, lecture du
-> quota, indexation des rollouts (1 051 messages), bilan de fin de session par
-> `codex exec`.
-> **CE QUI NE L'A PAS ÉTÉ** : la carte d'autorisation cliquée dans une VRAIE
-> session Codex en Release. Les triggers de debug sont `#if DEBUG` — ils
-> décideraient à la place de l'utilisateur — donc la première vraie carte devra
-> être cliquée à la main. Tant que ce n'est pas fait, ne pas écrire que ce
-> chemin est vérifié de bout en bout.
+Restent à vérifier avant fusion : VoiceOver parlé, matrice complète de motion
+réduite/tailles et parcours authentifiés de permissions, sons, fin/reprise et
+retour au terminal avec les deux CLI. Cette recette native nécessite une seule
+instance normale d'Atoll ; le mode aperçu ne la remplace pas.
 
-Ce n'est **pas** l'aperçu : le démarrage normal de l'app lance les services existants
-et peut réparer les wrappers Claude. Ne pas lancer simultanément deux Atoll normaux
-(même socket Claude / mêmes préférences). Pour une isolation complète des données,
-utiliser un compte macOS de test. Sinon :
-
-1. Quitter l'aperçu et la version stable, conserver le bundle stable intact.
-2. Lancer le bundle de test **sans** `--codex-preview`.
-3. Réglages → Codex : vérifier le chemin de configuration, installer les hooks.
-4. Dans le CLI Codex récent, `/hooks` : relire et approuver les définitions Atoll ;
-   démarrer une nouvelle session. La présence du fichier ne prouve pas sa confiance.
-5. Vérifier prompt → outil → permission native → réponse → fin / interruption,
-   puis fermeture de session. Le mode Rockstar Claude ne doit jamais décider pour Codex.
-6. Activer la lecture du quota ; comparer les fenêtres / resets avec Codex.
-   Vérifier aussi le cas sans compte, hors connexion et quota expiré.
-7. Vérifier une session Claude réelle : permissions, statusline et affichage inchangés.
-   **Ne pas injecter de faux prompts Claude** dans le journal de mesure de septembre.
-8. Tester les deux modes de groupement, encoche/pilule, largeur petite, détail,
-   longues chaînes de modèle/projet et une fenêtre de quota inconnue.
-
-Retour stable : retirer les hooks Codex depuis le bundle de test, désactiver sa
-lecture du quota, quitter cette app, relancer `~/Applications/Atoll.app` (sa
-réparation normale rétablit son wrapper Claude). Ne pas restaurer un backup entier
-par-dessus des changements personnels. Le wrapper Codex résiduel est inerte sans hooks.
-
-## Plan de développement après cette PR
-
-| Lot | Travail | Critère de sortie |
-|---|---|---|
-| 1 — cette PR | Identité fournisseur, suivi hooks, quotas, réglages, aperçu, tests | Build + tests verts, puis parcours réel relu avant fusion |
-| 2 — fiabilité | Fixtures capturées avec consentement sur CLI/desktop/IDE, événements concurrents, reconnexions, meilleur diagnostic de confiance | Matrice de clients supportés publiée ; aucune session historique annoncée vivante |
-| 3 — interactions | Adaptateur Codex dédié pour allow/deny, annulation, expiration, retour au client ; jump-back lorsque prouvable | Décisions conformes au schéma Codex, tests de course/timeout ; jamais de Rockstar implicite |
-| 4 — mémoire partagée | Contrat neutre avec origine/projet, lecture opt-in, minimisation des données, adaptation des skills | Fin du gel recall et mesures de référence conservées ; aucun mélange silencieux Claude/Codex |
-| 5 — passation entre agents | Notes de projet et rapports de revue liés au commit / PR ; éventuelle interface Atoll | Consentement avant envoi à un autre fournisseur, historique auditable, pas de boucle d'agents autonome |
-
-Pas de chat/orchestrateur ajouté à l'îlot dans cette PR. GitHub et ce document
-permettent déjà à Claude de relire le travail **si son client a encore l'accès et
-l'authentification nécessaires**. Atoll ne réactive pas un abonnement terminé.
-Une conversation automatique entre agents demanderait un travail distinct.
-
-## Relevé de vérification — 2026-09-06
-
-- Base : 737 tests existants passants avant l'ajout des tests Codex.
-- Suite finale : 761 tests recensés, 760 exécutés avec succès et le test réseau
-  ignoré par défaut ; ce dernier a été exécuté séparément avec succès.
-- Nouveaux tests : contrat de fournisseur, transitions, événements d'ancien tour,
-  péremption, merge/retrait/backup/liens symboliques, faux app-server JSON-RPC,
-  compte API/déconnecté, timeout/annulation, sortie anticipée/SIGPIPE, multi-quotas.
-- Lecture réelle du quota : réussie avec `codex-cli 0.153.4`, une catégorie
-  retournée, aucun thread démarré. Aucun quota personnel publié dans ce document.
-- Build Debug app + helper réussi ; aperçu visuel ouvert et inspecté.
-- Aucun hook utilisateur installé, aucun bundle stable remplacé, aucune donnée
-  de recall de production rejouée. Les parcours réels de hooks, permissions natives,
-  clients desktop/IDE et changement de compte restent à valider avant fusion.
-
-La PR a été fusionnée le 2026-09-09 après trois revues de Codex (deux verdicts
-BLOQUANT, puis « prêt pour la release ») et publiée en v0.17.0. Sa **quatrième**
-revue, faite APRÈS publication, a trouvé quatre défauts P2 sur des fonctions
-déjà livrées — corrigés en v0.17.1. La leçon vaut d'être écrite : un verdict
-« prêt pour la release » borne ce qui a été relu, pas ce qui existe.
+Le contexte de passation et les analyses sont détaillés dans
+[CODEX-FAILOVER.md](CODEX-FAILOVER.md). L'historique de l'ancienne PR reste dans
+git ; ses tableaux expérimentaux ont été remplacés ici pour éviter de décrire
+des limites déjà corrigées comme l'état actuel.

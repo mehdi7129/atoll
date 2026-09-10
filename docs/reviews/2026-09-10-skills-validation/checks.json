@@ -1,0 +1,219 @@
+[
+  {
+    "check": "core-full",
+    "localLog": "/tmp/atoll-next-core-full.log",
+    "observedOutput": [
+      "Executed 1014 tests, with 1 test skipped and 0 failures (0 unexpected) in 7.921 (7.998) seconds",
+      "Executed 1014 tests, with 1 test skipped and 0 failures (0 unexpected) in 7.921 (8.001) seconds"
+    ]
+  },
+  {
+    "check": "runtime-final",
+    "localLog": "/tmp/atoll-next-runtime-final.log",
+    "observedOutput": [
+      "PASS retro-claude-disable",
+      "PASS retro-claude-resume",
+      "PASS retro-claude-late-result",
+      "PASS retro-claude-nominal",
+      "PASS retro-codex-disable",
+      "PASS retro-codex-resume",
+      "PASS retro-codex-late-result",
+      "PASS retro-codex-nominal",
+      "PASS retro-claude-oversized : note conservée, skill refusé et trace persistée",
+      "PASS retro-codex-oversized : note conservée, skill refusé et trace persistée",
+      "PASS curation-claude-preparation",
+      "PASS curation-claude-scheduled-off",
+      "PASS curation-claude-late-result",
+      "PASS curation-claude-nominal",
+      "PASS curation-codex-preparation",
+      "PASS curation-codex-scheduled-off",
+      "PASS curation-codex-late-result",
+      "PASS curation-codex-nominal",
+      "PASS search-claude-preparation",
+      "PASS search-claude-late-result",
+      "PASS search-claude-nominal",
+      "PASS search-codex-preparation",
+      "PASS search-codex-late-result",
+      "PASS search-codex-nominal",
+      "PASS cartes : incarnation, déduplication, sons et clic après mort du helper",
+      "PASS carte enfant t2 précoce conservée après clôture t1",
+      "PASS quota Codex : capture → budget, ancien/partiel haut refusé pour les trois consommateurs",
+      "PASS budget : verrou commun, pré-spawn remboursé, échec lancé compté, abonnement distinct, plafond et persistance",
+      "PASS redémarrage : préparation libérée, spawn incertain ou confirmé compté, échec remboursé",
+      "PASS refus de capture journalisés : modèle absent, abonnement indisponible, home invalide",
+      "PASS curation : évaluation sans travail clôturée, refus de préparation persisté",
+      "60 scénarios des runners et cartes de production vérifiés, aucun appel IA."
+    ]
+  },
+  {
+    "check": "core-sabotages",
+    "localLog": "/tmp/atoll-next-core-sabotages.log",
+    "observedOutput": [
+      "PASS tests de base avant sabotage",
+      "PASS sabotage oversized-skill",
+      "PASS sabotage model-pagination",
+      "PASS sabotage review-position",
+      "PASS sabotage replacement-grace",
+      "PASS sabotage identity-retry",
+      "PASS sabotage identity-birth"
+    ]
+  },
+  {
+    "check": "runtime-sabotage",
+    "localLog": "/tmp/atoll-next-runtime-sabotage.log",
+    "observedOutput": [
+      "PASS retro-claude-disable",
+      "PASS retro-claude-resume",
+      "PASS retro-claude-late-result",
+      "PASS retro-claude-nominal",
+      "PASS retro-codex-disable",
+      "PASS retro-codex-resume",
+      "PASS retro-codex-late-result",
+      "PASS retro-codex-nominal",
+      "PASS sabotage : skill trop long écarté sans trace persistée"
+    ]
+  },
+  {
+    "check": "skill-review-final",
+    "localLog": "/tmp/atoll-next-skill-review-final.log",
+    "observedOutput": [
+      "PASS antériorité native visible avant le premier clic",
+      "PASS réponse annulée ignorée",
+      "PASS réponse d'un ancien home ignorée",
+      "PASS erreur d'un ancien home ignorée",
+      "PASS nouvelle lecture valide remplace l'ancienne",
+      "PASS fin d'une ancienne lecture ne masque pas la suivante"
+    ]
+  },
+  {
+    "check": "skill-review-sabotage",
+    "localLog": "/tmp/atoll-next-skill-review-sabotage.log",
+    "observedOutput": [
+      "PASS sabotage : réponse périmée détectée dans le centre réel"
+    ]
+  },
+  {
+    "check": "skill-review-error-sabotage",
+    "localLog": "/tmp/atoll-next-skill-review-error-sabotage.log",
+    "observedOutput": [
+      "PASS sabotage : erreur périmée détectée dans le centre réel"
+    ]
+  },
+  {
+    "check": "skill-review-loading-sabotage",
+    "localLog": "/tmp/atoll-next-skill-review-loading-sabotage.log",
+    "observedOutput": [
+      "PASS sabotage : chargement concurrent masqué détecté"
+    ]
+  },
+  {
+    "check": "uninstall",
+    "localLog": "/tmp/atoll-next-uninstall.log",
+    "observedOutput": [
+      "PASS retrait Claude : erreur explicite, hooks retirés, skills et hooks étrangers préservés"
+    ]
+  },
+  {
+    "check": "uninstall-sabotage",
+    "localLog": "/tmp/atoll-next-uninstall-sabotage.log",
+    "observedOutput": [
+      "PASS retrait Claude : erreur explicite, hooks retirés, skills et hooks étrangers préservés",
+      "PASS sabotage : absent : erreur de manifest masquée par le code de sortie; foreign : erreur de manifest masquée par le code de sortie; managed : erreur de manifest masquée par le code de sortie"
+    ]
+  },
+  {
+    "check": "catalog-final",
+    "localLog": "/tmp/atoll-next-catalog-final.log",
+    "observedOutput": [
+      "PASS hooks/list : 12 définitions Atoll reconnues, aucune confiance accordée.",
+      "PASS skills/list : home explicite, chemin avec espaces/symlink, scope natif, skill activé ; aucun thread créé.",
+      "PASS plugin/list : marketplaces locales, aucune mutation ni génération."
+    ]
+  },
+  {
+    "check": "install-final",
+    "localLog": "/tmp/atoll-next-install-final.log",
+    "observedOutput": [
+      "PASS installation avec argv[0] nu : chemin du helper réel conservé.",
+      "PASS helper installé deux fois : Codex seul, hooks étrangers préservés, aucune config Claude, idempotence.",
+      "PASS recall manuel du helper : corpus partagé, instructions exclues, bonnes commandes de reprise, aucun Claude requis.",
+      "PASS retrait Codex : hooks étrangers et mémoire préservés, recall retiré, aucune configuration Claude."
+    ]
+  },
+  {
+    "check": "build-debug-frozen",
+    "localLog": "/tmp/atoll-next-build-debug-frozen.log",
+    "observedOutput": [
+      "** BUILD SUCCEEDED **"
+    ]
+  },
+  {
+    "check": "build-release-frozen",
+    "localLog": "/tmp/atoll-next-build-release-frozen.log",
+    "observedOutput": [
+      "** BUILD SUCCEEDED **"
+    ]
+  },
+  {
+    "check": "voiceover-sabotage",
+    "localLog": "/tmp/atoll-next-voiceover-sabotage.log",
+    "observedOutput": [
+      "PASS VoiceOver codex : annonces, navigation et contrôles accessibles",
+      "PASS VoiceOver claude : annonces, navigation et contrôles accessibles"
+    ]
+  },
+  {
+    "check": "ui-keyboard-sabotage",
+    "localLog": "/tmp/atoll-next-ui-keyboard-sabotage.log",
+    "observedOutput": [
+      "FAIL skills-position: conversion-3; 2/2",
+      "PASS sabotage visuel détecté sur l'ancien build."
+    ]
+  },
+  {
+    "check": "hover-sabotage",
+    "localLog": "/tmp/atoll-next-hover-sabotage.log",
+    "observedOutput": [
+      "FAIL selector-hover: 27%; Le sélecteur compact s'est déplacé avant le clic",
+      "PASS sabotage visuel détecté sur l'ancien build."
+    ]
+  },
+  {
+    "check": "prefs-sabotage",
+    "localLog": "/tmp/atoll-next-prefs-sabotage.log",
+    "observedOutput": [
+      "FAIL preview-preferences: préférences de la recette interrompue conservées",
+      "PASS sabotage visuel détecté sur l'ancien build."
+    ]
+  },
+  {
+    "check": "docs-final",
+    "localLog": "/tmp/atoll-next-docs-final.log",
+    "observedOutput": [
+      "── check-docs — 12 familles de contrôles",
+      "",
+      "19 avertissement(s) — à regarder, sans échec :",
+      "  · [tests] sauté (--no-tests) : le compte annoncé n'a pas été vérifié",
+      "  · [mort] `discover` n'est utilisé QUE par ses tests — candidat au retrait",
+      "  · [mort] `needsMigration` n'est utilisé QUE par ses tests — candidat au retrait",
+      "  · [relectures] 29 fichier(s) jamais relus ligne à ligne (2698 lignes)",
+      "  · [relectures] App/RetrospectiveRunner.swift : 705 lignes changées depuis sa relecture du 2026-08-14 (fichier de 1025) — à relire",
+      "  · [relectures] App/NotesCurationService.swift : 407 lignes changées depuis sa relecture du 2026-08-14 (fichier de 781) — à relire",
+      "  · [relectures] App/CodexService.swift : 291 lignes changées depuis sa relecture du 2026-09-09 (fichier de 346) — à relire",
+      "  · [relectures] App/MemoryIndexer.swift : 370 lignes changées depuis sa relecture du 2026-08-14 (fichier de 720) — à relire",
+      "  · [relectures] App/CodexInteractionCenter.swift : 278 lignes changées depuis sa relecture du 2026-09-09 (fichier de 216) — à relire",
+      "  · [relectures] AtollCore/Sources/AtollCore/CodexTranscriptParser.swift : 268 lignes changées depuis sa relecture du 2026-09-09 (fichier de 246) — à relire",
+      "  · [relectures] App/CodexPreview.swift : 115 lignes changées depuis sa relecture du 2026-09-09 (fichier de 148) — à relire",
+      "  · [relectures] App/CodexSettingsPane.swift : 156 lignes changées depuis sa relecture du 2026-09-09 (fichier de 186) — à relire",
+      "  · [relectures] Bridge/CodexBridge.swift : 153 lignes changées depuis sa relecture du 2026-08-12 (fichier de 131) — à relire",
+      "  · [relectures] App/CompactView.swift : 270 lignes changées depuis sa relecture du 2026-09-09 (fichier de 115) — à relire",
+      "  · [relectures] App/CodexInteractionCardView.swift : 121 lignes changées depuis sa relecture du 2026-09-09 (fichier de 121) — à relire",
+      "  · [relectures] AtollCore/Sources/AtollCore/SessionPhase.swift : 102 lignes changées depuis sa relecture du 2026-08-14 (fichier de 149) — à relire",
+      "  · [relectures] App/CodexHandoffService.swift : 81 lignes changées depuis sa relecture du 2026-09-09 (fichier de 118) — à relire",
+      "  · [relectures] AtollCore/Sources/AtollCore/CodexRollout.swift : 24 lignes changées depuis sa relecture du 2026-09-09 (fichier de 24) — à relire",
+      "  · [relectures] AtollCore/Sources/AtollCore/CodexAccountClient.swift : 109 lignes changées depuis sa relecture du 2026-09-09 (fichier de 23) — à relire",
+      "",
+      "✓ aucune dérive : tout ce qui est vérifiable concorde avec le code."
+    ]
+  }
+]

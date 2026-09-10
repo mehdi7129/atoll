@@ -32,6 +32,8 @@ final class CodexInteractionCenter {
         let sessionID: String
         let projectName: String
         let tool: String
+        let permission: CodexPermissionRequest
+        let process: ProcessIdentity?
         let receivedAt: Date
         /// PID du helper bloqué. C'est la SEULE preuve fiable qu'il attend
         /// encore : l'EOF ne vaut rien ici, le helper faisant un half-close
@@ -47,9 +49,22 @@ final class CodexInteractionCenter {
         /// TOUR, pas la session : sans lui, annuler sur `Interrupt` emporterait
         /// les demandes d'un tour qui n'a pas été interrompu.
         let turnID: String?
+        var agentID: String? = nil
     }
 
     private(set) var pending: [Pending] = []
+    #if DEBUG
+    func seedPreviewRequests() {
+        guard CodexPreview.enabled, let permission = CodexPermissionRequest(payload: [
+            "tool_name": "apply_patch", "cwd": "/tmp/projet de test avec un nom long",
+            "tool_input": ["command": "*** Begin Patch\n*** Add File: exemple.txt\n+Une modification à relire intégralement.\n*** End Patch"]
+        ]) else { return }
+        pending = [Pending(id: "preview-codex", sessionID: "preview", projectName: "projet de test avec un nom long",
+                           tool: permission.toolName, permission: permission, process: nil,
+                           receivedAt: Date(), helperPid: getpid(),
+                           helperStartTime: ProcessInspector.startTime(of: getpid()), turnID: "preview-turn")]
+    }
+    #endif
 
     /// Le serveur du socket Codex, pour répondre sur le bon descripteur.
     @ObservationIgnored weak var server: BridgeServer?
@@ -58,22 +73,38 @@ final class CodexInteractionCenter {
     var current: Pending? { pending.first }
 
     func register(event: CodexHookEvent, requestID: String, helperPid: pid_t) {
+        guard !pending.contains(where: { $0.id == requestID }) else { return }
+        guard let permission = event.permission else {
+            handBack(requestID)
+            SoundCenter.shared.play(.decisionNeeded)
+            return
+        }
+        guard helperPid <= 0 || ProcessInspector.isAlive(helperPid) else {
+            handBack(requestID)
+            return
+        }
         let card = Pending(
             id: requestID,
             sessionID: event.sessionID,
             projectName: event.cwd.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "Codex",
             tool: event.tool ?? "Codex",
+            permission: permission,
+            process: event.process,
             receivedAt: Date(),
             helperPid: helperPid,
             helperStartTime: helperPid > 0 ? ProcessInspector.startTime(of: helperPid) : nil,
-            turnID: event.turnID)
+            turnID: event.turnID, agentID: event.agentID)
         pending.append(card)
+        SoundCenter.shared.play(.decisionNeeded)
         log.info("carte Codex \(requestID, privacy: .public) — \(card.tool, privacy: .public)")
     }
 
     /// Décision de l'utilisateur. Le helper la revalide de son côté : cette
     /// double barrière est voulue, c'est lui qui parle à Codex.
     func decide(_ requestID: String, _ decision: CodexPermissionDecision) {
+        // Le minuteur ne suffit pas : un helper peut mourir entre son passage
+        // et le clic. La décision reste liée à la requête et à son incarnation.
+        dropCardsOfDeadHelpers()
         guard let index = pending.firstIndex(where: { $0.id == requestID }) else { return }
         pending.remove(at: index)
         guard let payload = decision.hookOutput() else {
@@ -99,11 +130,16 @@ final class CodexInteractionCenter {
 
     /// Une session qui se termine emporte ses demandes : le helper est mort
     /// avec elle, répondre sur ces descripteurs n'atteindrait personne.
-    func cancelAll(forSession sessionID: String) {
-        for card in pending where card.sessionID == sessionID {
-            server?.cancelPending(card.id)
+    func cancelAll(forSession sessionID: String, process: ProcessIdentity?) {
+        for card in pending where card.sessionID == sessionID && card.process == process {
+            handBack(card.id)
         }
-        pending.removeAll { $0.sessionID == sessionID }
+    }
+
+    func cancelAll(forAgent agentID: String, inSession sessionID: String, turn: String?, process: ProcessIdentity?) {
+        for card in pending where card.sessionID == sessionID && card.agentID == agentID && card.turnID == turn && card.process == process {
+            handBack(card.id)
+        }
     }
 
     /// Retire les cartes dont plus personne n'attend la réponse.
@@ -144,8 +180,8 @@ final class CodexInteractionCenter {
     /// l'interruption : une carte pouvait survivre à un ⎋ jusqu'au passage du
     /// reaper ou à l'expiration de 600 s. Constat de Codex, revue du
     /// 2026-09-09.
-    func cancelAll(forSession sessionID: String, turn: String) {
-        for card in pending where card.sessionID == sessionID && card.turnID == turn {
+    func cancelAll(forSession sessionID: String, turn: String, process: ProcessIdentity?) {
+        for card in pending where card.sessionID == sessionID && card.turnID == turn && card.process == process {
             handBack(card.id)
         }
     }
@@ -154,8 +190,8 @@ final class CodexInteractionCenter {
     /// nomme aucun non plus. C'est tout ce qu'on peut retirer sans deviner :
     /// une carte qui nomme son tour n'est pas prouvée close par un `Stop`
     /// anonyme.
-    func cancelUnattributedCards(forSession sessionID: String) {
-        for card in pending where card.sessionID == sessionID && card.turnID == nil {
+    func cancelUnattributedCards(forSession sessionID: String, process: ProcessIdentity?) {
+        for card in pending where card.sessionID == sessionID && card.turnID == nil && card.process == process {
             handBack(card.id)
         }
     }

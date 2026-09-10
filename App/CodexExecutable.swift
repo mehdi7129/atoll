@@ -1,4 +1,5 @@
 import Foundation
+import AtollCore
 
 /// Résolution du chemin ABSOLU de `codex` — jumelle de `ClaudeExecutable`, et
 /// pour la même raison, qui a coûté la v0.16.6 : une app GUI qui lance une CLI
@@ -25,6 +26,11 @@ enum CodexExecutable {
     private static var cached: String?
     private static var triedLoginResolve = false
 
+    static func invalidateCache() {
+        cached = nil
+        triedLoginResolve = false
+    }
+
     nonisolated private static let loginResolveTimeout: TimeInterval = 5
 
     static let notFoundMessage =
@@ -33,15 +39,16 @@ enum CodexExecutable {
         + "son chemin dans Réglages → Codex"
 
     /// Chemin absolu exécutable, ou `nil`.
-    static func resolve() async -> String? {
+    static func resolve(overridePath: String? = nil) async -> String? {
         // Le réglage manuel court-circuite le cache : le changer doit AGIR, pas
         // attendre un redémarrage de l'app.
-        let custom = UserDefaults.standard.string(forKey: overrideKey) ?? ""
+        let custom = overridePath ?? UserDefaults.standard.string(forKey: overrideKey) ?? ""
         if !custom.isEmpty {
             let path = (custom as NSString).expandingTildeInPath
             return FileManager.default.isExecutableFile(atPath: path) ? path : nil
         }
-        if let cached { return cached }
+        if let cached, FileManager.default.isExecutableFile(atPath: cached) { return cached }
+        cached = nil
 
         // Emplacements usuels : vérification CHEAP (aucun shell), retentée à
         // chaque appel — codex peut être installé après le lancement d'Atoll.
@@ -66,9 +73,10 @@ enum CodexExecutable {
             process.standardOutput = pipe
             process.standardError = FileHandle.nullDevice
             process.standardInput = FileHandle.nullDevice
-            guard (try? process.run()) != nil else { return nil }
-            armWatchdog(process)
-            let data = (try? pipe.fileHandleForReading.readToEnd()) ?? Data()
+            let identity: ProcessIdentity?
+            do { identity = try ProcessInspector.launchOwned(process) } catch { return nil }
+            armWatchdog(process, identity: identity)
+            let data = BoundedProcessOutput.drain(pipe.fileHandleForReading, cap: 16_384)
             process.waitUntilExit()
             let path = String(decoding: data, as: UTF8.self)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -88,7 +96,7 @@ enum CodexExecutable {
             ? [("~/.local/bin/codex" as NSString).expandingTildeInPath,
                "/opt/homebrew/bin/codex", "/usr/local/bin/codex"]
             : [(custom as NSString).expandingTildeInPath]
-        let all = candidates + (cached.map { [$0] } ?? [])
+        let all = candidates + (custom.isEmpty ? (cached.map { [$0] } ?? []) : [])
         return all.first { path in
             var directory: ObjCBool = false
             return path.hasPrefix("/")
@@ -98,13 +106,13 @@ enum CodexExecutable {
         }.map { URL(fileURLWithPath: $0) }
     }
 
-    nonisolated private static func armWatchdog(_ process: Process) {
-        let pid = process.processIdentifier
+    nonisolated private static func armWatchdog(_ process: Process, identity: ProcessIdentity?) {
+        guard let identity else { return }
         DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + loginResolveTimeout) {
             guard process.isRunning else { return }
-            process.terminate()
+            ProcessInspector.signal(SIGTERM, to: identity)
             DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 1) {
-                if process.isRunning { kill(pid, SIGKILL) }
+                ProcessInspector.signal(SIGKILL, to: identity)
             }
         }
     }

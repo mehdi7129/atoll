@@ -21,7 +21,7 @@ final class NotchViewModel {
     var isPinned = false
     /// Session ouverte en vue détaillée (clic sur une ligne). nil = liste.
     var selectedSessionID: String?
-    /// Populated only by the isolated visual preview, never persisted.
+    /// Alimenté seulement par la recette isolée, jamais persisté.
     var previewSessions: [AgentSession]?
     var previewUsage: UsageSnapshot?
 
@@ -42,6 +42,9 @@ final class NotchViewModel {
     private let store: SessionStore
 
     @ObservationIgnored private var hoverTask: Task<Void, Never>?
+    private var islandHovered = false
+    private var selectorHovered = false
+    private var hoverOpenDelay: TimeInterval = 0.15
 
     /// Identifiant de l'écran de ce contrôleur : clé de la taille réglable.
     let displayID: String
@@ -53,10 +56,17 @@ final class NotchViewModel {
 
     /// Largeur compacte choisie pour CET écran (observe IslandSettings → l'îlot
     /// se redimensionne en direct quand on change le réglage).
-    var compactWidth: IslandWidth { IslandSettings.shared.width(for: displayID) }
+    var compactWidth: IslandWidth {
+        if CodexPreview.enabled {
+            return IslandWidth.allCases.first { CommandLine.arguments.contains("--preview-width-\($0.rawValue)") } ?? .small
+        }
+        return IslandSettings.shared.width(for: displayID)
+    }
 
     init(screen: NSScreen, isPrimary: Bool, store: SessionStore? = nil) {
-        notchSize = screen.notchSize
+        notchSize = CodexPreview.enabled
+            ? (CommandLine.arguments.contains("--preview-notch") ? CGSize(width: 180, height: 32) : nil)
+            : screen.notchSize
         menuBarHeight = screen.menuBarHeight
         displayID = screen.displayUUIDString
         hairline = 1 / max(screen.backingScaleFactor, 1)
@@ -87,13 +97,20 @@ final class NotchViewModel {
         }
     }
 
-    var sessions: [AgentSession] {
+    var allSessions: [AgentSession] {
         if let previewSessions { return previewSessions }
         return (store.uiSessions + CodexService.shared.sessions).sorted {
             if $0.needsAttention != $1.needsAttention { return $0.needsAttention }
             if $0.isActive != $1.isActive { return $0.isActive }
             return $0.startedAt > $1.startedAt
         }
+    }
+    var selectedProvider: AgentProvider { ProviderPreferences.shared.selection }
+    var sessions: [AgentSession] { allSessions.filter { $0.provider == selectedProvider } }
+
+    func selectProvider(_ provider: AgentProvider) {
+        ProviderPreferences.shared.selection = provider
+        selectedSessionID = nil
     }
     var usage: UsageSnapshot { previewUsage ?? store.displayQuota }
     var quotaResets: (five: Date?, seven: Date?) { store.quotaResets }
@@ -115,7 +132,7 @@ final class NotchViewModel {
     }
 
     /// Y a-t-il quelque chose à MONTRER dans les ailes ? Sessions uniquement.
-    var hasActivity: Bool { !sessions.isEmpty }
+    var hasActivity: Bool { !allSessions.isEmpty || !InteractionPresentation.shared.items.isEmpty }
     var workingCount: Int { sessions.filter(\.isActive).count }
     var attentionCount: Int { sessions.filter(\.needsAttention).count }
 
@@ -161,12 +178,14 @@ final class NotchViewModel {
     /// Survol : ouverture après un délai minimal, fermeture après une courte grâce
     /// (pattern boring.notch — évite les ouvertures accidentelles et les flickers).
     func hoverChanged(_ hovering: Bool, openDelay: TimeInterval) {
+        islandHovered = hovering
+        hoverOpenDelay = openDelay
         hoverTask?.cancel()
         if hovering {
-            guard state == .compact else { return }
+            guard state == .compact, !selectorHovered else { return }
             hoverTask = Task { [weak self] in
                 try? await Task.sleep(for: .milliseconds(Int(openDelay * 1000)))
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled, self?.selectorHovered == false else { return }
                 self?.open()
             }
         } else {
@@ -176,6 +195,14 @@ final class NotchViewModel {
                 self.close()
             }
         }
+    }
+
+    /// Le sélecteur compact doit rester sous le pointeur assez longtemps pour
+    /// recevoir un clic ; ailleurs, le survol conserve son ouverture normale.
+    func selectorHoverChanged(_ hovering: Bool) {
+        selectorHovered = hovering
+        if hovering { hoverTask?.cancel() }
+        else if islandHovered { hoverChanged(true, openDelay: hoverOpenDelay) }
     }
 
     /// Clic sur l'îlot : épingle l'état étendu (ne se referme plus au départ de la souris).

@@ -254,8 +254,9 @@ public enum IslandRowBudget {
     /// silence pour faire place à la secondaire.
     public static let codexQuotaCost = 1
 
-    public static func rows(bannerShown: Bool, codexQuotaShown: Bool = false) -> Int {
+    public static func rows(bannerShown: Bool, codexQuotaShown: Bool = false,
+                            providerSelectorShown: Bool = false) -> Int {
         let base = bannerShown ? withBanner : plain
-        return base - (codexQuotaShown ? codexQuotaCost : 0)
+        return base - (codexQuotaShown ? codexQuotaCost : 0) - (providerSelectorShown ? 1 : 0)
     }
 }

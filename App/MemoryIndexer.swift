@@ -649,6 +649,12 @@ private actor MemoryIndexWorker {
         if let index, let removed = try? index.runHygieneIfNeeded(), removed > 0 {
             log.info("hygiène de l'index : \(removed, privacy: .public) notification(s) de tâche retirée(s)")
         }
+        if let index {
+            do {
+                let changed = try index.runCodexHygieneIfNeeded()
+                if changed > 0 { log.info("hygiène Codex : \(changed) enveloppe(s) reclassée(s), sauvegarde conservée") }
+            } catch { log.error("hygiène Codex reportée : \(error.localizedDescription)") }
+        }
         return index
     }
 
@@ -662,6 +668,11 @@ private actor MemoryIndexWorker {
                        ".illisible", ".illisible-wal", ".illisible-shm",
                        ".illisible-recent", ".illisible-recent-wal", ".illisible-recent-shm"] {
             try? FileManager.default.removeItem(atPath: base + suffix)
+        }
+        let directory = BridgePaths.memoryDatabaseURL.deletingLastPathComponent()
+        let backups = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
+        for file in backups where MemoryIndex.isCodexHygieneBackupFileName(file.lastPathComponent) {
+            try? FileManager.default.removeItem(at: file)
         }
     }
 

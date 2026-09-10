@@ -26,6 +26,14 @@ final class InteractionCenter {
         case questions([ParsedHookEvent.AskQuestion], toolInputData: Data)
     }
 
+    /// Le brouillon appartient à la demande, pas à sa vue temporairement visible.
+    @Observable final class Draft {
+        var planFeedback = ""
+        var planAcceptEdits = false
+        var selectedOptions: [String: Set<String>] = [:]
+        var freeTexts: [String: String] = [:]
+    }
+
     struct Pending: Identifiable, Equatable {
         let id: String
         let sessionID: String
@@ -34,11 +42,20 @@ final class InteractionCenter {
         let toolName: String?
         let toolSummary: String?
         let receivedAt: Date
+        let draft = Draft()
 
         static func == (lhs: Pending, rhs: Pending) -> Bool { lhs.id == rhs.id }
     }
 
     private(set) var pending: [Pending] = []
+    #if DEBUG
+    func seedPreviewRequests() {
+        guard CodexPreview.enabled else { return }
+        pending = [Pending(id: "preview-plan", sessionID: "preview-claude", projectName: "atoll",
+                           kind: .plan("# Plan de test\n\n1. Vérifier les couleurs.\n2. Conserver le brouillon en changeant de demande.\n3. Tester le clavier."),
+                           toolName: "ExitPlanMode", toolSummary: "Plan de test", receivedAt: Date().addingTimeInterval(-5))]
+    }
+    #endif
     /// Compteur des permissions approuvées automatiquement (mode auto-accept).
     private(set) var autoAcceptedCount = 0
     private(set) var lastAutoAccepted: String?

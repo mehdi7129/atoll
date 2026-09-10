@@ -27,6 +27,7 @@ public struct SkillProposal: Identifiable, Equatable, Sendable {
     }
 
     public let slug: String
+    public let destination: AgentProvider
     public let title: String
     public let description: String
     public let rationale: String?
@@ -49,7 +50,16 @@ public struct SkillProposal: Identifiable, Equatable, Sendable {
     public let skillMD: String
 
     /// Identité stable pour l'UI de revue : le nom du dossier sur disque.
-    public var id: String { directoryURL.lastPathComponent }
+    public var id: String { "\(destination.rawValue):\(directoryURL.lastPathComponent)" }
+
+    /// Après une décision, poursuivre au même rang, puis au précédent si le
+    /// dernier élément a disparu. Une sélection encore présente reste stable.
+    public static func nextSelection(_ selected: ID?, previous: [ID], current: [ID]) -> ID? {
+        guard !current.isEmpty else { return nil }
+        if let selected, current.contains(selected) { return selected }
+        let index = selected.flatMap { previous.firstIndex(of: $0) } ?? 0
+        return current[min(index, current.count - 1)]
+    }
 
     public init(
         slug: String,
@@ -63,7 +73,8 @@ public struct SkillProposal: Identifiable, Equatable, Sendable {
         createdAt: Date,
         status: Status,
         directoryURL: URL,
-        skillMD: String
+        skillMD: String,
+        destination: AgentProvider = .claude
     ) {
         self.slug = slug
         self.title = title
@@ -77,6 +88,7 @@ public struct SkillProposal: Identifiable, Equatable, Sendable {
         self.status = status
         self.directoryURL = directoryURL
         self.skillMD = skillMD
+        self.destination = destination
     }
 
     /// Seules transitions légales : proposed → approved | rejected ;
@@ -115,7 +127,8 @@ public struct SkillProposal: Identifiable, Equatable, Sendable {
             createdAt: createdAt,
             status: status,
             directoryURL: directoryURL,
-            skillMD: skillMD
+            skillMD: skillMD,
+            destination: meta.destination ?? .claude
         )
     }
 
@@ -123,6 +136,7 @@ public struct SkillProposal: Identifiable, Equatable, Sendable {
     /// La date reste String ici : parsée à part pour tolérer les deux
     /// variantes ISO-8601 (avec/sans fractions de seconde).
     private struct Meta: Codable {
+        let destination: AgentProvider?
         let slug: String
         let title: String
         let description: String
@@ -135,7 +149,7 @@ public struct SkillProposal: Identifiable, Equatable, Sendable {
         let status: String
 
         enum CodingKeys: String, CodingKey {
-            case slug, title, description, rationale, project, status, flags
+            case slug, title, description, rationale, project, status, flags, destination
             case similarExisting = "similar_existing"
             case sourceSession = "source_session"
             case createdAt = "created_at"

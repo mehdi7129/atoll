@@ -516,19 +516,24 @@ enum BridgeCLI {
         // Skills APPRIS (7c) : retrait piloté par le manifeste UNIQUEMENT
         // (préfixe atoll- + entrée listée), fail-closed si illisible. Les
         // DONNÉES d'apprentissage (~/.atoll/learning) sont conservées.
-        if let report = try? LearnedSkillStore().uninstallAll(), !report.removed.isEmpty {
-            print("skills appris retirés : \(report.removed.joined(separator: ", "))")
+        var skillRestoreFailed = false
+        do {
+            let report = try LearnedSkillStore().uninstallAll()
+            if !report.removed.isEmpty { print("skills appris retirés : \(report.removed.joined(separator: ", "))") }
+        } catch {
+            skillRestoreFailed = true
+            FileHandle.standardError.write(Data("skills appris conservés : retrait impossible — \(error.localizedDescription)\n".utf8))
         }
         do {
             guard let current = try readSettings() else {
                 print("aucun settings.json — rien à désinstaller")
-                return (denyRestoreFailed || soundRestoreFailed) ? 1 : 0
+                return (denyRestoreFailed || soundRestoreFailed || skillRestoreFailed) ? 1 : 0
             }
             guard HookSettingsEditor.isInstalled(in: current) ||
                   StatusLineEditor.isInstalled(in: current) ||
                   String(decoding: current, as: UTF8.self).contains("/.atoll/bin/") else {
                 print("hooks non installés — rien à faire")
-                return (denyRestoreFailed || soundRestoreFailed) ? 1 : 0
+                return (denyRestoreFailed || soundRestoreFailed || skillRestoreFailed) ? 1 : 0
             }
             // Restaurer la statusline d'origine AVANT de retirer les hooks : la
             // désinstallation doit rendre le settings.json tel qu'il était.
@@ -539,7 +544,7 @@ enum BridgeCLI {
             // Les wrappers restent en place : les sessions Claude déjà ouvertes les
             // référencent encore, et ils sont fail-open (exit 0 sans binaire).
             print("hooks + statusline désinstallés")
-            return (denyRestoreFailed || soundRestoreFailed) ? 1 : 0
+            return (denyRestoreFailed || soundRestoreFailed || skillRestoreFailed) ? 1 : 0
         } catch {
             FileHandle.standardError.write(Data("échec de la désinstallation : \(error)\n".utf8))
             return 1
@@ -781,19 +786,32 @@ enum BridgeCLI {
 
     static func status() -> Int32 {
         let settings = try? Data(contentsOf: BridgePaths.claudeSettingsURL)
-        let state: [String: Any] = [
+        var state: [String: Any] = [
             "hooksInstalled": HookSettingsEditor.isInstalled(in: settings),
             "wrapperPresent": FileManager.default.isExecutableFile(atPath: BridgePaths.wrapperURL.path),
             "socketPresent": FileManager.default.fileExists(atPath: BridgePaths.socketPath),
             "denyParked": FileManager.default.fileExists(atPath: BridgePaths.rockstarParkedDenyURL.path),
             "skillInstalled": FileManager.default.fileExists(atPath: BridgePaths.recallSkillURL.path),
             "memoryIndexPresent": FileManager.default.fileExists(atPath: BridgePaths.memoryDatabaseURL.path),
+            "memoryIndexPath": BridgePaths.memoryDatabaseURL.path,
             // Réglage demandé vs mode réellement installé : un écart signale
             // des hooks à réécrire (`atoll-bridge install` le fait).
             "proactiveRecallEnabled": ProactiveRecallHook.loadConfig()?.enabled ?? false,
             "proactiveRecallHookBlocking": HookSettingsEditor.installedProactiveRecall(in: settings),
             "learnedSkills": LearnedSkillStore().installedSkills().count,
         ]
+        state["provider"] = "claude" // anciens champs conservés pour les consommateurs existants
+        state["codex"] = [
+            "home": CodexPaths.homeURL.path,
+            "configurationError": CodexPaths.configurationError as Any? ?? NSNull(),
+            "hooksInstalled": CodexHookSettingsEditor.isInstalled(try? Data(contentsOf: CodexPaths.hooksURL)),
+            "nativeTrust": "non vérifié — /hooks ou diagnostic natif dans Atoll",
+            "socketPresent": FileManager.default.fileExists(atPath: CodexPaths.socketPath),
+            "recallFilePresent": FileManager.default.fileExists(atPath: CodexRecallSkill.directory(home: CodexPaths.homeURL).appendingPathComponent("SKILL.md").path),
+            "proactiveRecallEnabled": false,
+            "learnedSkills": LearnedSkillStore(destination: .codex).installedSkills().count,
+            "skillManifestProblem": LearnedSkillStore(destination: .codex).manifestProblem() as Any? ?? NSNull(),
+        ] as [String: Any]
         if let data = try? JSONSerialization.data(withJSONObject: state, options: [.sortedKeys]) {
             print(String(decoding: data, as: UTF8.self))
         }

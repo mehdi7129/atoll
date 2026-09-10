@@ -31,6 +31,8 @@ public enum CodexHookInstallation {
         // Best-effort concurrent-edit detection (not an atomic compare-and-swap).
         let latest = fm.fileExists(atPath: target.path) ? try Data(contentsOf: target) : nil
         guard latest == current else { throw CocoaError(.fileWriteFileExists) }
+        // Préserver aussi la mise en forme personnelle si les objets sont égaux.
+        if let current, CodexHookSettingsEditor.sameJSON(current, edited) { return }
         try edited.write(to: target, options: .atomic)
         // Hook commands may contain personal paths or credentials. The backup
         // and settings are user-only; no widening of the existing access.
@@ -113,6 +115,8 @@ public enum CodexHookInstallation {
         let fm = FileManager.default
         try fm.createDirectory(at: binDirectory, withIntermediateDirectories: true)
         let url = wrapperURL(binDirectory: binDirectory)
+        if (try? String(contentsOf: url, encoding: .utf8)) == wrapperScript(helperURL: helperURL),
+           fm.isExecutableFile(atPath: url.path) { return }
         let temporary = binDirectory.appendingPathComponent(".codex-\(UUID().uuidString).tmp")
         defer { try? fm.removeItem(at: temporary) }
         try wrapperScript(helperURL: helperURL).write(to: temporary, atomically: true, encoding: .utf8)
@@ -160,7 +164,7 @@ public enum CodexHookInstallation {
         let fm = FileManager.default
         let target = settingsURL.resolvingSymlinksInPath()
         let settings = fm.fileExists(atPath: target.path) ? try? Data(contentsOf: target) : nil
-        guard CodexHookSettingsEditor.isInstalled(settings) else { return .notInstalled }
+        guard CodexHookSettingsEditor.hasManagedHooks(settings) else { return .notInstalled }
 
         let url = wrapperURL(binDirectory: binDirectory)
         let wanted = wrapperScript(helperURL: helperURL)
@@ -173,5 +177,37 @@ public enum CodexHookInstallation {
         }
         try writeWrapper(binDirectory: binDirectory, helperURL: helperURL)
         return .rewritten(previous: previous)
+    }
+
+    /// Migre les anciennes définitions encore présentes. Un retrait ou une
+    /// personnalisation reste choisi par l'utilisateur ; seul « Réparer »
+    /// explicitement demandé réinstalle la liste complète.
+    @discardableResult
+    public static func migrateIfInstalled(settingsURL: URL, binDirectory: URL,
+                                          helperURL: URL) throws -> Bool {
+        let target = settingsURL.resolvingSymlinksInPath()
+        guard FileManager.default.fileExists(atPath: target.path) else { return false }
+        let data = try Data(contentsOf: target)
+        // Valider avant toute écriture ; un JSON invalide n'est pas « absent ».
+        _ = try CodexHookSettingsEditor.edit(data, install: false)
+        guard CodexHookSettingsEditor.hasManagedHooks(data) else { return false }
+        let edited = try CodexHookSettingsEditor.migrate(data)
+        let changed = !CodexHookSettingsEditor.sameJSON(data, edited)
+        if changed {
+            // Chaque vraie migration conserve SA copie, y compris après une
+            // personnalisation. La sauvegarde de première installation reste.
+            let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
+            let backup = target.appendingPathExtension("atoll-migration-\(stamp)-\(UUID().uuidString).json")
+            let fd = open(backup.path, O_WRONLY | O_CREAT | O_EXCL, 0o600)
+            guard fd >= 0 else { throw CocoaError(.fileWriteUnknown) }
+            let file = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
+            do { try file.write(contentsOf: data); try file.close() }
+            catch { try? file.close(); try? FileManager.default.removeItem(at: backup); throw error }
+            guard try Data(contentsOf: target) == data else { throw CocoaError(.fileWriteFileExists) }
+            try edited.write(to: target, options: .atomic)
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: target.path)
+        }
+        _ = try refreshWrapper(settingsURL: target, binDirectory: binDirectory, helperURL: helperURL)
+        return changed
     }
 }

@@ -1,0 +1,82 @@
+[
+  {
+    "case": "list-codex",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "list-claude",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "card-claude",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "card-codex",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "detail",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "detail-cli-absent",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "onboarding-unset",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "onboarding-claude",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "onboarding-codex",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "onboarding-navigation",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-codex",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "idle-notch",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "rockstar",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "rockstar-notch",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "compact",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "light",
+    "passed": true,
+    "failures": []
+  }
+]

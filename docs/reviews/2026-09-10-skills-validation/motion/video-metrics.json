@@ -1,0 +1,66 @@
+[
+  {
+    "case": "motion-notch-reduced",
+    "programs": [],
+    "stream_groups": [],
+    "streams": [
+      {
+        "width": 892,
+        "height": 724,
+        "avg_frame_rate": "204000/3613",
+        "nb_read_frames": "340"
+      }
+    ],
+    "format": {
+      "duration": "6.015000"
+    }
+  },
+  {
+    "case": "motion-notch",
+    "programs": [],
+    "stream_groups": [],
+    "streams": [
+      {
+        "width": 892,
+        "height": 724,
+        "avg_frame_rate": "66400/1201",
+        "nb_read_frames": "331"
+      }
+    ],
+    "format": {
+      "duration": "5.988333"
+    }
+  },
+  {
+    "case": "motion-pill-reduced",
+    "programs": [],
+    "stream_groups": [],
+    "streams": [
+      {
+        "width": 892,
+        "height": 724,
+        "avg_frame_rate": "65400/1201",
+        "nb_read_frames": "327"
+      }
+    ],
+    "format": {
+      "duration": "5.998333"
+    }
+  },
+  {
+    "case": "motion-pill",
+    "programs": [],
+    "stream_groups": [],
+    "streams": [
+      {
+        "width": 892,
+        "height": 724,
+        "avg_frame_rate": "205200/3613",
+        "nb_read_frames": "342"
+      }
+    ],
+    "format": {
+      "duration": "6.011667"
+    }
+  }
+]

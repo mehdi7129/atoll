@@ -20,18 +20,17 @@ import Foundation
 /// 2. `.summary` — les résumés de compaction sont déjà distillés par le modèle,
 ///    rapport valeur/caractère imbattable.
 /// 3. `.assistant` — les conclusions (« voilà ce que j'ai fait, voilà pourquoi »).
-/// 4. `.toolResult` PORTANT UNE ERREUR — c'est là que vivent les pièges, donc la moitié
-///    de ce qu'une rétrospective doit apprendre.
-/// 5. `.tool` SUIVI D'UN SUCCÈS — la commande exacte qui a MARCHÉ, matière d'une
-///    procédure rejouable.
+/// 4. `.toolResult` portant une erreur, ou une issue explicitement inconnue.
+/// 5. `.tool` suivi d'un succès ; les invocations Codex sans verdict sont
+///    conservées avec `outcome=unknown`, sans servir de preuve de réussite.
 ///
 /// ## Ce qu'on jette
 /// - `.thinking` : verbeux (cap 4 000 par fragment côté parseur) et redondant avec les
 ///   conclusions ; à budget égal, dix conclusions valent mieux qu'un raisonnement.
 /// - `.title`, `.note` : métadonnées d'Atoll, aucune valeur d'analyse (et une `.note`
 ///   est un texte QU'ATOLL A ÉCRIT — le réinjecter ferait tourner le modèle en rond).
-/// - Tout `.toolResult` sans marqueur d'erreur : le succès se lit sur l'invocation, pas
-///   sur ses 400 Ko de sortie.
+/// - Les sorties réussies : le succès se lit sur l'invocation. Une issue
+///   explicitement inconnue n'est jamais jugée par les mots de sa sortie.
 public enum TranscriptDigest {
 
     // MARK: - Types
@@ -46,17 +45,20 @@ public enum TranscriptDigest {
         /// `is_error` du transcript pour un `.toolResult` (nil = absent) —
         /// propagé depuis le fragment, c'est l'autorité sur l'échec.
         public let isError: Bool?
+        public let toolOutcome: TranscriptLine.ToolOutcome?
         /// Identifiant d'invocation (`toolUseID` du fragment) : relie une
         /// commande à SON résultat, même quand plusieurs outils partent en
         /// parallèle. nil = absent du transcript, on retombe sur la position.
         public let toolUseID: String?
 
         public init(role: TranscriptLine.Role, text: String, timestamp: Date?,
-                    isError: Bool? = nil, toolUseID: String? = nil) {
+                    isError: Bool? = nil, toolUseID: String? = nil,
+                    toolOutcome: TranscriptLine.ToolOutcome? = nil) {
             self.role = role
             self.text = text
             self.timestamp = timestamp
             self.isError = isError
+            self.toolOutcome = toolOutcome
             self.toolUseID = toolUseID
         }
     }
@@ -237,7 +239,7 @@ public enum TranscriptDigest {
             for fragment in line.fragments where !fragment.text.isEmpty {
                 flat.append(Entry(role: fragment.role, text: fragment.text,
                                   timestamp: line.timestamp, isError: fragment.isError,
-                                  toolUseID: fragment.toolUseID))
+                                  toolUseID: fragment.toolUseID, toolOutcome: fragment.toolOutcome))
             }
         }
         // Index des résultats par identifiant d'invocation.
@@ -255,20 +257,20 @@ public enum TranscriptDigest {
             case .user, .summary, .assistant:
                 isKept = true
             case .toolResult:
-                isKept = isFailure(entry)
+                isKept = entry.toolOutcome == .unknown || isFailure(entry)
             case .tool:
-                isKept = succeeded(toolAt: index, in: flat, resultsByID: resultsByID)
+                isKept = entry.toolOutcome == .unknown || succeeded(toolAt: index, in: flat, resultsByID: resultsByID)
             // `.memory` ne peut pas apparaître ici — une mémoire de projet n'est
             // pas une ligne de transcript — mais le switch doit rester
             // exhaustif, et le rangement prudent est celui des rôles jamais
             // sélectionnés.
-            case .thinking, .title, .note, .memory:
+            case .thinking, .title, .note, .memory, .instruction:
                 isKept = false
             }
             guard isKept else { continue }
             kept.append(Entry(role: entry.role, text: capped(entry.text),
                               timestamp: entry.timestamp, isError: entry.isError,
-                              toolUseID: entry.toolUseID))
+                              toolUseID: entry.toolUseID, toolOutcome: entry.toolOutcome))
         }
         return kept
     }
@@ -287,12 +289,14 @@ public enum TranscriptDigest {
     /// arrive déjà tronqué à 1 500 caractères : un build qui échoue après une
     /// longue sortie passait pour un succès.
     static func isFailure(_ fragment: TranscriptLine.Fragment) -> Bool {
+        if let outcome = fragment.toolOutcome { return outcome == .failure }
         if let isError = fragment.isError { return isError }
         return hasErrorMarker(fragment.text)
     }
 
     /// Même règle pour une entrée déjà sélectionnée.
     static func isFailure(_ entry: Entry) -> Bool {
+        if let outcome = entry.toolOutcome { return outcome == .failure }
         if let isError = entry.isError { return isError }
         return hasErrorMarker(entry.text)
     }
@@ -319,12 +323,12 @@ public enum TranscriptDigest {
         // quand quatre outils partaient ensemble (audit du 2026-07-27).
         if let id = flat[index].toolUseID {
             guard let result = resultsByID[id] else { return false }
-            return !isFailure(result)
+            return result.toolOutcome.map { $0 == .success } ?? !isFailure(result)
         }
         let upperBound = min(index + toolLookahead, flat.count - 1)
         guard upperBound > index else { return false }
         for next in (index + 1)...upperBound where flat[next].role == .toolResult {
-            return !isFailure(flat[next])
+            return flat[next].toolOutcome.map { $0 == .success } ?? !isFailure(flat[next])
         }
         return false
     }
@@ -356,7 +360,7 @@ public enum TranscriptDigest {
         case .toolResult: return 3
         case .summary: return 4
         case .user: return 5
-        case .thinking, .title, .note, .memory: return 0
+        case .thinking, .title, .note, .memory, .instruction: return 0
         }
     }
 
@@ -419,12 +423,14 @@ public enum TranscriptDigest {
     /// la graphie de `TranscriptLine.Role`, sans interprétation) et l'heure LOCALE si
     /// elle est connue, omise sinon (`[user] …`). Deux invariants utiles au prompt qui
     /// consommera ce texte, à énoncer côté prompt car ils ne se lisent pas dans le rendu :
-    /// tout `tool` présent a RÉUSSI, tout `tool_result` présent porte une ERREUR.
+    /// Les verdicts inconnus restent explicitement étiquetés ; leur texte ne
+    /// permet jamais d'affirmer qu'une procédure a réussi ou échoué.
     static func render(_ entry: Entry, formatter: DateFormatter) -> String {
+        let role = entry.role.rawValue + (entry.toolOutcome.map { " outcome=\($0.rawValue)" } ?? "")
         guard let timestamp = entry.timestamp else {
-            return "[\(entry.role.rawValue)] \(entry.text)"
+            return "[\(role)] \(entry.text)"
         }
-        return "[\(entry.role.rawValue) \(formatter.string(from: timestamp))] \(entry.text)"
+        return "[\(role) \(formatter.string(from: timestamp))] \(entry.text)"
     }
 
     /// Heure locale « HH:mm » : celle où la session s'est déroulée, la seule qui parle à

@@ -5,6 +5,29 @@ import XCTest
 /// pas par un initialiseur de test : une bascule qui marcherait sur un modèle
 /// fabriqué mais pas sur le JSON réel de l'app-server ne prouverait rien.
 final class ProviderFailoverTests: XCTestCase {
+    func testDefaultFailoverRejectsClaudeMeasurementsOlderThanTheAnalysisGate() {
+        let decision = ProviderFailover.choose(claude: claudeFacts(used: 1, age: 601),
+            codex: codexQuota(primary: 0), config: .init(enabled: true), now: now)
+        XCTAssertEqual(decision.reason, .claudeUnknown)
+        XCTAssertEqual(decision.provider, .claude)
+    }
+    func testExplicitCodexDoesNotNeedClaudeOrFallBackWhenQuotaIsUnknown() {
+        let missing = LearningGate.QuotaFacts(usedFraction: nil, receivedAt: nil, resetsAt: nil)
+        let choice = ProviderFailover.choose(claude: missing, codex: nil,
+            config: .init(enabled: false, preferred: .codex))
+        XCTAssertEqual(choice.provider, .codex)
+        XCTAssertEqual(choice.reason, .codexSelected)
+        XCTAssertEqual(ProviderFailover.choose(claude: missing, codex: nil,
+            config: .init(enabled: true, preferred: .codex)).provider, .codex)
+    }
+
+    func testIndependentQuotaBucketsAreUnknownForAnUnmappedModel() {
+        let bucket: [String: Any] = ["primary": ["usedPercent": 5, "windowDurationMins": 300]]
+        let quota = CodexQuota(result: ["rateLimitsByLimitId": ["codex": bucket, "special-model": bucket]])
+        let facts = ProviderFailover.quotaFacts(of: quota)
+        XCTAssertNil(facts.usedFraction)
+        XCTAssertNotNil(facts.unknownReason)
+    }
 
     private let now = Date(timeIntervalSince1970: 1_800_000_000)
 
@@ -147,8 +170,8 @@ final class ProviderFailoverTests: XCTestCase {
         XCTAssertEqual(decision.reason, .bothExhausted)
     }
 
-    func testWorstFractionIgnoresWindowsAlreadyReset() {
-        // Fenêtre expirée à 99 % + fenêtre en cours à 10 % ⇒ seule la seconde compte.
+    func testResetRequiresANewMeasurementInsteadOfDroppingAConstraint() {
+        // Un reset ne prouve pas que la fenêtre est à zéro ; attendre une mesure.
         let bucket: [String: Any] = [
             "limitId": "codex",
             "primary": ["usedPercent": 99, "windowDurationMins": 300,
@@ -158,7 +181,7 @@ final class ProviderFailoverTests: XCTestCase {
         ]
         guard let quota = CodexQuota(result: ["rateLimits": bucket], receivedAt: now)
         else { return XCTFail("quota indécodable") }
-        XCTAssertEqual(ProviderFailover.worstUsedFraction(quota, now: now) ?? -1, 0.10, accuracy: 0.001)
+        XCTAssertNil(ProviderFailover.worstUsedFraction(quota, now: now))
     }
 
     /// CAS RÉEL, mesuré le 2026-09-06 à 23h31 sur le compte de Mehdi
@@ -204,6 +227,39 @@ final class ProviderFailoverTests: XCTestCase {
         XCTAssertNil(facts.usedFraction)
         XCTAssertNil(facts.receivedAt)
         XCTAssertNil(facts.resetsAt)
+    }
+
+    func testStaleCodexKeepsAHighLowerBoundWithoutAuthorizingFailover() throws {
+        let quota = try XCTUnwrap(codexQuota(primary: 0.99, age: 400))
+        let facts = ProviderFailover.quotaFacts(of: quota, now: now)
+        XCTAssertEqual(facts.usedFraction, 0.99)
+        XCTAssertEqual(facts.resetsAt, now.addingTimeInterval(3600))
+        XCTAssertNotNil(facts.unknownReason)
+        XCTAssertNil(facts.usable(at: now, freshness: 300))
+        XCTAssertNil(ProviderFailover.worstUsedFraction(quota, now: now))
+        XCTAssertEqual(ProviderFailover.choose(claude: claudeFacts(used: 0), codex: quota,
+            config: .init(enabled: true, preferred: .codex), now: now),
+            .init(provider: .codex, reason: .codexUnknown))
+    }
+
+    func testResetOfOneWindowKeepsOtherHighWindowButNeverProvesAvailability() throws {
+        for percent in [10, 99] {
+            let quota = try XCTUnwrap(CodexQuota(result: ["rateLimits": [
+                "primary": ["usedPercent": 99, "resetsAt": now.addingTimeInterval(-1).timeIntervalSince1970],
+                "secondary": ["usedPercent": percent, "resetsAt": now.addingTimeInterval(9000).timeIntervalSince1970]
+            ]], receivedAt: now))
+            let facts = ProviderFailover.quotaFacts(of: quota, now: now)
+            XCTAssertEqual(facts.usedFraction, Double(percent) / 100)
+            XCTAssertEqual(facts.resetsAt, now.addingTimeInterval(9000))
+            XCTAssertNotNil(facts.unknownReason)
+            XCTAssertNil(facts.usable(at: now))
+            XCTAssertNil(ProviderFailover.worstUsedFraction(quota, now: now))
+            let result = LearningGate.decide(session: .init(sessionID: "s", durationSeconds: 3600,
+                transcriptSizeBytes: 500_000, userPromptCount: 12, isCurrentlyAlive: false), quota: facts,
+                config: .init(enabled: true, unknownQuotaMaxPerWindow: 0),
+                history: .init(processed: [], runTimestamps: []), now: now)
+            XCTAssertEqual(result, .skip(percent == 99 ? .quotaAboveThreshold : .quotaStale))
+        }
     }
 
     /// Ces faits doivent traverser `LearningGate` sans traitement de faveur :

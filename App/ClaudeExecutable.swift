@@ -1,4 +1,5 @@
 import Foundation
+import AtollCore
 
 /// Résolution du chemin ABSOLU de `claude`, pour les deux lanceurs qui dépensent
 /// du quota : le bilan de fin de session et le rangement des notes.
@@ -39,7 +40,8 @@ enum ClaudeExecutable {
 
     /// Chemin absolu exécutable, ou `nil` si `claude` reste introuvable.
     static func resolve() async -> String? {
-        if let cached { return cached }
+        if let cached, FileManager.default.isExecutableFile(atPath: cached) { return cached }
+        cached = nil
         // Chemin usuel de l'installeur natif : vérif CHEAP (pas de shell),
         // retentée à chaque appel — claude peut apparaître après coup.
         let common = ("~/.local/bin/claude" as NSString).expandingTildeInPath
@@ -59,9 +61,10 @@ enum ClaudeExecutable {
             process.standardOutput = pipe
             process.standardError = FileHandle.nullDevice
             process.standardInput = FileHandle.nullDevice
-            guard (try? process.run()) != nil else { return nil }
-            armWatchdog(process)
-            let data = (try? pipe.fileHandleForReading.readToEnd()) ?? Data()
+            let identity: ProcessIdentity?
+            do { identity = try ProcessInspector.launchOwned(process) } catch { return nil }
+            armWatchdog(process, identity: identity)
+            let data = BoundedProcessOutput.drain(pipe.fileHandleForReading, cap: 16_384)
             process.waitUntilExit()
             let path = String(decoding: data, as: UTF8.self)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -74,13 +77,13 @@ enum ClaudeExecutable {
 
     /// Tue un process qui dépasse `loginResolveTimeout` (SIGTERM puis SIGKILL) :
     /// un profil qui pend ne doit pas geler le lanceur.
-    nonisolated private static func armWatchdog(_ process: Process) {
-        let pid = process.processIdentifier
+    nonisolated private static func armWatchdog(_ process: Process, identity: ProcessIdentity?) {
+        guard let identity else { return }
         DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + loginResolveTimeout) {
             guard process.isRunning else { return }
-            process.terminate()
+            ProcessInspector.signal(SIGTERM, to: identity)
             DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 1) {
-                if process.isRunning { kill(pid, SIGKILL) }
+                ProcessInspector.signal(SIGKILL, to: identity)
             }
         }
     }

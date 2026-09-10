@@ -1,0 +1,31 @@
+{
+  "notes" : [
+    {
+      "content" : "Les coordonnées SourceSim sont exprimées en centimètres. Pour l’export CibleSim v3, la conversion vers les mètres est (x, y, z) → (-y, z, x) × 0,01.",
+      "slug" : "sourcesim-ciblesim-v3-coordonnees"
+    },
+    {
+      "content" : "La conversion des coordonnées SourceSim vers CibleSim v3 est appliquée uniquement à la frontière d’export. Les identifiants et les timestamps sont conservés sans modification.",
+      "slug" : "ciblesim-v3-conversion-frontiere-export"
+    }
+  ],
+  "nothingLearned" : false,
+  "provider" : "codex",
+  "rejectedSkills" : [
+
+  ],
+  "reportedModels" : [
+
+  ],
+  "requestedModel" : "gpt-6-astra",
+  "skills" : [
+    {
+      "body" : "Pour exporter des points SourceSim en centimètres vers CibleSim v3, appliquer la transformation uniquement à la frontière d’export :\n\n`(x, y, z) → (-y × 0.01, z × 0.01, x × 0.01)`\n\nConserver les identifiants et les timestamps. Un export brut peut produire simultanément des axes incorrects et des distances 100 fois trop grandes.\n\nValider avec un point dont les trois composantes sont distinctes : `(100, 200, 300)` doit devenir `(-2, 3, 1)` en mètres. Vérifier ensuite un aller-retour sur plusieurs points avec l’inverse `(X, Y, Z) → (100Z, -100X, 100Y)` et comparer les coordonnées dans l’unité source. Une validation sur 40 points a obtenu une erreur maximale de `0,000001 cm` ; contrôler aussi l’identité des identifiants et timestamps.\n\nCommande de vérification finale attestée :\n\n```sh\nexporter --space target --unit m\n```\n\nLimiter cette convention d’axes à CibleSim v3 : aucune autre version n’a été validée.",
+      "description" : "Export SourceSim vers CibleSim v3 : corriger les axes et les unités à la frontière d’export, puis valider la conversion.",
+      "rationale" : "Le catalogue est vide. La procédure contient une transformation spécifique vérifiée et une validation réutilisable qui détecte les erreurs d’axes et d’échelle.",
+      "similarExisting" : "",
+      "slug" : "sourcesim-ciblesim-v3-export-validation"
+    }
+  ],
+  "summary" : "Correction vérifiée de l’export SourceSim vers CibleSim v3 : permutation des axes, inversion de signe et conversion en mètres. Le point témoin et 40 points en aller-retour ont validé la transformation, avec une erreur maximale de 0,000001 cm et conservation des identifiants et timestamps."
+}
