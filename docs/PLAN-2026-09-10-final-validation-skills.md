@@ -76,10 +76,10 @@ ligne par ligne.
 
 | Lot | État observé |
 |---|---|
-| Générateur | Consignes partagées actives et legacy, borne technique sans troncature, refus journalisé. Codex : 0 / 0 / 1 / 0 skills pour les quatre cas ; procédure utile de 146 mots. Claude : génération bloquée par l'organisation |
+| Générateur | Consignes partagées actives et legacy, borne technique sans troncature, refus journalisé. Codex : 0 / 0 / 1 / 0 skills pour les quatre cas ; procédure utile de 146 mots. Claude : appel de test refusé par un 403 d'accès abonnement ; contexte de connexion à vérifier |
 | P3 actionnables | Position et antériorité des skills, comparaison, sélecteur compact, délai clavier, catalogue modèle, identité du processus et diagnostic de retrait corrigés et testés |
 | VoiceOver / visuel | Annonces et action VoiceOver réelles vérifiées, paramètres restaurés ; 24 variantes relues, quatre transitions filmées. L'OCR n'est pas une preuve de voix ni un substitut à la lecture visuelle |
-| CLI natifs | Codex : permettre, refuser, rendre la décision au CLI, interrompre et reprendre vérifiés avec le helper du build. Claude, écoute humaine et retour à un panneau de terminal visible restent à valider |
+| CLI natifs | Codex : permettre, refuser, rendre la décision au CLI, interrompre et reprendre vérifiés avec le helper du build. Sons entendus, confirmation ultérieure de Mehdi. Claude et retour à un panneau de terminal visible restent à valider |
 | Publication | Commit/push et mise à jour de la PR #2 autorisés ; conserver son état brouillon et les réserves avant fusion |
 
 La relecture a amélioré le plan sur six points concrets :
@@ -106,8 +106,9 @@ La relecture a amélioré le plan sur six points concrets :
    reconnaissance OCR sur police petite et le focus perdu ont produit des faux
    négatifs. Les captures sont relues ; les tests de clic/survol et les films
    sont rejoués seuls. Aucun total « tout vert » n'est déduit de la matrice OCR.
-6. **Les limites externes ne demandent pas plus de code.** Le refus Claude exige
-   un accès abonnement valide ; l'écoute et le retour au terminal demandent une
+6. **Les limites externes ne demandent pas plus de code.** Le refus de l'appel
+   Claude demande de vérifier le contexte de connexion utilisé ; l'écoute est
+   désormais confirmée par Mehdi et le retour au terminal exige encore une
    recette observable. Ni bascule API, ni identité de terminal fabriquée, ni
    réparation destructive des données incertaines.
 

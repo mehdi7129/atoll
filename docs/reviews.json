@@ -522,7 +522,7 @@
       "date": "2026-09-10",
       "document": "docs/REVIEW-2026-09-10-skills-validation.md",
       "depth": "sweep",
-      "note": "Générateur concis et dernière validation PR #2 : diffs et appelants, Core/runtime, sabotages, générations Codex, VoiceOver natif et captures/films. Seconde analyse du plan et des courses asynchrones. Pas une lecture ligne par ligne ; accès Claude, écoute humaine et jump-back visible explicitement non validés.",
+      "note": "Générateur concis et dernière validation PR #2 : diffs et appelants, Core/runtime, sabotages, générations Codex, VoiceOver natif et captures/films. Seconde analyse du plan et des courses asynchrones. Pas une lecture ligne par ligne ; appel Claude et jump-back visible explicitement non validés ; écoute des sons confirmée ensuite par Mehdi.",
       "files": [
         "App/AppDelegate.swift",
         "App/ClaudeExecutable.swift",

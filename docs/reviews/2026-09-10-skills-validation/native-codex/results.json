@@ -15,5 +15,5 @@
     "anchorKind": "vscode"
   },
   "terminalJump": "not exercised: test PTY does not identify a visible IDE terminal pane",
-  "audio": "human listening not confirmed"
+  "audio": "human listening confirmed by user after returning to the Mac"
 }

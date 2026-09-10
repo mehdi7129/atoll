@@ -14,9 +14,10 @@
 > décision au CLI, interruption et reprise exercés. VoiceOver : annonces réelles
 > et action native vérifiées ; ses deux réglages temporaires sont restaurés.
 > 24 variantes visuelles et quatre films de transition relus.
-> Restent avant fusion : parcours Claude bloqué par un refus d'abonnement de
-> l'organisation (403), écoute des sons non effectuée par Mehdi, retour au
-> panneau d'un terminal visible non exercé. Les limites P3 conservatrices sont
+> Sons entendus et confirmés par Mehdi après son retour devant le Mac.
+> Restent avant fusion : parcours Claude (appel de test refusé par un 403
+> d'accès abonnement ; contexte de connexion à vérifier) et retour au panneau
+> d'un terminal visible non exercé. Les limites P3 conservatrices sont
 > décrites dans le rapport ; elles ne sont pas déclarées corrigées.
 > PR en brouillon, aucune release ; bundle stable v0.17.2 non remplacé.
 > Pour une nouvelle copie de recette, utiliser `Scripts/prepare-preview.py` :

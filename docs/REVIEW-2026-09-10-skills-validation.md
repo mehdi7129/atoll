@@ -3,8 +3,9 @@
 Passe du 10 septembre 2026 après `32f034a`, selon le
 [plan relu](PLAN-2026-09-10-final-validation-skills.md). La
 [PR #2](https://github.com/mehdi7129/atoll/pull/2) reste en brouillon : les
-correctifs et la recette Codex sont vérifiés, mais l'accès Claude, l'écoute
-humaine des sons et le retour à un terminal visible restent à valider.
+correctifs et la recette Codex sont vérifiés, mais le parcours Claude et le
+retour à un terminal visible restent à valider. Mehdi a confirmé avoir entendu
+les sons après son retour devant le Mac.
 
 Les [corrections R01–R11 et leurs preuves](REVIEW-2026-09-10-pr2-corrections.md)
 restent acquises. Cette passe est un balayage des diffs et de leurs appelants,
@@ -46,8 +47,11 @@ conversion ne constitue pas une nouvelle règle Drotek ou un résultat de produc
 Quatre exemples établissent ce comportement sur ces cas, pas la qualité de
 toutes les générations futures. Aucun skill personnel installé n'a été réécrit.
 
-**Claude Code 2.1.267 est connecté, mais la génération est bloquée par un 403** :
-l'organisation a désactivé l'accès par abonnement à Claude Code. La réponse
+**Claude Code 2.1.267 est connecté, mais l'appel de génération de test reçoit un
+403** : le message annonce un accès par abonnement désactivé pour l'organisation
+utilisée par cet appel. Cette réponse ne suffit pas à établir que le compte ou
+la session habituelle de Mehdi est bloqué ; le contexte de connexion de la
+recette reste à comparer à une session Claude qui fonctionne. La réponse
 contient `is_error: true`, aucun token et aucun coût. La recette s'arrête en
 échec ; aucune bascule vers une clé API. Les fixtures runtime Claude passent,
 mais elles ne remplacent pas une génération ni un parcours authentifié Claude.
@@ -90,11 +94,15 @@ montre les trois actions et les détails consultables. Le PTY de recette porte
 une ancre `vscode`/Cursor ; il ne correspond pas à un panneau de terminal visible
 identifiable. **Le jump-back visuel reste non exercé.** Le contrôle GUI de
 Terminal a été refusé par la vérification automatique de l'outil ; ce refus n'a
-pas été contourné. Le PTY permet la recette CLI, sans prouver la navigation GUI.
+pas été contourné. C'est une limite du moyen de recette, pas un échec observé du
+bouton d'Atoll ni la preuve d'une permission macOS manquante. Le PTY permet la
+recette CLI, sans prouver la navigation GUI.
 
-**L'écoute des sons reste non validée** : Mehdi a répondu « Je n'ai pas pu
-écouter ». Les tests runtime contrôlent les déclenchements ; ils ne prouvent
-pas le son entendu. Les réglages audio temporaires ont été retirés.
+**L'écoute des sons est confirmée par Mehdi.** Après avoir indiqué ne pas avoir
+pu écouter au début de la recette, il a précisé être revenu près du Mac et
+avoir entendu les sons. Cette [confirmation humaine](reviews/2026-09-10-skills-validation/native-codex/audio-confirmation.json)
+complète les tests runtime de déclenchement. Les réglages audio temporaires
+ont été retirés.
 
 ### VoiceOver
 
@@ -202,7 +210,7 @@ La seconde analyse du plan a aussi validé le maintien des protections suivantes
 - Permission non représentable dans l'îlot : décision dans le terminal ; les
   deux API de diagnostic signalées par le contrôle documentaire restent testées.
 
-Avant fusion restent trois recettes concrètes : **Claude authentifié avec un
-abonnement autorisé, écoute des sons, retour vers un terminal visible**. Les
+Avant fusion restent deux recettes concrètes : **Claude authentifié avec un
+contexte de connexion fonctionnel, retour vers un terminal visible**. Les
 améliorations de code et les validations possibles dans l'environnement présent
 sont réalisées ; la PR reste à examiner par Mehdi.
