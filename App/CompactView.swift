@@ -1,7 +1,8 @@
 import SwiftUI
 import AtollCore
 
-/// Choix d'agent accessible aussi en compact ; le mode Claude reste identifié.
+/// Compact d'origine : activité à gauche, quota à droite. La couleur porte le
+/// fournisseur ; son sélecteur reste dans le panneau ouvert.
 struct CompactView: View {
     let viewModel: NotchViewModel
     let colors: ThemeColors
@@ -13,25 +14,20 @@ struct CompactView: View {
         if viewModel.hasActivity || rockstar {
             if let notch = viewModel.notchSize {
                 HStack(spacing: 0) {
-                    VStack(spacing: 1) {
-                        ProviderSelector(viewModel: viewModel, colors: colors, compact: true)
-                        activityLabel
-                    }
-                    .frame(width: viewModel.compactWidth.wingWidth)
+                    activityLabel
+                        .padding(.leading, 12)
+                        .frame(width: viewModel.compactWidth.wingWidth)
                     Color.clear.frame(width: notch.width)
-                    rightSide.padding(.trailing, 8).frame(width: viewModel.compactWidth.wingWidth)
+                    rightSide.padding(.trailing, 12).frame(width: viewModel.compactWidth.wingWidth)
                 }
                 .frame(height: notch.height)
             } else {
-                HStack(spacing: 4) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        ProviderSelector(viewModel: viewModel, colors: colors, compact: true)
-                        activityLabel
-                    }
-                    Spacer(minLength: 0)
+                HStack(spacing: 6) {
+                    activityLabel
+                    Spacer(minLength: 4)
                     rightSide
                 }
-                .padding(.horizontal, 8)
+                .padding(.horizontal, 10)
                 .frame(height: max(viewModel.menuBarHeight, IslandGeometry.minimumPillHeight))
             }
         }
@@ -42,35 +38,53 @@ struct CompactView: View {
     }
 
     private var activityLabel: some View {
-        HStack(spacing: 3) {
+        HStack(spacing: 5) {
             statusGlyph
-            Text(focusSession.map { String($0.projectName.split(separator: "/").last ?? "").prefix(9) } ?? "au repos")
-                .lineLimit(1).foregroundStyle(colors.dim)
+            if let session = focusSession {
+                Text(shortName(session.projectName))
+                    .foregroundStyle(session.needsAttention ? colors.warn : colors.dim)
+                if viewModel.sessions.count > 1 {
+                    Text("+\(viewModel.sessions.count - 1)")
+                        .foregroundStyle(colors.dim).fixedSize()
+                }
+            } else if !viewModel.hasNotch {
+                Text("atoll").foregroundStyle(colors.dim)
+            }
+            Spacer(minLength: 0)
         }
-        .font(AtollFont.mono(8))
-        .frame(maxWidth: .infinity)
+        .font(AtollFont.mono(10))
+        .lineLimit(1)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(viewModel.selectedProvider.label), \(focusSession?.projectName ?? "au repos")")
+    }
+
+    private func shortName(_ name: String) -> String {
+        let last = String(name.split(separator: "/").last ?? "")
+        return last.count > 10 ? String(last.prefix(9)) + "…" : last
     }
 
     private var rightSide: some View {
-        VStack(spacing: 0) {
+        HStack(spacing: 4) {
+            Spacer(minLength: 0)
             if rockstar {
-                Text("CLAUDE◆ROCKSTAR")
-                .font(AtollFont.mono(7, weight: .bold))
-                .foregroundStyle(Color(hex: 0xFF3B30))
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Claude Rockstar actif, y compris en arrière-plan")
-                .help("Rockstar reste actif pour Claude ; Codex conserve ses autorisations")
+                Text("◆")
+                    .foregroundStyle(Color(hex: 0xFF3B30))
+                    .accessibilityLabel("Claude Rockstar actif, y compris en arrière-plan")
+                    .help("Rockstar reste actif pour Claude ; Codex conserve ses autorisations")
             }
             TimelineView(.periodic(from: .now, by: 30)) { _ in
                 if let quota = compactQuota {
-                    Text("\(quota.label) \(Int(quota.fraction * 100))%")
-                        .foregroundStyle(colors.dim)
+                    HStack(spacing: 4) {
+                        if !quota.label.isEmpty { Text(quota.label) }
+                        Text("\(Int(quota.fraction * 100))%")
+                    }
+                    .foregroundStyle(colors.dim)
                 } else {
-                    Text("\(viewModel.selectedProvider == .codex ? "CX" : "CL") · —").foregroundStyle(colors.dim)
+                    Text("·").foregroundStyle(colors.dim)
                 }
             }
-            .font(AtollFont.mono(8))
         }
+        .font(AtollFont.mono(10))
         .lineLimit(1)
         .fixedSize()
     }
@@ -80,13 +94,13 @@ struct CompactView: View {
             guard let quota = CodexService.shared.quota, quota.isFresh(at: Date()),
                   let bucket = quota.primaryBucket,
                   let window = bucket.windows.first, window.isCurrent(at: Date()) else { return nil }
-            // Sans durée connue, ne pas inventer une fenêtre ni faire déborder
-            // l'aile avec « principale » / « secondaire » : le détail la nomme.
-            let label = window.label == "principale" || window.label == "secondaire" ? "CX" : "CX \(window.label)"
+            // Sans durée connue, le détail nomme la fenêtre. Le compact garde
+            // le pourcentage réel, sans inventer « 5h » ni répéter le fournisseur.
+            let label = window.label == "principale" || window.label == "secondaire" ? "" : window.label
             return (label, window.usedFraction)
         }
         guard viewModel.hasFreshFiveHour else { return nil }
-        return ("CL 5h", viewModel.usage.fiveHourFraction)
+        return ("5h", viewModel.usage.fiveHourFraction)
     }
 
     @ViewBuilder private var statusGlyph: some View {
@@ -94,7 +108,7 @@ struct CompactView: View {
             Text("?").foregroundStyle(colors.warn)
         } else if viewModel.workingCount > 0 {
             AsciiSpinnerView(color: activityIsRockstar ? Color(hex: 0xFF3B30) : colors.accent)
-        } else { Text("·").foregroundStyle(colors.dim) }
+        } else { Text("·").foregroundStyle(colors.accent) }
         if !CodexPreview.enabled && SkillReviewCenter.shared.pendingCount > 0 {
             Text("+").foregroundStyle(colors.accent).accessibilityLabel("Skill proposé")
         }

@@ -1,0 +1,187 @@
+{
+  "date": "2026-09-10",
+  "base": "25132e3",
+  "core": {
+    "executed": 1020,
+    "skipped": 1,
+    "failed": 0
+  },
+  "runtime": {
+    "scenarios": 60,
+    "failed": 0
+  },
+  "builds": {
+    "Debug": "passed",
+    "Release unsigned": "passed"
+  },
+  "nativeReadOnly": {
+    "cliVersion": "0.154.0",
+    "interactiveYoloCorrectlyIdentified": 3,
+    "appServersExcluded": 4,
+    "hooksActive": 10,
+    "hooksTotal": 12,
+    "untrustedEvents": [
+      "SubagentStart",
+      "SubagentStop"
+    ]
+  },
+  "ui": [
+    {
+      "case": "compact",
+      "passed": true,
+      "failures": []
+    },
+    {
+      "case": "provider-expanded",
+      "passed": true,
+      "failures": []
+    },
+    {
+      "case": "detail-context",
+      "passed": true,
+      "failures": []
+    },
+    {
+      "case": "settings-codex",
+      "passed": true,
+      "failures": []
+    },
+    {
+      "case": "rockstar",
+      "passed": true,
+      "failures": []
+    },
+    {
+      "case": "rockstar-notch",
+      "passed": true,
+      "failures": []
+    },
+    {
+      "case": "matrix-small-pill-dark-motion",
+      "passed": true,
+      "failures": []
+    },
+    {
+      "case": "matrix-small-notch-dark-motion",
+      "passed": true,
+      "failures": []
+    },
+    {
+      "case": "matrix-medium-pill-dark-motion",
+      "passed": true,
+      "failures": []
+    },
+    {
+      "case": "matrix-medium-notch-dark-motion",
+      "passed": true,
+      "failures": []
+    },
+    {
+      "case": "matrix-large-pill-dark-motion",
+      "passed": true,
+      "failures": []
+    },
+    {
+      "case": "matrix-large-notch-dark-motion",
+      "passed": true,
+      "failures": []
+    },
+    {
+      "case": "compact-claude",
+      "passed": true,
+      "failures": []
+    },
+    {
+      "case": "idle-notch",
+      "passed": true,
+      "failures": []
+    },
+    {
+      "case": "physical-screen-0",
+      "passed": true,
+      "failures": []
+    },
+    {
+      "case": "physical-screen-1",
+      "passed": true,
+      "failures": []
+    },
+    {
+      "case": "settings-codex-advanced",
+      "passed": true,
+      "failures": []
+    },
+    {
+      "case": "matrix-small-notch-light-reduced",
+      "passed": true,
+      "failures": []
+    },
+    {
+      "case": "matrix-large-pill-light-reduced",
+      "passed": true,
+      "failures": []
+    }
+  ],
+  "coreSabotage": [
+    {
+      "case": "yolo",
+      "detected": true
+    },
+    {
+      "case": "helper",
+      "detected": true
+    },
+    {
+      "case": "context",
+      "detected": true
+    },
+    {
+      "case": "trust",
+      "detected": true
+    }
+  ],
+  "oldBuildUiSabotage": [
+    {
+      "case": "compact",
+      "passed": false,
+      "failures": [
+        "18%",
+        "sélecteur de fournisseur encore présent dans le compact",
+        "préfixe CL/CX encore visible"
+      ]
+    },
+    {
+      "case": "detail-context",
+      "passed": false,
+      "failures": [
+        "contexte",
+        "173",
+        "617",
+        "258",
+        "400",
+        "tokens",
+        "67%"
+      ]
+    },
+    {
+      "case": "settings-codex",
+      "passed": false,
+      "failures": [
+        "Copier /hooks",
+        "Choisir le dossier",
+        "SubagentStart",
+        "SubagentStop"
+      ]
+    }
+  ],
+  "initialOcrFailures": {
+    "cases": [
+      "matrix-small-notch-dark-motion",
+      "physical-screen-0"
+    ],
+    "reason": "Nom tronqué en projet… dans une aile étroite. Capture relue ; test corrigé avec texte visible et nom complet AX."
+  },
+  "personalFilesUnchanged": true,
+  "stableInstalledVersion": "0.18.0 (35)",
+  "releasePublished": false
+}

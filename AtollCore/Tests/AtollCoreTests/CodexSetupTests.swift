@@ -168,4 +168,22 @@ final class CodexSetupTests: XCTestCase {
             XCTAssertEqual(rendered, object as NSDictionary)
         }
     }
+
+    func testPartialTrustNamesOnlyTheHooksThatNeedReview() throws {
+        let hooks: [[String: Any]] = CodexHookEvent.Kind.allCases.map { kind in
+            ["command": CodexHookSettingsEditor.command,
+             "eventName": kind.rawValue.prefix(1).lowercased() + kind.rawValue.dropFirst(),
+             "async": !CodexHookSettingsEditor.synchronousEvents.contains(kind),
+             "timeoutSec": kind == .permissionRequest ? 600 : 3,
+             "statusMessage": kind == .permissionRequest ? CodexHookSettingsEditor.permissionStatusMessage : "",
+             "enabled": true,
+             "trustStatus": [.subagentStart, .subagentStop].contains(kind) ? "untrusted" : "trusted"]
+        }
+        let data = try JSONSerialization.data(withJSONObject: ["data": [["hooks": hooks, "errors": []]]])
+        let diagnostic = try XCTUnwrap(CodexHookDiagnostics(data: data))
+        XCTAssertEqual(diagnostic.managedCount, 12)
+        XCTAssertEqual(diagnostic.activeCount, 10)
+        XCTAssertEqual(diagnostic.untrustedEventNames, ["SubagentStart", "SubagentStop"])
+        XCTAssertEqual(diagnostic.summary, "10/12 hooks actifs. À approuver dans /hooks : SubagentStart, SubagentStop.")
+    }
 }

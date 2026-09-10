@@ -7,7 +7,8 @@ public struct CodexSessionMetadata: Sendable {
     public let branchAtStart: String?
     public let firstHumanPrompt: String?
     public let model: String?
-    public let contextFraction: Double?
+    public let contextUsage: ContextTokenUsage?
+    public var contextFraction: Double? { contextUsage?.fraction }
     public let contextAt: Date?
 
     public static func read(at url: URL, sessionID: String) -> Self? {
@@ -36,21 +37,21 @@ public struct CodexSessionMetadata: Sendable {
             guard let data = try? JSONSerialization.data(withJSONObject: object) else { return nil }
             return CodexTranscriptParser.parse(data)?.fragments.first(where: { $0.role == .user })?.text
         }.first.map { String($0.prefix(200)) }
-        var model: String?, fraction: Double?, measuredAt: Date?
+        var model: String?, usage: ContextTokenUsage?, measuredAt: Date?
         for root in tail {
             guard let payload = root["payload"] as? [String: Any] else { continue }
             if root["type"] as? String == "turn_context", let value = payload["model"] as? String { model = value }
-            if root["type"] as? String == "compacted" { fraction = nil; measuredAt = nil }
+            if root["type"] as? String == "compacted" { usage = nil; measuredAt = nil }
             if root["type"] as? String == "event_msg", payload["type"] as? String == "token_count" {
                 // Une mesure récente inconnue efface l'ancienne, elle n'est
                 // ni zéro ni une preuve de consommation actuelle.
-                fraction = nil; measuredAt = nil
+                usage = nil; measuredAt = nil
                 if let info = payload["info"] as? [String: Any],
                    let last = info["last_token_usage"] as? [String: Any],
-                   let used = Self.number(last["total_tokens"]),
-                   let window = Self.number(info["model_context_window"]),
-                   used.isFinite, window.isFinite, used >= 0, window > 0, used <= window {
-                    fraction = used / window
+                   let used = Self.tokenCount(last["total_tokens"]),
+                   let window = Self.tokenCount(info["model_context_window"]),
+                   let current = ContextTokenUsage(usedTokens: used, windowTokens: window) {
+                    usage = current
                     if let stamp = root["timestamp"] as? String {
                         let format = ISO8601DateFormatter()
                         format.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -60,12 +61,12 @@ public struct CodexSessionMetadata: Sendable {
             }
         }
         return Self(branchAtStart: (meta["git"] as? [String: Any])?["branch"] as? String,
-                    firstHumanPrompt: first, model: model, contextFraction: fraction, contextAt: measuredAt)
+                    firstHumanPrompt: first, model: model, contextUsage: usage, contextAt: measuredAt)
     }
 
-    private static func number(_ value: Any?) -> Double? {
+    private static func tokenCount(_ value: Any?) -> Int? {
         guard let number = value as? NSNumber,
               CFGetTypeID(number) != CFBooleanGetTypeID() else { return nil }
-        return number.doubleValue
+        return Int(exactly: number.doubleValue)
     }
 }

@@ -1,5 +1,14 @@
 # CLAUDE.md — instructions projet Atoll
 
+> **v0.18.1, build 36 — préparation autorisée le 2026-09-10, PR #3.** Mehdi demande
+> le compact d'origine : activité à gauche, quota à droite, une ligne en police
+> 10. La couleur distingue les CLI ; aucun « CL/CX », choix dans le panneau ouvert.
+> Le losange rouge Rockstar reste avec le quota, nommé pour l'accessibilité.
+> `--yolo` doit être reconnu comme TUI ; les auxiliaires du dossier Codex ne sont
+> pas des sessions. Le contexte conserve les nombres de la dernière mesure.
+> [Plan et seconde lecture](docs/PLAN-2026-09-10-island-context-setup.md),
+> [preuves de correction](docs/REVIEW-2026-09-10-island-context-setup.md).
+
 > **v0.18.0, build 35 — publiée le 2026-09-10, PR #2 fusionnée.**
 > App et DMG notarisés ; flux Sparkle servi et téléchargements vérifiés.
 > [Preuves de livraison](docs/releases/0.18.0.json). La fiche courante est

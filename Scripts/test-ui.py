@@ -8,6 +8,7 @@ Un ancien build peut servir de sabotage avec --expect-failure.
 import argparse
 import json
 import plistlib
+import re
 import subprocess
 import tempfile
 import time
@@ -31,7 +32,32 @@ SWIFT = r'''
 import AppKit
 import Vision
 import Foundation
-if ["press", "frame"].contains(CommandLine.arguments[1]) {
+if CommandLine.arguments[1] == "screens" {
+    let screens = NSScreen.screens.enumerated().map { index, screen -> [String: Any] in
+        ["index": index, "name": screen.localizedName, "scale": screen.backingScaleFactor]
+    }
+    print(String(data: try JSONSerialization.data(withJSONObject: screens), encoding: .utf8)!)
+} else if CommandLine.arguments[1] == "elements" {
+    let application = AXUIElementCreateApplication(pid_t(CommandLine.arguments[2])!)
+    var entries: [[String: String]] = []
+    func visit(_ element: AXUIElement) {
+        func text(_ attribute: String) -> String {
+            var value: CFTypeRef?
+            AXUIElementCopyAttributeValue(element, attribute as CFString, &value)
+            return value as? String ?? ""
+        }
+        // La recette porte sur la fenêtre, pas les menus système et documents récents.
+        if text(kAXRoleAttribute) == kAXMenuBarRole { return }
+        let label = [text(kAXTitleAttribute), text(kAXDescriptionAttribute), text(kAXValueAttribute)]
+            .filter { !$0.isEmpty }.joined(separator: " · ")
+        if !label.isEmpty { entries.append(["role": text(kAXRoleAttribute), "label": label]) }
+        var children: CFTypeRef?
+        AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &children)
+        for child in children as? [AXUIElement] ?? [] { visit(child) }
+    }
+    visit(application)
+    print(String(data: try JSONSerialization.data(withJSONObject: entries), encoding: .utf8)!)
+} else if ["press", "frame"].contains(CommandLine.arguments[1]) {
     let application = AXUIElementCreateApplication(pid_t(CommandLine.arguments[2])!)
     let title = CommandLine.arguments[3]
     func find(_ element: AXUIElement) -> AXUIElement? {
@@ -104,22 +130,25 @@ cases = {
     "preview-preferences": (["--preview-skills"], ["APPROUVER"]),
     "skills": (["--preview-skills"], ["PROPOSITION", "SKILL.MD", "mots", "INSTALLÉ ACTUELLEMENT", "APPROUVER"]),
     "skills-position": (["--preview-skills"], ["conversion-3", "2/2", "APPROUVER"]),
-    "selector-hover": (["--preview-compact"], ["27%"]),
+    "provider-expanded": ([], ["CLAUDE CODE", "CODEX", "27%"]),
     "list-codex": (["--preview-many"], ["projet-", "autres", "QUOTAS"]),
     "list-claude": (["--preview-many", "--preview-claude"], ["projet-", "autres", "QUOTAS"]),
     "card-claude": (["--preview-cards"], ["CLAUDE", "PLAN", "Vérifier les couleurs", "feedback", "REVISE", "APPROVE"]),
     "card-codex": (["--preview-cards", "--preview-codex-card"], ["apply_patch", "REFUSER", "AUTORISER", "DÉCIDER DANS CODEX"]),
     "detail": (["--preview-detail"], ["retour", "modèle", "contexte"]),
+    "detail-context": (["--preview-detail"], ["contexte", "173", "617", "258", "400", "tokens", "67%"]),
     "detail-cli-absent": (["--preview-detail", "--preview-claude"], ["retour", "modèle", "contexte"]),
     "onboarding-unset": (["--preview-onboarding"], ["COMMENCER", "moteur des analyses", "HOOKS INSTALLÉS"]),
     "onboarding-claude": (["--preview-onboarding"], ["COMMENCER", "moteur des analyses", "HOOKS INSTALLÉS"]),
     "onboarding-codex": (["--preview-onboarding"], ["COMMENCER", "moteur des analyses", "HOOKS INSTALLÉS"]),
     "onboarding-navigation": (["--preview-onboarding"], ["COMMENCER", "moteur des analyses", "HOOKS INSTALLÉS"]),
-    "settings-codex": (["--preview-codex-settings"], ["Codex CLI", "Appliquer le dossier Codex", "Vérifier avec Codex"]),
+    "settings-codex": (["--preview-codex-settings"], ["Codex CLI", "Copier /hooks", "Choisir le dossier", "Vérifier avec Codex", "SubagentStart", "SubagentStop"]),
+    "settings-codex-advanced": (["--preview-codex-settings", "--preview-advanced"], ["Configuration avancée", "CODEX_HOME", "Fichier des hooks", "Réparer les définitions", "Retirer l'intégration"]),
     "idle-notch": (["--preview-empty", "--preview-notch", "--preview-compact"], []),
-    "rockstar": (["--preview-empty", "--preview-compact", "--preview-rockstar"], ["CLAUDE", "ROCKSTAR", "18%"]),
-    "rockstar-notch": (["--preview-empty", "--preview-compact", "--preview-rockstar", "--preview-notch"], ["CLAUDE", "ROCKSTAR", "18%"]),
+    "rockstar": (["--preview-empty", "--preview-compact", "--preview-rockstar"], ["18%"]),
+    "rockstar-notch": (["--preview-empty", "--preview-compact", "--preview-rockstar", "--preview-notch"], ["18%"]),
     "compact": (["--preview-compact"], ["projet-", "18%"]),
+    "compact-claude": (["--preview-compact", "--preview-claude"], ["projet-", "27%"]),
     "light": (["--preview-many", "--preview-light"], ["projet-", "autres", "QUOTAS"]),
 }
 for width in ["small", "medium", "large"]:
@@ -131,8 +160,10 @@ for width in ["small", "medium", "large"]:
                 if notch: options.append("--preview-notch")
                 if light: options.append("--preview-light")
                 if reduced: options.append("--preview-reduce-motion")
-                cases[name] = (options, ["projet-", "18%"])
-selected = args.case or list(cases)
+                cases[name] = (options, ["projet", "18%"])
+for index in range(3):
+    cases[f"physical-screen-{index}"] = (["--preview-compact", "--preview-native-screen", f"--preview-screen={index}"], ["projet", "18%"])
+selected = args.case or [name for name in cases if not name.startswith("physical-screen-")]
 if any(name not in cases for name in selected):
     parser.error("Cas inconnus : " + str(selected))
 
@@ -146,6 +177,11 @@ with tempfile.TemporaryDirectory(prefix="atoll-ui-probe-") as directory:
     def read(mode, value):
         return json.loads(subprocess.check_output([str(probe), mode, str(value)], text=True))
 
+    screens = read("screens", 0)
+    (args.output / "screens.json").write_text(json.dumps(screens, ensure_ascii=False, indent=2))
+    for name in selected:
+        if name.startswith("physical-screen-") and int(name.rsplit("-", 1)[1]) >= len(screens):
+            parser.error("Écran physique absent : " + name)
     results = []
     for name in selected:
         options, expected = cases[name]
@@ -199,22 +235,9 @@ with tempfile.TemporaryDirectory(prefix="atoll-ui-probe-") as directory:
                         if recorder.poll() is None:
                             recorder.terminate()
                             recorder.wait(timeout=5)
-                if name == "selector-hover":
-                    before = args.output / "selector-hover-before.png"
-                    subprocess.run(["/usr/sbin/screencapture", "-x", "-o", "-l", str(window["kCGWindowNumber"]), str(before)], check=True)
-                    target = json.loads(subprocess.check_output([str(probe), "frame", str(process.pid), "Claude Code"], text=True))
-                    x, y = int(target["x"]), int(target["y"])
-                    (args.output / "selector-pointer.json").write_text(json.dumps(target))
-                    subprocess.run(["/opt/homebrew/bin/cliclick", f"m:={x},={y}"], check=True)
-                    time.sleep(0.7)
-                    hovered = args.output / "selector-hover-wait.png"
-                    subprocess.run(["/usr/sbin/screencapture", "-x", "-o", "-l", str(window["kCGWindowNumber"]), str(hovered)], check=True)
-                    hover_text = "\n".join(line["text"] for line in read("ocr", hovered)["lines"] if line["y"] > 0.19)
-                    if "QUOTAS" in hover_text or "SESSIONS" in hover_text:
-                        case_failures.append("Le sélecteur compact s'est déplacé avant le clic")
-                    else:
-                        subprocess.run(["/opt/homebrew/bin/cliclick", "-w", "150", f"c:={x},={y}"], check=True)
-                        time.sleep(0.3)
+                if name == "provider-expanded":
+                    subprocess.run([str(probe), "press", str(process.pid), "Claude Code"], check=True)
+                    time.sleep(0.5)
                 if name == "skills-position":
                     before = args.output / "skills-position-before.png"
                     subprocess.run(["/usr/sbin/screencapture", "-x", "-o", "-l", str(window["kCGWindowNumber"]), str(before)], check=True)
@@ -258,11 +281,32 @@ with tempfile.TemporaryDirectory(prefix="atoll-ui-probe-") as directory:
                 observed = read("ocr", path)
                 (args.output / (name + ".json")).write_text(json.dumps(observed, ensure_ascii=False, indent=2))
                 # Les contrôles de recette au-dessus de l'îlot ne sont pas des preuves.
-                text = "\n".join(line["text"] for line in observed["lines"] if name.startswith("onboarding-") or name == "settings-codex" or name.startswith("skills") or line["y"] > 0.19)
+                text = "\n".join(line["text"] for line in observed["lines"] if name.startswith("onboarding-") or name.startswith("settings-codex") or name.startswith("skills") or line["y"] > 0.19)
                 def normalized(value):
                     return "".join(c for c in unicodedata.normalize("NFD", value.casefold()) if unicodedata.category(c) != "Mn")
                 missing = [label for label in expected if normalized(label) not in normalized(text)]
                 missing += case_failures
+                if "--preview-compact" in options:
+                    elements = read("elements", process.pid)
+                    (args.output / (name + "-accessibility.json")).write_text(json.dumps(elements, ensure_ascii=False, indent=2))
+                    if any(e["role"] == "AXButton" and "sessions," in e["label"] for e in elements):
+                        missing.append("sélecteur de fournisseur encore présent dans le compact")
+                    if re.search(r"\b(?:CL|CX)\s*\d", text):
+                        missing.append("préfixe CL/CX encore visible")
+                    if "--preview-rockstar" in options and not any("Claude Rockstar actif" in e["label"] for e in elements):
+                        missing.append("marqueur Rockstar inaccessible")
+                    if "--preview-empty" not in options:
+                        project = "projet-0" if "--preview-claude" in options else "projet-1"
+                        if not any(e["role"] == "AXStaticText" and project in e["label"] for e in elements):
+                            missing.append("nom complet du projet inaccessible")
+                    lines = [line for line in observed["lines"] if line["y"] > 0.19]
+                    activity = next((line for line in lines if "projet" in line["text"]), None)
+                    percentage = "27%" if "--preview-claude" in options else "18%"
+                    quota = next((line for line in lines if percentage in line["text"]), None)
+                    if activity and quota:
+                        offset = abs(activity["y"] + activity["height"] / 2 - quota["y"] - quota["height"] / 2)
+                        if offset > max(activity["height"], quota["height"]) * 0.6:
+                            missing.append("activité et quota sur deux lignes")
                 if name == "preview-preferences":
                     stale = subprocess.run(["defaults", "read", preview_domain, "fixtureStale"], capture_output=True)
                     if stale.returncode == 0:

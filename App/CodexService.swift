@@ -67,8 +67,8 @@ final class CodexService {
         syncQuotaSettings()
     }
 
-    /// Scan hors du fil principal : `proc_listpids` puis une lecture d'en-tête
-    /// par rollout. Les hooks restent l'autorité — `adopt` n'écrase rien.
+    /// Relit hors du fil principal le registre d'identités confirmé par les hooks.
+    /// Les hooks restent l'autorité — `adopt` n'écrase rien.
     private func adoptRunningSessions() {
         guard scanTask == nil else { return }
         let known = Set(observed.sessions().map(\.id))
@@ -246,6 +246,8 @@ final class CodexService {
             row["model"] = session.model
             row["branchAtStart"] = session.gitBranch
             row["contextFraction"] = session.contextUsedFraction
+            row["contextUsedTokens"] = session.contextTokenUsage?.usedTokens
+            row["contextWindowTokens"] = session.contextTokenUsage?.windowTokens
             row["contextMeasuredAt"] = session.contextMeasuredAt.map { ISO8601DateFormatter().string(from: $0) }
             return row
         }

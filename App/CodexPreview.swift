@@ -4,6 +4,25 @@ import AtollCore
 
 /// Recette des vraies vues, sans socket, installation, analyse ou connexion.
 enum CodexPreview {
+    static var hookDiagnosticSummary: String {
+        guard enabled,
+              let definitions = try? CodexHookSettingsEditor.edit(nil, install: true),
+              let root = try? JSONSerialization.jsonObject(with: definitions) as? [String: Any],
+              let events = root["hooks"] as? [String: [[String: Any]]] else { return "" }
+        let hooks: [[String: Any]] = events.flatMap { event, groups in
+            groups.flatMap { $0["hooks"] as? [[String: Any]] ?? [] }.map { handler in
+                var hook = handler
+                hook["eventName"] = event.prefix(1).lowercased() + event.dropFirst()
+                hook["timeoutSec"] = handler["timeout"]
+                hook["enabled"] = true
+                hook["trustStatus"] = ["SubagentStart", "SubagentStop"].contains(event) ? "untrusted" : "trusted"
+                return hook
+            }
+        }
+        guard let data = try? JSONSerialization.data(withJSONObject: ["data": [["hooks": hooks, "errors": []]]]) else { return "" }
+        return CodexHookDiagnostics(data: data)?.summary ?? ""
+    }
+
     // Un domaine par copie, réinitialisé au prochain lancement même après
     // SIGKILL. Ne jamais balayer les domaines d'autres processus ou apps.
     static var preferenceDomain: String {
@@ -41,13 +60,22 @@ enum CodexPreview {
             fputs("Recette native en aperçu : home=\(BridgePaths.homeDirectory.path), codex=\(CodexPaths.homeURL.path)\n", stderr)
         }
         let args = CommandLine.arguments
-        let screen = NSScreen.screens.dropFirst().first ?? NSScreen.screens[0]
+        let requestedScreen = args.first { $0.hasPrefix("--preview-screen=") }
+            .flatMap { Int($0.dropFirst("--preview-screen=".count)) }
+        let screen = requestedScreen.flatMap { NSScreen.screens.indices.contains($0) ? NSScreen.screens[$0] : nil }
+            ?? NSScreen.screens.dropFirst().first ?? NSScreen.screens[0]
         let model = NotchViewModel(screen: screen, isPrimary: true)
         model.previewSessions = args.contains("--preview-empty") ? [] : (0..<(args.contains("--preview-many") ? 24 : 2)).map { i in
-            AgentSession(id: "preview-\(i)", projectName: "projet-\(i) — libellé très long à vérifier",
+            var session = AgentSession(id: "preview-\(i)", projectName: "projet-\(i) — libellé très long à vérifier",
                          status: i % 3 == 0 ? .awaitingPermission(tool: "Tests Swift") : .working(tool: "Analyse"),
-                         cwd: args.contains("--preview-detail") ? NSTemporaryDirectory() : nil,
+                         cwd: args.contains("--preview-detail") ? "/tmp" : nil,
                          provider: i % 2 == 0 ? .claude : .codex)
+            if args.contains("--preview-detail"), session.provider == .codex {
+                session.contextTokenUsage = ContextTokenUsage(usedTokens: 173_617, windowTokens: 258_400)
+                session.contextUsedFraction = session.contextTokenUsage?.fraction
+                session.contextMeasuredAt = Date()
+            }
+            return session
         }
         model.previewUsage = UsageSnapshot(fiveHourFraction: 0.27, sevenDayFraction: 0.64)
         CodexService.shared.seedPreviewQuota()
@@ -72,6 +100,8 @@ enum CodexPreview {
             ProviderPreferences.codexPaletteKey: Palette.monoCyan.id,
             InteractionCenter.autonomyKey: args.contains("--preview-rockstar") ? "rockstar" : "manual"
         ])
+        let windowHeight: CGFloat = args.contains("--preview-codex-settings")
+            ? min(screen.visibleFrame.height - 80, 1_200) : 580
         let content = Group {
             if args.contains("--preview-onboarding") {
                 OnboardingView(onDone: {})
@@ -80,18 +110,18 @@ enum CodexPreview {
             } else if args.contains("--preview-codex-settings") {
                 // Recette de rendu seulement : les callbacks de ce panneau
                 // changent le home suivi et démarrent des lectures natives.
-                CodexSettingsPane().disabled(true).frame(width: 780, height: 580)
+                CodexSettingsPane().disabled(true).frame(width: 780, height: windowHeight)
             } else {
                 PreviewContent(model: model, light: args.contains("--preview-light"))
             }
         }
             .defaultAppStorage(defaults)
             .onDisappear { defaults.removePersistentDomain(forName: domain) }
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 780, height: 580),
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 780, height: windowHeight),
                               styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
         window.title = "Atoll — recette isolée"
         window.contentView = NSHostingView(rootView: content)
-        window.setFrameOrigin(NSPoint(x: screen.visibleFrame.midX - 390, y: screen.visibleFrame.midY - 290))
+        window.setFrameOrigin(NSPoint(x: screen.visibleFrame.midX - 390, y: screen.visibleFrame.midY - windowHeight / 2))
         window.makeKeyAndOrderFront(nil)
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)

@@ -203,6 +203,7 @@ public struct CodexSessions: Sendable {
         if entry.session.model == nil { entry.session.model = metadata.model }
         entry.session.contextUsedFraction = metadata.contextFraction
         entry.session.contextMeasuredAt = metadata.contextAt
+        entry.session.contextTokenUsage = metadata.contextUsage
         entries[sessionID] = entry
     }
 

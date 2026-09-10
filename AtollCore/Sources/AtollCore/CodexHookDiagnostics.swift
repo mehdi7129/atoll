@@ -7,6 +7,8 @@ public struct CodexHookDiagnostics: Equatable, Sendable {
     public let untrustedCount: Int
     public let obsoleteCount: Int
     public let errorCount: Int
+    public let activeCount: Int
+    public let untrustedEventNames: [String]
 
     public init?(data: Data) {
         guard let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
@@ -16,6 +18,16 @@ public struct CodexHookDiagnostics: Equatable, Sendable {
         managedCount = hooks.count
         disabledCount = hooks.filter { $0["enabled"] as? Bool != true }.count
         untrustedCount = hooks.filter { !["trusted", "managed"].contains($0["trustStatus"] as? String ?? "") }.count
+        activeCount = hooks.filter {
+            $0["enabled"] as? Bool == true && ["trusted", "managed"].contains($0["trustStatus"] as? String ?? "")
+        }.count
+        untrustedEventNames = Array(Set(hooks.compactMap { hook -> String? in
+            guard !["trusted", "managed"].contains(hook["trustStatus"] as? String ?? ""),
+                  let event = hook["eventName"] as? String else { return nil }
+            return CodexHookEvent.Kind.allCases.first {
+                $0.rawValue.prefix(1).lowercased() + $0.rawValue.dropFirst() == event
+            }?.rawValue
+        })).sorted()
         obsoleteCount = hooks.filter { hook in
             guard let name = hook["eventName"] as? String,
                   let kind = CodexHookEvent.Kind.allCases.first(where: {
@@ -37,7 +49,9 @@ public struct CodexHookDiagnostics: Equatable, Sendable {
         if obsoleteCount > 0 || managedCount < CodexHookEvent.Kind.allCases.count {
             return "définitions Atoll incomplètes ou obsolètes — réparer l'installation"
         }
-        if untrustedCount > 0 { return "\(untrustedCount) hook(s) à approuver — ouvre /hooks" }
-        return "\(managedCount) hooks actifs et approuvés · attente d'événements de la TUI"
+        if untrustedCount > 0 {
+            return "\(activeCount)/\(managedCount) hooks actifs. À approuver dans /hooks : \(untrustedEventNames.joined(separator: ", "))."
+        }
+        return "\(managedCount) hooks actifs et approuvés. Envoie un message dans Codex pour vérifier le suivi."
     }
 }

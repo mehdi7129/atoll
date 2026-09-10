@@ -112,6 +112,10 @@ struct SessionDetailView: View {
                         .foregroundStyle(context > 0.85 ? colors.warn : colors.accent)
                     Text("\(Int(context * 100))%")
                         .foregroundStyle(colors.fg)
+                    if let usage = session.contextTokenUsage {
+                        Text(usage.formattedCounts)
+                            .foregroundStyle(colors.dim)
+                    }
                 }
                 .font(AtollFont.mono(10))
                 if session.provider == .codex {
