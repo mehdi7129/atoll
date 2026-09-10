@@ -8,8 +8,10 @@ les mesures et pièges historiques, sans faire autorité sur l'état actuel.
 
 | Élément | État vérifié |
 |---|---|
-| Version du code | **v0.18.0, build 35** ; publication en préparation |
-| Fusion / release | Mehdi les a autorisées après lecture des deux limites de recette ci-dessous ; PR #2 en cours de finalisation |
+| Version publiée | **[v0.18.0, build 35](https://github.com/mehdi7129/atoll/releases/tag/v0.18.0)** |
+| Fusion / source | [PR #2](https://github.com/mehdi7129/atoll/pull/2) fusionnée ; tag sur `37178a4` ; accord de Mehdi avec les deux recettes différées ci-dessous |
+| Distribution | Universelle arm64 / x86_64 ; app et DMG signés Developer ID, notarisés, staplés et acceptés par Gatekeeper |
+| Mise à jour | Appcast poussé après les assets (`dbe47f0`) et identique au flux servi ; 19 URL disponibles, SHA256 des sept fichiers publiés vérifiés |
 | Référence précédente | v0.17.2, build 34 ; `main` avant PR #2 : `1b08ebd` |
 | Tests fonctionnels | 1 014 tests Core, 1 skip live opt-in, 0 échec ; 60 scénarios runtime |
 | Recettes | Codex authentifié : autoriser, refuser, rendre la décision au CLI, interrompre/reprendre ; VoiceOver natif, sons entendus, 24 variantes et quatre films relus |
@@ -18,6 +20,8 @@ les mesures et pièges historiques, sans faire autorité sur l'état actuel.
 Vérifier l'état réel avant toute action : `git status --short --branch`,
 `git log -5 --oneline`, `git worktree list`, puis `gh release view`.
 Une source publiée et une app installée peuvent avoir des versions différentes.
+Le [relevé de livraison](releases/0.18.0.json) conserve les commits, identifiants
+de notarisation, résultats et empreintes des fichiers distribués.
 
 ## Ce qui est livré dans le code
 
@@ -53,7 +57,7 @@ Une source publiée et une app installée peuvent avoir des versions différente
 4. **Mouvement réduit** désactive l'onde ; les fondus et transitions de taille
    existants demeurent. L'OCR ne remplace ni la lecture des captures ni VoiceOver.
 
-La fusion et la publication sont autorisées malgré les deux recettes différées.
+La fusion et la publication ont eu lieu avec l'accord de Mehdi malgré les deux recettes différées.
 Ne pas les déclarer réussies lors d'une reprise de session.
 
 ## Vérifier ou modifier
@@ -105,6 +109,12 @@ Profil notarytool : `atoll-notary`. Clés de signature dans le Keychain ; ne jam
 les exporter dans les logs ou le dépôt. Préserver le DerivedData Debug et les
 archives `dist/updates`. Les anciennes sorties remplacées restent récupérables
 à la corbeille. Une nouvelle release ne nécessite pas de réinstaller l'app stable.
+
+Incident local du 10 septembre : 44 copies non suivies suffixées « 2 », toutes
+identiques aux originaux et absentes des six listes de compilation Release, ont
+été conservées dans `/private/tmp/atoll-018-sync-copies-yjutnk0r/` avec manifeste.
+La cause reste indéterminée ; si elles réapparaissent, comparer avant de déplacer,
+sans les intégrer au build ni supprimer un changement distinct.
 
 ## Références utiles
 

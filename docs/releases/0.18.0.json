@@ -1,0 +1,102 @@
+{
+  "version": "0.18.0",
+  "build": "35",
+  "sourceCommit": "37178a4a1e81af22576496375831f33dae4a3846",
+  "architectures": [
+    "x86_64",
+    "arm64"
+  ],
+  "checks": {
+    "app": "Developer ID verified",
+    "helper": "Developer ID verified",
+    "sparkle-autoupdate": "Developer ID verified",
+    "appStaple": "valid",
+    "dmgStaple": "valid",
+    "gatekeeper": "app and dmg accepted",
+    "deliveredZip": "version/build, signature and staple verified"
+  },
+  "assets": [
+    {
+      "name": "Atoll-0.18.0.dmg",
+      "bytes": 8524040,
+      "sha256": "fa8c52058ccafaa987aca6f104fb5eda73b46a3d6c07995efbc309cd8e0abbe6",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.18.0/Atoll-0.18.0.dmg"
+    },
+    {
+      "name": "Atoll-0.18.0.zip",
+      "bytes": 7711959,
+      "sha256": "d61463bee4c6ed95e5d3cd1996c241236e932d5301cd53a0e77c347c38a9d33a",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.18.0/Atoll-0.18.0.zip"
+    },
+    {
+      "name": "Atoll35-30.delta",
+      "bytes": 2930130,
+      "sha256": "160bb19349446d377e0380fa605ca48b4c0df808118c3e6dd99c5ed94d106cd9",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.18.0/Atoll35-30.delta"
+    },
+    {
+      "name": "Atoll35-31.delta",
+      "bytes": 2934586,
+      "sha256": "02a42d67f6479ec737ab38bb0503671cb5acb353142f8f037c1d4c4c036943a0",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.18.0/Atoll35-31.delta"
+    },
+    {
+      "name": "Atoll35-32.delta",
+      "bytes": 2703122,
+      "sha256": "86bfbe4555b0f2c7da81c0091597b5ecc5b0e06f33be3e6bc64b914f4ec3b659",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.18.0/Atoll35-32.delta"
+    },
+    {
+      "name": "Atoll35-33.delta",
+      "bytes": 2680930,
+      "sha256": "ae5ff246d31b2b67c9113da5f487ce47c79d026e930ae7004338e72f703b0b8e",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.18.0/Atoll35-33.delta"
+    },
+    {
+      "name": "Atoll35-34.delta",
+      "bytes": 2656382,
+      "sha256": "23e8107c26df589fea3c2e871aa3fbcd8521cca56186a0b3c904261d423f8f61",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.18.0/Atoll35-34.delta"
+    }
+  ],
+  "releaseURL": "https://github.com/mehdi7129/atoll/releases/tag/v0.18.0",
+  "publishedAt": "2026-09-10T17:49:21Z",
+  "pullRequest": "https://github.com/mehdi7129/atoll/pull/2",
+  "notarization": {
+    "app": {
+      "submissionID": "89ff223b-1611-4ef4-ae36-af0ca93293d8",
+      "status": "Accepted"
+    },
+    "dmg": {
+      "submissionID": "4fc47c74-3f5c-4d0a-ba1d-3e47ef3a9cac",
+      "status": "Accepted"
+    }
+  },
+  "publicDownloads": {
+    "checkedAt": "2026-09-10T17:49:51.191381+00:00",
+    "enclosuresHTTP200": 18,
+    "dmgHTTP200": true,
+    "downloadedSHA256Matches": 7
+  },
+  "appcast": {
+    "url": "https://mehdi7129.github.io/atoll/appcast.xml",
+    "commit": "dbe47f043a95962947e577f5923f4a7d128709a1",
+    "sha256": "9af6df0e20cc36f3399ff0a3197516940f0bf3893152b4a8314899f5a9143496",
+    "servedBytesEqualRepository": true
+  },
+  "validation": {
+    "core": {
+      "executed": 1014,
+      "skipped": 1,
+      "failures": 0
+    },
+    "runtimeScenariosPassed": 60,
+    "releaseCleanupAndSabotage": "passed",
+    "featureEvidence": "../REVIEW-2026-09-10-skills-validation.md",
+    "deferred": [
+      "Recette Claude authentifiée : abonnement absent sur la machine de test.",
+      "Retour visuel dans un onglet de terminal : refus du pilotage GUI par l’outil ; aucun défaut du bouton établi."
+    ]
+  },
+  "verifiedAt": "2026-09-10T17:52:45.565042+00:00"
+}

@@ -169,7 +169,7 @@ l'épingle, cliquer ailleurs le referme.
 La seconde intégration peut être installée séparément dans les réglages. Réglages › Codex
 affiche aussi le home utilisé et vérifie les définitions et leur confiance avec le CLI.
 
-**Version courante : v0.18.0.** Publication en préparation.
+**Version courante : v0.18.0.** [Notes de version](https://github.com/mehdi7129/atoll/releases/tag/v0.18.0).
 
 ---
 

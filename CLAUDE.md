@@ -1,7 +1,8 @@
 # CLAUDE.md — instructions projet Atoll
 
-> **v0.18.0, build 35 — publication autorisée, en préparation (2026-09-10).**
-> Mehdi a autorisé la fusion de la PR #2 et la release. La fiche courante est
+> **v0.18.0, build 35 — publiée le 2026-09-10, PR #2 fusionnée.**
+> App et DMG notarisés ; flux Sparkle servi et téléchargements vérifiés.
+> [Preuves de livraison](docs/releases/0.18.0.json). La fiche courante est
 > [docs/HANDOFF.md](docs/HANDOFF.md) ; les relevés anciens y sont archivés.
 > Le générateur vise des skills utiles et concis ; la recette Codex, VoiceOver
 > et l'écoute des sons sont vérifiés. La recette Claude authentifiée demeure
