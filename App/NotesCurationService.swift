@@ -61,17 +61,26 @@ final class NotesCurationService {
     @ObservationIgnored private var spawnFailure: String?
     @ObservationIgnored private var timeoutTask: Task<Void, Never>?
     @ObservationIgnored private var schedulerTask: Task<Void, Never>?
+    @ObservationIgnored private var cycleTask: Task<Void, Never>?
+    @ObservationIgnored private var runGeneration = UUID()
+    @ObservationIgnored private var processIdentity: ProcessIdentity?
+    @ObservationIgnored private var activeExecution: AnalysisExecution?
+    @ObservationIgnored private var activeLease: UUID?
+    @ObservationIgnored private var activeManual = true
+    @ObservationIgnored private var runLaunched = false
+    private(set) var retryAt: Date?
 
     private static let timeoutSeconds: TimeInterval = 600
     nonisolated private static let stdoutCapBytes = 4 * 1024 * 1024
     /// Cadence de la vérification « est-ce dû ? » quand l'automatique est actif.
-    private static let schedulerTickSeconds: TimeInterval = 6 * 3600
+    private static let schedulerTickSeconds: TimeInterval = 15 * 60
 
     private init() {
         let state = Self.loadState()
         lastRunAt = state.lastRunAt
         lastOutcome = state.lastOutcome
         warnings = state.warnings
+        retryAt = state.retryAt
     }
 
     // MARK: - Planification
@@ -82,6 +91,7 @@ final class NotesCurationService {
         guard LearningSettings.shared.isCurationScheduled else {
             schedulerTask?.cancel()
             schedulerTask = nil
+            if !activeManual, cycleTask != nil { cancel() }
             return
         }
         guard schedulerTask == nil else { return }
@@ -107,6 +117,7 @@ final class NotesCurationService {
     /// Lance un cycle si l'échéance est passée (et si le réglage est actif).
     func runIfDue() {
         guard LearningSettings.shared.isCurationScheduled else { return }
+        if let retryAt, retryAt > Date() { return }
         let interval = LearningSettings.curationIntervalDays * 86_400
         if let lastRunAt, Date().timeIntervalSince(lastRunAt) < interval { return }
         curateNow(manual: false)
@@ -115,7 +126,7 @@ final class NotesCurationService {
     /// Déclenchement explicite (bouton des Réglages) — ignore l'échéance mais
     /// PAS les autres garde-fous.
     func curateNow(manual: Bool = true) {
-        guard phase == .idle, process == nil else {
+        guard phase == .idle, process == nil, cycleTask == nil else {
             log.info("curation déjà en cours — demande ignorée")
             return
         }
@@ -130,13 +141,26 @@ final class NotesCurationService {
         // Ré-entrance : la garde est posée AVANT le premier await (un
         // double-clic lançait deux `claude` en Phase 9).
         phase = .running
-        Task { await run(manual: manual) }
+        activeManual = manual
+        lastOutcome = nil
+        let generation = UUID()
+        runGeneration = generation
+        cycleTask = Task {
+            defer { cycleTask = nil }
+            await run(manual: manual, generation: generation)
+            if runGeneration != generation { phase = .idle; lastOutcome = "analyse annulée" }
+        }
     }
 
     /// Kill-switch : arrêt immédiat avec escalade SIGTERM → SIGKILL.
     /// `phase` revient à `.idle` (revue) : sinon un `cancel()` sans processus
     /// en vol laissait le service bloqué en « running » pour toujours.
+    func cancelIfCodex() {
+        if activeExecution?.provider == .codex { cancel() }
+    }
+
     func cancel() {
+        runGeneration = UUID()
         timeoutTask?.cancel()
         timeoutTask = nil
         terminateWithEscalation()
@@ -144,18 +168,19 @@ final class NotesCurationService {
     }
 
     private func terminateWithEscalation() {
-        guard let process, process.isRunning else { return }
-        let pid = process.processIdentifier
-        process.terminate()
+        guard let identity = processIdentity else { return }
+        ProcessInspector.signal(SIGTERM, to: identity)
         Task.detached(priority: .utility) {
             try? await Task.sleep(for: .seconds(5))
-            if kill(pid, 0) == 0 { kill(pid, SIGKILL) }
+            ProcessInspector.signal(SIGKILL, to: identity)
         }
     }
 
     // MARK: - Cycle
 
-    private func run(manual: Bool) async {
+    private func run(manual: Bool, generation: UUID) async {
+        guard runGeneration == generation, !Task.isCancelled else { return }
+        runLaunched = false
         // AVANT le balayage : le staging est la pièce à conviction d'une
         // bascule interrompue, et `sweepStagingLeaks` le détruit.
         Self.repairInterruptedSwap()
@@ -174,72 +199,41 @@ final class NotesCurationService {
                    touched: false)
             return
         }
-        // QUOTA — mêmes exigences que la rétrospective (revue) : la version
-        // précédente ne regardait le quota que s'il était CONNU, donc au
-        // premier tour du planificateur (juste après le lancement, avant la
-        // première statusline) elle partait sans aucun garde-fou.
-        let store = SessionStore.shared
-        let claudeQuota = LearningGate.QuotaFacts(
-            usedFraction: store.realQuota?.fiveHour.usedFraction,
-            receivedAt: store.rawQuotaReceivedAt,
-            resetsAt: store.realQuota?.fiveHour.resetsAt
-        )
-        // ORDRE IMPÉRATIF, comme pour le bilan : choisir le compte qui paie,
-        // PUIS lui appliquer les refus de quota. `provider == nil` ⇒ aucun des
-        // deux ne peut payer, et on s'arrête AVANT `quotaRefusal` — celui-ci
-        // tolère un quota inconnu (une dépense par fenêtre), ce qui ferait
-        // repartir le run sur le Claude qu'on vient de mesurer plein.
-        let failover = ProviderFailover.choose(
-            claude: claudeQuota,
-            codex: CodexService.shared.quota,
-            config: LearningSettings.shared.failoverConfig
-        )
-        guard let provider = failover.provider else {
-            let motif = failover.reason == .bothExhausted
-                ? "les deux abonnements sont épuisés"
-                : "quota Codex indisponible"
-            log.info("curation reportée : \(motif, privacy: .public)")
+        let execution: AnalysisExecution
+        let lease: UUID
+        do {
+            execution = try AnalysisExecution.capture(kind: .curation)
+            lease = try AnalysisBudget.shared.begin(execution, kind: .curation)
+        } catch {
+            lastOutcome = error.localizedDescription
             phase = .idle
-            lastOutcome = "reportée (\(motif))"
-            Self.saveState(.init(lastRunAt: lastRunAt, lastOutcome: lastOutcome,
-                                 warnings: warnings))
             return
         }
-        let quota = provider == .codex
-            ? ProviderFailover.quotaFacts(of: CodexService.shared.quota)
-            : claudeQuota
-        if let refusal = Self.quotaRefusal(quota, now: Date(), lastSpendAt: lastSpendAt) {
-            log.info("curation reportée : \(refusal, privacy: .public)")
-            phase = .idle
-            lastOutcome = "reportée (\(refusal))"
-            Self.saveState(.init(lastRunAt: lastRunAt, lastOutcome: lastOutcome,
-                                 warnings: warnings))
-            return
+        activeExecution = execution
+        activeLease = lease
+        defer {
+            AnalysisBudget.shared.finish(lease, outcome: lastOutcome ?? "cancelled")
+            activeExecution = nil
+            activeLease = nil
         }
-        if let used = quota.usedFraction,
-           used > LearningSettings.shared.quotaThreshold {
-            let percent = Int(used * 100)
-            log.info("quota 5 h à \(percent) % — curation reportée")
-            // Reportée : `lastRunAt` n'est PAS avancé, la prochaine vérification
-            // réessaiera (sinon un pic de quota sauterait toute la semaine).
-            // L'issue est tout de même persistée, sinon les Réglages
-            // afficheraient le passage PRÉCÉDENT après un redémarrage.
-            phase = .idle
-            lastOutcome = "reportée (quota 5 h à \(percent) %)"
-            Self.saveState(.init(lastRunAt: lastRunAt, lastOutcome: lastOutcome,
-                                 warnings: warnings))
-            return
-        }
-
+        let provider = execution.provider
         let userPrompt = NotesCurationPrompt.userPrompt(notes: notes)
         var parsed: NotesCurationOutput?
         switch provider {
         case .claude:
             let arguments = NotesCurationPrompt.cliArguments(
-                model: LearningSettings.shared.curationModel,
+                model: execution.model,
                 budgetUSD: LearningSettings.budgetUSD
             ) + [userPrompt]
-            guard let output = await spawnClaude(arguments: arguments) else {
+            guard let launch = await CodexRun.prepareClaude(arguments: arguments, label: "curation") else {
+                guard runGeneration == generation else { return }
+                finish(outcome: CodexRun.lastFailure ?? "Analyse indisponible.", touched: false)
+                return
+            }
+            defer { launch.cleanUp() }
+            guard let output = await spawnShell(command: launch.shellCommand, generation: generation,
+                                                workingDirectory: launch.workspace) else {
+                guard runGeneration == generation else { return }
                 finish(outcome: spawnFailure ?? "échec du lancement de l'analyse", touched: false)
                 return
             }
@@ -256,29 +250,40 @@ final class NotesCurationService {
                 schema: NotesCurationPrompt.jsonSchema,
                 prompt: CodexExecPlan.fullPrompt(system: NotesCurationPrompt.systemPrompt,
                                                  user: userPrompt),
-                workingDirectory: nil, label: "curation")
+                workingDirectory: nil, label: "curation", home: execution.home, model: execution.model,
+                executableOverride: execution.executableOverride)
             else {
-                finish(outcome: CodexExecutable.notFoundMessage, touched: false)
+                guard runGeneration == generation else { return }
+                finish(outcome: CodexRun.lastFailure ?? CodexExecutable.notFoundMessage, touched: false)
                 return
             }
             defer { launch.cleanUp() }
-            guard await spawnShell(command: launch.shellCommand) != nil else {
+            guard runGeneration == generation, !Task.isCancelled else { return }
+            guard await spawnShell(command: launch.shellCommand, generation: generation, workingDirectory: launch.workspace) != nil else {
+                guard runGeneration == generation else { return }
                 finish(outcome: spawnFailure ?? "échec du lancement de l'analyse", touched: false)
                 return
             }
-            let data = launch.outputFile.flatMap { try? Data(contentsOf: $0) } ?? Data()
+            let data = launch.outputFile.flatMap { BoundedProcessOutput.file(at: $0, cap: Self.stdoutCapBytes) } ?? Data()
             parsed = NotesCurationOutput.parse(codexOutput: data)
         }
+        guard runGeneration == generation, !Task.isCancelled else { return }
         guard let curation = parsed else {
             log.error("curation : sortie inexploitable")
             finish(outcome: "sortie inexploitable — notes inchangées", touched: false)
             return
         }
 
-        switch NotesCurationPlanner.plan(existing: notes, output: curation, now: Date()) {
+        let archives = await Task.detached(priority: .utility) {
+            NoteProvenance.readArchives(at: BridgePaths.learningArchiveDirectory)
+        }.value
+        guard generation == runGeneration else { return }
+        switch NotesCurationPlanner.plan(existing: notes, output: curation, now: Date(), archives: archives) {
         case .failure(let refusal):
             let reason: String
             switch refusal {
+            case .untraceableSources:
+                reason = "source de note absente ou inconnue — refus (notes conservées)"
             case .emptyOutputFromNonEmptyInput:
                 reason = "aucune note proposée — refus (rien n'a été touché)"
             case .excessiveShrink(let ratio):
@@ -596,32 +601,19 @@ final class NotesCurationService {
     /// (contradictions) proviennent de ce cycle ou doivent être effacés.
     private func finish(outcome: String, touched: Bool) {
         let now = Date()
-        lastRunAt = now
+        if runLaunched || touched {
+            lastRunAt = now
+            retryAt = nil
+        } else {
+            retryAt = now.addingTimeInterval(30 * 60)
+        }
         lastOutcome = outcome
         if !touched { warnings = [] }
         phase = .idle
-        Self.saveState(.init(lastRunAt: now, lastOutcome: outcome, warnings: warnings))
+        Self.saveState(.init(lastRunAt: lastRunAt, lastOutcome: outcome, warnings: warnings, retryAt: retryAt))
     }
 
     // MARK: - Sous-processus
-
-    /// Spawn `claude -p` via un shell de LOGIN (sinon le process est muet
-    /// depuis une app GUI — piège vécu), sortie bornée, lecture sur des tâches
-    /// détachées (readabilityHandler est inopérant en LSUIElement).
-    private func spawnClaude(arguments: [String]) async -> Data? {
-        // Chemin ABSOLU, jamais le nom nu : `zsh -l -c` est un shell de login
-        // NON INTERACTIF, il ne lit pas ~/.zshrc — où vit ~/.local/bin.
-        // Mesuré le 2026-08-24 : « exit 127 — command not found: claude ».
-        guard let claude = await ClaudeExecutable.resolve() else {
-            log.error("curation impossible : claude introuvable")
-            spawnFailure = ClaudeExecutable.notFoundMessage
-            return nil
-        }
-        let shellCommand = "unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN; exec "
-            + FleetLaunch.shellQuote(claude) + " "
-            + arguments.map(FleetLaunch.shellQuote).joined(separator: " ")
-        return await spawnShell(command: shellCommand)
-    }
 
     /// Exécution proprement dite — identique quel que soit l'abonnement : même
     /// shell de login, même watchdog, même drainage parallèle des deux pipes,
@@ -632,14 +624,20 @@ final class NotesCurationService {
     /// stdout n'est qu'un journal d'événements — le rapport est dans le fichier
     /// de `--output-last-message` —, mais le non-`nil` reste le signal
     /// « le process est allé au bout avec exit 0 ».
-    private func spawnShell(command shellCommand: String) async -> Data? {
+    private func spawnShell(command shellCommand: String, generation: UUID, workingDirectory: URL?) async -> Data? {
+        guard runGeneration == generation, !Task.isCancelled else { return nil }
+        guard let lease = activeLease, let execution = activeExecution,
+              AnalysisBudget.shared.mayLaunch(lease, context: execution) else {
+            spawnFailure = "Quota périmé ou plafond interne atteint."
+            return nil
+        }
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/zsh")
         process.arguments = ["-l", "-c", shellCommand]
         var environment = ProcessInfo.processInfo.environment
         environment["ATOLL_RETROSPECTIVE"] = "1" // filtré par reconcile() : invisible dans l'îlot
         process.environment = environment
-        process.currentDirectoryURL = BridgePaths.learningDirectory
+        process.currentDirectoryURL = workingDirectory
         // NON NÉGOCIABLE sur le chemin Codex : `codex exec` lit stdin même
         // quand le prompt est en argument, et attend EOF — mesuré le
         // 2026-09-06 (« Reading additional input from stdin... »), soit dix
@@ -653,7 +651,6 @@ final class NotesCurationService {
         spawnFailure = nil
         // La dépense commence ICI, pas au cycle : c'est ce qui borne la
         // tolérance « quota inconnu ».
-        lastSpendAt = Date()
         do {
             try process.run()
         } catch {
@@ -661,19 +658,24 @@ final class NotesCurationService {
             spawnFailure = "l'analyse n'a pas pu être lancée (\(error.localizedDescription))"
             return nil
         }
+        lastSpendAt = Date()
+        runLaunched = true
+        AnalysisBudget.shared.launched(lease)
         self.process = process
+        processIdentity = ProcessInspector.identity(of: process.processIdentifier)
+        let identity = processIdentity
         let pid = process.processIdentifier
         SessionStore.shared.registerInternalPid(pid)
         log.info("curation lancée (pid \(pid))")
 
-        timeoutTask = Task { [weak self] in
+        timeoutTask = Task {
             try? await Task.sleep(for: .seconds(Self.timeoutSeconds))
             guard !Task.isCancelled else { return }
             log.error("curation (pid \(pid)) : timeout — SIGTERM")
-            self?.process?.terminate()
+            if let identity { ProcessInspector.signal(SIGTERM, to: identity) }
             try? await Task.sleep(for: .seconds(5))
             guard !Task.isCancelled else { return }
-            kill(pid, SIGKILL)
+            if let identity { ProcessInspector.signal(SIGKILL, to: identity) }
         }
 
         // Les DEUX pipes sont drainés EN PARALLÈLE (revue) : les lire l'un
@@ -694,7 +696,7 @@ final class NotesCurationService {
             return collected
         }.value
         async let errorTask: String = Task.detached(priority: .utility) {
-            let data = (try? stderr.fileHandleForReading.readToEnd()) ?? Data()
+            let data = BoundedProcessOutput.drain(stderr.fileHandleForReading, cap: 2000, tail: true)
             return String(decoding: data.suffix(2000), as: UTF8.self)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
         }.value
@@ -707,6 +709,8 @@ final class NotesCurationService {
         timeoutTask = nil
         SessionStore.shared.unregisterInternalPid(pid)
         self.process = nil
+        processIdentity = nil
+        guard runGeneration == generation, !Task.isCancelled else { return nil }
 
         guard process.terminationStatus == 0 else {
             log.error("curation (pid \(pid)) : exit \(process.terminationStatus) — \(errorTail, privacy: .public)")
@@ -747,6 +751,7 @@ final class NotesCurationService {
         var lastRunAt: Date?
         var lastOutcome: String?
         var warnings: [String] = []
+        var retryAt: Date? = nil
     }
 
     private static var stateURL: URL {

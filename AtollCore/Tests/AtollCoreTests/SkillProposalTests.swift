@@ -27,7 +27,7 @@ final class SkillProposalTests: XCTestCase {
         XCTAssertEqual(proposal?.status, .proposed)
         XCTAssertEqual(proposal?.sourceSession, "abc-123")
         XCTAssertEqual(proposal?.skillMD, "# corps")
-        XCTAssertEqual(proposal?.id, "git-hygiene") // dernier composant du dossier
+        XCTAssertEqual(proposal?.id, "claude:git-hygiene") // destination et dossier
     }
 
     func testDecodeUnknownStatusIsIgnored() {

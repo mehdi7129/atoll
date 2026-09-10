@@ -12,6 +12,7 @@ private let log = Logger(subsystem: "dev.mehdiguiard.atoll", category: "codex-ru
 /// deux copies auraient divergé, comme les quatre résolutions de `claude` que
 /// la v0.16.6 a dû rattraper.
 enum CodexRun {
+    @MainActor private(set) static var lastFailure: String?
 
     /// Ce qu'il faut pour lancer, et pour ranger après.
     struct Launch {
@@ -36,9 +37,19 @@ enum CodexRun {
     /// dont la sortie serait de la prose et le rapport perdu.
     @MainActor
     static func prepare(schema: String, prompt: String,
-                        workingDirectory: String?, label: String) async -> Launch? {
-        guard let codex = await CodexExecutable.resolve() else {
+                        workingDirectory: String?, label: String, home: URL = CodexPaths.homeURL,
+                        model: String, executableOverride: String) async -> Launch? {
+        lastFailure = nil
+        guard let codex = await CodexExecutable.resolve(overridePath: executableOverride) else {
+            lastFailure = CodexExecutable.notFoundMessage
             log.error("codex introuvable — \(CodexExecutable.notFoundMessage, privacy: .public)")
+            return nil
+        }
+        let models = await Task.detached(priority: .utility) {
+            readModels(executable: URL(fileURLWithPath: codex), home: home)
+        }.value
+        guard models.contains(where: { $0.model == model && !$0.hidden }) else {
+            lastFailure = "Modèle Codex non validé : actualise les modèles dans Réglages → Codex."
             return nil
         }
         // Le schéma d'Atoll est écrit pour Anthropic ; OpenAI le refuse en l'état
@@ -66,7 +77,7 @@ enum CodexRun {
 
         let arguments = CodexExecPlan.arguments(
             schemaPath: schemaFile.path, outputPath: outputFile.path,
-            workingDirectory: workingDirectory) + [prompt]
+            workingDirectory: workspace.path, model: model) + [prompt]
 
         // Shell de LOGIN, comme pour Claude : il source le profil, dont dépend
         // l'authentification par abonnement. Mais le nom nu `codex` n'y est PAS
@@ -76,9 +87,43 @@ enum CodexRun {
         // une clé API dans l'environnement ferait payer à l'appel au lieu de
         // consommer l'abonnement, et c'est l'abonnement que l'utilisateur a
         // demandé à utiliser.
-        let shellCommand = "unset OPENAI_API_KEY; exec "
+        let shellCommand = "unset OPENAI_API_KEY; export CODEX_HOME=" + FleetLaunch.shellQuote(home.path) + "; exec "
             + FleetLaunch.shellQuote(codex) + " "
             + arguments.map(FleetLaunch.shellQuote).joined(separator: " ")
         return Launch(shellCommand: shellCommand, outputFile: outputFile, workspace: workspace)
+    }
+
+    /// Même dossier de travail contrôlé pour Claude et Codex. Le projet à
+    /// analyser est une donnée du prompt, jamais le cwd du processus interne.
+    @MainActor
+    static func prepareClaude(arguments: [String], label: String) async -> Launch? {
+        lastFailure = nil
+        guard let claude = await ClaudeExecutable.resolve() else {
+            lastFailure = ClaudeExecutable.notFoundMessage; return nil
+        }
+        let workspace = FileManager.default.temporaryDirectory.appendingPathComponent("atoll-claude-\(label)-\(UUID().uuidString)")
+        do {
+            try FileManager.default.createDirectory(at: workspace, withIntermediateDirectories: true,
+                                                    attributes: [.posixPermissions: 0o700])
+        } catch { lastFailure = "Dossier temporaire impossible."; return nil }
+        return Launch(shellCommand: "unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN; exec "
+            + FleetLaunch.shellQuote(claude) + " " + arguments.map(FleetLaunch.shellQuote).joined(separator: " "),
+                      outputFile: nil, workspace: workspace)
+    }
+
+    static func readModels(executable: URL, home: URL) -> [CodexModel] {
+        var cursor: String?
+        var models: [CodexModel] = []
+        let deadline = Date().addingTimeInterval(20)
+        for _ in 0..<5 {
+            guard Date() < deadline,
+                  case .available(let data) = CodexReadClient.read(.models(cursor: cursor),
+                    executable: executable, home: home, timeout: max(0.1, deadline.timeIntervalSinceNow)),
+                  let page = try? JSONDecoder().decode(CodexModel.Page.self, from: data) else { return [] }
+            models += page.data
+            guard let next = page.nextCursor, next != cursor else { return models }
+            cursor = next
+        }
+        return [] // catalogue incomplet : pas de validation supposée
     }
 }

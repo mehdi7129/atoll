@@ -14,6 +14,7 @@ final class LearningSettings {
     static let shared = LearningSettings()
 
     static let enabledKey = "learningRetrospectiveEnabled"   // Bool, défaut false
+    static let skillDestinationKey = "learningSkillDestination" // défaut : agent de la session source
     static let thresholdKey = "learningQuotaThreshold"       // Double, défaut 0.7
     static let modelKey = "learningRetrospectiveModel"       // String, défaut "sonnet"
     /// Modèle de la CURATION des notes — String, défaut "sonnet" (jugement
@@ -86,7 +87,19 @@ final class LearningSettings {
     var gateConfig: LearningGate.Config {
         LearningGate.Config(enabled: isEnabled,
                             quotaThreshold: quotaThreshold,
-                            maxPerWindow: maxPerWindow)
+                            maxPerWindow: maxPerWindow,
+                            unknownQuotaMaxPerWindow: allowUnknownQuota ? 1 : 0)
+    }
+
+    static let analysisProviderKey = "analysisProvider"
+    static let codexModelKey = "analysisCodexModel"
+    static let unknownQuotaKey = "analysisAllowUnknownQuota"
+    var analysisProvider: AgentProvider {
+        AgentProvider(rawValue: UserDefaults.standard.string(forKey: Self.analysisProviderKey) ?? "") ?? .claude
+    }
+    var codexModel: String { UserDefaults.standard.string(forKey: Self.codexModelKey) ?? "" }
+    var allowUnknownQuota: Bool {
+        UserDefaults.standard.object(forKey: Self.unknownQuotaKey) as? Bool ?? true
     }
 
     // MARK: - Bascule vers Codex
@@ -113,7 +126,9 @@ final class LearningSettings {
 
     var failoverConfig: ProviderFailover.Config {
         ProviderFailover.Config(enabled: isFailoverEnabled,
-                                claudeExhaustedAt: failoverThreshold)
+                                claudeExhaustedAt: failoverThreshold,
+                                codexExhaustedAt: failoverThreshold,
+                                preferred: analysisProvider)
     }
 
     /// La curation hebdomadaire est-elle armée ? (indépendante de la

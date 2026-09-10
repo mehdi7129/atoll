@@ -9,6 +9,11 @@
 
 **Une Dynamic Island pour Claude Code et Codex, dans l'encoche de ton MacBook.**
 
+> **Développement du 10 septembre 2026, non publié :** le code ajoute le choix
+> Claude Code / Codex CLI, les palettes séparées et les analyses avec l'un ou
+> l'autre abonnement. La release disponible reste v0.17.2. Les preuves et la
+> recette GUI restante sont dans le [suivi de mise en œuvre](docs/IMPLEMENTATION-2026-09-10-codex-claude.md).
+
 Trois sessions tournent : un `claude` dans un onglet Cursor, un `codex` dans un iTerm passé
 derrière le navigateur, un troisième en arrière-plan lancé il y a vingt minutes. L'un des
 trois est bloqué depuis huit minutes sur une demande de permission — tu ne sais pas lequel.
@@ -41,18 +46,21 @@ Tu descends la souris vers l'encoche, l'îlot se déplie :
   Codex  5h  ██▌░░░░░░░  24 %           7j  █▏░░░░░░░░  11 %
 ```
 
-Toutes tes sessions, **tous projets et les deux CLI confondus**, regroupées par dépôt — ou
-par état, si la vraie question du moment est « laquelle m'attend ? ». Le pourcentage est le
-contexte consommé ; les quotas 5 h et 7 j sont ceux que renvoient les serveurs d'Anthropic
-et d'OpenAI : **lus, jamais estimés**.
+Les boutons **CLAUDE CODE / CODEX** choisissent les sessions affichées, leur palette
+et le quota principal. Les deux collecteurs restent actifs ; leurs compteurs signalent
+les demandes en attente. Les sessions sont regroupées par dépôt ou par état, avec une
+liste défilante. Le contexte s'affiche lorsqu'une mesure existe ; les fenêtres de quota
+et leurs resets viennent des serveurs : **lus, jamais estimés**. Le schéma ci-dessus
+illustre les informations disponibles ; la vue choisit celles du fournisseur sélectionné.
 
 Un clic ouvre le détail d'une session, un autre ramène la fenêtre du terminal exact d'où
 elle vient — Cursor, VS Code, Terminal.app, iTerm2. Fin de la chasse à l'onglet.
 
 ## Répondre sans changer de fenêtre
 
-Quand une session demande une permission, soumet un plan ou pose une question, une carte
-apparaît dans l'encoche, la commande en clair :
+Quand une session demande une permission, une carte apparaît dans l'encoche avec les
+détails de la demande. Les cartes de questions et de plans restent propres à Claude ;
+avec Codex, ces échanges et l'interruption restent dans le terminal :
 
 ```
 ── PERMISSION ──────────────────
@@ -72,10 +80,11 @@ perdues, plusieurs fois par jour.
 ## Claude Code et Codex, au même endroit
 
 Si tu travailles avec les deux, tu as deux abonnements, deux terminaux, et deux façons de
-savoir où en est une session. Atoll les met dans le même îlot : les sessions Codex
-apparaissent à côté des sessions Claude, avec leur projet, leur état, leur jump-back vers le
-bon terminal — et **leur propre quota**, lu chez OpenAI comme celui d'Anthropic est lu chez
-Anthropic.
+savoir où en est une session. Atoll les met dans le même îlot, avec un bouton pour choisir
+Claude ou Codex, un accent orange ou cyan et **le quota de l'agent choisi**. La carte déjà
+affichée garde son fournisseur jusqu'à sa résolution ; une nouvelle demande ne la remplace
+pas. Le retour au terminal utilise l'ancre capturée et propose un repli lorsque l'onglet
+exact n'est pas identifiable.
 
 Le reste suit : les rollouts Codex entrent dans la même mémoire locale, le bilan de fin de
 session sait les relire, et les sons sonnent pareil.
@@ -91,15 +100,19 @@ Codex peut donc remonter pendant une session Claude. Si tu veux que les deux n'a
 commun, l'indexation se coupe dans Réglages → Mémoire — elle les coupe alors tous les deux.
 
 L'installation est distincte et facultative — Atoll marche très bien avec un seul des deux.
-Elle touche à `hooks.json` (sauvegardé avant la première écriture) et à rien d'autre : ni
-`config.toml`, ni tes choix de confiance.
+Pour Codex, elle gère ses définitions dans `hooks.json`, leur lanceur et le skill manuel
+`atoll-recall`. Les hooks étrangers sont conservés et sauvegardés avant modification.
+`config.toml` et les choix de confiance restent gérés par Codex : les hooks doivent être
+relus et approuvés dans `/hooks`.
 
 ## Se souvenir — au-delà d'un seul dépôt
 
 Tous les transcripts de toutes tes sessions passées — Claude Code **et** Codex — sont
-indexés **en local** (SQLite FTS5, dans `~/.atoll/memory.db`). Rien ne quitte la machine.
+indexés **en local** (SQLite FTS5, dans `~/.atoll/memory.db`). La recherche est locale ;
+les extraits rappelés dans une conversation ou fournis à une analyse sont ensuite traités
+par le fournisseur choisi pour cette conversation ou cette analyse.
 
-Le skill `atoll-recall` ouvre ce passé à Claude :
+Le skill manuel `atoll-recall` ouvre ce passé à Claude comme à Codex :
 
 > « comment on avait réglé ce problème de signature, le mois dernier ? »
 
@@ -145,15 +158,16 @@ Télécharge le dernier `Atoll-x.y.z.dmg` depuis les
 [Releases](https://github.com/mehdi7129/atoll/releases) et glisse Atoll dans Applications.
 
 L'app est signée Developer ID et notarisée par Apple ; les mises à jour arrivent ensuite
-toutes seules (Sparkle). Au premier lancement, une fenêtre de bienvenue installe les hooks
-Claude Code en un clic : tes hooks existants sont préservés, `~/.claude/settings.json` est
-sauvegardé avant la première écriture, et la désinstallation restitue tout.
+toutes seules (Sparkle). Dans la version en développement, l'accueil propose de choisir
+Claude Code ou Codex CLI et installe cette seule intégration. Les hooks existants sont
+préservés et la configuration modifiée est sauvegardée. Codex seul ne crée pas de
+configuration Claude.
 
 Atoll vit dans la barre de menus et autour de l'encoche. Survoler l'îlot l'étend, cliquer
 l'épingle, cliquer ailleurs le referme.
 
-Le suivi de **Codex** s'installe séparément, dans Réglages › Codex, et seulement si tu le
-demandes.
+La seconde intégration peut être installée séparément dans les réglages. Réglages › Codex
+affiche aussi le home utilisé et vérifie les définitions et leur confiance avec le CLI.
 
 **Version courante : v0.17.2.**
 
@@ -168,16 +182,23 @@ En fin de session substantielle, et en tenant compte de ta fenêtre de quota, un
 analyse **en lecture seule** relit la session et en extrait ce qui dure :
 
 - des **notes mémoire**, indexées et citées par les recherches suivantes ;
-- des **procédures rejouables**, transformées en vrais skills Claude Code.
+- des **procédures rejouables**, proposées pour une destination Claude Code ou Codex CLI.
 
 Les skills proposés arrivent en **quarantaine** : tu lis le `SKILL.md` complet dans une
 fenêtre dédiée, tu approuves (⌘⏎) ou tu rejettes (⌘⌫). Rien n'est actif sans ton accord. Un
-skill approuvé vit dans `~/.claude/skills` : il sert à *tous* tes projets.
+skill approuvé vit dans les skills de sa destination : `~/.claude/skills` pour Claude,
+ou le dossier `skills` du home choisi pour Codex. La destination est affichée et figée
+dans la proposition ; le bouton d'affichage ne la change pas.
 
-Avant de proposer quoi que ce soit, Atoll compare le besoin à ce que Claude peut déjà
-invoquer chez toi — tes skills, tes slash commands, ceux de tes plugins — et signale ce que
-la proposition recoupe. Chaque fin de session laisse une trace lisible : analysée, ou sautée
-et pourquoi, et ce que ça a coûté. Fonction désactivée par défaut.
+Atoll compare le besoin au catalogue de la destination et le vérifie de nouveau avant
+l'approbation. Pour Codex, il utilise le catalogue natif `skills/list`. Une erreur de
+lecture ou une nouvelle antériorité demande une nouvelle vérification. L'usage Codex est
+affiché « non mesuré », sans suggestion d'archivage fondée sur un faux zéro.
+
+Le moteur des analyses se choisit séparément : Claude ou Codex, pour le bilan, le rangement
+des notes et la recherche IA facultative de plugins. Le budget interne est partagé ; le
+failover vers l'autre abonnement est un opt-in distinct. Chaque fin de session laisse une
+trace de son traitement ou de son abstention. Apprentissage désactivé par défaut.
 
 </details>
 
@@ -190,6 +211,9 @@ Sans attendre que Claude pense au skill, Atoll peut joindre à chaque message le
 tes sessions passées liés à ce que tu écris — marqués comme **données**, jamais comme des
 instructions, et jamais des sorties d'outils. Recherche 100 % locale, quelques
 millisecondes ; à la moindre anicroche, rien n'est injecté et le CLI continue.
+
+L'injection proactive reste propre à Claude. Pour Codex, utiliser le recall manuel :
+la consommation d'un contexte additionnel depuis un hook async n'est pas tenue pour acquise.
 
 Chaque passage laisse une ligne dans `~/.atoll/recall-journal.jsonl` — injecté, ou refusé
 avec sa raison — que `atoll-bridge recall-stats` résume. Ce journal ne contient **ni tes
@@ -204,7 +228,7 @@ plutôt que gardée par habitude.
 
 <br>
 
-Rockstar suspend les règles de refus de permissions que tu as écrites toi-même, le temps
+Rockstar, **pour Claude uniquement**, suspend les règles de refus de permissions que tu as écrites toi-même, le temps
 d'une session où tu veux avancer sans être interrompu, puis les restitue.
 
 C'est l'un des trois seuls endroits où Atoll touche à une configuration qui n'est pas la
@@ -215,7 +239,8 @@ mode, au lancement suivant de l'app, à la désinstallation — et par le helper
 l'app se ferme ou plante en cours de route.
 
 Tant que Rockstar est actif, l'îlot reste visible en permanence : on ne désarme pas une
-machine en silence.
+machine en silence. L'indicateur `CLAUDE · ROCKSTAR` reste visible pendant que tu regardes
+Codex, y compris en compact. Changer de vue ne modifie pas cette préférence.
 
 </details>
 

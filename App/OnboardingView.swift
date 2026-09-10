@@ -15,7 +15,7 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
 
     convenience init() {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 560, height: 470),
+            contentRect: NSRect(x: 0, y: 0, width: 560, height: 500),
             styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -71,7 +71,8 @@ struct OnboardingView: View {
 
     @AppStorage("paletteID") private var paletteID = Palette.monoOrange.id
     @Environment(\.colorScheme) private var scheme
-    @State private var hooksInstalled = HookInstaller.isInstalled
+    @State private var provider = ProviderPreferences.selected
+    @State private var hooksInstalled = false
     @State private var hookError: String?
 
     private var colors: ThemeColors { ThemeColors(paletteID: paletteID, scheme: scheme) }
@@ -83,22 +84,26 @@ struct OnboardingView: View {
                 Text("░░▒▒▓▓  A T O L L  ▓▓▒▒░░")
                     .font(AtollFont.mono(17, weight: .bold))
                     .foregroundStyle(colors.accent)
-                Text("Une Dynamic Island pour Claude Code")
+                Text("Une Dynamic Island pour Claude Code et Codex CLI")
                     .font(AtollFont.mono(12))
                     .foregroundStyle(colors.dim)
             }
             .frame(maxWidth: .infinity)
             .padding(.top, 26)
 
+            Picker("Agent à intégrer", selection: $provider) {
+                Text("CLAUDE CODE").tag(AgentProvider.claude)
+                Text("CODEX").tag(AgentProvider.codex)
+            }
+            .pickerStyle(.segmented)
+            .onChange(of: provider) { _, _ in refreshInstalled(); hookError = nil }
+
             step(
                 number: "1",
-                title: "BRANCHER CLAUDE CODE",
-                body: """
-                Atoll écoute vos sessions via les hooks de Claude Code. Fail-open \
-                garanti : Atoll fermé ou planté, le CLI claude fonctionne exactement \
-                comme avant. Vos hooks existants sont préservés (backup unique de \
-                settings.json) et la désinstallation restitue tout.
-                """
+                title: "BRANCHER \(provider == .claude ? "CLAUDE CODE" : "CODEX CLI")",
+                body: provider == .claude
+                    ? "Atoll observe les hooks de Claude Code. Vos hooks existants sont préservés. Atoll absent, Claude garde la main."
+                    : "Atoll observe les hooks de Codex CLI. Après installation, approuve les définitions dans /hooks et démarre une session. Atoll absent, Codex garde la main."
             ) {
                 HStack(spacing: 10) {
                     Button(hooksInstalled ? "HOOKS INSTALLÉS ✓" : "[ INSTALLER LES HOOKS ]") {
@@ -118,12 +123,10 @@ struct OnboardingView: View {
 
             step(
                 number: "2",
-                title: "CHOISIR L'AUTONOMIE",
-                body: """
-                Dans le menu ≋ → Réglages… : Manuel (vous décidez de tout) \
-                ou Rockstar (aucune \
-                protection — à vos risques et périls).
-                """
+                title: provider == .claude ? "CHOISIR L'AUTONOMIE" : "GARDER LA MAIN",
+                body: provider == .claude
+                    ? "Dans ≋ → Réglages : Manuel ou Rockstar. Rockstar désactive les protections Claude."
+                    : "Les commandes, patchs et outils MCP peuvent demander une décision dans l'îlot. Les questions et les plans restent dans le terminal. Rockstar concerne uniquement Claude."
             ) { EmptyView() }
 
             step(
@@ -146,9 +149,15 @@ struct OnboardingView: View {
                 .padding(.bottom, 24)
         }
         .padding(.horizontal, 34)
-        .frame(width: 560, height: 470)
+        .frame(width: 560, height: 500)
         .background(colors.bg)
-        .onAppear { hooksInstalled = HookInstaller.isInstalled }
+        .onAppear {
+            if UserDefaults.standard.string(forKey: ProviderPreferences.selectedKey) == nil,
+               CodexExecutable.resolveCheap() != nil, !HookInstaller.isInstalled {
+                provider = .codex
+            }
+            refreshInstalled()
+        }
     }
 
     @ViewBuilder
@@ -168,13 +177,26 @@ struct OnboardingView: View {
     private func installHooks() {
         hookError = nil
         do {
-            try HookInstaller.install()
+            if provider == .codex { try HookInstaller.configureCodex(install: true) }
+            else { try HookInstaller.install() }
+            ProviderPreferences.shared.selection = provider
+            // Proposition explicite initiale ; ne pas activer l'apprentissage.
+            if UserDefaults.standard.string(forKey: "analysisProvider") == nil {
+                UserDefaults.standard.set(provider.rawValue, forKey: "analysisProvider")
+            }
         } catch {
             hookError = error.localizedDescription
         }
-        hooksInstalled = HookInstaller.isInstalled
+        refreshInstalled()
         // Même chemin que les Réglages : le parking des règles deny suit la
         // disponibilité des hooks (ex. niveau Rockstar déjà choisi).
-        HookInstaller.syncDenyParking(level: InteractionCenter.shared.autonomyLevel)
+        if provider == .claude {
+            HookInstaller.syncDenyParking(level: InteractionCenter.shared.autonomyLevel)
+        }
+    }
+
+    private func refreshInstalled() {
+        hooksInstalled = provider == .claude ? HookInstaller.isInstalled
+            : CodexHookSettingsEditor.isInstalled(try? Data(contentsOf: CodexPaths.hooksURL))
     }
 }

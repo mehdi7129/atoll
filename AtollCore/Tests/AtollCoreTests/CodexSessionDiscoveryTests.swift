@@ -22,7 +22,7 @@ final class CodexSessionDiscoveryTests: XCTestCase {
     }
 
     func testALiveProcessWithARecentRolloutIsDiscovered() throws {
-        let found = discover([.init(pid: 5941, cwd: "/p/codex")],
+        let found = discover([.init(pid: 5941, cwd: "/p/codex", startTime: 1_700_000_000, sessionID: "01a08577")],
                              [rollout("01a08577", cwd: "/p/codex")])
         let session = try XCTUnwrap(found.first)
         XCTAssertEqual(session.sessionID, "codex:01a08577")
@@ -53,24 +53,23 @@ final class CodexSessionDiscoveryTests: XCTestCase {
 
     /// Deux rollouts dans le même dossier : on garde le PLUS RÉCENT. En annoncer
     /// deux inventerait une session qui n'existe pas.
-    func testOnlyTheNewestRolloutOfADirectoryIsKept() throws {
+    func testTheNewestRolloutIsNotProofOfIdentity() throws {
         let found = discover([.init(pid: 1, cwd: "/p/codex")],
                              [rollout("vieux", cwd: "/p/codex", minutesAgo: 300),
                               rollout("recent", cwd: "/p/codex", minutesAgo: 2)])
-        XCTAssertEqual(found.count, 1)
-        XCTAssertEqual(try XCTUnwrap(found.first).sessionID, "codex:recent")
+        XCTAssertTrue(found.isEmpty)
     }
 
     /// Deux processus dans le MÊME dossier ne doivent pas produire deux fois la
     /// même session : ils sont indiscernables, on n'en montre qu'une.
-    func testTwoProcessesInTheSameDirectoryYieldASingleSession() {
+    func testTwoUnidentifiedProcessesDoNotInheritAnOldSession() {
         let found = discover([.init(pid: 1, cwd: "/p/codex"), .init(pid: 2, cwd: "/p/codex")],
                              [rollout("01a08577", cwd: "/p/codex")])
-        XCTAssertEqual(found.count, 1)
+        XCTAssertTrue(found.isEmpty)
     }
 
     func testDifferentDirectoriesAreIndependent() {
-        let found = discover([.init(pid: 1, cwd: "/p/a"), .init(pid: 2, cwd: "/p/b")],
+        let found = discover([.init(pid: 101, cwd: "/p/a", startTime: 1_700_000_000, sessionID: "aaa"), .init(pid: 102, cwd: "/p/b", startTime: 1_700_000_001, sessionID: "bbb")],
                              [rollout("aaa", cwd: "/p/a"), rollout("bbb", cwd: "/p/b")])
         XCTAssertEqual(Set(found.map(\.sessionID)), ["codex:aaa", "codex:bbb"])
     }

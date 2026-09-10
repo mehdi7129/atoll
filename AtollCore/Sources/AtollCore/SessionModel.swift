@@ -1,7 +1,6 @@
 import Foundation
 
-/// Une session d'agent (Claude Code) telle qu'affichée par l'îlot.
-/// En Phase 1 les données sont factices ; la Phase 2 branchera les hooks.
+/// Une session CLI telle qu'affichée par l'îlot.
 public struct AgentSession: Identifiable, Equatable, Sendable {
     public enum Status: Equatable, Sendable {
         case working(tool: String?)
@@ -23,8 +22,10 @@ public struct AgentSession: Identifiable, Equatable, Sendable {
     // Infos enrichies (transcript + statusline), toutes optionnelles.
     public var model: String?
     public var subagentCount: Int
+    public var subagentCountIsKnown: Bool
     public var mcpServers: [String]
     public var contextUsedFraction: Double?
+    public var contextMeasuredAt: Date?
     public var costUSD: Double?
     /// Souvenirs joints au dernier prompt par le recall proactif (0 = aucun,
     /// fonction éteinte ou rien trouvé). Rendu visible dans le détail : le bloc
@@ -48,7 +49,7 @@ public struct AgentSession: Identifiable, Equatable, Sendable {
                 model: String? = nil, subagentCount: Int = 0, mcpServers: [String] = [],
                 contextUsedFraction: Double? = nil, costUSD: Double? = nil, cwd: String? = nil,
                 recallInjected: Int = 0, stateConfirmedByHook: Bool = true,
-                provider: AgentProvider = .claude) {
+                provider: AgentProvider = .claude, subagentCountIsKnown: Bool = true) {
         self.provider = provider
         self.stateConfirmedByHook = stateConfirmedByHook
         self.id = id
@@ -59,6 +60,7 @@ public struct AgentSession: Identifiable, Equatable, Sendable {
         self.startedAt = startedAt
         self.model = model
         self.subagentCount = subagentCount
+        self.subagentCountIsKnown = subagentCountIsKnown
         self.mcpServers = mcpServers
         self.contextUsedFraction = contextUsedFraction
         self.costUSD = costUSD

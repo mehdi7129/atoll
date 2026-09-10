@@ -9,16 +9,16 @@ private let log = Logger(subsystem: "dev.mehdiguiard.atoll", category: "learning
 /// enrichie de son usage (compté depuis l'index mémoire) et de drapeaux d'état.
 struct InstalledSkillRow: Identifiable {
     let skill: InstalledSkill
-    var usageCount: Int
+    var usageCount: Int?
     var lastUsedAt: Date?
     var userModified: Bool
-    var id: String { skill.slug }
+    var id: String { "\(skill.destination.rawValue):\(skill.slug)" }
 
     /// Suggestion d'archivage : installé depuis > 30 j et jamais/plus utilisé.
     var suggestedForArchive: Bool {
-        let old = Date().timeIntervalSince(skill.installedAt) > 30 * 86400
-        let idle = lastUsedAt.map { Date().timeIntervalSince($0) > 30 * 86400 } ?? true
-        return old && idle
+        // L'index n'atteste pas encore une couverture exhaustive de 30 jours.
+        // Un zéro observé, ou Codex non instrumenté, ne prouve aucun abandon.
+        false
     }
 }
 
@@ -34,7 +34,8 @@ struct InstalledSkillRow: Identifiable {
 final class SkillReviewCenter {
     static let shared = SkillReviewCenter()
 
-    private let store = LearnedSkillStore()
+    private func store(for provider: AgentProvider) -> LearnedSkillStore { LearnedSkillStore(destination: provider) }
+    private(set) var approving: SkillProposal.ID?
 
     private(set) var proposals: [SkillProposal] = []
     private(set) var installed: [InstalledSkillRow] = []
@@ -46,8 +47,9 @@ final class SkillReviewCenter {
     /// Au lancement : réconcilie le manifeste avec le disque (orphelins,
     /// déplacements inachevés, éditions manuelles) puis découvre les propositions.
     func reconcileAndScan() {
-        let report = store.reconcile()
+        let reports = AgentProvider.allCases.map { store(for: $0).reconcile() }
         var notes: [String] = []
+        for report in reports {
         if !report.removedFromManifest.isEmpty {
             notes.append("Retirés (supprimés à la main) : \(report.removedFromManifest.joined(separator: ", "))")
         }
@@ -57,44 +59,83 @@ final class SkillReviewCenter {
         if !report.userModified.isEmpty {
             notes.append("Modifiés par vous : \(report.userModified.joined(separator: ", "))")
         }
+        }
         reconcileNotes = notes
         refresh()
     }
 
     /// Recharge propositions + skills installés + stats d'usage.
     func refresh() {
-        proposals = store.discoverProposals()
-        similarByProposal = computeSimilarities(for: proposals)
-        let userModified = Set(store.reconcile().userModified)
+        let problems = AgentProvider.allCases.compactMap { provider in
+            store(for: provider).manifestProblem().map { "\(provider.label) : \($0)" }
+        }
+        if !problems.isEmpty { lastError = problems.joined(separator: "\n") }
+        proposals = AgentProvider.allCases.flatMap { store(for: $0).discoverProposals() }
+            .sorted { ($0.createdAt, $0.id) < ($1.createdAt, $1.id) }
+        similarByProposal = similarByProposal.filter { id, _ in proposals.contains { $0.id == id } }
+        similarByProposal.merge(computeSimilarities(for: proposals.filter { $0.destination == .claude })) { _, new in new }
         let usage = loadUsage()
-        installed = store.installedSkills().map { skill in
-            let stat = usage[skill.dirName] ?? usage[skill.slug]
+        installed = AgentProvider.allCases.flatMap { provider in
+            let store = store(for: provider)
+            let userModified = Set(store.reconcile().userModified)
+            return store.installedSkills().map { skill in
+            let stat = provider == .claude ? (usage[skill.dirName] ?? usage[skill.slug]) : nil
             return InstalledSkillRow(
                 skill: skill,
-                usageCount: stat?.count ?? 0,
+                usageCount: stat?.count,
                 lastUsedAt: stat?.lastUsed,
                 userModified: userModified.contains(skill.slug)
             )
+            }
         }
     }
 
-    func approve(_ id: SkillProposal.ID, force: Bool = false) {
-        guard let proposal = proposals.first(where: { $0.id == id }) else { return }
-        do {
-            let entry = try store.approve(proposal, force: force)
-            log.info("skill approuvé : \(entry.dirName, privacy: .public)")
-            lastError = nil
-        } catch {
-            log.error("approbation \(proposal.slug, privacy: .public) : \(error.localizedDescription)")
-            lastError = error.localizedDescription
+    func approve(_ proposal: SkillProposal, force: Bool = false) {
+        guard approving == nil else { return }
+        guard proposals.contains(proposal) else {
+            lastError = "La proposition a changé : relis-la avant de confirmer l'installation."
+            return
         }
-        refresh()
+        let id = proposal.id
+        let target: SkillDestination
+        do { target = try self.target(for: proposal.destination) }
+        catch { lastError = error.localizedDescription; return }
+        approving = id
+        Task {
+            defer { approving = nil }
+            do {
+                let project = proposal.sourceProject.map { URL(fileURLWithPath: $0) }
+                let entries = try await target.catalog(project: project)
+                guard target == (try self.target(for: proposal.destination)),
+                      proposals.contains(proposal) else { throw AnalysisExecution.Failure("La destination ou la proposition a changé : relis la proposition.") }
+                let twin = target.store.skillsRoot.appendingPathComponent(SkillSlug.dirName(for: proposal.slug)).appendingPathComponent("SKILL.md").resolvingSymlinksInPath()
+                let candidates = entries.filter { $0.path.resolvingSymlinksInPath() != twin }
+                let match = SkillCatalog().closestMatch(slug: proposal.slug, title: proposal.title,
+                    description: proposal.description, catalog: candidates)
+                let label = match.map { self.label(for: $0) }
+                if let label, similarByProposal[id] != label {
+                    similarByProposal[id] = label
+                    lastError = "Le catalogue contient « \(label) ». Relis cette antériorité avant de confirmer l'installation."
+                    return
+                }
+                let entry = try target.store.approve(proposal, force: force)
+                log.info("skill approuvé pour \(entry.destination.rawValue) : \(entry.dirName, privacy: .public)")
+                lastError = nil
+            } catch { lastError = error.localizedDescription }
+            refresh()
+        }
+    }
+
+    private func target(for provider: AgentProvider) throws -> SkillDestination {
+        SkillDestination(provider: provider,
+            home: provider == .codex ? try CodexPaths.validatedHome() : BridgePaths.homeDirectory.appendingPathComponent(".claude"),
+            executableOverride: UserDefaults.standard.string(forKey: CodexExecutable.overrideKey) ?? "")
     }
 
     func reject(_ id: SkillProposal.ID) {
         guard let proposal = proposals.first(where: { $0.id == id }) else { return }
         do {
-            try store.reject(proposal)
+            try store(for: proposal.destination).reject(proposal)
             log.info("skill rejeté : \(proposal.slug, privacy: .public)")
             lastError = nil
         } catch {
@@ -103,9 +144,9 @@ final class SkillReviewCenter {
         refresh()
     }
 
-    func archiveInstalled(slug: String) {
+    func archiveInstalled(slug: String, destination: AgentProvider) {
         do {
-            try store.archiveInstalled(slug: slug)
+            try store(for: destination).archiveInstalled(slug: slug)
             lastError = nil
         } catch {
             lastError = error.localizedDescription
@@ -116,7 +157,7 @@ final class SkillReviewCenter {
     /// Un skill installé a-t-il été édité à la main ? (protège l'approbation
     /// d'une mise à jour : on confirmera avant d'écraser.)
     func isUpdateOfModifiedSkill(_ proposal: SkillProposal) -> Bool {
-        installed.first { $0.skill.slug == proposal.slug }?.userModified ?? false
+        installed.first { $0.skill.slug == proposal.slug && $0.skill.destination == proposal.destination }?.userModified ?? false
     }
 
     /// Ce slug est-il DÉJÀ installé ? Approuver le remplacera — et l'étiquette
@@ -124,7 +165,7 @@ final class SkillReviewCenter {
     /// la main (audit : elle affichait « (nouveau) », alors que le calcul
     /// d'antériorité exclut justement le jumeau en comptant sur cette mention).
     func isUpdateOfInstalledSkill(_ proposal: SkillProposal) -> Bool {
-        installed.contains { $0.skill.slug == proposal.slug }
+        installed.contains { $0.skill.slug == proposal.slug && $0.skill.destination == proposal.destination }
     }
 
     /// Antériorités calculées UNE fois par `refresh()` (jamais dans le corps
@@ -180,7 +221,7 @@ final class SkillReviewCenter {
     /// « gsd:plan-phase » ou « example-skills:pdf [désactivé] » — une capacité
     /// qu'on ne peut pas invoquer n'est pas un doublon au même titre.
     private func label(for entry: CatalogEntry) -> String {
-        entry.isAvailable ? entry.id : "\(entry.id) [désactivé]"
+        "\(entry.id) [\(entry.origin)\(entry.isAvailable ? "" : "; désactivé")]"
     }
 
     func requestReviewWindow() {

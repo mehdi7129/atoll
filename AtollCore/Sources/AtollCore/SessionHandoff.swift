@@ -1,6 +1,6 @@
 import Foundation
 
-/// Passation d'une session Claude vers Codex, quand le quota Claude est épuisé.
+/// Passation explicite d'une session CLI vers l'autre fournisseur.
 ///
 /// CE QUE CE N'EST PAS, ET IL FAUT LE DIRE : ce n'est PAS une bascule
 /// automatique de la session interactive. Atoll observe le CLI `claude`, il ne
@@ -58,12 +58,16 @@ public enum SessionHandoff {
         digest: String,
         contextPath: String,
         executable: String? = nil,
+        source: AgentProvider = .claude,
+        destination: AgentProvider = .codex,
+        codexHome: String? = nil,
         endedAt: Date,
         formatter: DateFormatter? = nil
     ) -> Files {
         let stamp = (formatter ?? defaultFormatter).string(from: endedAt)
-        var header = ["# Reprise d'une session Claude Code", "",
-                      "- Projet : \(projectName)", "- Interrompue le : \(stamp)"]
+        var header = ["# Reprise d'une session \(source.label)", "",
+                      "- Destination : \(destination.label)",
+                      "- Projet : \(projectName)", "- Contexte préparé le : \(stamp)"]
         if let workingDirectory, !workingDirectory.isEmpty {
             header.append("- Dossier : \(workingDirectory)")
         }
@@ -97,21 +101,22 @@ public enum SessionHandoff {
         // cité : un nom de projet ou de dossier peut contenir n'importe quoi.
         let quotedDirectory = shellQuote(workingDirectory ?? "")
         let prompt = """
-        Je reprends dans Codex une session Claude Code interrompue faute de \
-        quota. Lis \(contextPath) — c'est le compte rendu de ce qui a été \
+        Je reprends dans \(destination.label) une session \(source.label). \
+        Lis le fichier de contexte au chemin absolu \(contextPath) — c'est le compte rendu de ce qui a été \
         fait — puis attends ma consigne. Ne modifie rien avant que je te le \
         demande.
         """
         // Chemin ABSOLU quand l'appelant a su le résoudre — le nom nu ne
         // survit qu'au PATH du shell qui ouvre le `.command`.
-        let binary = (executable?.isEmpty == false) ? shellQuote(executable!) : "codex"
+        let binary = (executable?.isEmpty == false) ? shellQuote(executable!) : destination.rawValue
+        let homeLine = destination == .codex ? codexHome.map { "export CODEX_HOME=" + shellQuote($0) + "\n" } ?? "" : ""
         let launcher = """
         #!/bin/sh
-        # Écrit par Atoll — reprise d'une session Claude Code sur Codex.
+        # Écrit par Atoll — reprise \(source.label) vers \(destination.label).
         # Ce fichier est jetable : il peut être supprimé à tout moment.
         set -e
         cd \(quotedDirectory.isEmpty ? "." : quotedDirectory)
-        exec \(binary) \(shellQuote(prompt))
+        \(homeLine)exec \(binary) \(shellQuote(prompt))
         """
         return Files(contextMarkdown: context, launcherScript: launcher)
     }

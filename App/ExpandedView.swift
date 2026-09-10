@@ -5,9 +5,10 @@ import AtollCore
 struct ExpandedView: View {
     let viewModel: NotchViewModel
     let colors: ThemeColors
+    @Environment(\.openSettings) private var openSettings
 
     @AppStorage(InteractionCenter.autonomyKey) private var autonomyRaw = AutonomyLevel.manual.rawValue
-    private var level: AutonomyLevel { CodexPreview.enabled ? .manual : (AutonomyLevel(rawValue: autonomyRaw) ?? .manual) }
+    private var level: AutonomyLevel { AutonomyLevel(rawValue: autonomyRaw) ?? .manual }
 
     /// Projets dépliés (racines de projet). Les dossiers multi-sessions sont
     /// repliés par défaut : on voit un dossier par projet, on déplie pour voir
@@ -31,28 +32,45 @@ struct ExpandedView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             header
+            ProviderSelector(viewModel: viewModel, colors: colors)
 
-            if let request = InteractionCenter.shared.current {
+            if let selected = InteractionPresentation.shared.current {
                 // Une demande en attente prend toute la place (priorité maximale).
-                InteractionCardView(request: request, colors: colors)
-                    .id(request.id)
-                Spacer(minLength: 0)
-            } else if let codexRequest = CodexInteractionCenter.shared.current {
-                // Une demande CODEX, après celles de Claude : les deux centres
-                // sont séparés, et une demande Claude bloque le CLI de Mehdi de
-                // la même façon. L'ordre entre les deux est arbitraire ; ce qui
-                // ne l'est pas, c'est qu'aucune ne soit jamais perdue.
-                CodexInteractionCardView(request: codexRequest, colors: colors)
-                    .id(codexRequest.id)
-                Spacer(minLength: 0)
+                ScrollView {
+                if selected.provider == .claude,
+                   let request = InteractionCenter.shared.pending.first(where: { $0.id == selected.requestID }) {
+                    InteractionCardView(request: request, colors: colors).id(selected)
+                } else if selected.provider == .codex,
+                          let request = CodexInteractionCenter.shared.pending.first(where: { $0.id == selected.requestID }) {
+                    CodexInteractionCardView(request: request, colors: colors).id(selected)
+                }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                if InteractionPresentation.shared.items.count > 1 {
+                    HStack {
+                        AsciiButton(label: "← DEMANDE", color: colors.dim, shortcut: nil) {
+                            InteractionPresentation.shared.move(-1)
+                        }
+                        Spacer()
+                        Text("\(InteractionPresentation.shared.items.count) demandes · Claude / Codex")
+                            .foregroundStyle(colors.dim)
+                        Spacer()
+                        AsciiButton(label: "DEMANDE →", color: colors.dim, shortcut: nil) {
+                            InteractionPresentation.shared.move(1)
+                        }
+                    }
+                    .font(AtollFont.mono(9))
+                }
             } else if let session = viewModel.selectedSession {
                 // Détail d'une session (clic sur une ligne).
-                SessionDetailView(session: session, colors: colors) {
-                    viewModel.clearSelection()
+                ScrollView {
+                    SessionDetailView(session: session, colors: colors) {
+                        viewModel.clearSelection()
+                    }
                 }
             } else {
-                sessionList
-                Spacer(minLength: 0)
+                ScrollView { sessionList }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 // Bannière passive : jamais par-dessus une carte de permission
                 // (branche else uniquement), aucune ouverture forcée.
                 if !CodexPreview.enabled && SkillReviewCenter.shared.pendingCount > 0 {
@@ -100,7 +118,7 @@ struct ExpandedView: View {
     }
 
     private var sessionList: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        LazyVStack(alignment: .leading, spacing: 6) {
             // En-tête + bascule de mode. Le titre rétrécit pour laisser la
             // place au sélecteur (la grille ASCII reste sur une ligne).
             HStack(spacing: 6) {
@@ -118,8 +136,15 @@ struct ExpandedView: View {
             }
 
             if viewModel.sessions.isEmpty {
-                Text("· aucune session — lance Claude ou Codex avec les hooks Atoll")
+                Text("· aucune session \(viewModel.selectedProvider.label) — lance le CLI avec les hooks Atoll")
                     .foregroundStyle(colors.dim)
+                Button("Configurer \(viewModel.selectedProvider.label)…") {
+                    guard !CodexPreview.enabled else { return }
+                    UserDefaults.standard.set(viewModel.selectedProvider.rawValue, forKey: "settingsTab")
+                    openSettings()
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(colors.accent)
             } else if groupByState {
                 stateGroupedList
             } else {
@@ -230,8 +255,9 @@ struct ExpandedView: View {
     /// et du négatif, ce qui ne suffisait pas dès qu'un coût s'ajoutait
     /// (bannière + quota Codex tombaient ensemble à 1).
     private var rowBudget: Int {
-        max(2, IslandRowBudget.rows(bannerShown: bannerShown,
-                                    codexQuotaShown: codexQuotaShown) - 2)
+        // La viewport est bornée par le VStack parent. Toutes les rangées
+        // restent accessibles par défilement, quelle que soit la bannière.
+        max(3, viewModel.sessions.count * 2 + 3)
     }
 
     /// Sessions regroupées par PROJET (racine `.git`), ordre de première apparition
@@ -326,12 +352,14 @@ struct ExpandedView: View {
 
     private var footerBody: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(AsciiArt.sectionHeader("QUOTAS · CLAUDE", width: 79))
+            Text(AsciiArt.sectionHeader(viewModel.selectedProvider == .codex ? "QUOTAS · CODEX" : "QUOTAS · CLAUDE", width: 79))
                 .lineLimit(1)
                 .foregroundStyle(colors.dim)
 
             // Jauges seulement avec de VRAIES données (jamais le mock de dev).
-            if viewModel.hasRealQuota {
+            if viewModel.selectedProvider == .codex {
+                codexQuotaRow
+            } else if viewModel.hasRealQuota {
                 HStack(spacing: 16) {
                     // La jauge 5 h disparaît quand SA fenêtre a tourné ; le 7 j
                     // et les jauges par modèle, eux, restent valides et
@@ -359,7 +387,6 @@ struct ExpandedView: View {
                     .font(AtollFont.mono(9))
                     .foregroundStyle(colors.dim)
             }
-            codexQuotaRow
         }
     }
 

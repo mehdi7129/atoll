@@ -72,7 +72,7 @@ targets:
         # 2e lancement ; l'activation est un OPT-IN explicite dans les Réglages
         # (zéro télémétrie par défaut — règle du projet).
         SUEnableAutomaticChecks: false
-        NSAppleEventsUsageDescription: "Atoll utilise l'automatisation pour faire remonter au premier plan le terminal exact de la session Claude que vous ouvrez."
+        NSAppleEventsUsageDescription: "Atoll utilise l'automatisation pour faire remonter au premier plan le terminal de la session Claude Code ou Codex que vous ouvrez."
     postBuildScripts:
       - name: Embed atoll-bridge helper
         script: |

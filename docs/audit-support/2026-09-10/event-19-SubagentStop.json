@@ -1,0 +1,20 @@
+{
+  "session_id": "fixture-id-1",
+  "turn_id": "fixture-id-8",
+  "transcript_path": "/private/fixture/atoll-contract/home/sessions/2026/09/10/rollout-2026-09-10T00-47-11-01a0885a-8f9f-7963-9983-3a650bde3968.jsonl",
+  "agent_transcript_path": "/private/fixture/atoll-contract/home/sessions/2026/09/10/rollout-2026-09-10T00-54-24-01a08861-2b08-7940-b2a9-1a09f16f563f.jsonl",
+  "cwd": "/fixture/atoll-contract/project",
+  "hook_event_name": "SubagentStop",
+  "model": "gpt-6-astra",
+  "permission_mode": "default",
+  "stop_hook_active": false,
+  "agent_id": "fixture-id-9",
+  "agent_type": "default",
+  "last_assistant_message": "L’exécution hors sandbox de `printf atoll-child-contract` a été rejetée : « Refus volontaire du test de contrat Atoll. » Je termine sans réessayer ni utiliser d’autre outil.",
+  "_atoll_test_enrich": {
+    "tty": "ttys033",
+    "sessionStartTime": 1788994012.272407,
+    "sessionPid": 4242,
+    "observedAt": 1788994479.824327
+  }
+}

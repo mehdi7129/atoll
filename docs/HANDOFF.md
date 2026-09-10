@@ -1,5 +1,17 @@
 # HANDOFF — reprise du développement d'Atoll
 
+> **MISE EN ŒUVRE CLI — 2026-09-10 :** Mehdi a approuvé l'application du
+> [plan relu](PLAN-2026-09-09-codex-claude.md). Les lots 0–6 ont maintenant du
+> code et des tests : sélecteur/palettes, identité TUI, permissions, analyses
+> avec moteur explicite, mémoire/skills par destination et passation dans les
+> deux sens. **Travail non publié, version stable v0.17.2 inchangée.** Lire le
+> [rapport et les preuves](IMPLEMENTATION-2026-09-10-codex-claude.md) avant les
+> récits historiques ci-dessous. La recette GUI complète est encore bloquée
+> par l'accès/capture macOS ; clavier, VoiceOver, film et clic réel des cartes
+> Codex/Claude ne sont pas déclarés vérifiés. Le recall Codex reste manuel ;
+> Rockstar reste Claude ; questions, plans et interruption Codex restent natifs.
+> Ne pas publier avant cette recette et une Release signée testée.
+
 > **LE RENDEZ-VOUS DU RECALL EST ÉCHU, ET TRANCHÉ (v0.17.2, 2026-09-09).**
 > Le mois de mesure a rendu : 1 062 passages, 66 % d'injection, **46 % des
 > extraits n'appariant qu'UN mot**, latence médiane 119 ms. La décision n'a pas

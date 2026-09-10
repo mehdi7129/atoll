@@ -122,4 +122,24 @@ final class SessionHandoffTests: XCTestCase {
         let markdown = make(branch: nil).contextMarkdown
         XCTAssertFalse(markdown.contains("Branche :"))
     }
+
+    func testReverseHandoffNamesItsDestinationWithoutQuotaAssumption() {
+        let files = SessionHandoff.make(projectName: "fixture", workingDirectory: "/fixture", gitBranch: nil,
+            digest: "Donnée historique", contextPath: "/private/fixture/contexte.md", executable: "/bin/claude",
+            source: .codex, destination: .claude, codexHome: "/must-not-be-exported", endedAt: date)
+        XCTAssertTrue(files.contextMarkdown.contains("session Codex"))
+        XCTAssertTrue(files.contextMarkdown.contains("Destination : Claude"))
+        XCTAssertTrue(files.launcherScript.contains("exec '/bin/claude'"))
+        XCTAssertTrue(files.launcherScript.contains("/private/fixture/contexte.md"))
+        XCTAssertFalse(files.launcherScript.contains("CODEX_HOME"))
+        XCTAssertFalse(files.launcherScript.contains("faute de quota"))
+        XCTAssertFalse(files.launcherScript.contains("Donnée historique"))
+    }
+
+    func testForwardHandoffQuotesTheSelectedCodexHome() {
+        let files = SessionHandoff.make(projectName: "fixture", workingDirectory: "/fixture", gitBranch: nil,
+            digest: "", contextPath: "/private/fixture/contexte.md", executable: "/bin/codex",
+            codexHome: "/fixture/l'été $(nothing)", endedAt: date)
+        XCTAssertTrue(files.launcherScript.contains(#"export CODEX_HOME='/fixture/l'\''été $(nothing)'"#))
+    }
 }

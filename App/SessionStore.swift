@@ -966,7 +966,7 @@ final class SessionStore {
 
     /// État courant écrit dans ~/Library/Application Support/Atoll/state.json —
     /// observable en CLI pour le debug, base de la persistance future.
-    private func scheduleSnapshot() {
+    func scheduleSnapshot() {
         snapshotTask?.cancel()
         snapshotTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(300))
@@ -1015,8 +1015,11 @@ final class SessionStore {
         let list: [[String: Any]] = sessions.map { session in
             var entry: [String: Any] = [
                 "id": session.id,
+                "provider": "claude",
                 "phase": String(describing: session.phase),
                 "synthetic": session.isSynthetic,
+                "source": session.isSynthetic ? "fleet" : "hook",
+                "lastObservedAt": ISO8601DateFormatter().string(from: session.lastEventAt),
             ]
             if let pid = session.pid { entry["pid"] = Int(pid) }
             if let cwd = session.cwd { entry["cwd"] = cwd }
@@ -1029,15 +1032,24 @@ final class SessionStore {
             "eventCount": eventCount,
             "serverRunning": serverRunning,
             "autonomy": InteractionCenter.shared.autonomyLevel.rawValue,
-            "sessions": list,
+            "sessions": list + CodexService.shared.diagnosticSessions(),
+            "codexServerRunning": CodexService.shared.serverRunning,
+            "codexHome": CodexPaths.homeURL.path,
+            "selectedProvider": ProviderPreferences.shared.selection.rawValue,
             "pendingInteractions": InteractionCenter.shared.pending.map { request -> [String: Any] in
-                var entry: [String: Any] = ["id": request.id, "session": request.sessionID]
+                var entry: [String: Any] = ["id": request.id, "session": request.sessionID, "provider": "claude"]
                 switch request.kind {
                 case .permission: entry["kind"] = "permission"
                 case .plan: entry["kind"] = "plan"
                 case .questions: entry["kind"] = "questions"
                 }
                 if let tool = request.toolSummary ?? request.toolName { entry["tool"] = tool }
+                return entry
+            } + CodexInteractionCenter.shared.pending.map { request -> [String: Any] in
+                var entry: [String: Any] = ["id": request.id, "session": request.sessionID,
+                    "provider": "codex", "kind": "permission", "tool": request.permission.toolName]
+                entry["agentID"] = request.agentID
+                entry["turnID"] = request.turnID
                 return entry
             },
         ]

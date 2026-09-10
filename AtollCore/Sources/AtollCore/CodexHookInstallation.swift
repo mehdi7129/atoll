@@ -5,9 +5,16 @@ import Darwin
 /// subscription, ~/.codex, ~/.claude or the recall measurement journal.
 public enum CodexHookInstallation {
     public static func apply(settingsURL: URL, binDirectory: URL, helperURL: URL, install: Bool) throws {
+        try apply(settingsURL: settingsURL, binDirectory: binDirectory, helperURL: helperURL,
+                  install: install, migrationSnapshot: nil)
+    }
+
+    private static func apply(settingsURL: URL, binDirectory: URL, helperURL: URL,
+                              install: Bool, migrationSnapshot: Data?) throws {
         let fm = FileManager.default
         let target = settingsURL.resolvingSymlinksInPath()
         let current = fm.fileExists(atPath: target.path) ? try Data(contentsOf: target) : nil
+        if let migrationSnapshot, current != migrationSnapshot { throw CocoaError(.fileWriteFileExists) }
         if !install && current == nil { return }
         let edited = try CodexHookSettingsEditor.edit(current, install: install)
         if install {
@@ -31,6 +38,8 @@ public enum CodexHookInstallation {
         // Best-effort concurrent-edit detection (not an atomic compare-and-swap).
         let latest = fm.fileExists(atPath: target.path) ? try Data(contentsOf: target) : nil
         guard latest == current else { throw CocoaError(.fileWriteFileExists) }
+        // Préserver aussi la mise en forme personnelle si les objets sont égaux.
+        if let current, CodexHookSettingsEditor.sameJSON(current, edited) { return }
         try edited.write(to: target, options: .atomic)
         // Hook commands may contain personal paths or credentials. The backup
         // and settings are user-only; no widening of the existing access.
@@ -113,6 +122,8 @@ public enum CodexHookInstallation {
         let fm = FileManager.default
         try fm.createDirectory(at: binDirectory, withIntermediateDirectories: true)
         let url = wrapperURL(binDirectory: binDirectory)
+        if (try? String(contentsOf: url, encoding: .utf8)) == wrapperScript(helperURL: helperURL),
+           fm.isExecutableFile(atPath: url.path) { return }
         let temporary = binDirectory.appendingPathComponent(".codex-\(UUID().uuidString).tmp")
         defer { try? fm.removeItem(at: temporary) }
         try wrapperScript(helperURL: helperURL).write(to: temporary, atomically: true, encoding: .utf8)
@@ -173,5 +184,22 @@ public enum CodexHookInstallation {
         }
         try writeWrapper(binDirectory: binDirectory, helperURL: helperURL)
         return .rewritten(previous: previous)
+    }
+
+    /// Répare une installation existante, y compris partielle, sans installer
+    /// Codex chez quelqu'un qui ne l'a pas demandé. Le trust reste natif.
+    @discardableResult
+    public static func migrateIfInstalled(settingsURL: URL, binDirectory: URL,
+                                          helperURL: URL) throws -> Bool {
+        let target = settingsURL.resolvingSymlinksInPath()
+        guard FileManager.default.fileExists(atPath: target.path) else { return false }
+        let data = try Data(contentsOf: target)
+        // Valider avant toute écriture ; un JSON invalide n'est pas « absent ».
+        _ = try CodexHookSettingsEditor.edit(data, install: false)
+        guard CodexHookSettingsEditor.hasManagedHooks(data) else { return false }
+        let changed = CodexHookSettingsEditor.needsMigration(data)
+        try apply(settingsURL: target, binDirectory: binDirectory, helperURL: helperURL,
+                  install: true, migrationSnapshot: data)
+        return changed
     }
 }

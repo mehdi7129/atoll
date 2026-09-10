@@ -1,5 +1,6 @@
 import Foundation
 import Darwin
+import AtollCore
 
 /// Inspection de processus via libproc (même utilisateur, aucun privilège requis).
 /// Partagé entre l'app et le helper `atoll-bridge` (via le bridging header libproc.h).
@@ -155,6 +156,54 @@ enum ProcessInspector {
         guard let path = executablePath(of: pid) else { return false }
         if (path as NSString).lastPathComponent == "codex" { return true }
         return path.contains("/.codex/packages/")
+    }
+
+    static func identity(of pid: pid_t) -> ProcessIdentity? {
+        ProcessIdentity.current(of: pid)
+    }
+
+    /// Une sonde illisible n'autorise pas un signal vers un PID inconnu.
+    @discardableResult
+    static func signal(_ signal: Int32, to identity: ProcessIdentity) -> Bool {
+        identity.send(signal)
+    }
+
+    static func arguments(of pid: pid_t) -> [String] {
+        var mib: [Int32] = [CTL_KERN, KERN_PROCARGS2, pid]
+        var size = 0
+        guard sysctl(&mib, 3, nil, &size, nil, 0) == 0, size > 4, size < 2 * 1024 * 1024 else { return [] }
+        var bytes = [UInt8](repeating: 0, count: size)
+        let capacity = size
+        guard sysctl(&mib, 3, &bytes, &size, nil, 0) == 0, size > 4, size <= capacity else { return [] }
+        let argc = bytes.prefix(4).enumerated().reduce(UInt32(0)) { $0 | UInt32($1.element) << ($1.offset * 8) }
+        guard argc > 0, argc < 16_384 else { return [] }
+        var index = 4
+        while index < size && bytes[index] != 0 { index += 1 }
+        while index < size && bytes[index] == 0 { index += 1 }
+        var arguments: [String] = []
+        for _ in 0..<argc {
+            guard index < size else { return [] }
+            let start = index
+            while index < size && bytes[index] != 0 { index += 1 }
+            arguments.append(String(decoding: bytes[start..<index], as: UTF8.self))
+            index += 1
+        }
+        return arguments
+    }
+
+    static func findCodexTUIAncestor(from pid: pid_t) -> ProcessIdentity? {
+        var current = pid
+        for _ in 0..<16 {
+            if isCodexProcess(current) {
+                guard tty(of: current) != nil,
+                      environment(of: current)["ATOLL_RETROSPECTIVE"] == nil,
+                      CodexProcessKind.isInteractive(arguments: arguments(of: current)) else { return nil }
+                return identity(of: current)
+            }
+            guard let parent = parent(of: current), parent > 1, parent != current else { return nil }
+            current = parent
+        }
+        return nil
     }
 
     /// Les pids de tous les CLI `codex` vivants.

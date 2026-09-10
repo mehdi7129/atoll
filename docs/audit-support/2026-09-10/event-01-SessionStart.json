@@ -1,0 +1,9 @@
+{
+  "session_id": "fixture-id-1",
+  "transcript_path": "/private/fixture/atoll-contract/home/sessions/2026/09/10/rollout-2026-09-10T00-47-11-01a0885a-8f9f-7963-9983-3a650bde3968.jsonl",
+  "cwd": "/fixture/atoll-contract/project",
+  "hook_event_name": "SessionStart",
+  "model": "gpt-6-astra",
+  "permission_mode": "default",
+  "source": "startup"
+}

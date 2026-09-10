@@ -32,6 +32,7 @@ enum HookInstaller {
     }
 
     static func configureCodex(install: Bool) throws {
+        if let reason = CodexPaths.configurationError { throw InstallerError.helperFailed(reason) }
         try runHelper(install ? "install-codex" : "uninstall-codex")
     }
 
@@ -104,6 +105,10 @@ enum HookInstaller {
         let process = Process()
         process.executableURL = helperURL
         process.arguments = [verb]
+        var environment = ProcessInfo.processInfo.environment
+        environment["CODEX_HOME"] = CodexPaths.homeURL.path
+        process.environment = environment
+        process.standardInput = FileHandle.nullDevice
         let errorPipe = Pipe()
         process.standardOutput = Pipe()
         process.standardError = errorPipe

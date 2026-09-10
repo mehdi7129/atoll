@@ -325,6 +325,9 @@ final class PluginInventory {
     /// Vidé à chaque nouvelle recherche.
     private(set) var searchMatches: [PluginSearchResult.Match] = []
     private(set) var isSearching = false
+    @ObservationIgnored private var searchGeneration = UUID()
+    @ObservationIgnored private var activeSearchProvider: AgentProvider?
+    @ObservationIgnored private var searchProcessIdentity: ProcessIdentity?
 
     /// Les commandes `claude plugin` en vol — pour les arrêter à la fermeture.
     ///
@@ -333,16 +336,16 @@ final class PluginInventory {
     /// autre appel (une recherche pendant un « Actualiser »).
     final class InFlight: @unchecked Sendable {
         private let lock = NSLock()
-        private var processes: [Process] = []
+        private var processes: [(Process, ProcessIdentity?)] = []
 
         func adopt(_ process: Process) {
             lock.lock(); defer { lock.unlock() }
-            processes.append(process)
+            processes.append((process, ProcessInspector.identity(of: process.processIdentifier)))
         }
 
         func release(_ process: Process) {
             lock.lock(); defer { lock.unlock() }
-            processes.removeAll { $0 === process }
+            processes.removeAll { $0.0 === process }
         }
 
         /// SIGTERM à tout ce qui tourne, puis SIGKILL une seconde plus tard aux
@@ -350,13 +353,11 @@ final class PluginInventory {
         /// un pid recyclé, même garde que les deux autres escalades du projet).
         func terminateAll() {
             lock.lock()
-            let alive = processes.filter(\.isRunning)
+            let identities = processes.filter { $0.0.isRunning }.compactMap { $0.1 }
             lock.unlock()
-            guard !alive.isEmpty else { return }
-            let pids = alive.map(\.processIdentifier)
-            alive.forEach { $0.terminate() }
+            identities.forEach { ProcessInspector.signal(SIGTERM, to: $0) }
             DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 1) {
-                for pid in pids where kill(pid, 0) == 0 { kill(pid, SIGKILL) }
+                identities.forEach { ProcessInspector.signal(SIGKILL, to: $0) }
             }
         }
     }
@@ -366,7 +367,22 @@ final class PluginInventory {
     /// Arrête les commandes en vol. Appelé par `applicationWillTerminate` : la
     /// recherche de plugins est un `claude -p` FACTURÉ, il ne doit pas survivre
     /// à l'app qui l'a lancé.
-    func cancel() { Self.inFlight.terminateAll() }
+    func cancel() {
+        searchGeneration = UUID()
+        Self.inFlight.terminateAll()
+    }
+
+    func cancelIfCodex() {
+        guard activeSearchProvider == .codex else { return }
+        searchGeneration = UUID()
+        if let identity = searchProcessIdentity {
+            ProcessInspector.signal(SIGTERM, to: identity)
+            Task {
+                try? await Task.sleep(for: .seconds(1))
+                ProcessInspector.signal(SIGKILL, to: identity)
+            }
+        }
+    }
 
     /// Compare un besoin exprimé en français au catalogue PUBLIC des plugins.
     ///
@@ -376,55 +392,95 @@ final class PluginInventory {
     /// - `PluginSearchResult.parse` DROPPE tout id absent du catalogue : une
     ///   hallucination du modèle ne doit jamais devenir une commande
     ///   d'installation. C'est la garde centrale de cette fonction.
-    func search(need: String) async -> String? {
+    func search(need: String, useAI: Bool = false) async -> String? {
         let trimmed = need.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-        guard !isSearching else { return nil }
+        guard !trimmed.isEmpty, !isSearching else { return nil }
+        let generation = UUID()
+        searchGeneration = generation
         isSearching = true
         searchMatches = []
-        defer { isSearching = false }
-
+        var execution: AnalysisExecution?
+        var lease: UUID?
+        var resultLabel = "cancelled"
+        defer {
+            if let lease { AnalysisBudget.shared.finish(lease, outcome: resultLabel) }
+            activeSearchProvider = nil
+            searchProcessIdentity = nil
+            isSearching = false
+        }
+        // L'exécuteur, son modèle et son home sont figés AVANT le catalogue async.
+        if useAI {
+            do {
+                let plan = try AnalysisExecution.capture(kind: .pluginSearch)
+                lease = try AnalysisBudget.shared.begin(plan, kind: .pluginSearch, destination: .claude)
+                execution = plan
+                activeSearchProvider = plan.provider
+            } catch { return error.localizedDescription }
+        }
         if snapshot?.available.isEmpty ?? true {
-            // Un « Actualiser » déjà en vol fait sortir `refreshNow` sur sa
-            // garde de ré-entrance, SANS charger le catalogue : la recherche
-            // échouait alors sur « catalogue indisponible » alors qu'il était
-            // parfaitement joignable — il suffisait de recliquer 5 s plus tard.
             while isRefreshing {
-                try? await Task.sleep(for: .milliseconds(300))
+                try? await Task.sleep(for: .milliseconds(100))
+                guard generation == searchGeneration, !Task.isCancelled else { return "Recherche annulée." }
             }
-            if snapshot?.available.isEmpty ?? true {
-                await refreshNow(includeAvailable: true)
-            }
+            if snapshot?.available.isEmpty ?? true { await refreshNow(includeAvailable: true) }
         }
+        guard generation == searchGeneration, !Task.isCancelled else { return "Recherche annulée." }
         guard let snapshot, !snapshot.available.isEmpty else {
-            return "Catalogue des plugins indisponible."
+            resultLabel = "catalogueUnavailable"
+            return "Catalogue des plugins Claude indisponible."
         }
-        guard let claude = await resolveClaudePath() else {
-            return "Binaire claude introuvable."
+        guard let execution, let lease else {
+            let terms = Set(trimmed.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
+                .split(whereSeparator: { !$0.isLetter && !$0.isNumber }).filter { $0.count >= 3 }.map(String.init))
+            searchMatches = snapshot.available.compactMap { plugin -> (Int, PluginSearchResult.Match)? in
+                let text = "\(plugin.id) \(plugin.description ?? "")"
+                    .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
+                let score = terms.filter { text.contains($0) }.count
+                guard score > 0 else { return nil }
+                return (score, .init(pluginID: plugin.id, reason: "Correspondance locale dans le catalogue Claude.",
+                                    confidence: "medium"))
+            }.sorted { $0.0 == $1.0 ? $0.1.pluginID < $1.1.pluginID : $0.0 > $1.0 }
+                .prefix(3).map { $0.1 }
+            return searchMatches.isEmpty ? "Aucune correspondance locale. L'analyse IA reste facultative." : nil
         }
-
-        // Le catalogue ET les identifiants qu'il contient viennent du MÊME
-        // appel : `parse` n'accepte donc que ce que le modèle a vraiment vu.
-        // Les redériver depuis `available` en validait ~268 pour ~120 montrés.
         let catalog = snapshot.promptCatalog()
-        let arguments = PluginSearchPrompt.cliArguments(
-            model: LearningSettings.shared.searchModel,
-            budgetUSD: 0.30
-        ) + [PluginSearchPrompt.userPrompt(need: trimmed, catalog: catalog.text)]
-        let outcome = await Self.run(arguments: arguments, claude: claude, timeout: 120)
-        guard outcome.status == 0 else {
-            return "Recherche impossible : \(outcome.diagnostic)"
+        let prompt = PluginSearchPrompt.userPrompt(need: trimmed, catalog: catalog.text)
+        let launch: CodexRun.Launch?
+        if execution.provider == .codex {
+            launch = await CodexRun.prepare(schema: PluginSearchPrompt.jsonSchema,
+                prompt: CodexExecPlan.fullPrompt(system: PluginSearchPrompt.systemPrompt, user: prompt),
+                workingDirectory: nil, label: "plugins", home: execution.home, model: execution.model,
+                executableOverride: execution.executableOverride)
+        } else {
+            launch = await CodexRun.prepareClaude(arguments:
+                PluginSearchPrompt.cliArguments(model: execution.model, budgetUSD: 0.30) + [prompt], label: "plugins")
         }
-        let known = catalog.shownIDs
-        // Même repli que les trois autres chemins qui spawnent `claude` : un
-        // `.zprofile` bavard précède le JSON sur stdout du shell de login, et
-        // faisait échouer TOUTE recherche en permanence — après avoir dépensé
-        // le budget (audit du 2026-07-27).
-        guard let result = Self.parseSearchTolerant(outcome.output, knownIDs: known) else {
-            return "Réponse inexploitable."
+        guard let launch else {
+            resultLabel = "preparationFailed"
+            return CodexRun.lastFailure ?? "Préparation impossible."
         }
+        defer { launch.cleanUp() }
+        guard generation == searchGeneration, !Task.isCancelled else { return "Recherche annulée." }
+        let outcome = await Self.run(arguments: [], claude: "", timeout: 120, launch: launch,
+            beforeSpawn: {
+                generation == self.searchGeneration && !Task.isCancelled
+                    && AnalysisBudget.shared.mayLaunch(lease, context: execution)
+            }, onSpawn: { process in
+                AnalysisBudget.shared.launched(lease)
+                self.searchProcessIdentity = ProcessInspector.identity(of: process.processIdentifier)
+            })
+        guard generation == searchGeneration, !Task.isCancelled else { return "Recherche annulée." }
+        resultLabel = "exit(\(outcome.status))"
+        guard outcome.status == 0 else { return "Recherche impossible : \(outcome.diagnostic)" }
+        let result: PluginSearchResult?
+        if let file = launch.outputFile, let data = BoundedProcessOutput.file(at: file, cap: 1_048_576) {
+            result = PluginSearchResult.parse(codexOutput: data, knownIDs: catalog.shownIDs)
+        } else if launch.outputFile == nil {
+            result = Self.parseSearchTolerant(outcome.output, knownIDs: catalog.shownIDs)
+        } else { result = nil }
+        guard let result else { resultLabel = "invalidOutput"; return "Réponse inexploitable." }
         searchMatches = result.matches
-        log.info("recherche « \(trimmed.prefix(40), privacy: .public) » : \(result.matches.count) candidat(s)")
+        resultLabel = "success"
         return result.matches.isEmpty ? "Aucun plugin ne correspond." : nil
     }
 
@@ -451,7 +507,10 @@ final class PluginInventory {
     private static func run(
         arguments: [String],
         claude: String,
-        timeout: TimeInterval
+        timeout: TimeInterval,
+        launch: CodexRun.Launch? = nil,
+        beforeSpawn: (() -> Bool)? = nil,
+        onSpawn: ((Process) -> Void)? = nil
     ) async -> CommandOutcome {
         // Shell de LOGIN : un `claude` lancé directement depuis une app GUI est
         // muet (PATH/profil absents — piège vécu, documenté dans CLAUDE.md).
@@ -460,13 +519,14 @@ final class PluginInventory {
         // Tous les arguments sont échappés (FleetLaunch.shellQuote) : un id de
         // plugin vient d'un marketplace tiers, il n'a rien à faire non quoté
         // dans une ligne de commande.
-        let shellCommand = "unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN; exec "
+        let shellCommand = launch?.shellCommand ?? ("unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN; exec "
             + FleetLaunch.shellQuote(claude) + " "
-            + arguments.map(FleetLaunch.shellQuote).joined(separator: " ")
+            + arguments.map(FleetLaunch.shellQuote).joined(separator: " "))
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/zsh")
         process.arguments = ["-l", "-c", shellCommand]
+        process.currentDirectoryURL = launch?.workspace
         // ATOLL_RETROSPECTIVE=1 : marque le process comme INTERNE. Sans ça,
         // `SessionStore.reconcile()` prendrait ce `claude` pour une session
         // utilisateur et l'afficherait dans l'îlot (le marqueur d'env couvre
@@ -483,10 +543,11 @@ final class PluginInventory {
         process.standardOutput = stdout
         process.standardError = stderr
 
-        guard (try? process.run()) != nil else {
+        guard beforeSpawn?() ?? true, (try? process.run()) != nil else {
             log.error("spawn impossible : claude plugin \(arguments.joined(separator: " "), privacy: .public)")
             return CommandOutcome(status: -1, output: Data(), errorTail: "", killedByWatchdog: false)
         }
+        onSpawn?(process)
         let pid = process.processIdentifier
         SessionStore.shared.registerInternalPid(pid)
         armWatchdog(process, seconds: timeout)
@@ -507,10 +568,10 @@ final class PluginInventory {
         // des tâches détachées : `readabilityHandler` est inopérant en
         // LSUIElement (piège vécu).
         async let outData: Data = Task.detached(priority: .utility) {
-            (try? stdout.fileHandleForReading.readToEnd()) ?? Data()
+            BoundedProcessOutput.drain(stdout.fileHandleForReading, cap: 4_194_304)
         }.value
         async let errData: Data = Task.detached(priority: .utility) {
-            (try? stderr.fileHandleForReading.readToEnd()) ?? Data()
+            BoundedProcessOutput.drain(stderr.fileHandleForReading, cap: 4000, tail: true)
         }.value
         let output = await outData
         let errorData = await errData
@@ -532,12 +593,12 @@ final class PluginInventory {
     /// plus tard s'il s'accroche. Le terminate ferme les pipes → `readToEnd`
     /// retourne et l'appelant reprend la main.
     nonisolated private static func armWatchdog(_ process: Process, seconds: TimeInterval) {
-        let pid = process.processIdentifier
+        guard let identity = ProcessInspector.identity(of: process.processIdentifier) else { return }
         DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + seconds) {
             guard process.isRunning else { return }
-            process.terminate()
+            ProcessInspector.signal(SIGTERM, to: identity)
             DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 1) {
-                if process.isRunning { kill(pid, SIGKILL) }
+                ProcessInspector.signal(SIGKILL, to: identity)
             }
         }
     }

@@ -53,11 +53,11 @@ final class CodexTranscriptParserTests: XCTestCase {
     /// Une enveloppe machine glissée dans un message `user` n'est pas
     /// l'utilisateur qui parle : même raisonnement que l'exclusion des
     /// `<task-notification>` en v0.16.0 (17 % du corpus `user` pour rien).
-    func testMachineEnvelopesInUserMessagesAreDropped() {
-        XCTAssertNil(line(#"""
+    func testMachineEnvelopesRetainTheirActualProvenance() {
+        XCTAssertEqual(line(#"""
         {"type":"response_item","payload":{"type":"message","role":"user","id":"msg_4",
          "content":[{"type":"input_text","text":"<environment_context>\n  <cwd>/tmp</cwd>\n"}]}}
-        """#))
+        """#)?.fragments.first?.role, .instruction)
         // …mais une vraie question qui PARLE de ces balises doit passer.
         XCTAssertNotNil(line(#"""
         {"type":"response_item","payload":{"type":"message","role":"user","id":"msg_5",

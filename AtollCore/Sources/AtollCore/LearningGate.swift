@@ -17,11 +17,7 @@ import Foundation
 ///   arrivent en paramètres, la décision est rejouable à l'identique en test.
 public enum LearningGate {
 
-    /// Fenêtre glissante du plafond de runs — alignée sur la fenêtre 5 h du
-    /// quota Anthropic (voir `QuotaSnapshot`).
-    /// Fenêtre glissante de facturation d'Anthropic. Publique : la curation
-    /// des notes s'appuie sur la même pour borner sa dépense quand le quota
-    /// est inconnu.
+    /// Limite INTERNE glissante d'Atoll, indépendante des resets de l'abonnement.
     public static let runWindowSeconds: TimeInterval = 5 * 3_600
 
     /// Faits observés sur la session candidate. `userPromptCount` nil = session
@@ -52,22 +48,37 @@ public enum LearningGate {
         }
     }
 
-    /// Dernier quota 5 h connu (via statusline). Tout champ nil = donnée absente ;
-    /// une donnée absente ou périmée interdit le run (fail-safe : on ne lance pas
-    /// une dépense de quota à l'aveugle).
-    public struct QuotaFacts: Equatable, Sendable {
-        /// Fraction utilisée 0…1 de la fenêtre 5 h.
+    /// Mesure projetée pour l'abonnement choisi. Une donnée absente, ancienne
+    /// ou partielle relève de la politique explicite du quota inconnu. Une
+    /// fenêtre encore haute et non réinitialisée peut néanmoins interdire le run.
+    public struct QuotaFacts: Codable, Equatable, Sendable {
+        /// Fraction utilisée 0…1 ; peut n'être qu'un minorant si unknownReason existe.
         public let usedFraction: Double?
         /// Instant où cette valeur a été reçue (fraîcheur).
         public let receivedAt: Date?
         /// Réinitialisation annoncée ; passée ⇒ la valeur ne veut plus rien dire
         /// (même piège que `StatusLinePayload` : cache d'avant le reset).
         public let resetsAt: Date?
+        public let bucket: String?
+        public let window: String?
+        /// Une fraction accompagnée de cette raison n'établit pas la disponibilité.
+        public let unknownReason: String?
 
-        public init(usedFraction: Double?, receivedAt: Date?, resetsAt: Date?) {
+        public init(usedFraction: Double?, receivedAt: Date?, resetsAt: Date?,
+                    bucket: String? = nil, window: String? = nil, unknownReason: String? = nil) {
             self.usedFraction = usedFraction
             self.receivedAt = receivedAt
             self.resetsAt = resetsAt
+            self.bucket = bucket
+            self.window = window
+            self.unknownReason = unknownReason
+        }
+
+        public func usable(at now: Date, freshness: TimeInterval = 600) -> Double? {
+            guard unknownReason == nil, let value = usedFraction, value.isFinite, (0...1).contains(value),
+                  let date = receivedAt, now >= date, now.timeIntervalSince(date) < freshness,
+                  resetsAt.map({ $0 > now }) ?? true else { return nil }
+            return value
         }
     }
 
@@ -236,7 +247,7 @@ public enum LearningGate {
         }
         let windowExpired = quota.resetsAt.map { $0 < now } ?? false
         let isStale = now.timeIntervalSince(receivedAt) > config.quotaFreshnessSeconds
-            || windowExpired
+            || windowExpired || quota.unknownReason != nil
         if isStale {
             // Lecture vieille mais fenêtre 5 h EXPLICITEMENT toujours en cours
             // (`resets_at` connu et futur) : la fraction ne peut qu'avoir

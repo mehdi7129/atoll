@@ -1,0 +1,21 @@
+{
+  "session_id": "fixture-id-1",
+  "turn_id": "fixture-id-6",
+  "transcript_path": "/private/fixture/atoll-contract/home/sessions/2026/09/10/rollout-2026-09-10T00-47-11-01a0885a-8f9f-7963-9983-3a650bde3968.jsonl",
+  "cwd": "/fixture/atoll-contract/project",
+  "hook_event_name": "PostToolUse",
+  "model": "gpt-6-astra",
+  "permission_mode": "default",
+  "tool_name": "collaborationwait_agent",
+  "tool_input": {
+    "timeout_ms": 10000
+  },
+  "tool_response": "{\"message\":\"Wait timed out.\",\"timed_out\":true}",
+  "tool_use_id": "fixture-id-10",
+  "_atoll_test_enrich": {
+    "observedAt": 1788994477.181549,
+    "tty": "ttys033",
+    "sessionPid": 4242,
+    "sessionStartTime": 1788994012.272407
+  }
+}

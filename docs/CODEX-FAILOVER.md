@@ -1,254 +1,139 @@
-# Bascule Claude → Codex
+# Exécuteur des analyses et passation entre CLI
 
-État : **travail expérimental, non publié**, 2026-09-06.
-Branche : `codex/codex-support-dual-quotas`, empilé sur la PR #1.
-Demande de Mehdi : « si je n'ai plus de quota sur Claude, j'aimerais que ça
-passe sur mon compte Codex ».
+État du code au **2026-09-10**, développé sur v0.17.2, **non publié**.
+Le [rapport de mise en œuvre](IMPLEMENTATION-2026-09-10-codex-claude.md) distingue
+tests exécutés et parcours encore à vérifier.
 
-## Ce qui bascule, et ce qui ne peut pas basculer
+## Trois choix indépendants
 
-La PR #1 **observe** Codex et **lit** son quota. Elle ne bascule rien. Ce
-document décrit ce qui a été ajouté par-dessus.
-
-| | État | Pourquoi |
+| Choix | Où | Effet |
 |---|---|---|
-| **A — les deux dépenses d'Atoll** (bilan de fin de session, rangement des notes) | ✅ bascule **automatique** | Atoll lance lui-même ces `claude -p`. Il contrôle le processus de bout en bout, donc il peut le lancer ailleurs. |
-| **B — la session interactive** | ⚠️ **geste**, pas bascule | Bouton « CONTINUER DANS CODEX » : ouvre un terminal sur Codex dans le même dossier, avec un condensé de la session à côté. |
-| **B′ — bascule interactive automatique** | ❌ **impossible** | Atoll **observe** le CLI `claude`, il ne le pilote pas. Aucun hook, aucun réglage ne transforme une session en cours en session Codex. Ne pas le promettre. |
+| Fournisseur affiché | Boutons Claude Code / Codex | Liste, quota, palette |
+| Exécuteur des analyses | Réglages → Apprentissage ou Codex | Abonnement et modèle des dépenses Atoll |
+| Destination des skills | Réglages → Abonnement des analyses Atoll | Catalogue, proposition et installation Claude ou Codex |
 
-Le point B′ est la limite structurelle de tout ce dossier. Elle mérite d'être
-répétée parce que le titre « bascule » laisse croire l'inverse : ce qui passe
-sur Codex, ce sont les analyses qu'**Atoll** paie, pas le travail de Mehdi.
+Changer de vue ne change jamais l'exécuteur. L'origine d'un transcript reste
+sa provenance, quel que soit l'agent qui l'analyse.
 
-## Ordre des portes, et pourquoi il est impératif
+## Les trois consommateurs
 
-```
-ProviderFailover.choose  →  quel abonnement paie ?
-        ↓ (le fournisseur retenu)
-LearningGate.decide      →  cette dépense vaut-elle la peine, sur CE quota ?
-        ↓
-CodexRun.prepare / ClaudeExecutable.resolve
-```
+Le bilan de fin de session, le rangement des notes et la recherche IA facultative
+de plugins utilisent le même choix d'exécuteur et le même budget interne.
+La recherche locale de plugins ne consomme rien ; le catalogue ciblé demeure
+Claude même quand son classement IA est effectué par Codex.
 
-Choisir d'abord évite d'évaluer un plafond de fenêtre sur un compte qu'on ne va
-pas débiter — et donc de refuser un run que le second abonnement pouvait payer.
-`LearningGate` n'a pas été modifié : il reçoit simplement les faits de quota du
-fournisseur retenu, via `ProviderFailover.quotaFacts(of:)`. C'est ce qui garantit
-qu'une dépense Codex est arbitrée avec **exactement** les mêmes règles (seuil,
-fraîcheur, plafond par fenêtre) qu'une dépense Claude.
+Un poste Codex seul peut choisir Codex sans binaire ni quota Claude.
+L'onboarding préselectionne l'agent choisi si aucun moteur n'a encore été défini,
+sans activer l'apprentissage. Le modèle Codex doit être choisi dans le catalogue
+natif et est revalidé avant chaque lancement.
 
-### ⚠️ Le garde-fou qu'il ne faut pas retirer
+Le failover vers l'autre abonnement est **désactivé par défaut**. Son activation
+ne suffit pas : il faut une mesure fraîche et applicable prouvant l'épuisement
+du moteur choisi et une mesure fraîche et disponible pour l'autre. Il peut aller
+dans les deux sens. Un quota inconnu ou ambigu ne provoque jamais une bascule.
 
-Quand aucun fournisseur ne peut payer, l'appelant **saute avant** `LearningGate`.
-Ce n'est pas de la coquetterie : « quota inconnu » n'est pas un refus sec chez
-lui — il accorde `unknownQuotaMaxPerWindow` run(s) à l'aveugle. Sans ce
-court-circuit, il dirait `.run`, et ce run partirait sur le Claude qu'on vient
-justement de mesurer plein. C'est le motif exact de la régression trouvée dans le
-correctif de la v0.16.6 : la bonne décision prise, puis dépensée quand même faute
-d'une ligne dans la porte suivante.
+La tolérance historique « quota inconnu : une tentative interne par 5 h » est
+affichée et désactivable. Elle porte seulement sur le moteur choisi. Le plafond
+configurable connu est également une limite interne de cinq heures **par
+abonnement**, partagée entre les trois consommateurs ; ce n'est pas une durée
+contractuelle déduite pour Codex. Une seule analyse Atoll est préparée ou lancée
+à la fois. Aucune moyenne ni maximum arbitraire ne mélange des catégories
+indépendantes de quota. Sans correspondance fiable au modèle, la portée demeure
+inconnue. Dans l'unique catégorie Codex applicable, une fenêtre haute dont le
+reset reste futur conserve sa valeur comme minorant, même si la mesure vieillit
+ou qu'une autre fenêtre a été réinitialisée. Ce minorant peut refuser le job,
+jamais prouver de la disponibilité ni déclencher un failover.
 
-## Les invariants de `ProviderFailover`
+## Préparation, annulation et comptabilité
 
-- **OFF par défaut.** Dépenser un second abonnement est un choix explicite.
-- **Une donnée absente n'est pas un quota épuisé.** Un quota Claude INCONNU ou
-  périmé ne déclenche **pas** la bascule. C'est la règle la plus contre-intuitive
-  du module et la plus importante : sans mesure fraîche, « épuisé » est une
-  supposition, et une supposition ne doit pas débiter l'autre compte.
-- **Basculer vers un compte dont on ne sait rien, c'est remplacer un échec connu
-  par un échec inconnu** : quota Codex absent ou périmé ⇒ on ne lance rien.
-- **Un `resetsAt` passé rend la valeur muette**, des deux côtés (même piège que
-  `StatusLinePayload` : un cache d'avant la réinitialisation).
-- **Seuil distinct de celui du gate** (95 % contre 70 %). Le seuil du gate dit
-  « pas assez de marge pour me permettre ça » ; celui-ci dit « il n'y a plus
-  rien ». Basculer au premier ferait payer Codex alors que Claude peut encore
-  servir Mehdi pour son propre travail.
-- **La fenêtre Codex retenue est la PLUS CONTRAIGNANTE** (`max`), jamais la
-  moyenne ni la plus favorable — voir la mesure ci-dessous, qui l'a tranché.
+Le job en file lit les préférences à son évaluation. Avant le premier await de
+préparation, il fige origine, destination, exécuteur, modèle, home, configuration
+de résolution et quota. Le binaire absolu est résolu dans cette génération.
+Un changement de réglage ultérieur ne reroute pas le job. Une nouvelle
+validation du quota peut le reporter, jamais changer silencieusement de moteur.
 
-## Trois comportements hérités, assumés et nommés
+OFF, annulation ou reprise de session invalident le job pendant la résolution,
+la préparation, l'exécution et jusqu'aux écritures finales. Une réponse tardive
+ne produit ni note, ni proposition, ni remplacement des notes actives.
+La désactivation du rangement automatique annule son cycle en cours ; un
+rangement explicitement demandé reste distinct.
 
-1. **`lastSpendAt` de la curation est PARTAGÉ entre les deux abonnements.** Une
-   dépense Claude il y a deux heures bloque donc une dépense Codex dans la même
-   fenêtre, même si le compte Codex est vierge. C'est conservateur, et sans
-   effet pratique : le rangement des notes est hebdomadaire. À revoir seulement
-   si un troisième consommateur apparaît.
-2. **Côté curation, `finish` avance `lastRunAt` même sur échec** — donc un
-   « codex introuvable » repousse le rangement automatique d'une semaine, comme
-   le fait déjà un « claude introuvable ». Ce n'est pas un oubli : le
-   commentaire de `finish` le veut ainsi, pour ne pas relancer un cycle toutes
-   les six heures sur une panne de configuration. Le bouton « Ranger
-   maintenant » reste disponible. Défaut préexistant, déjà signalé dans
-   `CLAUDE.md` comme à trancher hors gel ; ce lot ne l'élargit pas au-delà de
-   son chemin jumeau.
-3. **La fenêtre de 5 h est supposée commune.** `quotaRefusal` borne la dépense
-   sur `LearningGate.runWindowSeconds` (5 h, la fenêtre Anthropic) ; la fenêtre
-   principale de Codex mesure 300 min, soit la même durée. C'est une COÏNCIDENCE
-   vérifiée le 2026-09-06, pas un contrat : si Codex change de fenêtre, c'est
-   `ProviderFailover.quotaFacts(of:)` qui portera la vérité (il lit `resetsAt`
-   du serveur), mais le plafond par fenêtre, lui, restera calé sur 5 h.
+Le journal local `analysis-jobs-v2.json` distingue réservation, lancement et
+résultat. Il contient moteur, modèle, type d'analyse, origine, destination et
+snapshot du quota avec fraction, fraîcheur, reset, catégorie et raison lorsque
+disponibles ; pas le contenu des prompts ni les secrets de connexion.
+Un lancement impossible rend son créneau ; un processus lancé puis en échec
+compte comme tentative. Une réservation interrompue par un crash est traitée
+conservativement au redémarrage.
 
-## Ce qui a été mesuré, et ce qui reste à mesurer
+Un échec de préparation ou de spawn du rangement, après admission au budget,
+applique un backoff de 30 minutes et n'avance pas la date du dernier vrai
+lancement. Un refus antérieur de configuration ou de budget (modèle absent,
+autre analyse en cours) reste évalué par le minuteur ordinaire de 15 minutes.
+Le bouton manuel reste possible.
+Le minuteur des bilans recontrôle la tête de file après les awaits ; une autre
+session terminée pendant la préparation ne reprend pas un délai périmé.
 
-### Mesuré le 2026-09-06
+## Lancement contrôlé
 
-- **Format des hooks Codex validé sur pièces**, ce que le handoff de la PR #1
-  listait comme non fait. Le `hooks.json` écrit par `CodexHookSettingsEditor` a
-  été soumis au RPC `hooks/list` d'un `codex app-server` lancé sur un
-  `CODEX_HOME` jetable : **les 10 événements sont reconnus** (`preToolUse`,
-  `permissionRequest`, `postToolUse`, `preCompact`, `postCompact`,
-  `sessionStart`, `sessionEnd`, `stop`, `interrupt`, `userPromptSubmit`),
-  `timeout: 3` devient `timeoutSec: 3`, et `trustStatus: "untrusted"` confirme
-  qu'une approbation dans `/hooks` reste nécessaire. **Un événement inconnu est
-  ignoré sans invalider le fichier** : si OpenAI renomme un événement, Atoll ne
-  casse pas la configuration Codex de l'utilisateur.
-- **Le quota Codex de Mehdi était épuisé au moment du test** :
-  `codex/primary` (fenêtre 300 min) à **100 %**, `codex/secondary`
-  (10 080 min) à **16 %**. `codex exec` a répondu « You've hit your usage
-  limit » et sorti en 1.
-  **C'est ce relevé qui a tranché `max` contre `min`** : en retenant la fenêtre
-  la moins chargée, Atoll aurait lu 16 %, jugé Codex disponible, lancé un run
-  condamné, et brûlé un créneau de sa propre fenêtre pour un `failed(exit 1)`.
-  Le cas est figé dans `ProviderFailoverTests` avec ses valeurs réelles.
-- **`codex exec` LIT STDIN même quand le prompt est en argument.** Sans
-  `/dev/null`, il imprime « Reading additional input from stdin... » et attend
-  EOF — soit, depuis Atoll, dix minutes de watchdog par run. Les deux lanceurs
-  posent `standardInput = .nullDevice` ; le commentaire est au point de spawn.
-- **808 tests verts** (761 avant ce lot), 1 test réseau ignoré par défaut.
-  Les propriétés de `ProviderFailover` ont été **vérifiées par sabotage**, une à
-  une : l'ignorance qui bascule, `min` au lieu de `max`, le seuil rendu
-  exclusif, la fenêtre expirée toujours crue. Quatre sabotages, quatre échecs.
+Les exécutables sont résolus par chemin absolu, y compris depuis l'environnement
+réduit d'une app macOS. Le shell de login est conservé pour l'authentification
+par abonnement, avec stdin fermé. Le home Codex choisi est réimposé **après**
+le profil de login. Les clés API héritées ne doivent pas remplacer l'abonnement
+choisi par Atoll.
 
-### Mesuré le 2026-09-07 — les deux points bloquants
+Les jobs travaillent dans un dossier temporaire contrôlé. Leur contexte est
+fourni explicitement ; le projet analysé n'est pas leur cwd. Le marqueur
+`ATOLL_RETROSPECTIVE=1` neutralise l'observation interne. Les sorties et rapports
+sont bornés ; l'escalade des signaux recontrôle le PID et son instant de
+démarrage. Le mot « error » dans un fichier lu ne devient pas un verdict d'échec
+d'outil : le condensé conserve l'issue inconnue en l'absence de preuve.
 
-**1. LE SCHÉMA D'ATOLL EST REFUSÉ PAR OPENAI.** Premier vrai `codex exec` :
-HTTP 400, `invalid_json_schema`, aucun fichier produit —
+Le schéma produit pour OpenAI est adapté au contrat strict : propriétés requises,
+objets fermés et retrait des bornes non acceptées. La validation Swift reste
+obligatoire après décodage. Le test réel du 10 septembre a exercé le runner App
+avec un modèle présent dans le catalogue natif et obtenu un rapport valide.
+Il a vérifié le home après un profil contradictoire, le retrait de la clé API,
+stdin EOF et l'absence de rollout persistant. **Cela ne prouve pas l'absence
+de toutes les instructions ou skills globaux du CLI.** Le dossier du projet est
+isolé ; une isolation totale par `--ignore-user-config` n'est pas promise.
 
-> `'required' is required to be supplied and to be an array including every key
-> in properties. Missing 'confidence'.`
+Le stockage et la recherche de mémoire sont locaux. Les extraits explicitement
+fournis à une analyse ou rappelés dans une conversation sont traités par le
+fournisseur de cette conversation ou de cette analyse.
 
-Anthropic tolère un `required` partiel ; OpenAI l'interdit en sortie structurée
-stricte, et refuse aussi `pattern`, `maxLength`, `maxItems`. **Le lot A ne
-pouvait donc RIEN produire**, et aucun test unitaire ne l'aurait dit : il fallait
-le vrai appel. D'où `CodexExecPlan.openAISchema(from:)`, qui traduit le schéma
-Anthropic — `required` complet, champs jadis facultatifs rendus **nullables**
-(forcer `similar_existing` pousserait le modèle à inventer une antériorité, soit
-l'inverse du but), mots-clés non supportés retirés.
+## Continuer une session dans l'autre CLI
 
-Retirer ces bornes est **sans danger, et c'est une propriété du code existant** :
-`RetrospectiveReport` et `NotesCurationOutput` revalident tout en Swift
-« indépendamment du `--json-schema` du CLI ». Le schéma guide le modèle ; il n'a
-jamais été ce qui protège Atoll. Cinq sabotages de la conversion, cinq échecs.
+Les détails de session proposent **CONTINUER DANS CODEX** ou **CONTINUER DANS
+CLAUDE** selon leur origine, indépendamment du réglage de failover.
 
-**Après correctif — la chaîne complète tourne** :
+Atoll prépare un condensé dans un dossier unique de passation, avec fichiers
+privés, puis ouvre un script de terminal. Ce script utilise un exécutable résolu,
+fait `cd` dans le dossier source et demande de lire le chemin **absolu** du
+contexte. Le home est explicite pour une destination Codex. Un chemin manquant,
+un binaire absent ou un échec d'ouverture donnent une erreur visible.
 
-| Run | Résultat |
-|---|---|
-| Bilan (`retro.json`) | **exit 0, 7 s**, rapport conforme dans le fichier de sortie |
-| Rangement des notes (`curation.json`) | **exit 0**, deux notes fusionnées avec leurs `sources` |
+« Terminal ouvert » décrit le résultat de l'ouverture par macOS. Cela ne prouve
+ni que le CLI est authentifié, ni qu'il a lu le contexte, ni qu'il a repris le
+travail. Atoll ne migre pas le thread existant et ne transmet pas une réponse
+de permission d'un agent à l'autre.
 
-Les deux rapports RÉELS sont figés verbatim dans `CodexExecPlanTests` : un test
-sur un payload fabriqué à la main n'aurait pas vu le refus du schéma.
+## Preuves et limites
 
-**2. LES PAYLOADS DE HOOKS CODEX SONT CONFORMES À CE QUE LIT LA PR #1.** Capture
-des payloads bruts dans un `CODEX_HOME` jetable (hooks factices,
-`--dangerously-bypass-hook-trust`, aucune config personnelle touchée). Six
-événements dans un run simple, la chaîne entière :
+- Les vrais runners App et le centre de permissions sont compilés avec
+  collaborateurs contrôlés par `Scripts/test-runtime.py` : trois consommateurs,
+  deux moteurs, cas nominaux, quota, annulations et résultats tardifs.
+- `--sabotage-cancellation` retire une garde sur des copies temporaires et
+  vérifie que la suite détecte l'écriture après annulation.
+- `--sabotage-quota-projection` réintroduit l'effacement des mesures Codex
+  anciennes et vérifie le refus attendu par le test de capture du budget.
+- `Scripts/test-codex-exec.py --live` vérifie le nouveau chemin réel Codex.
+  Il consomme une génération ; il n'est pas lancé par la suite ordinaire.
+- Les scripts de passation dans les deux sens ont été exécutés avec de faux
+  CLI : chemin avec espaces/apostrophe, cwd, home et contexte absolu corrects.
+- L'ouverture de Terminal.app avec un CLI authentifié, le clic réel des cartes
+  et la non-régression GUI Claude restent à valider. Une Release signée testée
+  et la recette de publication restent nécessaires avant diffusion.
 
-```
-SessionStart    cwd hook_event_name model permission_mode session_id source transcript_path
-UserPromptSubmit  … prompt turn_id
-PreToolUse        … tool_input tool_name tool_use_id turn_id
-PostToolUse       … tool_response …
-Stop              … last_assistant_message stop_hook_active turn_id
-SessionEnd      cwd hook_event_name reason session_id transcript_path
-```
-
-`cwd`, `turn_id`, `model`, `prompt`, `tool_name`, `tool_input`, `session_id`
-sont tous là : `CodexIntegration` nommera bien le projet et filtrera bien les
-événements d'un tour périmé. **Les strings du binaire ne le disaient pas** — on
-n'y trouvait ni `cwd` ni `turn_id` près des champs de hook, et j'en avais déduit
-à tort un risque. C'est la capture qui tranche, pas l'inspection.
-
-Note : `SessionEnd` ne porte PAS de `turn_id`. Sans effet — `CodexSessions.apply`
-traite ce cas en premier, avant le garde de tour.
-
-### Mesuré le 2026-09-08 — essai réel dans l'app
-
-Build de test lancé à la place de l'app stable (protocole de la PR #1), puis
-restitution complète.
-
-**LE LOT A FONCTIONNE DE BOUT EN BOUT.** Trigger `retroCodex` sur le plus gros
-transcript du projet (**84 Mo**, condensé à 149 813 caractères en 4 s) :
-`codex exec` lancé par l'app avec les arguments attendus, **2 min de run**,
-`success(8n/1s)` — huit notes et un skill (`animation-video-frame-analysis`)
-écrits par Atoll dans ses répertoires après revalidation Swift. Coût nul :
-c'est l'abonnement qui paie.
-
-**LE SUIVI DES SESSIONS FONCTIONNE.** Payload réel rejoué dans le trajet complet
-(wrapper → socket → `CodexService` → îlot) : helper **exit 0, stdout VIDE**
-(stdout est le canal de réponse d'un hook), et l'îlot affiche
-`Codex · Dynamic_Island · Gpt 6.astra · [ WORKING ]` avec le prompt en
-sous-titre. Le détail de session dit « Suivi Codex par hooks · retourne dans ton
-client Codex pour interagir » et désactive le bouton terminal.
-
-**LE `.command` DU HANDOFF FONCTIONNE** : Terminal.app exécute le script, le `cd`
-atteint le dossier du projet et `codex` est résolu — **sans aucune permission
-d'automatisation**, là où le jump-back en exige une.
-
-#### Deux défauts d'affichage trouvés par la capture, et corrigés
-
-1. **Activer le quota Codex poussait le quota CLAUDE hors du panneau.** Le pied
-   gagnait deux lignes dans un panneau à hauteur FIXE et `.clipShape`é — « tout
-   ce qui dépasse disparaît SANS le dire », dit `IslandRowBudget`. On ne voyait
-   plus que l'en-tête « QUOTAS · CLAUDE » et un fragment de barre orange sous le
-   bord : l'information principale effacée au profit de la secondaire. Correctif :
-   `codexQuotaCost` dans le budget, **et** pied Codex ramené à UNE ligne (l'âge
-   rejoint la ligne de jauges).
-2. **RÉGRESSION DANS LE CORRECTIF, trouvée en le vérifiant** : bannière + quota
-   Codex faisaient tomber le budget à 1, et à une rangée `byState` ne dessine
-   **RIEN** — 0 groupe, 0 session, toutes annoncées « cachées ». Un groupe coûte
-   son en-tête PLUS sa première session. Le `max(1, …)` d'origine ne protégeait
-   que du zéro. Plancher relevé à 2, mesuré avant/après.
-
-   C'est la troisième fois dans ce dossier qu'un correctif introduit son propre
-   défaut (après `failed(codex)` absent de `refundAttempt`). La leçon du projet
-   tient : **une correction mérite sa propre vérification, et la capture est le
-   seul juge d'un défaut visuel.**
-
-### À mesurer avant de fusionner
-
-1. **Le bouton « CONTINUER DANS CODEX » cliqué pour de vrai.** Le mécanisme
-   `.command` est prouvé et la logique est testée, mais le bouton lui-même n'a
-   pas été vu à l'écran : le trigger `select` ouvre la première session, qui
-   était la session Codex — or le bouton est réservé aux sessions Claude. Il
-   faut un clic humain.
-2. **Une VRAIE session Codex**, hooks approuvés dans `/hooks` par Mehdi. Le
-   trajet est prouvé avec un payload rejoué ; l'approbation de confiance et
-   l'émission par le CLI lui-même ne le sont pas.
-3. **Une bascule déclenchée par le quota**, et non forcée par le trigger : il
-   faudrait attendre que le quota Claude passe réellement le seuil.
-
-## Ce qui n'a PAS été touché
-
-Rien du chemin Claude : statusline, permissions, flotte, jump-back, mémoire,
-sons, rétrospective. Le fournisseur ne change **qu'un seul point** dans chaque
-runner — la commande lancée et l'endroit où lire le rapport. Tout le reste
-(condensé, prompt, antériorité, revalidation Swift, écriture des fichiers) est
-commun : **Atoll écrit toujours lui-même, après ses propres contrôles, quel que
-soit le modèle qui a répondu.** C'est cette propriété qui rend la bascule sûre.
-
-Le journal du recall n'a pas été touché non plus — le gel de septembre tient.
-
-## Fichiers
-
-| Fichier | Rôle |
-|---|---|
-| `AtollCore/ProviderFailover.swift` | La porte : quel abonnement paie, et pourquoi. Pur, testé, saboté. |
-| `AtollCore/CodexExecPlan.swift` | Traduction des deux jobs vers `codex exec`. Ce qui ne se traduit pas y est nommé. |
-| `AtollCore/SessionHandoff.swift` | Contexte + script `.command` d'une reprise. Pur, testé. |
-| `App/CodexExecutable.swift` | Chemin absolu de `codex` — jumelle de `ClaudeExecutable`, même piège. |
-| `App/CodexRun.swift` | Fichiers temporaires et commande shell d'une dépense Codex. |
-| `App/CodexHandoffService.swift` | Écrit la passation, ouvre Terminal.app (sans AppleScript, donc sans TCC). |
-| `App/RetrospectiveRunner.swift` | Choix du fournisseur, gate sur SON quota, lancement, lecture du rapport. |
-| `App/NotesCurationService.swift` | Idem ; `spawnClaude` scindé en `spawnShell`, partagé. |
-| `App/CodexSettingsPane.swift` | Réglage de la bascule et de son seuil. |
+Le protocole d'installation, les capacités natives et la recette visuelle sont
+dans [CODEX-INTEGRATION.md](CODEX-INTEGRATION.md).

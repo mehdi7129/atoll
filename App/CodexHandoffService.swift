@@ -5,8 +5,7 @@ import os
 
 private let log = Logger(subsystem: "dev.mehdiguiard.atoll", category: "codex-handoff")
 
-/// « CONTINUER DANS CODEX » : prépare la reprise d'une session Claude sur
-/// l'abonnement Codex, et ouvre un terminal dessus.
+/// Prépare une reprise explicite entre les deux CLI et ouvre son terminal.
 ///
 /// POURQUOI UN `.command` ET PAS UN APPLESCRIPT. Terminal.app exécute un
 /// fichier exécutable qu'on lui ouvre, ce qui suffit ici et ne demande AUCUNE
@@ -34,12 +33,24 @@ enum CodexHandoffService {
     ///
     /// `digest` est calculé par l'appelant : c'est lui qui sait lire le
     /// transcript, et ce type ne doit pas dépendre du format JSONL.
-    static func start(session: AgentSession, digest: String) async -> Outcome {
-        // Un dossier par session, remplacé à chaque fois : deux reprises de la
-        // même session ne doivent pas empiler des contextes contradictoires.
+    static func start(session: AgentSession, digest: String, destination: AgentProvider = .codex) async -> Outcome {
+        guard !CodexPreview.enabled else { return .failed("Passation désactivée dans l'aperçu isolé.") }
+        guard destination != session.provider, let cwd = session.cwd, cwd.hasPrefix("/"),
+              FileManager.default.fileExists(atPath: cwd) else { return .failed("Dossier de la session indisponible.") }
+        let home: URL?
+        do { home = destination == .codex ? try CodexPaths.validatedHome() : nil }
+        catch { return .failed(error.localizedDescription) }
+        let override = UserDefaults.standard.string(forKey: CodexExecutable.overrideKey) ?? ""
+        let executable = destination == .codex
+            ? await CodexExecutable.resolve(overridePath: override) : await ClaudeExecutable.resolve()
+        guard let executable else { return .failed("\(destination.label) introuvable : vérifie son installation.") }
+        if destination == .codex, home != CodexPaths.homeURL { return .failed("Le dossier Codex a changé : relance la passation.") }
+        // Une reprise déjà ouverte conserve son contexte, même si une autre
+        // fenêtre prépare la même session pendant l'ouverture de Terminal.
         let safeID = session.id.replacingOccurrences(
             of: "[^A-Za-z0-9._-]", with: "_", options: .regularExpression)
         let workspace = directory.appendingPathComponent(safeID, isDirectory: true)
+            .appendingPathComponent(destination.rawValue + "-" + UUID().uuidString, isDirectory: true)
         let contextFile = workspace.appendingPathComponent("contexte.md")
         let scriptFile = workspace.appendingPathComponent("reprendre.command")
 
@@ -54,7 +65,8 @@ enum CodexHandoffService {
             gitBranch: session.gitBranch,
             digest: digest,
             contextPath: contextFile.path,
-            executable: await CodexExecutable.resolve(),
+            executable: executable,
+            source: session.provider, destination: destination, codexHome: home?.path,
             endedAt: Date()
         )
 
@@ -64,6 +76,7 @@ enum CodexHandoffService {
                 at: workspace, withIntermediateDirectories: true,
                 attributes: [.posixPermissions: 0o700])
             try files.contextMarkdown.write(to: contextFile, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: contextFile.path)
             try files.launcherScript.write(to: scriptFile, atomically: true, encoding: .utf8)
             try FileManager.default.setAttributes(
                 [.posixPermissions: 0o700], ofItemAtPath: scriptFile.path)

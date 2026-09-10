@@ -1,6 +1,6 @@
 import Foundation
 
-public enum AgentProvider: String, Sendable {
+public enum AgentProvider: String, Codable, CaseIterable, Sendable {
     case claude, codex
     public var label: String { self == .claude ? "Claude" : "Codex" }
 }
@@ -14,14 +14,18 @@ public struct CodexHookEvent: Sendable {
         case postToolUse = "PostToolUse", permissionRequest = "PermissionRequest"
         case stop = "Stop", interrupt = "Interrupt"
         case preCompact = "PreCompact", postCompact = "PostCompact"
+        case subagentStart = "SubagentStart", subagentStop = "SubagentStop"
     }
     public let kind: Kind
     public let sessionID: String
+    /// Le CLI émet le session_id du PARENT et l'agent_id de l'enfant.
+    public let agentID: String?
     public let turnID: String?
     public let cwd: String?
     public let model: String?
     public let prompt: String?
     public let tool: String?
+    public let permission: CodexPermissionRequest?
     /// Chemin du rollout de la session (`~/.codex/sessions/**/*.jsonl`).
     /// PRÉSENT SUR TOUS LES ÉVÉNEMENTS, `SessionEnd` compris (vérifié sur
     /// `codex-cli 0.153.4`) — c'est lui qui permet au bilan de fin de session
@@ -39,26 +43,42 @@ public struct CodexHookEvent: Sendable {
     /// `__CFBundleIdentifier = com.todesktop.230313mzl4w4u92`, que
     /// `TerminalTarget.resolve` reconnaît comme `vscodeFamily(cli: "cursor")`.
     public let anchor: TerminalAnchor?
+    public let process: ProcessIdentity?
+    public let home: URL?
+    /// Date de capture du helper, distincte de la livraison au socket.
+    public let observedAt: Date?
 
     public init?(envelope: [String: Any]) {
         guard envelope["provider"] as? String == "codex",
               let payload = envelope["payload"] as? [String: Any],
               let name = payload["hook_event_name"] as? String,
               let kind = Kind(rawValue: name),
-              let id = payload["session_id"] as? String, !id.isEmpty,
-              (payload["agent_id"] as? String).map({ $0.isEmpty }) ?? true
+              let id = payload["session_id"] as? String, !id.isEmpty
         else { return nil }
+        agentID = (payload["agent_id"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+        if (kind == .subagentStart || kind == .subagentStop), agentID == nil { return nil }
         self.kind = kind
         sessionID = "codex:" + id
         turnID = payload["turn_id"] as? String
         cwd = payload["cwd"] as? String
         model = payload["model"] as? String
         prompt = (payload["prompt"] as? String).map { String($0.prefix(200)) }
-        tool = ParsedHookEvent.summarize(toolName: payload["tool_name"] as? String,
+        permission = kind == .permissionRequest ? CodexPermissionRequest(payload: payload) : nil
+        tool = permission?.summary ?? ParsedHookEvent.summarize(toolName: payload["tool_name"] as? String,
                                          input: payload["tool_input"] as? [String: Any])
 
         transcriptPath = payload["transcript_path"] as? String
         let enrich = envelope["enrich"] as? [String: Any] ?? [:]
+        home = (enrich["codexHome"] as? String).flatMap {
+            $0.hasPrefix("/") ? URL(fileURLWithPath: $0).standardizedFileURL.resolvingSymlinksInPath() : nil
+        }
+        if let pid = enrich["sessionPid"] as? Int32,
+           let start = enrich["sessionStartTime"] as? Double {
+            process = ProcessIdentity(pid: pid, startedAt: start)
+        } else { process = nil }
+        observedAt = (enrich["observedAt"] as? Double).flatMap {
+            $0.isFinite && $0 > 0 ? Date(timeIntervalSince1970: $0) : nil
+        }
         let environment = enrich["env"] as? [String: String] ?? [:]
         let hint = enrich["terminalHint"] as? String
         // Une ancre sans AUCUN moyen d'identifier le terminal ne sert à rien :
@@ -81,6 +101,11 @@ public struct CodexHookEvent: Sendable {
 
 /// Hook-only observation, not a claimed inventory of every Codex desktop/CLI thread.
 public struct CodexSessions: Sendable {
+    private struct Child: Sendable {
+        var turnID: String?
+        var closedAt: Date?
+        var closedTurns: [String] = []
+    }
     private struct Entry: Sendable {
         var session: AgentSession
         var turnID: String?
@@ -101,6 +126,10 @@ public struct CodexSessions: Sendable {
         /// une session qui n'en a pas assez, et une valeur inventée fausserait
         /// sa décision dans le sens le plus coûteux (lancer pour rien).
         var userPromptCount = 0
+        var lastCountedPromptTurn: String?
+        var process: ProcessIdentity?
+        var turnOpenedAt: Date?
+        var children: [String: Child] = [:]
     }
 
     /// Faits d'une session Codex terminée, pour le bilan de fin de session.
@@ -112,13 +141,43 @@ public struct CodexSessions: Sendable {
         public let model: String?
         public let userPromptCount: Int
         public let startedAt: Date
+        public let process: ProcessIdentity?
+
+        public init(sessionID: String, transcriptPath: String?, cwd: String?, model: String?,
+                    userPromptCount: Int, startedAt: Date, process: ProcessIdentity? = nil) {
+            self.sessionID = sessionID
+            self.transcriptPath = transcriptPath
+            self.cwd = cwd
+            self.model = model
+            self.userPromptCount = userPromptCount
+            self.startedAt = startedAt
+            self.process = process
+        }
     }
 
     /// Combien de tours clôturés on retient. Huit suffisent très largement : un
     /// hook async retardataire arrive dans la seconde, pas huit tours plus tard.
     private static let closedTurnMemory = 8
     private var entries: [String: Entry] = [:]
+    private struct ClosedSession: Sendable {
+        let process: ProcessIdentity?
+        let at: Date
+    }
+    private var closedSessions: [String: ClosedSession] = [:]
     public init() {}
+
+    public func process(for sessionID: String) -> ProcessIdentity? { entries[sessionID]?.process }
+
+    /// Inclut une session silencieuse connue : l'âge d'un hook ne prouve pas sa mort.
+    public func contains(_ sessionID: String) -> Bool { entries[sessionID] != nil }
+
+    private mutating func rememberEnd(_ sessionID: String, process: ProcessIdentity?, now: Date) {
+        closedSessions[sessionID] = ClosedSession(process: process, at: now)
+        if closedSessions.count > 256,
+           let oldest = closedSessions.min(by: { $0.value.at < $1.value.at })?.key {
+            closedSessions.removeValue(forKey: oldest)
+        }
+    }
 
     /// Ancre terminal d'une session Codex — le pendant de
     /// `SessionStore.terminalAnchor(for:)` côté Claude.
@@ -130,6 +189,18 @@ public struct CodexSessions: Sendable {
     /// `SessionStore.transcriptPath(for:)`.
     public func transcriptPath(for sessionID: String) -> String? {
         entries[sessionID]?.transcriptPath
+    }
+
+    public func lastObservedAt(for sessionID: String) -> Date? { entries[sessionID]?.lastEvent }
+
+    public mutating func enrich(_ metadata: CodexSessionMetadata, sessionID: String, process: ProcessIdentity) {
+        guard var entry = entries[sessionID], entry.process == process else { return }
+        entry.session.gitBranch = metadata.branchAtStart
+        if entry.session.subtitle == nil { entry.session.subtitle = metadata.firstHumanPrompt }
+        if entry.session.model == nil { entry.session.model = metadata.model }
+        entry.session.contextUsedFraction = metadata.contextFraction
+        entry.session.contextMeasuredAt = metadata.contextAt
+        entries[sessionID] = entry
     }
 
     /// Ce que la projection a fait d'un événement.
@@ -189,11 +260,16 @@ public struct CodexSessions: Sendable {
         public var accepted: Bool { turn == .current }
         /// La demande d'autorisation qu'il porte, s'il en porte une, est morte.
         public var cardIsStale: Bool { turn == .closed }
+        public let childClosed: String?
+        public let childClosedTurn: String?
 
-        public init(turn: Turn, ended: EndedSession? = nil, closure: Closure = .none) {
+        public init(turn: Turn, ended: EndedSession? = nil, closure: Closure = .none,
+                    childClosed: String? = nil, childClosedTurn: String? = nil) {
             self.turn = turn
             self.ended = ended
             self.closure = closure
+            self.childClosed = childClosed
+            self.childClosedTurn = childClosedTurn
         }
     }
 
@@ -210,7 +286,74 @@ public struct CodexSessions: Sendable {
 
     @discardableResult
     public mutating func applyEvent(_ event: CodexHookEvent, now: Date = Date()) -> Applied {
+        if let closed = closedSessions[event.sessionID] {
+            // Seul un démarrage explicite d'une NOUVELLE incarnation permet
+            // une reprise. Un prompt async et un scan ancien ne le peuvent pas.
+            let newerProcess = event.process.map { $0.startedAt > (closed.process?.startedAt ?? closed.at.timeIntervalSince1970) } ?? false
+            guard event.agentID == nil, event.kind == .sessionStart, newerProcess else {
+                return Applied(turn: newerProcess ? .unknown : .closed)
+            }
+            closedSessions.removeValue(forKey: event.sessionID)
+        }
+        if let expected = entries[event.sessionID]?.process, let actual = event.process,
+           expected != actual {
+            // Les événements de l'ancien processus ne ferment pas sa reprise.
+            guard event.agentID == nil, event.kind == .sessionStart, actual.startedAt > expected.startedAt else {
+                return Applied(turn: actual.startedAt > expected.startedAt ? .unknown : .closed)
+            }
+            entries.removeValue(forKey: event.sessionID)
+        }
+        if let expected = entries[event.sessionID]?.process, event.process == nil {
+            // Le helper d'une ancienne incarnation peut avoir perdu son
+            // parent. Son SessionEnd anonyme n'a aucune autorité sur la reprise.
+            if let captured = event.observedAt, captured.timeIntervalSince1970 < expected.startedAt {
+                return Applied(turn: .closed)
+            }
+            if event.kind == .sessionEnd || event.kind == .sessionStart { return Applied(turn: .unknown) }
+        }
+        // Les chemins, outils, modèles et fins ENFANT n'ont aucune autorité
+        // sur le parent. Ce branchement précède toutes les clôtures du parent.
+        if let child = event.agentID {
+            guard var entry = entries[event.sessionID], let identity = event.process,
+                  identity == entry.process else { return Applied(turn: .unknown) }
+            var state = entry.children[child] ?? Child(turnID: event.turnID)
+            if let turn = event.turnID, state.closedTurns.contains(turn) { return Applied(turn: .closed) }
+            if let closed = state.closedAt {
+                // Un autre tour peut être une reprise du MÊME enfant. Il
+                // reste inconnu jusqu'au démarrage explicite daté du CLI.
+                guard event.kind == .subagentStart, let turn = event.turnID,
+                      turn != state.turnID, let captured = event.observedAt, captured > closed else {
+                    return Applied(turn: event.turnID != nil && event.turnID == state.turnID ? .closed : .unknown)
+                }
+                state.closedAt = nil
+                state.turnID = turn
+            } else if let current = state.turnID, let actual = event.turnID, current != actual {
+                return Applied(turn: .unknown)
+            }
+            if event.kind == .subagentStop || event.kind == .sessionEnd {
+                if event.turnID == nil, state.turnID != nil { return Applied(turn: .unknown) }
+                state.closedAt = event.observedAt ?? now
+                if let turn = event.turnID ?? state.turnID {
+                    state.closedTurns.append(turn)
+                    state.closedTurns = Array(state.closedTurns.suffix(Self.closedTurnMemory))
+                }
+            }
+            // Le tour enfant a SON identifiant (capture native 13/16/19).
+            // Le Stop du parent ne prouve pas la fin d'un enfant en arrière-plan.
+            if entry.children[child] == nil, entry.children.count >= 256 {
+                guard let oldest = entry.children.filter({ $0.value.closedAt != nil })
+                    .min(by: { $0.value.closedAt! < $1.value.closedAt! })?.key else { return Applied(turn: .unknown) }
+                entry.children.removeValue(forKey: oldest)
+            }
+            entry.children[child] = state
+            entry.session.subagentCount = entry.children.values.filter { $0.closedAt == nil }.count
+            entry.session.subagentCountIsKnown = true
+            entries[event.sessionID] = entry
+            return Applied(turn: .current, childClosed: state.closedAt == nil ? nil : child,
+                childClosedTurn: state.closedAt == nil ? nil : (event.turnID ?? state.turnID))
+        }
         if event.kind == .sessionEnd {
+            let process = event.process ?? entries[event.sessionID]?.process
             let ended = entries.removeValue(forKey: event.sessionID).map {
                 EndedSession(sessionID: event.sessionID,
                              // Le chemin de l'événement de fin fait autorité ; on
@@ -219,15 +362,21 @@ public struct CodexSessions: Sendable {
                              cwd: event.cwd ?? $0.session.cwd,
                              model: $0.session.model,
                              userPromptCount: $0.userPromptCount,
-                             startedAt: $0.session.startedAt)
+                             startedAt: $0.session.startedAt, process: process)
             }
+            rememberEnd(event.sessionID, process: process, now: now)
             return Applied(turn: .current, ended: ended)
         }
         var entry = entries[event.sessionID] ?? Entry(session: AgentSession(
             id: event.sessionID,
             projectName: event.cwd.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "Codex",
-            status: .awaitingInput, startedAt: now, cwd: event.cwd, provider: .codex
+            status: .awaitingInput, startedAt: now, cwd: event.cwd, provider: .codex,
+            subagentCountIsKnown: false
         ), lastEvent: now)
+        if let captured = event.observedAt, let opened = entry.turnOpenedAt,
+           captured < opened, event.turnID == nil {
+            return Applied(turn: .unknown)
+        }
         // ⚠️ LA CLÔTURE D'UN TOUR EST MONOTONE : une fois `Stop` ou `Interrupt`
         // reçu, plus RIEN de ce tour ne peut le rouvrir.
         //
@@ -266,8 +415,11 @@ public struct CodexSessions: Sendable {
             return Applied(turn: named ? .closed : .unknown)
         }
 
+        let duplicatePrompt = event.kind == .userPromptSubmit && event.turnID != nil && event.turnID == entry.lastCountedPromptTurn
         if event.kind == .userPromptSubmit || entry.turnID == nil { entry.turnID = event.turnID }
         if event.kind == .userPromptSubmit { entry.turnIsClosed = false }
+        if event.kind == .userPromptSubmit, !duplicatePrompt { entry.turnOpenedAt = event.observedAt }
+        if let process = event.process { entry.process = process }
         if let cwd = event.cwd {
             entry.session.cwd = cwd
             entry.session.projectName = URL(fileURLWithPath: cwd).lastPathComponent
@@ -275,12 +427,15 @@ public struct CodexSessions: Sendable {
         if let model = event.model { entry.session.model = model }
         if let path = event.transcriptPath { entry.transcriptPath = path }
         if let anchor = event.anchor { entry.anchor = anchor }
-        if event.kind == .userPromptSubmit { entry.userPromptCount += 1 }
+        if event.kind == .userPromptSubmit, !duplicatePrompt {
+            entry.userPromptCount += 1
+            entry.lastCountedPromptTurn = event.turnID
+        }
         entry.lastEvent = now
         entry.session.stateConfirmedByHook = true
         if event.kind == .stop || event.kind == .interrupt {
             entry.turnIsClosed = true
-            if let turn = event.turnID, !entry.closedTurns.contains(turn) {
+            if let turn = event.turnID ?? entry.turnID, !entry.closedTurns.contains(turn) {
                 entry.closedTurns.append(turn)
                 entry.closedTurns = Array(entry.closedTurns.suffix(Self.closedTurnMemory))
             }
@@ -295,7 +450,7 @@ public struct CodexSessions: Sendable {
         case .preCompact: entry.session.status = .working(tool: "compactage")
         case .permissionRequest:
             entry.session.status = .awaitingPermission(tool: event.tool ?? "Codex")
-        case .sessionEnd: break
+        case .sessionEnd, .subagentStart, .subagentStop: break
         }
         entries[event.sessionID] = entry
         // `Stop` et `Interrupt` closent le tour : l'appelant retire les cartes
@@ -314,7 +469,7 @@ public struct CodexSessions: Sendable {
     public func sessions(now: Date = Date()) -> [AgentSession] {
         entries.values.compactMap { entry -> AgentSession? in
             let age = now.timeIntervalSince(entry.lastEvent)
-            guard age < 86_400 else { return nil } // crashed/abandoned clients
+            guard entry.process != nil || age < 86_400 else { return nil }
             var session = entry.session
             // Codex has no PermissionDenied hook. Silence isn't proof of an
             // outstanding approval, nor proof that a long-running tool finished.
@@ -343,26 +498,46 @@ public struct CodexSessions: Sendable {
     /// session dont on ne sait rien.
     public mutating func adopt(_ discovered: [CodexSessionDiscovery.Discovered],
                                now: Date = Date()) {
-        for session in discovered where entries[session.sessionID] == nil {
+        for session in discovered where entries[session.sessionID] == nil && closedSessions[session.sessionID] == nil {
             var agent = AgentSession(
                 id: session.sessionID,
                 projectName: URL(fileURLWithPath: session.cwd).lastPathComponent,
                 status: .awaitingInput, startedAt: session.startedAt,
-                cwd: session.cwd, provider: .codex)
+                cwd: session.cwd, provider: .codex, subagentCountIsKnown: false)
             agent.stateConfirmedByHook = false
             entries[session.sessionID] = Entry(
                 session: agent, turnID: nil, lastEvent: now,
-                transcriptPath: session.transcriptPath)
+                anchor: session.anchor, transcriptPath: session.transcriptPath,
+                process: session.process)
         }
     }
 
     public mutating func prune(now: Date = Date()) {
-        entries = entries.filter { now.timeIntervalSince($0.value.lastEvent) < 86_400 }
+        entries = entries.filter { $0.value.process != nil || now.timeIntervalSince($0.value.lastEvent) < 86_400 }
+    }
+
+    /// La mort attestée du processus termine la session exactement une fois.
+    /// Une sonde indisponible reste inconnue, jamais convertie en mort.
+    public mutating func reconcile(now: Date = Date(),
+                                    probe: (Int32) -> CodexCardReaper.Probe) -> [EndedSession] {
+        var ended: [EndedSession] = []
+        for (id, entry) in entries {
+            guard let identity = entry.process else { continue }
+            let current = probe(identity.pid)
+            guard !current.isAlive || (current.startTime != nil && current.startTime != identity.startedAt)
+            else { continue }
+            ended.append(EndedSession(sessionID: id, transcriptPath: entry.transcriptPath,
+                                      cwd: entry.session.cwd, model: entry.session.model,
+                                      userPromptCount: entry.userPromptCount, startedAt: entry.session.startedAt,
+                                      process: identity))
+            entries.removeValue(forKey: id)
+            rememberEnd(id, process: identity, now: now)
+        }
+        return ended
     }
 }
 
-/// Hooks d'OBSERVATION : aucune sortie, aucune décision, aucune lecture de
-/// transcript.
+/// Définitions gérées par Atoll. Seule PermissionRequest attend une décision.
 public enum CodexHookSettingsEditor {
     public static let command = "\"$HOME/.atoll/bin/atoll-codex-bridge\""
     public enum EditError: Error { case invalidSettings }
@@ -456,5 +631,29 @@ public enum CodexHookSettingsEditor {
                 }
             }
         }
+    }
+
+    public static func hasManagedHooks(_ data: Data?) -> Bool {
+        guard let data, let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              let hooks = root["hooks"] as? [String: Any] else { return false }
+        return hooks.values.contains { value in
+            (value as? [[String: Any]] ?? []).contains { group in
+                (group["hooks"] as? [[String: Any]] ?? []).contains { $0["command"] as? String == command }
+            }
+        }
+    }
+
+    public static func needsMigration(_ data: Data?) -> Bool {
+        guard let data, hasManagedHooks(data), let updated = try? edit(data, install: true) else { return false }
+        return !sameJSON(data, updated)
+    }
+
+    static func sameJSON(_ left: Data, _ right: Data) -> Bool {
+        guard let a = try? JSONSerialization.jsonObject(with: left),
+              let b = try? JSONSerialization.jsonObject(with: right),
+              let ac = try? JSONSerialization.data(withJSONObject: a, options: .sortedKeys),
+              let bc = try? JSONSerialization.data(withJSONObject: b, options: .sortedKeys) else { return false }
+        // NSDictionary.isEqual confond NSNumber(1) et Bool(true), pas JSON.
+        return ac == bc
     }
 }

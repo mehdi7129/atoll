@@ -22,10 +22,7 @@ import Foundation
 ///   abonnement ChatGPT ne se facture pas à l'appel. C'est le quota, lu par
 ///   `CodexAccountClient`, qui borne la dépense — d'où la porte
 ///   `ProviderFailover` en amont.
-/// - `--model` est VOLONTAIREMENT omis : le réglage de modèle d'Atoll nomme des
-///   modèles Anthropic (`haiku`, `sonnet`…) qui ne veulent rien dire pour
-///   Codex. Passer un nom inconnu ferait échouer le run ; on laisse donc le
-///   défaut du compte, qui est le choix de l'utilisateur.
+/// Le modèle est choisi explicitement et validé via model/list avant lancement.
 public enum CodexExecPlan {
 
     /// ⚠️ PIÈGE MESURÉ LE 2026-09-06, et il coûte dix minutes par run. `codex
@@ -42,7 +39,7 @@ public enum CodexExecPlan {
     /// (`--output-last-message`), là où Claude l'imprime sur stdout. C'est la
     /// différence de forme la plus importante entre les deux chemins.
     public static func arguments(schemaPath: String, outputPath: String,
-                                 workingDirectory: String?) -> [String] {
+                                 workingDirectory: String?, model: String? = nil) -> [String] {
         var arguments = [
             "exec",
             // Aucune session persistée : pas de transcript Codex à indexer, pas
@@ -54,13 +51,14 @@ public enum CodexExecPlan {
             // Sans ça, une demande d'approbation suspendrait le process jusqu'au
             // watchdog : il n'y a personne pour répondre.
             "-c", "approval_policy=\"never\"",
-            // Ni AGENTS.md du dépôt ni config personnelle : le prompt doit être
-            // la seule instruction, comme `--setting-sources ""` côté Claude.
+            // Ceci ignore config.toml ; ce n'est PAS une garantie d'absence
+            // d'AGENTS.md ou de skills globaux. Le cwd est contrôlé séparément.
             "--ignore-user-config",
             "--skip-git-repo-check",
             "--output-schema", schemaPath,
             "--output-last-message", outputPath,
         ]
+        if let model { arguments += ["--model", model] }
         if let workingDirectory, !workingDirectory.isEmpty {
             arguments += ["--cd", workingDirectory]
         }

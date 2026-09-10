@@ -53,17 +53,21 @@ struct SkillReviewView: View {
     let onClose: () -> Void
 
     @State private var center = SkillReviewCenter.shared
-    @State private var currentIndex = 0
+    @State private var selectedID: SkillProposal.ID?
+    @State private var overwriteProposal: SkillProposal?
     @State private var confirmingOverwrite = false
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage("paletteID") private var paletteID = Palette.monoOrange.id
+    @AppStorage("codexPaletteID") private var codexPaletteID = Palette.monoCyan.id
 
-    private var colors: ThemeColors { ThemeColors(paletteID: paletteID, scheme: colorScheme) }
+    private var colors: ThemeColors {
+        ThemeColors(paletteID: current?.destination == .codex ? codexPaletteID : paletteID, scheme: colorScheme)
+    }
 
     private var current: SkillProposal? {
-        guard center.proposals.indices.contains(currentIndex) else { return nil }
-        return center.proposals[currentIndex]
+        center.proposals.first { $0.id == selectedID } ?? center.proposals.first
     }
+    private var currentIndex: Int { center.proposals.firstIndex { $0.id == current?.id } ?? 0 }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -93,13 +97,18 @@ struct SkillReviewView: View {
         .padding(20)
         .frame(width: 640, height: 560, alignment: .top)
         .background(colors.bg)
-        .onAppear { center.refresh() }
+        .onAppear { center.refresh(); selectedID = current?.id }
+        .onChange(of: center.proposals.map(\.id)) { _, _ in
+            if !center.proposals.contains(where: { $0.id == selectedID }) { selectedID = center.proposals.first?.id }
+        }
     }
 
     @ViewBuilder
     private func proposalView(_ proposal: SkillProposal) -> some View {
         // Titre + provenance
         VStack(alignment: .leading, spacing: 4) {
+            Text("Destination : \(proposal.destination.label) · installation après vérification du catalogue")
+                .foregroundStyle(colors.accent)
             Text(AsciiArt.sectionHeader("PROPOSITION \(currentIndex + 1)/\(center.proposals.count)", width: 60))
                 .foregroundStyle(colors.dim)
             HStack {
@@ -184,11 +193,11 @@ struct SkillReviewView: View {
             HStack {
                 Spacer()
                 AsciiButton(label: "◀ PRÉC", color: colors.dim, shortcut: .leftArrow, modifiers: []) {
-                    currentIndex = max(0, currentIndex - 1)
+                    select(at: currentIndex - 1)
                 }
                 Text("\(currentIndex + 1) / \(center.proposals.count)").foregroundStyle(colors.dim)
                 AsciiButton(label: "SUIV ▶", color: colors.dim, shortcut: .rightArrow, modifiers: []) {
-                    currentIndex = min(center.proposals.count - 1, currentIndex + 1)
+                    select(at: currentIndex + 1)
                 }
                 Spacer()
             }
@@ -199,7 +208,6 @@ struct SkillReviewView: View {
         HStack(spacing: 12) {
             AsciiButton(label: "REJETER ⌘⌫", color: colors.warn, shortcut: .delete, modifiers: .command) {
                 center.reject(proposal.id)
-                clampIndex()
             }
             Spacer()
             AsciiButton(label: "PLUS TARD", color: colors.dim, shortcut: nil) {
@@ -208,14 +216,20 @@ struct SkillReviewView: View {
             Spacer()
             AsciiButton(label: "APPROUVER ⌘⏎", color: colors.ok, shortcut: .return, modifiers: .command) {
                 if center.isUpdateOfModifiedSkill(proposal) {
+                    overwriteProposal = proposal
                     confirmingOverwrite = true
                 } else {
-                    center.approve(proposal.id)
-                    clampIndex()
+                    center.approve(proposal)
                 }
             }
         }
         .font(AtollFont.mono(11))
+        .disabled(center.approving != nil)
+
+        if center.approving != nil {
+            Text("Vérification du catalogue et de la destination…")
+                .font(AtollFont.mono(9)).foregroundStyle(colors.dim)
+        }
 
         if let error = center.lastError {
             Text(error).font(AtollFont.mono(9)).foregroundStyle(colors.warn)
@@ -225,9 +239,8 @@ struct SkillReviewView: View {
             .alert("Écraser un skill modifié à la main ?", isPresented: $confirmingOverwrite) {
                 Button("Annuler", role: .cancel) { }
                 Button("Écraser", role: .destructive) {
-                    if let proposal = current {
-                        center.approve(proposal.id, force: true)
-                        clampIndex()
+                    if let snapshot = overwriteProposal {
+                        center.approve(snapshot, force: true)
                     }
                 }
             } message: {
@@ -235,7 +248,8 @@ struct SkillReviewView: View {
             }
     }
 
-    private func clampIndex() {
-        currentIndex = min(currentIndex, max(0, center.proposals.count - 1))
+    private func select(at index: Int) {
+        guard center.proposals.indices.contains(index) else { return }
+        selectedID = center.proposals[index].id
     }
 }

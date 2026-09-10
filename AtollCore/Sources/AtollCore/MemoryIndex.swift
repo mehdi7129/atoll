@@ -302,6 +302,86 @@ public final class MemoryIndex {
         Int32(try scalar("PRAGMA application_id"))
     }
 
+    /// Hygiène ciblée des anciens prompts machine Codex, y compris ceux dont
+    /// le rollout a disparu. Snapshot SQLite complet AVANT changement, puis
+    /// reclassement en une transaction. Un ancien Atoll peut encore écrire
+    /// des lignes : les rôles encore user seront revérifiés au lancement.
+    @discardableResult
+    public func runCodexHygieneIfNeeded() throws -> Int {
+        guard mode == .readWrite else { throw MemoryIndexError.connectionClosed }
+        try exec("CREATE TABLE IF NOT EXISTS atoll_content_migrations (name TEXT PRIMARY KEY, last_id INTEGER NOT NULL)")
+        let high = try scalar("SELECT COALESCE(MAX(id), 0) FROM messages")
+        let stmt = try prepare("""
+            SELECT m.id, m.text FROM messages m JOIN sessions s ON s.id = m.session_id
+            WHERE m.role = 'user' AND s.session_id LIKE 'codex:%'
+            """)
+        defer { sqlite3_finalize(stmt) }
+        var changes: [(Int64, [TranscriptLine.Fragment])] = []
+        while try step(stmt) {
+            let text = columnText(stmt, 1) ?? ""
+            let fragments = CodexTranscriptParser.classifiedUserText(text)
+            if fragments.contains(where: { $0.role == .instruction }) {
+                changes.append((sqlite3_column_int64(stmt, 0), fragments))
+            }
+        }
+        guard !changes.isEmpty else { return 0 }
+        try snapshotBeforeCodexHygiene()
+        try withTransaction {
+            for (id, fragments) in changes {
+                // Garder les octets originaux et leur attribution dans cette
+                // ligne ; seuls les éventuels suffixes humains redeviennent
+                // recherchables. Aucun UPDATE de texte sans trigger FTS.
+                try run("UPDATE messages SET role = 'instruction' WHERE id = ?1", binds: [.int(id)])
+                for (index, fragment) in fragments.enumerated() where fragment.role == .user {
+                    try run("""
+                        INSERT INTO messages(file_id, session_id, uuid, block_idx, role, ts, text)
+                        SELECT file_id, session_id, 'atoll-human-v1:' || id, ?2, 'user', ts, ?3
+                        FROM messages WHERE id = ?1
+                        """, binds: [.int(id), .int(Int64(index)), .text(fragment.text)])
+                }
+            }
+            try run("INSERT OR REPLACE INTO atoll_content_migrations(name, last_id) VALUES('codex-instructions-v1', ?1)",
+                    binds: [.int(high)])
+        }
+        return changes.count
+    }
+
+    private func snapshotBeforeCodexHygiene() throws {
+        let target = url.deletingLastPathComponent().appendingPathComponent("memory-before-codex-hygiene-\(UUID().uuidString).sqlite")
+        let destination = try Self.openHandle(path: target.path, flags: SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE)
+        defer { sqlite3_close_v2(destination) }
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: target.path)
+        guard let backup = sqlite3_backup_init(destination, "main", try handle(), "main") else {
+            throw MemoryIndexError.sqlite(code: sqlite3_errcode(destination), message: "Impossible de sauvegarder l'index avant migration Codex")
+        }
+        let result = sqlite3_backup_step(backup, -1)
+        let finished = sqlite3_backup_finish(backup)
+        guard result == SQLITE_DONE, finished == SQLITE_OK else {
+            throw MemoryIndexError.sqlite(code: result, message: "Sauvegarde incomplète : migration Codex annulée")
+        }
+        // Le backup hérite du journal_mode WAL de la source. Le convertir en
+        // fichier autonome avant fermeture permet sa réouverture read-only,
+        // sans avoir besoin de créer des fichiers auxiliaires -wal/-shm.
+        let standalone = sqlite3_exec(destination, "PRAGMA journal_mode=DELETE", nil, nil, nil)
+        guard standalone == SQLITE_OK else {
+            throw MemoryIndexError.sqlite(code: standalone, message: "Sauvegarde non autonome : migration Codex annulée")
+        }
+    }
+
+    /// Nettoyage des seules sauvegardes gérées lors d'une suppression explicite
+    /// de la mémoire. Un nom ressemblant ne suffit pas à autoriser sa suppression.
+    public static func isCodexHygieneBackupFileName(_ name: String) -> Bool {
+        let prefix = "memory-before-codex-hygiene-"
+        guard name.hasPrefix(prefix) else { return false }
+        var suffix = String(name.dropFirst(prefix.count))
+        for auxiliary in ["-wal", "-shm", "-journal"] where suffix.hasSuffix(auxiliary) {
+            suffix.removeLast(auxiliary.count)
+        }
+        guard suffix.hasSuffix(".sqlite") else { return false }
+        let identity = String(suffix.dropLast(7))
+        return identity.count == 36 && UUID(uuidString: identity) != nil
+    }
+
     // MARK: - Ingestion
 
     /// Ingère un lot de lignes lues entre `fileState.offset` et `newOffset`,
@@ -950,7 +1030,7 @@ public final class MemoryIndex {
         let roleClause = roles.map { set in
             let list = set.map { "'\($0.rawValue)'" }.sorted().joined(separator: ",")
             return "  AND m.role IN (\(list))\n"
-        } ?? ""
+        } ?? "  AND m.role <> 'instruction'\n"
         return """
         SELECT s.session_id, s.project_path, s.project_dir, s.title,
                m.role, m.ts,

@@ -7,6 +7,10 @@ import Foundation
 /// sans valeur mémorielle (bruit technique, type inconnu) donne `fragments` vide
 /// ou carrément `nil` côté parseur — jamais une erreur.
 public struct TranscriptLine: Equatable, Sendable {
+    /// Verdict structurel d'un outil. `unknown` interdit tout repli lexical.
+    public enum ToolOutcome: String, Equatable, Sendable {
+        case success, failure, unknown
+    }
     /// Rôle d'un fragment de texte, conservé dans l'index pour filtrage/affichage.
     public enum Role: String, Equatable, Sendable {
         case user
@@ -32,6 +36,9 @@ public struct TranscriptLine: Equatable, Sendable {
         /// remonter partout, et rouvrirait la fuite inter-projets que la
         /// frontière de chemin ferme.
         case memory
+        /// Enveloppe d'instructions du client : conservée pour sa provenance,
+        /// exclue des recherches ordinaires et des condensés d'apprentissage.
+        case instruction
     }
 
     /// Un morceau de texte indexable extrait de la ligne.
@@ -44,6 +51,7 @@ public struct TranscriptLine: Equatable, Sendable {
         /// classe en échec la lecture réussie d'un fichier contenant ce mot
         /// (mesuré : 5× trop de faux positifs). nil = information absente.
         public let isError: Bool?
+        public let toolOutcome: ToolOutcome?
         /// Identifiant d'invocation d'outil : `id` pour un `.tool`,
         /// `tool_use_id` pour le `.toolResult` correspondant.
         ///
@@ -56,10 +64,12 @@ public struct TranscriptLine: Equatable, Sendable {
         /// (audit du 2026-07-27). nil = information absente du transcript.
         public let toolUseID: String?
 
-        public init(role: Role, text: String, isError: Bool? = nil, toolUseID: String? = nil) {
+        public init(role: Role, text: String, isError: Bool? = nil, toolUseID: String? = nil,
+                    toolOutcome: ToolOutcome? = nil) {
             self.role = role
             self.text = text
             self.isError = isError
+            self.toolOutcome = toolOutcome
             self.toolUseID = toolUseID
         }
     }

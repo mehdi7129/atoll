@@ -53,10 +53,12 @@ final class NotchViewModel {
 
     /// Largeur compacte choisie pour CET écran (observe IslandSettings → l'îlot
     /// se redimensionne en direct quand on change le réglage).
-    var compactWidth: IslandWidth { IslandSettings.shared.width(for: displayID) }
+    var compactWidth: IslandWidth { CodexPreview.enabled ? .small : IslandSettings.shared.width(for: displayID) }
 
     init(screen: NSScreen, isPrimary: Bool, store: SessionStore? = nil) {
-        notchSize = screen.notchSize
+        notchSize = CodexPreview.enabled
+            ? (CommandLine.arguments.contains("--preview-notch") ? CGSize(width: 180, height: 32) : nil)
+            : screen.notchSize
         menuBarHeight = screen.menuBarHeight
         displayID = screen.displayUUIDString
         hairline = 1 / max(screen.backingScaleFactor, 1)
@@ -87,13 +89,20 @@ final class NotchViewModel {
         }
     }
 
-    var sessions: [AgentSession] {
+    var allSessions: [AgentSession] {
         if let previewSessions { return previewSessions }
         return (store.uiSessions + CodexService.shared.sessions).sorted {
             if $0.needsAttention != $1.needsAttention { return $0.needsAttention }
             if $0.isActive != $1.isActive { return $0.isActive }
             return $0.startedAt > $1.startedAt
         }
+    }
+    var selectedProvider: AgentProvider { ProviderPreferences.shared.selection }
+    var sessions: [AgentSession] { allSessions.filter { $0.provider == selectedProvider } }
+
+    func selectProvider(_ provider: AgentProvider) {
+        ProviderPreferences.shared.selection = provider
+        selectedSessionID = nil
     }
     var usage: UsageSnapshot { previewUsage ?? store.displayQuota }
     var quotaResets: (five: Date?, seven: Date?) { store.quotaResets }
@@ -115,7 +124,7 @@ final class NotchViewModel {
     }
 
     /// Y a-t-il quelque chose à MONTRER dans les ailes ? Sessions uniquement.
-    var hasActivity: Bool { !sessions.isEmpty }
+    var hasActivity: Bool { !allSessions.isEmpty || !InteractionPresentation.shared.items.isEmpty }
     var workingCount: Int { sessions.filter(\.isActive).count }
     var attentionCount: Int { sessions.filter(\.needsAttention).count }
 
@@ -143,7 +152,7 @@ final class NotchViewModel {
             return IslandGeometry.compactSize(
                 notch: notchSize,
                 menuBarHeight: menuBarHeight,
-                hasActivity: hasActivity || rockstar,
+                hasActivity: true,
                 width: compactWidth
             )
         case .expanded:

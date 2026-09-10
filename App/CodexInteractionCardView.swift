@@ -50,6 +50,29 @@ struct CodexInteractionCardView: View {
                 .lineLimit(3)
                 .fixedSize(horizontal: false, vertical: true)
 
+            Text(request.permission.cwd)
+                .font(AtollFont.mono(9))
+                .foregroundStyle(colors.dim)
+                .lineLimit(1)
+                .help(request.permission.cwd)
+
+            if let agent = request.agentID {
+                Text("Sous-agent \(agent) · session parente \(request.sessionID)")
+                    .font(AtollFont.mono(9)).foregroundStyle(colors.dim)
+                    .lineLimit(1).help("Sous-agent \(agent), parent \(request.sessionID)")
+            }
+
+            ScrollView([.vertical, .horizontal]) {
+                Text(request.permission.details)
+                    .font(AtollFont.mono(10))
+                    .foregroundStyle(colors.fg)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: true, vertical: true)
+                    .padding(6)
+            }
+            .frame(height: 140)
+            .accessibilityLabel("Détails complets de la demande Codex")
+
             Text("Codex attend ta décision. Elle ne vaut que pour cette demande.")
                 .font(AtollFont.mono(9))
                 .foregroundStyle(colors.dim)

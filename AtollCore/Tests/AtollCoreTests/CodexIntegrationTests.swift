@@ -26,10 +26,11 @@ final class CodexIntegrationTests: XCTestCase {
         XCTAssertEqual(AgentSession(projectName: "legacy", status: .done).provider, .claude)
     }
 
-    func testRejectsInvalidAndSubagentPayloads() {
+    func testRejectsInvalidPayloadsAndKeepsChildIdentity() {
         XCTAssertNil(CodexHookEvent(envelope: [:]))
         XCTAssertNil(CodexHookEvent(envelope: envelope("FutureEvent")))
-        XCTAssertNil(CodexHookEvent(envelope: envelope("Stop", extra: ["agent_id": "child"])))
+        XCTAssertEqual(CodexHookEvent(envelope: envelope("Stop", extra: ["agent_id": "child"]))?.agentID, "child")
+        XCTAssertNil(CodexHookEvent(envelope: envelope("SubagentStart")))
         XCTAssertNil(CodexHookEvent(envelope: envelope("SessionStart", extra: ["session_id": ""])))
         XCTAssertNotNil(CodexHookEvent(envelope: envelope("SessionStart", extra: ["transcript_path": NSNull()])))
     }

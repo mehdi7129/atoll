@@ -30,7 +30,7 @@ enum RecallCLI {
         let options = parse(arguments: arguments)
         guard !options.query.isEmpty else {
             print("usage : atoll-bridge recall \"mots clés\" [--limit N] [--project <chemin>] [--json]")
-            print("        recherche plein-texte dans la mémoire des sessions Claude Code indexée par Atoll")
+            print("        recherche plein-texte dans la mémoire locale des sessions Claude Code et Codex indexée par Atoll")
             return 0
         }
 

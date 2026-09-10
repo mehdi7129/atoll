@@ -143,7 +143,7 @@ final class NotesCurationTests: XCTestCase {
 
         // À exactement 50 % on passe : le seuil est strict.
         let boundary = NotesCurationOutput(
-            notes: [.init(title: "Pile au seuil", content: String(repeating: "y", count: 100), sources: [])],
+            notes: [.init(title: "Pile au seuil", content: String(repeating: "y", count: 100), sources: existing.map(\.name))],
             contradictions: []
         )
         _ = try planSuccess(NotesCurationPlanner.plan(existing: existing, output: boundary, now: try fixedNow()))
@@ -276,7 +276,7 @@ final class NotesCurationTests: XCTestCase {
         let output = NotesCurationOutput(
             notes: [.init(title: "Sans héritage",
                           content: String(repeating: "Corps. ", count: 10),
-                          sources: ["absent.md"])],
+                          sources: ["autre.md"])],
             contradictions: []
         )
         let plan = try planSuccess(NotesCurationPlanner.plan(
@@ -316,7 +316,7 @@ final class NotesCurationTests: XCTestCase {
         let existing = (0..<3).map { (name: "0\($0)-note.md", content: fichier) }
         let output = NotesCurationOutput(
             notes: (0..<3).map { NotesCurationOutput.Note(title: "Pièges de build \($0)",
-                                                          content: corps, sources: []) },
+                                                          content: corps, sources: ["0\($0)-note.md"]) },
             contradictions: [])
 
         // L'ANCIENNE mesure (fichier entier vs corps nu) aurait refusé : on le

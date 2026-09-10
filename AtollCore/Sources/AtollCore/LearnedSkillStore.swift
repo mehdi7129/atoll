@@ -9,13 +9,19 @@ public enum LearnedSkillError: LocalizedError, Equatable {
     case manifestUnreadable
     case userModifiedWithoutForce(String)
     case illegalTransition
+    case legacyConflict(String)
+    case unreviewedResources
 
     public var errorDescription: String? {
         switch self {
+        case .unreviewedResources:
+            return "La proposition contient des annexes non affichées dans la revue. Installation refusée ; conserve-les pour une revue explicite."
+        case .legacyConflict(let slug):
+            return "L'ancienne et la nouvelle version d'Atoll ont modifié « \(slug) » : conserve les deux manifestes et résous cette divergence avant de continuer."
         case .invalidSlug(let slug):
             return "Slug de skill invalide : « \(slug) »."
         case .collisionWithUnmanagedDirectory(let dirName):
-            return "Le dossier « \(dirName) » existe déjà dans ~/.claude/skills et n'est pas géré par Atoll — rien n'a été touché."
+            return "Le dossier « \(dirName) » existe déjà dans la destination choisie et n'est pas géré par Atoll — rien n'a été touché."
         case .manifestUnreadable:
             return "Manifeste des skills installés illisible — aucune suppression effectuée."
         case .userModifiedWithoutForce(let slug):
@@ -88,16 +94,19 @@ public struct LearnedSkillStore {
 
     public let learningRoot: URL
     public let skillsRoot: URL
+    public let destination: AgentProvider
     private let now: () -> Date
 
     /// Racines injectables pour les tests ; défauts = chemins réels.
     public init(
         learningRoot: URL = BridgePaths.learningDirectory,
-        skillsRoot: URL = BridgePaths.claudeSkillsDirectory,
+        skillsRoot: URL? = nil,
+        destination: AgentProvider = .claude,
         now: @escaping () -> Date = Date.init
     ) {
         self.learningRoot = learningRoot
-        self.skillsRoot = skillsRoot
+        self.skillsRoot = skillsRoot ?? (destination == .claude ? BridgePaths.claudeSkillsDirectory : CodexPaths.homeURL.appendingPathComponent("skills"))
+        self.destination = destination
         self.now = now
     }
 
@@ -105,16 +114,24 @@ public struct LearnedSkillStore {
 
     private var fm: FileManager { .default }
 
-    private var proposedDirectory: URL {
-        learningRoot.appendingPathComponent("proposed", isDirectory: true)
+    /// Un ancien Atoll ne voit jamais les propositions ou manifestes Codex.
+    /// Deux homes Codex successifs conservent chacun leur inventaire.
+    private var scope: String {
+        destination == .claude ? "claude" : "codex-" + InstalledSkillsManifest.sha256(skillsRoot.resolvingSymlinksInPath().path).prefix(16)
+    }
+    private var artifactRoot: URL {
+        destination == .claude ? learningRoot : learningRoot.appendingPathComponent("skills-v2/\(scope)")
+    }
+    public var proposedDirectory: URL {
+        artifactRoot.appendingPathComponent("proposed", isDirectory: true)
     }
 
     private var archiveDirectory: URL {
-        learningRoot.appendingPathComponent("archive", isDirectory: true)
+        artifactRoot.appendingPathComponent("archive", isDirectory: true)
     }
 
-    private var manifestURL: URL {
-        learningRoot.appendingPathComponent("installed.json")
+    public var manifestURL: URL {
+        learningRoot.appendingPathComponent("installed-v2-\(scope).json")
     }
 
     // MARK: - Découverte
@@ -133,7 +150,7 @@ public struct LearnedSkillStore {
         return entries
             .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true }
             .compactMap(loadProposal(in:))
-            .filter { $0.status == .proposed }
+            .filter { $0.status == .proposed && $0.destination == destination }
             .sorted { ($0.createdAt, $0.id) < ($1.createdAt, $1.id) }
     }
 
@@ -155,6 +172,12 @@ public struct LearnedSkillStore {
     /// d'abord, jamais perdu.
     @discardableResult
     public func approve(_ proposal: SkillProposal, force: Bool = false) throws -> InstalledSkill {
+        guard owns(proposal), loadProposal(in: proposal.directoryURL) == proposal else { throw LearnedSkillError.illegalTransition }
+        // Le producteur écrit seulement ces deux fichiers, et la revue ne
+        // montre que SKILL.md. Aucune annexe non relue ne devient exécutable.
+        guard try fm.contentsOfDirectory(atPath: proposal.directoryURL.path).allSatisfy({ ["SKILL.md", "meta.json"].contains($0) }) else {
+            throw LearnedSkillError.unreviewedResources
+        }
         guard SkillProposal.canTransition(from: proposal.status, to: .approved) else {
             throw LearnedSkillError.illegalTransition
         }
@@ -166,6 +189,9 @@ public struct LearnedSkillStore {
         let target = skillsRoot.appendingPathComponent(dirName, isDirectory: true)
         var manifest = try readManifestOrThrow()
         let existingIndex = manifest.skills.firstIndex { $0.slug == slug }
+        if let index = existingIndex, managedDirectory(for: manifest.skills[index]) != target {
+            throw LearnedSkillError.manifestUnreadable
+        }
         let stamp = timestamp()
 
         // (b) dossier déjà présent : mise à jour si géré, adoption si c'est
@@ -216,6 +242,14 @@ public struct LearnedSkillStore {
             ".\(dirName).tmp-\(UUID().uuidString)", isDirectory: true)
         try fm.createDirectory(at: staging, withIntermediateDirectories: true)
         defer { try? fm.removeItem(at: staging) } // inerte après le move (chemin disparu)
+        // Une mise à jour du texte conserve toutes les ressources installées.
+        if fm.fileExists(atPath: target.path) {
+            for file in try fm.contentsOfDirectory(at: target, includingPropertiesForKeys: nil)
+                where file.lastPathComponent != "SKILL.md" && file.lastPathComponent != "meta.json" {
+                let to = staging.appendingPathComponent(file.lastPathComponent)
+                try fm.copyItem(at: file, to: to)
+            }
+        }
         try Data(proposal.skillMD.utf8).write(to: staging.appendingPathComponent("SKILL.md"))
         if fm.fileExists(atPath: target.path) {
             try fm.removeItem(at: target) // l'ancien contenu vient d'être archivé
@@ -235,7 +269,8 @@ public struct LearnedSkillStore {
             installedAt: existingIndex.map { manifest.skills[$0].installedAt } ?? now(),
             updatedAt: existingIndex == nil ? nil : now(),
             skillSHA256: InstalledSkillsManifest.sha256(proposal.skillMD),
-            sourceArchivePath: proposalArchive.path
+            sourceArchivePath: proposalArchive.path,
+            destination: destination
         )
         if let index = existingIndex {
             manifest.skills[index] = entry
@@ -266,6 +301,7 @@ public struct LearnedSkillStore {
     /// Déplace la proposition vers `archive/rejected/<slug>-<ts>/` (statut du
     /// meta mis à jour au passage). RIEN n'est supprimé.
     public func reject(_ proposal: SkillProposal) throws {
+        guard owns(proposal) else { throw LearnedSkillError.illegalTransition }
         guard SkillProposal.canTransition(from: proposal.status, to: .rejected) else {
             throw LearnedSkillError.illegalTransition
         }
@@ -317,9 +353,7 @@ public struct LearnedSkillStore {
     /// Entrées du manifeste ; absent OU illisible → [] (lecture seule, le
     /// fail-closed strict est réservé aux opérations destructrices).
     public func installedSkills() -> [InstalledSkill] {
-        guard let data = try? Data(contentsOf: manifestURL),
-              let manifest = InstalledSkillsManifest.decode(data) else { return [] }
-        return manifest.skills
+        (try? readManifestOrThrow().skills) ?? []
     }
 
     // MARK: - Réconciliation
@@ -340,8 +374,7 @@ public struct LearnedSkillStore {
         var userModified: [String] = []
         var unmanaged: [String] = []
 
-        let manifest = (try? Data(contentsOf: manifestURL))
-            .flatMap(InstalledSkillsManifest.decode)
+        let manifest = try? readManifestOrThrow()
 
         if var manifest {
             // `skillsRoot` absent le temps d'un lancement (volume non monté,
@@ -441,6 +474,7 @@ public struct LearnedSkillStore {
             guard (try? dir.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true,
                   let data = try? Data(contentsOf: dir.appendingPathComponent("meta.json")),
                   let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+                  (object["destination"] as? String ?? "claude") == destination.rawValue,
                   let rawStatus = object["status"] as? String,
                   let status = SkillProposal.Status(rawValue: rawStatus),
                   status != .proposed
@@ -473,13 +507,8 @@ public struct LearnedSkillStore {
     /// étrangers ne sont JAMAIS énumérés — seule la liste du manifeste guide.
     @discardableResult
     public func uninstallAll() throws -> UninstallReport {
-        guard fm.fileExists(atPath: manifestURL.path) else {
-            return UninstallReport(removed: [], archived: [])
-        }
-        guard let data = try? Data(contentsOf: manifestURL),
-              let manifest = InstalledSkillsManifest.decode(data) else {
-            throw LearnedSkillError.manifestUnreadable
-        }
+        var manifest = try readManifestOrThrow()
+        guard !manifest.skills.isEmpty else { return UninstallReport(removed: [], archived: []) }
 
         var removed: [String] = []
         var archived: [String] = []
@@ -532,7 +561,8 @@ public struct LearnedSkillStore {
             }
         }
 
-        try writeManifest(InstalledSkillsManifest(skills: remaining))
+        manifest.skills = remaining
+        try writeManifest(manifest)
         return UninstallReport(removed: removed, archived: archived)
     }
 
@@ -549,26 +579,52 @@ public struct LearnedSkillStore {
     /// (`SkillSlug.dirName(for:)` sur un slug validé, seule garde
     /// anti-traversée du projet) et on exige l'égalité.
     private func managedDirectory(for entry: InstalledSkill) -> URL? {
-        guard let slug = SkillSlug.validate(entry.slug),
+        guard entry.destination == destination, let slug = SkillSlug.validate(entry.slug),
               SkillSlug.dirName(for: slug) == entry.dirName else { return nil }
         return skillsRoot.appendingPathComponent(entry.dirName, isDirectory: true)
     }
 
     /// Manifeste absent = vide ; présent mais illisible = fail-closed.
     private func readManifestOrThrow() throws -> InstalledSkillsManifest {
-        guard fm.fileExists(atPath: manifestURL.path) else {
-            return InstalledSkillsManifest()
+        func read(_ url: URL, version: Int) throws -> InstalledSkillsManifest? {
+            guard fm.fileExists(atPath: url.path) else { return nil }
+            guard let data = BoundedProcessOutput.file(at: url, cap: 2_097_152),
+                  let manifest = InstalledSkillsManifest.decode(data), manifest.v == version,
+                  manifest.skills.allSatisfy({ $0.destination == destination }),
+                  Set(manifest.skills.map(\.slug)).count == manifest.skills.count else {
+                throw LearnedSkillError.manifestUnreadable
+            }
+            return manifest
         }
-        guard let data = try? Data(contentsOf: manifestURL),
-              let manifest = InstalledSkillsManifest.decode(data) else {
-            throw LearnedSkillError.manifestUnreadable
+        let current = try read(manifestURL, version: 2)
+        let legacy = destination == .claude ? try read(learningRoot.appendingPathComponent("installed.json"), version: 1) : nil
+        let merged = try InstalledSkillsManifest.migrating(current, legacy: legacy)
+        if (current != nil || legacy != nil), merged != current {
+            try writeManifest(merged)
         }
-        return manifest
+        return merged
+    }
+
+    public func manifestProblem() -> String? {
+        do { _ = try readManifestOrThrow(); return nil }
+        catch { return error.localizedDescription }
+    }
+
+    private func owns(_ proposal: SkillProposal) -> Bool {
+        let files = [proposal.directoryURL, proposal.directoryURL.appendingPathComponent("SKILL.md"),
+                     proposal.directoryURL.appendingPathComponent("meta.json")]
+        return proposal.destination == destination &&
+            files.allSatisfy { (try? $0.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) != true } &&
+            proposal.directoryURL.resolvingSymlinksInPath().deletingLastPathComponent() == proposedDirectory.resolvingSymlinksInPath()
     }
 
     private func writeManifest(_ manifest: InstalledSkillsManifest) throws {
+        guard manifest.v == 2, manifest.skills.allSatisfy({ $0.destination == destination }) else {
+            throw LearnedSkillError.manifestUnreadable
+        }
         try fm.createDirectory(at: learningRoot, withIntermediateDirectories: true)
         try manifest.encoded().write(to: manifestURL, options: .atomic)
+        try fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: manifestURL.path)
     }
 
     /// Archive le DOSSIER entier d'un skill avant de le supprimer.

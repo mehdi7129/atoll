@@ -25,9 +25,13 @@ public enum CodexSessionDiscovery {
     public struct RunningProcess: Equatable, Sendable {
         public let pid: Int32
         public let cwd: String
-        public init(pid: Int32, cwd: String) {
+        public let startTime: Double?
+        public let sessionID: String?
+        public init(pid: Int32, cwd: String, startTime: Double? = nil, sessionID: String? = nil) {
             self.pid = pid
             self.cwd = cwd
+            self.startTime = startTime
+            self.sessionID = sessionID
         }
     }
 
@@ -51,17 +55,22 @@ public enum CodexSessionDiscovery {
         public let cwd: String
         public let transcriptPath: String
         public let startedAt: Date
+        public let process: ProcessIdentity?
+        public let anchor: TerminalAnchor?
+
+        public init(sessionID: String, cwd: String, transcriptPath: String, startedAt: Date,
+                    process: ProcessIdentity? = nil, anchor: TerminalAnchor? = nil) {
+            self.sessionID = sessionID
+            self.cwd = cwd
+            self.transcriptPath = transcriptPath
+            self.startedAt = startedAt
+            self.process = process
+            self.anchor = anchor
+        }
     }
 
-    /// Âge maximal d'un rollout pour qu'on le rattache à un processus vivant.
-    ///
-    /// Le processus prouve la vie ; cette borne évite seulement d'exhumer un
-    /// rollout d'il y a trois jours parce qu'une session tourne aujourd'hui
-    /// dans le même dossier. Large à dessein : une session peut rester ouverte
-    /// et silencieuse pendant des heures.
-    public static let maxRolloutAge: TimeInterval = 24 * 3_600
-
-    /// Apparie processus et rollouts PAR DOSSIER DE TRAVAIL.
+    /// Compatibilité du premier collecteur ; le collecteur courant utilise
+    /// CodexSessionRegistry. Appariement par identité capturée, jamais par cwd.
     ///
     /// `known` = les sessions déjà connues par les hooks : elles font autorité
     /// et ne doivent jamais être dupliquées par cette heuristique.
@@ -69,28 +78,21 @@ public enum CodexSessionDiscovery {
                                 rollouts: [Rollout],
                                 known: Set<String>,
                                 now: Date = Date()) -> [Discovered] {
-        // Un dossier peut porter plusieurs rollouts ; on ne garde que le plus
-        // récent. Deux sessions simultanées dans le même dossier sont
-        // indiscernables ici — en inventer deux serait pire que d'en montrer une.
-        var newestByCwd: [String: Rollout] = [:]
-        for rollout in rollouts {
-            guard now.timeIntervalSince(rollout.modifiedAt) <= maxRolloutAge,
-                  rollout.modifiedAt <= now else { continue }
-            if let existing = newestByCwd[rollout.cwd], existing.modifiedAt >= rollout.modifiedAt {
-                continue
-            }
-            newestByCwd[rollout.cwd] = rollout
-        }
-
         var seen = Set<String>()
         return processes.compactMap { process -> Discovered? in
-            guard let rollout = newestByCwd[process.cwd] else { return nil }
+            // Le cwd n'est JAMAIS une identité. L'association provient d'un
+            // hook capturé, puis la sonde doit confirmer la même incarnation.
+            guard let sessionID = process.sessionID, let start = process.startTime,
+                  let identity = ProcessIdentity(pid: process.pid, startedAt: start),
+                  let rollout = rollouts.first(where: { $0.sessionID == sessionID && $0.cwd == process.cwd }),
+                  rollout.modifiedAt <= now else { return nil }
             let id = "codex:" + rollout.sessionID
             // Les hooks font autorité : une session déjà connue n'est jamais
             // redécouverte, sinon l'îlot l'afficherait deux fois.
             guard !known.contains(id), seen.insert(id).inserted else { return nil }
             return Discovered(sessionID: id, cwd: rollout.cwd,
-                              transcriptPath: rollout.path, startedAt: rollout.modifiedAt)
+                              transcriptPath: rollout.path, startedAt: Date(timeIntervalSince1970: start),
+                              process: identity)
         }
     }
 }

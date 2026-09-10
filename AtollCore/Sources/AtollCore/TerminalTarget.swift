@@ -2,7 +2,7 @@ import Foundation
 
 /// Données d'ancrage capturées au moment du hook, permettant de retrouver le
 /// terminal exact qui héberge une session (voir docs/research/…terminal-jump-back).
-public struct TerminalAnchor: Equatable, Sendable {
+public struct TerminalAnchor: Codable, Equatable, Sendable {
     public let cwd: String?
     public let tty: String?               // « ttys012 »
     public let bundleID: String?          // __CFBundleIdentifier (autoritaire)

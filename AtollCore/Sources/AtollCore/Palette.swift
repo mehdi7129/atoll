@@ -45,6 +45,14 @@ public struct Palette: Identifiable, Equatable, Sendable {
 }
 
 public extension Palette {
+    /// Accent Codex, même base neutre que la palette Claude par défaut.
+    static let monoCyan = Palette(
+        id: "mono-cyan", displayName: "Mono · Cyan",
+        dark: Variant(bg: 0x0A0A0A, surface: 0x161616, fg: 0xEAEAEA, dim: 0x8F8F8F,
+                      accent: 0x42D9E8, warn: 0xFFB000, ok: 0x33FF33),
+        light: Variant(bg: 0xFAF7F2, surface: 0xF0EBE2, fg: 0x141414, dim: 0x6B675C,
+                       accent: 0x007D8A, warn: 0xB07600, ok: 0x1E7D1E)
+    )
     /// Défaut : quasi-monochrome + accent orange (validé par Mehdi).
     static let monoOrange = Palette(
         id: "mono-orange",
@@ -85,7 +93,7 @@ public extension Palette {
                        accent: 0x268BD2, warn: 0xB58900, ok: 0x859900)
     )
 
-    static let all: [Palette] = [.monoOrange, .phosphor, .amber, .solarized]
+    static let all: [Palette] = [.monoOrange, .monoCyan, .phosphor, .amber, .solarized]
 
     static func named(_ id: String) -> Palette {
         all.first { $0.id == id } ?? .monoOrange

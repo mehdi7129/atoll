@@ -38,7 +38,12 @@ enum CodexBridge {
         //
         // Toujours AUCUNE réponse, aucune décision : on enrichit ce qu'on
         // observe, on ne prend pas la main sur Codex.
-        var enrich: [String: Any] = [:]
+        var enrich: [String: Any] = ["observedAt": Date().timeIntervalSince1970,
+                                     "codexHome": CodexPaths.cliHomeURL.path]
+        if let identity = ProcessInspector.findCodexTUIAncestor(from: getpid()) {
+            enrich["sessionPid"] = identity.pid
+            enrich["sessionStartTime"] = identity.startedAt
+        }
         if let tty = ProcessInspector.tty(of: getpid()) { enrich["tty"] = tty }
         let environment = ProcessInfo.processInfo.environment
         if let hint = environment["__CFBundleIdentifier"] ?? environment["TERM_PROGRAM"] {
@@ -85,18 +90,34 @@ enum CodexBridge {
         //
         // On ne joue QUE si l'enveloppe n'a pas été remise : exactement un des
         // deux sonne, jamais les deux.
-        if !outcome.reached, let name = payload["hook_event_name"] as? String {
+        if !outcome.reached, let name = payload["hook_event_name"] as? String,
+           name != "Stop" || (payload["agent_id"] as? String).map({ $0.isEmpty }) ?? true {
             SoundPlayer.play(hookEvent: name, provider: .codex)
         }
     }
 
     static func configure(install: Bool) -> Int32 {
+        if let error = CodexPaths.configurationError {
+            try? FileHandle.standardError.write(contentsOf: Data((error + "\n").utf8))
+            return 1
+        }
+        var hooksApplied = false
         do {
             try CodexHookInstallation.apply(settingsURL: settingsURL, binDirectory: BridgePaths.binDirectory,
                                             helperURL: URL(fileURLWithPath: CommandLine.arguments[0]), install: install)
+            hooksApplied = true
+            if install {
+                try CodexRecallSkill.install(home: CodexPaths.homeURL, helperURL: URL(fileURLWithPath: CommandLine.arguments[0]))
+            } else {
+                try CodexRecallSkill.uninstall(home: CodexPaths.homeURL)
+                _ = try LearnedSkillStore(destination: .codex).uninstallAll()
+            }
             return 0
         } catch {
-            let message = "Installation des hooks Codex échouée : \(error.localizedDescription)\n"
+            let phase = hooksApplied
+                ? "Hooks Codex \(install ? "installés" : "retirés"), gestion des skills incomplète"
+                : "\(install ? "Installation" : "Retrait") des hooks Codex échoué"
+            let message = "\(phase) : \(error.localizedDescription)\n"
             try? FileHandle.standardError.write(contentsOf: Data(message.utf8))
             return 1
         }

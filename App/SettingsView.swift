@@ -89,6 +89,7 @@ private struct ResizableWindow: NSViewRepresentable {
 private struct GeneralPane: View {
     @AppStorage(ThemeManager.themeKey) private var themePreference = ThemePreference.system.rawValue
     @AppStorage("paletteID") private var paletteID = Palette.monoOrange.id
+    @AppStorage(ProviderPreferences.codexPaletteKey) private var codexPaletteID = Palette.monoCyan.id
     @AppStorage("hoverDelay") private var hoverDelay = 0.15
     @AppStorage(VisualEffects.enabledKey) private var visualEffects = true
     @AppStorage(VisualEffects.glassIntensityKey) private var glassIntensity = VisualEffects.defaultGlassIntensity
@@ -130,10 +131,13 @@ private struct GeneralPane: View {
                     ThemeManager.apply(ThemePreference(rawValue: newValue) ?? .system)
                 }
 
-                Picker("Palette", selection: $paletteID) {
+                Picker("Palette Claude", selection: $paletteID) {
                     ForEach(Palette.all) { palette in
                         Text(palette.displayName).tag(palette.id)
                     }
+                }
+                Picker("Palette Codex", selection: $codexPaletteID) {
+                    ForEach(Palette.all) { palette in Text(palette.displayName).tag(palette.id) }
                 }
 
                 Toggle("Effets visuels", isOn: $visualEffects)
@@ -295,11 +299,12 @@ private struct ClaudeCodePane: View {
                 Index local (~/.atoll/memory.db) de tous vos transcripts — Claude Code \
                 ET Codex, dans le MÊME index : un souvenir venu d'une session Codex peut \
                 donc remonter dans une session Claude. Interrogeable via le skill \
-                « atoll-recall » — « retrouve quand on a parlé de… ». Rien ne quitte votre \
-                machine. Désactiver stoppe l'indexation des DEUX ; supprimer ~/.atoll \
+                « atoll-recall » — « retrouve quand on a parlé de… ». La recherche est locale ; \
+                les extraits joints à une conversation sont ensuite traités par son fournisseur. \
+                Désactiver stoppe l'indexation des DEUX ; supprimer ~/.atoll \
                 efface l'index et les notes. \
-                Les skills appris, eux, vivent dans ~/.claude/skills : passez par \
-                « Désinstaller les hooks » pour les retirer proprement (supprimer \
+                Les skills appris vivent dans les skills de leur destination Claude ou Codex : \
+                passez par le retrait de l'intégration correspondante pour les retirer proprement (supprimer \
                 ~/.atoll d'abord emporterait le manifeste, et Atoll refuserait \
                 alors d'y toucher).
                 """)
@@ -400,10 +405,15 @@ private struct ClaudeCodePane: View {
                         .disabled(pluginNeed.trimmingCharacters(in: .whitespaces).isEmpty
                                   || plugins.isSearching)
                 }
+                Button("Affiner avec l'IA · \(LearningSettings.shared.analysisProvider.label)") { runPluginSearch(useAI: true) }
+                    .disabled(pluginNeed.trimmingCharacters(in: .whitespaces).isEmpty || plugins.isSearching)
+                Text("Catalogue Claude Code · recherche locale gratuite ; l'analyse IA utilise l'abonnement choisi dans Apprentissage.")
+                    .font(.caption).foregroundStyle(.secondary)
                 if plugins.isSearching {
                     HStack {
                         ProgressView().controlSize(.small)
                         Text("comparaison au catalogue public…").font(.caption)
+                        Button("Annuler") { plugins.cancel() }
                     }
                 }
                 ForEach(plugins.searchMatches, id: \.pluginID) { match in
@@ -517,9 +527,9 @@ private struct ClaudeCodePane: View {
         }
     }
 
-    private func runPluginSearch() {
+    private func runPluginSearch(useAI: Bool = false) {
         let need = pluginNeed
-        Task { pluginError = await plugins.search(need: need) }
+        Task { pluginError = await plugins.search(need: need, useAI: useAI) }
     }
 
     /// « 31 installés · 4 activés · 1 cassé ».
@@ -668,7 +678,9 @@ private struct LearningPane: View {
                 .foregroundStyle(.secondary)
             }
 
-            Section("Modèles d'analyse") {
+            AnalysisSettingsSection()
+
+            Section("Modèles des analyses Claude") {
                 // Un modèle PAR TÂCHE : chercher (comparer un besoin à des
                 // centaines de descriptions) et analyser (extraire un skill
                 // d'une session) n'ont ni la même difficulté ni la même
@@ -790,7 +802,7 @@ private struct LearningPane: View {
                             if row.userModified {
                                 Text("modifié").font(.caption).foregroundStyle(.orange)
                             }
-                            Button("Archiver") { center.archiveInstalled(slug: row.skill.slug) }
+                            Button("Archiver") { center.archiveInstalled(slug: row.skill.slug, destination: row.skill.destination) }
                                 .buttonStyle(.borderless)
                         }
                     }
@@ -911,10 +923,11 @@ private struct LearningPane: View {
     }
 
     private func usageLabel(_ row: InstalledSkillRow) -> String {
+        guard let count = row.usageCount else { return "\(row.skill.destination.label) · usage non mesuré" }
         if let last = row.lastUsedAt {
-            return "\(row.usageCount) usage(s) · dernier \(last.formatted(.relative(presentation: .named)))"
+            return "\(row.skill.destination.label) · ≥ \(count) usage(s) observé(s) · dernier \(last.formatted(.relative(presentation: .named)))"
         }
-        return row.suggestedForArchive ? "jamais utilisé (inactif > 30 j)" : "jamais utilisé"
+        return "\(row.skill.destination.label) · ≥ \(count) usage(s) observé(s), date inconnue"
     }
 
     private var learningEnabled: Binding<Bool> {
@@ -1148,9 +1161,11 @@ private struct AboutPane: View {
             Section("À propos") {
                 LabeledContent("Version", value: appVersion)
                 LabeledContent("Licence", value: "GPL-3.0-or-later")
-                Text("Atoll — une Dynamic Island ASCII pour Claude Code.")
+                Text("Atoll — une Dynamic Island ASCII pour Claude Code et Codex CLI dans le terminal.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                Text("Les boutons Claude / Codex choisissent la vue et sa palette. Le moteur des analyses et la destination des skills se choisissent séparément dans Apprentissage. Rockstar reste propre à Claude.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)

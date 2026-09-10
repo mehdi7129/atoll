@@ -2,6 +2,28 @@ import XCTest
 @testable import AtollCore
 
 final class CodexAccountClientTests: XCTestCase {
+    func testReadOnlyCataloguesCarryExplicitHomeAndNeverRequestAnAccount() throws {
+        for (query, method) in [(CodexReadClient.Query.hooks(cwd: "/fixture/project"), "hooks/list"),
+                                (.models(), "model/list"), (.skills(cwd: "/fixture/project"), "skills/list")] {
+            try withServer("""
+            [ "$CODEX_HOME" = '/fixture/home with spaces' ] || exit 10
+            [ "$ATOLL_RETROSPECTIVE" = '1' ] || exit 11
+            IFS= read -r line
+            printf '%s\\n' '{"id":1,"result":{}}'
+            IFS= read -r line
+            case "$line" in *'"method":"initialized"'*) ;; *) exit 12;; esac
+            IFS= read -r line
+            case "$line" in *'"method":"\(method)"'*) ;; *) exit 13;; esac
+            printf '%s\\n' '{"id":2,"result":{"data":[]}}'
+            """) { executable in
+                guard case .available(let data) = CodexReadClient.read(query, executable: executable,
+                    home: URL(fileURLWithPath: "/fixture/home with spaces"), timeout: 2) else {
+                    return XCTFail("Catalogue \(method) indisponible")
+                }
+                XCTAssertNotNil(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+            }
+        }
+    }
     /// Explicit opt-in only; ordinary CI never touches an account or network.
     func testLiveReadOnlyAccount() throws {
         guard ProcessInfo.processInfo.environment["ATOLL_CODEX_LIVE_TEST"] == "1" else {
