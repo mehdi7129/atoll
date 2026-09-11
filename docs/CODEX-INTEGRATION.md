@@ -1,10 +1,13 @@
 # Atoll avec Codex CLI et Claude Code
 
-État du code au **2026-09-10**. L'intégration a été publiée en v0.18.0.
+État du code au **2026-09-11**. L'intégration a été publiée en v0.18.0.
 Le retour au compact d'origine, le contexte chiffré et le diagnostic simplifié
 sont publiés dans **v0.18.1, build 36** : voir leur
 [validation](REVIEW-2026-09-10-island-context-setup.md). L'[audit initial](AUDIT-2026-09-09-codex-claude.md)
 et le [rapport PR #2](REVIEW-2026-09-10-pr2-corrections.md) sont historiques.
+Les [réglages réorganisés du 11 septembre](PLAN-2026-09-11-settings-organization.md)
+sont implémentés sur `codex/settings-ux`, en attente de relecture de la PR et
+pas encore publiés.
 
 ## Périmètre et choix de fournisseur
 
@@ -82,14 +85,20 @@ Aucun coût en dollars n'est déduit d'un abonnement.
 L'onboarding installe l'agent choisi. Un poste Codex seul ne crée pas de
 configuration Claude. Réglages → Codex permet d'installer, réparer ou retirer
 l'intégration, de choisir le home et de consulter son état natif.
-Les premières étapes sont `/hooks`, le choix du **dossier du projet** et
-« Vérifier avec Codex ». Un nouveau message dans le CLI vérifie ensuite le suivi.
+Les premières étapes sont `/hooks`, puis un nouveau message dans le CLI.
+Le panneau présente l'état du suivi ; les instructions d'approbation s'effacent
+après réception d'un événement. « Vérifier la connexion » déplie le diagnostic
+pour un **dossier de projet**, sans limiter le suivi aux sessions de ce dossier.
 Le home Codex et le projet sont deux réglages distincts ; les chemins, la
-réparation et le retrait se trouvent sous « Configuration avancée ».
+réparation et le retrait se trouvent sous « Dépannage ».
 Installer un CLI ne change pas le moteur des analyses, même si la préférence
 est absente. L'accueil propose Réglages → Apprentissage ; cet onglet reste
-l'unique lieu de configuration du moteur et de son budget. Le catalogue et
-le choix du modèle Codex restent dans Réglages → Codex.
+l'unique lieu de configuration du moteur, des modèles et du budget. Codex affiche
+le choix enregistré et un raccourci qui ouvre Apprentissage sur les analyses.
+Le sélecteur Codex est visible quand ce moteur est choisi ou autorisé en repli.
+Son catalogue est lu à l'ouverture, sans génération.
+Aucun modèle n'est choisi automatiquement ; un choix absent du catalogue ou
+une lecture en échec ne remplace pas la sélection enregistrée.
 
 - Le home sélectionné est enregistré dans le fichier Atoll `codex-home.json`.
   Sans choix explicite, la détection utilise l'environnement puis `~/.codex`.

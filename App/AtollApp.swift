@@ -36,7 +36,15 @@ struct AtollApp: App {
 
         Settings {
             if CodexPreview.enabled {
+                #if DEBUG
+                if CommandLine.arguments.contains("--preview-all-settings") {
+                    CodexPreview.settingsScene(updater: updaterModel)
+                } else {
+                    Text("Aperçu isolé : réglages désactivés.").padding()
+                }
+                #else
                 Text("Aperçu isolé : réglages désactivés.").padding()
+                #endif
             } else {
                 SettingsView(updaterModel: updaterModel)
             }

@@ -17,15 +17,33 @@ struct AlertsPane: View {
     @State private var revision = 0
     @State private var message: String?
     @State private var isError = false
-    /// Les hooks Atoll sont-ils installés ? Sans eux, aucun événement n'arrive
-    /// et aucun son ne peut être joué : la migration n'aurait aucun sens.
+    /// Prérequis de la migration Claude uniquement ; Codex sonne indépendamment.
     @State private var hooksInstalled = true
 
+    @State private var previewMigration = CommandLine.arguments.first { $0.hasPrefix("--preview-sounds=") }
+        .map { String($0.dropFirst("--preview-sounds=".count)) } ?? "none"
+    @State private var previewChoices: [SoundEvent: SoundChoice] = [.decisionNeeded: .system("Glass"), .taskCompleted: .system("Pop")]
+    @State private var previewVolumes: [SoundEvent: Double] = [:]
+
     private var center: SoundCenter { .shared }
+    private var customSounds: [String] { CodexPreview.enabled ? [] : center.customSounds }
+    private var systemSounds: [String] { CodexPreview.enabled ? ["Glass", "Pop", "Funk"] : center.systemSoundNames }
+    private var parked: Bool { CodexPreview.enabled ? previewMigration == "parked" : center.isParked }
+    private var unreadable: Bool { CodexPreview.enabled ? previewMigration == "unreadable" : center.isParkingUnreadable }
+    private var detectedCommands: [String] {
+        if CodexPreview.enabled { return previewMigration == "detected" ? ["PermissionRequest — afplay exemple.aiff"] : [] }
+        return center.detectedHooks.map { "\($0.event) — \($0.command)" }
+    }
+    private func choice(_ event: SoundEvent) -> SoundChoice {
+        CodexPreview.enabled ? previewChoices[event] ?? .silent : center.choice(for: event)
+    }
+    private func volume(_ event: SoundEvent) -> Double {
+        CodexPreview.enabled ? previewVolumes[event] ?? SoundEvent.defaultVolume : center.volume(for: event)
+    }
 
     var body: some View {
         Form {
-            Section("Sons") {
+            Section("Sons d'Atoll") {
                 // L'écriture passe par le setter de SoundCenter, PAS par
                 // `$soundsEnabled` : lui seul republie ~/.atoll/sound-settings.json,
                 // le fichier que le helper lit pour sonner quand l'app est
@@ -36,21 +54,10 @@ struct AlertsPane: View {
                 // elle qui redessine la vue.
                 Toggle("Jouer des sons", isOn: Binding(
                     get: { soundsEnabled },
-                    set: { center.soundsEnabled = $0 }
+                    set: { if CodexPreview.enabled { soundsEnabled = $0 } else { center.soundsEnabled = $0 } }
                 ))
-                Text("""
-                Atoll se signale à l'oreille à deux moments : quand une décision \
-                t'attend, et quand une session a fini de travailler. Deux sons \
-                distincts, réglables séparément.
-                """)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                SettingsHelp("Pour Claude Code et Codex : un son quand une décision t'attend, un autre quand le CLI termine son tour.")
             }
-
-            // La migration passe AVANT le réglage fin des sons : quand des
-            // hooks sont détectés, c'est LE geste à faire en premier — enterré
-            // sous deux sections de curseurs, il ne serait jamais vu.
-            migrationSection
 
             ForEach(SoundEvent.allCases, id: \.self) { event in
                 Section(event.title) {
@@ -58,6 +65,8 @@ struct AlertsPane: View {
                 }
                 .disabled(!soundsEnabled)
             }
+
+            migrationSection
 
             if let message {
                 Text(message)
@@ -68,8 +77,11 @@ struct AlertsPane: View {
         .formStyle(.grouped)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
-            center.refreshLibraries()
-            hooksInstalled = HookInstaller.isInstalled
+            if !CodexPreview.enabled { center.refreshLibraries() }
+            if CodexPreview.enabled, CommandLine.arguments.contains("--preview-sound-missing") {
+                previewChoices[.decisionNeeded] = .custom("son-absent.wav")
+            }
+            hooksInstalled = CodexPreview.enabled ? !CommandLine.arguments.contains("--preview-uninstalled") : HookInstaller.isInstalled
         }
     }
 
@@ -77,13 +89,13 @@ struct AlertsPane: View {
 
     @ViewBuilder
     private func eventControls(_ event: SoundEvent) -> some View {
-        let current = center.choice(for: event)
+        let current = choice(event)
         // Fichier importé puis disparu (~/.atoll effacé, ménage manuel) : sans
         // cette entrée, le Picker n'a AUCUN tag correspondant — il s'affiche
         // vide, « Écouter » reste actif et ne produit rien, et les sons sont
         // silencieux sans que rien ne le dise.
         let missingCustom: String? = {
-            guard case .custom(let file) = current, !center.customSounds.contains(file) else { return nil }
+            guard case .custom(let file) = current, !customSounds.contains(file) else { return nil }
             return file
         }()
 
@@ -93,18 +105,19 @@ struct AlertsPane: View {
                 Divider()
                 Text("\(missingCustom) — fichier introuvable").tag(SoundChoice.custom(missingCustom))
             }
-            if !center.customSounds.isEmpty {
+            if !customSounds.isEmpty {
                 Divider()
-                ForEach(center.customSounds, id: \.self) { file in
+                ForEach(customSounds, id: \.self) { file in
                     Text(file).tag(SoundChoice.custom(file))
                 }
             }
             Divider()
-            ForEach(center.systemSoundNames, id: \.self) { name in
+            ForEach(systemSounds, id: \.self) { name in
                 Text(name).tag(SoundChoice.system(name))
             }
         }
         .id(revision)
+        .accessibilityIdentifier("sound-" + event.rawValue)
 
         if let missingCustom {
             Text("« \(missingCustom) » n'est plus dans ~/.atoll/sounds : cet événement est muet. "
@@ -117,92 +130,59 @@ struct AlertsPane: View {
             Slider(value: volumeBinding(for: event), in: 0...1, step: 0.05) {
                 Text("Volume")
             }
-            Text("\(Int(center.volume(for: event) * 100)) %")
+            Text("\(Int(volume(event) * 100)) %")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .frame(width: 44, alignment: .trailing)
-            Button("Écouter") { center.preview(event) }
-                .disabled(center.choice(for: event).isSilent)
+            Button("Écouter") { if !CodexPreview.enabled { center.preview(event) } }
+                .disabled(choice(event).isSilent || missingCustom != nil)
+                .accessibilityIdentifier("sound-preview-" + event.rawValue)
         }
 
         Button("Importer un son…") { importSound(for: event) }
-        Text(event.explanation)
-            .font(.caption)
-            .foregroundStyle(.secondary)
+        SettingsHelp(event.explanation)
     }
 
     // MARK: - Migration des hooks de l'utilisateur
 
     @ViewBuilder
     private var migrationSection: some View {
-        if center.isParkingUnreadable {
-            Section("Tes sons Claude Code") {
-                Label("Le fichier de parking est illisible.", systemImage: "exclamationmark.triangle")
+        if unreadable {
+            Section("Anciens sons de Claude Code") {
+                Label("La sauvegarde des anciens sons est illisible.", systemImage: "exclamationmark.triangle")
                     .foregroundStyle(.orange)
-                Text("""
-                Tes hooks sonores sont peut-être encore mis de côté dans \
-                ~/.atoll/parked-sound-hooks.json, mais Atoll n'arrive plus à le lire. \
-                Il refuse d'y toucher pour ne rien perdre : ouvre ce fichier pour en \
-                récupérer les commandes, puis supprime-le.
-                """)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-        } else if center.isParked {
-            // AVANT le test « hooks installés » : si les hooks Atoll ont
-            // disparu autrement que par le bouton (backup restauré, dotfiles,
-            // édition à la main), l'utilisateur se retrouvait sans aucun moyen
-            // de récupérer SES hooks depuis l'app — alors qu'ils sont chez nous.
-            Section("Tes sons Claude Code") {
-                Label("Tes hooks sonores sont mis de côté par Atoll.", systemImage: "archivebox")
-                Text("""
-                Ils sont conservés intacts dans ~/.atoll/parked-sound-hooks.json et \
-                seront remis à l'identique — automatiquement si tu désinstalles les \
-                hooks d'Atoll, ou tout de suite avec ce bouton.
-                """)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                Button("Rendre mes hooks sonores") { restoreHooks() }
-            }
-        } else if !hooksInstalled {
-            // Parquer sans les hooks Atoll = silence total pour zéro bénéfice
-            // (Atoll ne reçoit aucun événement, donc ne joue rien).
-            Section("Tes sons Claude Code") {
-                Text("""
-                Installe d'abord les hooks Atoll (onglet Claude Code) : sans eux, Atoll \
-                ne reçoit aucun événement et ne pourrait jouer aucun son — reprendre tes \
-                hooks maintenant te laisserait simplement en silence.
-                """)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-        } else if !center.detectedHooks.isEmpty {
-            Section("Tes sons Claude Code") {
-                Text("""
-                \(center.detectedHooks.count) hook\(center.detectedHooks.count > 1 ? "s" : "") \
-                de ton settings.json joue\(center.detectedHooks.count > 1 ? "nt" : "") déjà un son :
-                """)
-                // Identité par POSITION : `hookJSON` ne porte pas l'événement,
-                // donc le même son posé sur deux événements produisait deux
-                // identifiants égaux — et SwiftUI ne garantit alors plus le
-                // rendu de la liste que l'utilisateur doit justement valider
-                // avant qu'Atoll touche à son settings.json.
-                ForEach(Array(center.detectedHooks.enumerated()), id: \.offset) { _, hook in
-                    Text("· \(hook.event) — \(hook.command)")
-                        .font(.system(.caption, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
+                SettingsHelp("Tes hooks sonores sont peut-être encore mis de côté. Atoll conserve les données sans les modifier.")
+                DisclosureGroup("Détails de la sauvegarde") {
+                    SettingsHelp("Le fichier ~/.atoll/parked-sound-hooks.json doit être récupéré avant toute restauration. Conserve-en une copie pour retrouver les commandes.")
+                        .textSelection(.enabled)
                 }
-                Text("""
-                Atoll peut reprendre ces sons à son compte : il copie tes fichiers \
-                audio, les affecte aux deux événements, puis met tes hooks de côté \
-                pour que tu n'entendes pas tout en double. Rien n'est supprimé — la \
-                restitution reste à un clic, et se fait aussi toute seule à la \
-                désinstallation.
-                """)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                Button("Confier ces sons à Atoll") { adoptHooks() }
+            }
+        } else if parked {
+            // La restitution reste accessible même si l'intégration Claude a disparu.
+            Section("Anciens sons de Claude Code") {
+                Label("Atoll a repris tes anciens sons.", systemImage: "archivebox")
+                Button("Restaurer les anciens sons Claude") { restoreHooks() }
+                SettingsHelp("Remet tes hooks sonores dans Claude Code. Ils sont aussi restaurés au retrait de l'intégration.")
+                DisclosureGroup("Détails de la sauvegarde") {
+                    SettingsHelp("Les hooks d'origine sont conservés dans ~/.atoll/parked-sound-hooks.json.")
+                }
+            }
+        } else if !detectedCommands.isEmpty {
+            Section("Anciens sons de Claude Code") {
+                SettingsHelp("\(detectedCommands.count) ancien(s) hook(s) Claude joue(nt) déjà un son. Atoll peut les reprendre pour éviter les doublons.")
+                DisclosureGroup("Voir les sons détectés") {
+                    ForEach(Array(detectedCommands.enumerated()), id: \.offset) { _, command in
+                        Text(command).font(.system(.caption, design: .monospaced))
+                            .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+                    }
+                    SettingsHelp("Atoll copie les fichiers audio et met les hooks d'origine de côté. Leur restitution reste accessible à tout moment.")
+                    if hooksInstalled {
+                        Button("Confier ces sons à Atoll") { adoptHooks() }
+                    }
+                }
+                if !hooksInstalled {
+                    SettingsHelp("Installe l'intégration dans l'onglet Claude Code pour reprendre ces anciens sons. Les alertes Codex restent disponibles.")
+                }
             }
         }
     }
@@ -210,6 +190,7 @@ struct AlertsPane: View {
     // MARK: - Actions
 
     private func adoptHooks() {
+        guard !CodexPreview.enabled else { previewMigration = "parked"; soundsEnabled = true; return }
         // ORDRE IMPÉRATIF : parquer D'ABORD, adopter ENSUITE.
         //
         // L'adoption est persistante (elle copie des fichiers dans
@@ -250,6 +231,7 @@ struct AlertsPane: View {
     }
 
     private func restoreHooks() {
+        guard !CodexPreview.enabled else { previewMigration = "detected"; return }
         do {
             try center.restoreUserSoundHooks()
             isError = false
@@ -261,6 +243,7 @@ struct AlertsPane: View {
     }
 
     private func importSound(for event: SoundEvent) {
+        guard !CodexPreview.enabled else { message = "Import simulé : aucun fichier modifié."; return }
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
@@ -298,8 +281,9 @@ struct AlertsPane: View {
 
     private func choiceBinding(for event: SoundEvent) -> Binding<SoundChoice> {
         Binding(
-            get: { center.choice(for: event) },
+            get: { choice(event) },
             set: { newValue in
+                if CodexPreview.enabled { previewChoices[event] = newValue; return }
                 center.setChoice(newValue, for: event)
                 revision += 1
                 // Écouter tout de suite ce qu'on vient de choisir : sans cela il
@@ -311,8 +295,11 @@ struct AlertsPane: View {
 
     private func volumeBinding(for event: SoundEvent) -> Binding<Double> {
         Binding(
-            get: { center.volume(for: event) },
-            set: { center.setVolume($0, for: event); revision += 1 }
+            get: { volume(event) },
+            set: {
+                if CodexPreview.enabled { previewVolumes[event] = $0 }
+                else { center.setVolume($0, for: event); revision += 1 }
+            }
         )
     }
 }

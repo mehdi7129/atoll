@@ -1,0 +1,12 @@
+[
+  {
+    "case": "settings-analysis-options",
+    "passed": false,
+    "failures": [
+      "2 analyses maximum",
+      "Quota inconnu",
+      "Utiliser l'autre abonnement",
+      "état du volet inaccessible : Limites et bascule"
+    ]
+  }
+]

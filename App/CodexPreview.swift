@@ -4,6 +4,18 @@ import AtollCore
 
 /// Recette des vraies vues, sans socket, installation, analyse ou connexion.
 enum CodexPreview {
+    static var modelCatalog: CodexModel.Catalog {
+        guard enabled else { return .unavailable("Recette désactivée") }
+        if CommandLine.arguments.contains("--preview-models-unavailable") {
+            return .unavailable("Codex ne répond pas. Réessaie dans quelques instants.")
+        }
+        let data = Data("""
+        [{"id":"example-a","model":"example-a","displayName":"Modèle de test A","isDefault":true,"hidden":false},
+         {"id":"example-b","model":"example-b","displayName":"Modèle de test B","isDefault":false,"hidden":false}]
+        """.utf8)
+        return .available((try? JSONDecoder().decode([CodexModel].self, from: data)) ?? [])
+    }
+
     static var hookDiagnosticSummary: String {
         guard enabled,
               let definitions = try? CodexHookSettingsEditor.edit(nil, install: true),
@@ -100,28 +112,59 @@ enum CodexPreview {
             ProviderPreferences.codexPaletteKey: Palette.monoCyan.id,
             InteractionCenter.autonomyKey: args.contains("--preview-rockstar") ? "rockstar" : "manual"
         ])
-        let windowHeight: CGFloat = args.contains("--preview-codex-settings")
-            ? min(screen.visibleFrame.height - 80, 1_200) : 580
+        if args.contains("--preview-codex-settings") || args.contains("--preview-analysis-settings") || args.contains("--preview-settings=learning") || args.contains("--preview-all-settings") {
+            defaults.set(args.contains("--preview-analysis-claude") ? "claude" : "codex", forKey: LearningSettings.analysisProviderKey)
+            defaults.set(args.contains("--preview-model-selected") ? "example-b"
+                : args.contains("--preview-model-obsolete") ? "ancien-modele" : "", forKey: LearningSettings.codexModelKey)
+            defaults.set(!args.contains("--preview-quota-disabled"), forKey: CodexService.quotaEnabledKey)
+        }
+        let otherPane = args.first { $0.hasPrefix("--preview-settings=") }
+            .map { String($0.dropFirst("--preview-settings=".count)) }
+        defaults.set(true, forKey: MemoryIndexer.enabledKey)
+        defaults.set(args.contains("--preview-recall-enabled"), forKey: LearningSettings.proactiveRecallKey)
+        defaults.set(!args.contains("--preview-sounds-off"), forKey: SoundCenter.enabledKey)
+        if args.contains("--preview-learning-proposals") { SkillReviewCenter.shared.seedPreviewProposals() }
+        if args.contains("--preview-all-settings") {
+            let tabs = ["learning": "apprentissage", "alerts": "alertes", "autonomy": "autonomie", "updates": "maj", "about": "apropos"]
+            defaults.set(tabs[otherPane ?? ""] ?? otherPane ?? "general", forKey: "settingsTab")
+        }
+        let settingsPreview = args.contains("--preview-codex-settings") || args.contains("--preview-analysis-settings") || args.contains("--preview-all-settings") || otherPane != nil
+        let windowHeight: CGFloat = args.contains("--preview-short") ? 520 : args.contains("--preview-codex-settings")
+            ? min(screen.visibleFrame.height - 80, args.contains("--preview-advanced") ? 1_200 : 840)
+            : otherPane != nil ? min(screen.visibleFrame.height - 80, 1_100) : 580
+        let windowWidth: CGFloat = args.contains("--preview-narrow") ? 640 : 780
         let content = Group {
             if args.contains("--preview-onboarding") {
                 OnboardingView(onDone: {})
             } else if args.contains("--preview-skills") {
                 SkillReviewView(onClose: {})
+            } else if args.contains("--preview-all-settings") {
+                PreviewSettingsLauncher()
             } else if args.contains("--preview-codex-settings") {
-                // Recette de rendu seulement : les callbacks de ce panneau
-                // changent le home suivi et démarrent des lectures natives.
-                CodexSettingsPane().disabled(true).frame(width: 780, height: windowHeight)
+                // Les actions externes sont simulées ; disclosures, menus et
+                // sélections restent les vrais contrôles SwiftUI interactifs.
+                PreviewCodexSettings().frame(width: windowWidth, height: windowHeight)
+            } else if args.contains("--preview-analysis-settings") {
+                Form { AnalysisSettingsSection() }.formStyle(.grouped)
+                    .frame(width: windowWidth, height: windowHeight)
+            } else if let otherPane {
+                SettingsView.previewPane(otherPane).frame(width: windowWidth, height: windowHeight)
             } else {
                 PreviewContent(model: model, light: args.contains("--preview-light"))
             }
         }
             .defaultAppStorage(defaults)
-            .onDisappear { defaults.removePersistentDomain(forName: domain) }
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 780, height: windowHeight),
+            .preferredColorScheme(settingsPreview ? (args.contains("--preview-light") ? .light : .dark) : nil)
+            .onDisappear {
+                // Le lanceur s'efface après ouverture de la vraie scène Settings.
+                // Cette scène utilise encore ces préférences jusqu'à la fermeture.
+                if !args.contains("--preview-all-settings") { defaults.removePersistentDomain(forName: domain) }
+            }
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: windowWidth, height: windowHeight),
                               styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
         window.title = "Atoll — recette isolée"
         window.contentView = NSHostingView(rootView: content)
-        window.setFrameOrigin(NSPoint(x: screen.visibleFrame.midX - 390, y: screen.visibleFrame.midY - windowHeight / 2))
+        window.setFrameOrigin(NSPoint(x: screen.visibleFrame.midX - windowWidth / 2, y: screen.visibleFrame.midY - windowHeight / 2))
         window.makeKeyAndOrderFront(nil)
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
@@ -130,9 +173,70 @@ enum CodexPreview {
         preconditionFailure("Aperçu réservé au build Debug")
         #endif
     }
+
+    #if DEBUG
+    /// La vraie scène Settings donne les mêmes onglets et la même barre de
+    /// titre que le produit. Ses préférences et toutes ses actions sont isolées.
+    @MainActor static func settingsScene(updater: UpdaterModel) -> some View {
+        SettingsView(updaterModel: updater)
+            .defaultAppStorage(UserDefaults(suiteName: preferenceDomain)!)
+            .preferredColorScheme(CommandLine.arguments.contains("--preview-light") ? .light : .dark)
+            .background(PreviewSettingsWindow())
+    }
+    #endif
 }
 
 #if DEBUG
+private struct PreviewCodexSettings: View {
+    @AppStorage("settingsTab") private var tab = "codex"
+    @State private var focusRequest: UUID?
+
+    var body: some View {
+        Group {
+            if tab == "apprentissage" {
+                LearningPane(focusRequest: focusRequest)
+            } else {
+                CodexSettingsPane(onShowAnalyses: { focusRequest = UUID(); tab = "apprentissage" })
+            }
+        }
+        .disclosureGroupStyle(SettingsDisclosureStyle())
+    }
+}
+
+private struct PreviewSettingsLauncher: View {
+    @Environment(\.openSettings) private var openSettings
+
+    var body: some View {
+        Text("Ouverture des réglages isolés…")
+            .task {
+                openSettings()
+                for window in NSApp.windows where window.title == "Atoll — recette isolée" {
+                    window.orderOut(nil)
+                }
+            }
+    }
+}
+
+private struct PreviewSettingsWindow: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async {
+            guard let window = view.window else { return }
+            let args = CommandLine.arguments
+            let screen = NSScreen.screens.dropFirst().first ?? NSScreen.screens[0]
+            let width: CGFloat = args.contains("--preview-narrow") ? 640 : 780
+            let height: CGFloat = args.contains("--preview-short") ? 520 : min(screen.visibleFrame.height - 100, 1_100)
+            window.setContentSize(NSSize(width: width, height: height))
+            window.setFrameOrigin(NSPoint(x: screen.visibleFrame.midX - window.frame.width / 2,
+                                          y: screen.visibleFrame.midY - window.frame.height / 2))
+            window.makeKeyAndOrderFront(nil)
+        }
+        return view
+    }
+
+    func updateNSView(_ view: NSView, context: Context) { }
+}
+
 private struct PreviewContent: View {
     let model: NotchViewModel
     @State var light: Bool

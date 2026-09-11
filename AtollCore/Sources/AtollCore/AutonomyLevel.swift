@@ -1,6 +1,6 @@
 import Foundation
 
-/// Niveau d'autonomie accordé à Claude — UN SEUL réglage, trois niveaux
+/// Niveau d'autonomie accordé à Claude — UN SEUL réglage, deux niveaux
 /// mutuellement exclusifs. Remplace les deux anciens interrupteurs (auto /
 /// rockstar) pour qu'aucun état contradictoire ne soit possible.
 /// LE NIVEAU « AUTO » A ÉTÉ RETIRÉ le 2026-08-03, et il ne doit pas revenir sans
@@ -12,7 +12,7 @@ import Foundation
 /// jeton unique qui n'égalait aucun drapeau connu). On ne gagne pas cette course,
 /// et on n'a pas à la courir : le milieu appartient à Anthropic.
 public enum AutonomyLevel: String, CaseIterable, Sendable {
-    /// Rien n'est auto-approuvé : l'utilisateur décide de tout.
+    /// Atoll ne prend aucune décision automatique ; les règles propres au CLI restent actives.
     case manual
     /// Aucune protection : tout est auto-approuvé (permissions même
     /// destructrices, plans — avec auto-acceptation des éditions —, questions)
@@ -41,7 +41,7 @@ public enum AutonomyLevel: String, CaseIterable, Sendable {
     public var summary: String {
         switch self {
         case .manual:
-            return "Vous approuvez chaque demande vous-même."
+            return "Atoll n’approuve aucune demande automatiquement."
         case .rockstar:
             return "Aucune protection : tout est approuvé et vos règles deny sont suspendues. À vos risques et périls."
         }

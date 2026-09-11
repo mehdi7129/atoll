@@ -1,0 +1,338 @@
+[
+  {
+    "focused": "0",
+    "value": "",
+    "id": "",
+    "label": "Atoll",
+    "role": "AXApplication",
+    "enabled": ""
+  },
+  {
+    "focused": "0",
+    "id": "com_apple_SwiftUI_Settings_window",
+    "label": "Apprentissage",
+    "enabled": "",
+    "role": "AXWindow",
+    "value": ""
+  },
+  {
+    "enabled": "1",
+    "focused": "0",
+    "label": "Analyses d'Atoll",
+    "id": "",
+    "value": "",
+    "role": "AXHeading"
+  },
+  {
+    "label": "Moteur",
+    "focused": "0",
+    "id": "",
+    "role": "AXStaticText",
+    "value": "Moteur",
+    "enabled": "1"
+  },
+  {
+    "value": "0",
+    "enabled": "1",
+    "role": "AXRadioButton",
+    "focused": "0",
+    "label": "Claude Code",
+    "id": ""
+  },
+  {
+    "id": "",
+    "enabled": "1",
+    "role": "AXRadioButton",
+    "label": "Codex CLI",
+    "focused": "0",
+    "value": "1"
+  },
+  {
+    "role": "AXStaticText",
+    "label": "Abonnement utilisé pour les bilans, le rangement des notes et la recherche IA de plugins.",
+    "id": "",
+    "value": "Abonnement utilisé pour les bilans, le rangement des notes et la recherche IA de plugins.",
+    "enabled": "1",
+    "focused": "0"
+  },
+  {
+    "id": "",
+    "value": "Modèle Codex",
+    "focused": "0",
+    "label": "Modèle Codex",
+    "enabled": "1",
+    "role": "AXStaticText"
+  },
+  {
+    "focused": "1",
+    "role": "AXPopUpButton",
+    "label": "Modèle de test B",
+    "id": "codex-analysis-model",
+    "value": "Modèle de test B",
+    "enabled": "1"
+  },
+  {
+    "label": "Actualiser les modèles",
+    "enabled": "1",
+    "role": "AXButton",
+    "id": "",
+    "focused": "0",
+    "value": ""
+  },
+  {
+    "value": "0",
+    "label": "Limites et second abonnement",
+    "enabled": "1",
+    "role": "AXDisclosureTriangle",
+    "focused": "0",
+    "id": ""
+  },
+  {
+    "enabled": "1",
+    "id": "",
+    "value": "",
+    "role": "AXHeading",
+    "focused": "0",
+    "label": "Bilans de session"
+  },
+  {
+    "value": "Apprendre des sessions terminées",
+    "enabled": "1",
+    "label": "Apprendre des sessions terminées",
+    "id": "",
+    "role": "AXStaticText",
+    "focused": "0"
+  },
+  {
+    "role": "AXStaticText",
+    "enabled": "1",
+    "label": "Après une session importante, Atoll peut en tirer des notes et proposer des skills à revoir. Désactiver arrête ces bilans ; le rangement des notes garde son propre réglage.",
+    "id": "",
+    "value": "Après une session importante, Atoll peut en tirer des notes et proposer des skills à revoir. Désactiver arrête ces bilans ; le rangement des notes garde son propre réglage.",
+    "focused": "0"
+  },
+  {
+    "label": "Mémoire commune",
+    "value": "",
+    "id": "",
+    "enabled": "1",
+    "focused": "0",
+    "role": "AXHeading"
+  },
+  {
+    "id": "",
+    "value": "Indexer les conversations",
+    "enabled": "1",
+    "focused": "0",
+    "label": "Indexer les conversations",
+    "role": "AXStaticText"
+  },
+  {
+    "id": "memory-indexing",
+    "enabled": "1",
+    "role": "AXCheckBox",
+    "focused": "0",
+    "value": "1",
+    "label": ""
+  },
+  {
+    "value": "Une mémoire locale pour Claude Code et Codex. Désactiver arrête l'indexation des deux CLI, sans effacer les souvenirs existants.",
+    "enabled": "1",
+    "label": "Une mémoire locale pour Claude Code et Codex. Désactiver arrête l'indexation des deux CLI, sans effacer les souvenirs existants.",
+    "focused": "0",
+    "role": "AXStaticText",
+    "id": ""
+  },
+  {
+    "value": "Retrouve un souvenir avec le skill atoll-recall dans Claude Code ou $atoll-recall dans Codex. La recherche est locale ; les extraits joints à la conversation sont transmis à son fournisseur.",
+    "role": "AXStaticText",
+    "focused": "0",
+    "enabled": "1",
+    "id": "",
+    "label": "Retrouve un souvenir avec le skill atoll-recall dans Claude Code ou $atoll-recall dans Codex. La recherche est locale ; les extraits joints à la conversation sont transmis à son fournisseur."
+  },
+  {
+    "label": "Rappel automatique · Claude Code",
+    "role": "AXDisclosureTriangle",
+    "focused": "0",
+    "value": "0",
+    "id": "",
+    "enabled": "1"
+  },
+  {
+    "id": "",
+    "value": "0",
+    "enabled": "1",
+    "focused": "0",
+    "role": "AXDisclosureTriangle",
+    "label": "Entretien de la mémoire"
+  },
+  {
+    "focused": "0",
+    "value": "",
+    "enabled": "1",
+    "id": "",
+    "role": "AXHeading",
+    "label": "Notes et rangement"
+  },
+  {
+    "focused": "0",
+    "role": "AXStaticText",
+    "label": "Ranger les notes chaque semaine",
+    "value": "Ranger les notes chaque semaine",
+    "enabled": "1",
+    "id": ""
+  },
+  {
+    "enabled": "0",
+    "id": "",
+    "value": "",
+    "focused": "0",
+    "label": "Ranger maintenant",
+    "role": "AXButton"
+  },
+  {
+    "focused": "0",
+    "role": "AXStaticText",
+    "value": "Fusionne les doublons et signale les contradictions, en conservant une archive. Cette analyse utilise ton abonnement.",
+    "id": "",
+    "label": "Fusionne les doublons et signale les contradictions, en conservant une archive. Cette analyse utilise ton abonnement.",
+    "enabled": "1"
+  },
+  {
+    "enabled": "1",
+    "role": "AXDisclosureTriangle",
+    "id": "",
+    "label": "Voir les notes (0)",
+    "focused": "0",
+    "value": "0"
+  },
+  {
+    "focused": "0",
+    "id": "",
+    "label": "Skills",
+    "value": "",
+    "role": "AXHeading",
+    "enabled": "1"
+  },
+  {
+    "role": "AXStaticText",
+    "value": "Proposer les skills pour",
+    "enabled": "1",
+    "label": "Proposer les skills pour",
+    "focused": "0",
+    "id": ""
+  },
+  {
+    "label": "CLI de la session source",
+    "role": "AXPopUpButton",
+    "id": "skill-destination",
+    "enabled": "1",
+    "value": "CLI de la session source",
+    "focused": "0"
+  },
+  {
+    "value": "La destination est indépendante du moteur d'analyse. Chaque skill est installé après ta revue.",
+    "label": "La destination est indépendante du moteur d'analyse. Chaque skill est installé après ta revue.",
+    "role": "AXStaticText",
+    "enabled": "1",
+    "id": "",
+    "focused": "0"
+  },
+  {
+    "enabled": "1",
+    "role": "AXStaticText",
+    "value": "Aucune proposition à revoir pour l'instant.",
+    "label": "Aucune proposition à revoir pour l'instant.",
+    "focused": "0",
+    "id": ""
+  },
+  {
+    "id": "",
+    "role": "AXDisclosureTriangle",
+    "focused": "0",
+    "enabled": "1",
+    "label": "Skills appris (0)",
+    "value": "0"
+  },
+  {
+    "focused": "0",
+    "role": "AXDisclosureTriangle",
+    "enabled": "1",
+    "value": "0",
+    "label": "Journal des analyses",
+    "id": ""
+  },
+  {
+    "enabled": "1",
+    "label": "Général",
+    "id": "",
+    "role": "AXButton",
+    "value": "",
+    "focused": "0"
+  },
+  {
+    "role": "AXButton",
+    "label": "Claude Code",
+    "id": "",
+    "value": "",
+    "enabled": "1",
+    "focused": "0"
+  },
+  {
+    "role": "AXButton",
+    "id": "",
+    "label": "Codex",
+    "value": "",
+    "enabled": "1",
+    "focused": "0"
+  },
+  {
+    "label": "Autonomie",
+    "enabled": "1",
+    "value": "",
+    "id": "",
+    "focused": "0",
+    "role": "AXButton"
+  },
+  {
+    "enabled": "1",
+    "label": "Alertes",
+    "id": "",
+    "value": "",
+    "role": "AXButton",
+    "focused": "0"
+  },
+  {
+    "value": "",
+    "focused": "0",
+    "id": "",
+    "role": "AXButton",
+    "label": "Apprentissage",
+    "enabled": "1"
+  },
+  {
+    "focused": "0",
+    "label": "Mises à jour",
+    "role": "AXButton",
+    "value": "",
+    "id": "",
+    "enabled": "1"
+  },
+  {
+    "focused": "0",
+    "label": "À propos",
+    "role": "AXButton",
+    "value": "",
+    "enabled": "1",
+    "id": ""
+  },
+  {
+    "label": "Apprentissage",
+    "id": "",
+    "role": "AXStaticText",
+    "value": "Apprentissage",
+    "enabled": "1",
+    "focused": "0"
+  }
+]

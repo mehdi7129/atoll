@@ -1,8 +1,34 @@
 # HANDOFF — reprendre Atoll
 
-État du **10 septembre 2026**. Fiche courante ; les règles détaillées restent dans
+État du **11 septembre 2026**. Fiche courante ; les règles détaillées restent dans
 [CLAUDE.md](../CLAUDE.md). L'[ancien handoff](HANDOFF-2026-09-10-archive.md) conserve
 les mesures et pièges historiques, sans faire autorité sur l'état actuel.
+
+## Travail après v0.18.1 — PR des réglages
+
+Branche `codex/settings-ux`, base `a961c10`. Mehdi a validé la maquette des
+huit onglets et demandé l'application, le commit, le push et une PR. **La fusion
+attend sa relecture de la PR ; aucune release dans ce lot.**
+
+[Plan validé](PLAN-2026-09-11-settings-organization.md),
+[recette et seconde lecture](REVIEW-2026-09-11-settings-organization.md).
+L'organisation est implémentée : mémoire commune et modèles dans Apprentissage,
+raccourci direct depuis Codex, destination des skills près de leur revue,
+alertes communes et anciens sons Claude distingués, Autonomie explicitement
+Claude, vérification manuelle des mises à jour. Diagnostics et longues listes
+sont repliés ; erreurs et actions indispensables restent accessibles.
+Builds Debug/Release, 1 020 tests Core (un skip), 58 parcours UI et six sabotages
+validés. Captures des huit onglets et limites de recette dans le rapport lié.
+
+Les clés des préférences et les services sont conservés. Le code des gros volets
+Claude et Apprentissage a quitté `SettingsView.swift` pour des fichiers dédiés.
+La recette protégée peut maintenant ouvrir la vraie scène macOS Settings avec
+`--preview-all-settings --preview-settings=codex` ; elle conserve un domaine de
+préférences privé et simule ses actions externes. Ne jamais tester ces actions
+sur la copie stable. Les anciens rapports de [première simplification](REVIEW-2026-09-11-settings-ux.md)
+sont historiques ; la maquette validée reste dans `docs/mockups/2026-09-11-settings/`.
+
+La version publiée et l'app stable restent **v0.18.1, build 36**.
 
 ## État de livraison
 
@@ -15,7 +41,7 @@ les mesures et pièges historiques, sans faire autorité sur l'état actuel.
 | Référence précédente | v0.18.0, build 35 ; `main` avant PR #3 : `25132e3` |
 | Tests fonctionnels | 1 020 tests Core, 1 skip live opt-in, 0 échec ; 60 scénarios runtime |
 | Recettes | PR #3 : 19 cas UI relus et sabotages détectés, trois TUI réels identifiés. Codex authentifié, VoiceOver et sons validés en v0.18.0 ; non répétés pour ce patch |
-| Installation de travail | `~/Applications/Atoll.app` **v0.18.0, build 35**, vérifiée après le retour de Mehdi ; la procédure de release ne l'a pas remplacée |
+| Installation de travail | `~/Applications/Atoll.app` **v0.18.1, build 36**, vérifiée le 11 septembre ; les retouches locales des réglages ne l'ont pas remplacée |
 
 Vérifier l'état réel avant toute action : `git status --short --branch`,
 `git log -5 --oneline`, `git worktree list`, puis `gh release view`.

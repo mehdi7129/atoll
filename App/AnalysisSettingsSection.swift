@@ -2,38 +2,79 @@ import SwiftUI
 import AtollCore
 
 struct AnalysisSettingsSection: View {
+    var focusRequest: UUID? = nil
     @AppStorage(LearningSettings.analysisProviderKey) private var provider = AgentProvider.claude.rawValue
     @AppStorage(LearningSettings.failoverEnabledKey) private var fallback = false
     @AppStorage(LearningSettings.unknownQuotaKey) private var allowUnknown = true
     @AppStorage(LearningSettings.maxPerWindowKey) private var maximum = 2
-    @AppStorage(LearningSettings.skillDestinationKey) private var destination = "origin"
+    @AppStorage(LearningSettings.thresholdKey) private var threshold = 0.7
+    @State private var optionsExpanded = false
 
     var body: some View {
-        Section("Abonnement des analyses Atoll") {
-            Picker("Moteur", selection: $provider) {
-                Text("Claude Code").tag(AgentProvider.claude.rawValue)
-                Text("Codex CLI").tag(AgentProvider.codex.rawValue)
+        Section("Analyses d'Atoll") {
+            VStack(alignment: .leading, spacing: 8) {
+                Picker("Moteur", selection: $provider) {
+                    Text("Claude Code").tag(AgentProvider.claude.rawValue)
+                    Text("Codex CLI").tag(AgentProvider.codex.rawValue)
+                }
+                .pickerStyle(.segmented)
+                SettingsHelp("Abonnement utilisé pour les bilans, le rangement des notes et la recherche IA de plugins.")
             }
-            .pickerStyle(.segmented)
-            Picker("Skills proposés pour", selection: $destination) {
-                Text("L'agent de la session source").tag("origin")
-                Text("Claude Code").tag(AgentProvider.claude.rawValue)
-                Text("Codex CLI").tag(AgentProvider.codex.rawValue)
+            if provider == AgentProvider.codex.rawValue || fallback {
+                CodexAnalysisModelPicker(focusRequest: focusRequest)
             }
-            Text("Bilan, rangement des notes et recherche IA facultative de plugins. Ce choix est indépendant du bouton d'affichage. Une analyse déjà préparée garde son moteur et son modèle.")
-                .font(.caption).foregroundStyle(.secondary)
-            Toggle("Autoriser l'autre abonnement si celui-ci est épuisé", isOn: $fallback)
-            Text("La bascule exige un quota récent et applicable des deux côtés. Une portée ambiguë ou un quota inconnu ne déclenche jamais de bascule.")
-                .font(.caption).foregroundStyle(.secondary)
-            Toggle("Quota inconnu : autoriser une tentative interne par 5 h", isOn: $allowUnknown)
-            Stepper("Plafond interne : \(maximum) analyses / 5 h / abonnement", value: $maximum, in: 1...10)
-            Text("Ces 5 h sont une limite d'Atoll, pas la fenêtre contractuelle de Codex. Les trois analyses partagent ce plafond. Un lancement impossible ne dépense pas de créneau.")
-                .font(.caption).foregroundStyle(.secondary)
-            if provider == AgentProvider.codex.rawValue {
-                Text(LearningSettings.shared.codexModel.isEmpty
-                     ? "Choisis un modèle disponible dans Réglages → Codex avant de lancer une analyse."
-                     : "Modèle Codex : \(LearningSettings.shared.codexModel)")
-                    .font(.caption)
+            if provider == AgentProvider.claude.rawValue || fallback {
+                ClaudeAnalysisModelPickers()
+            }
+            DisclosureGroup("Limites et second abonnement", isExpanded: $optionsExpanded) {
+                VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Stepper("\(maximum) analyses maximum / 5 h / abonnement", value: $maximum, in: 1...10)
+                        SettingsHelp("Une limite commune aux analyses d'Atoll, indépendante du quota de ton CLI.")
+                    }
+                    Picker("Quota utilisé maximum", selection: $threshold) {
+                        Text("50 %").tag(0.5)
+                        Text("60 %").tag(0.6)
+                        Text("70 %").tag(0.7)
+                        Text("80 %").tag(0.8)
+                    }
+                    Toggle("Quota inconnu : une tentative par 5 h", isOn: $allowUnknown)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Toggle("Utiliser l'autre abonnement si nécessaire", isOn: $fallback)
+                            .accessibilityIdentifier("analysis-fallback")
+                        SettingsHelp("Seulement si le premier est épuisé et si les quotas des deux comptes sont connus.")
+                    }
+                }
+                .padding(.vertical, 8)
+            }
+        }
+        .disclosureGroupStyle(SettingsDisclosureStyle())
+    }
+}
+
+private struct ClaudeAnalysisModelPickers: View {
+    @AppStorage(LearningSettings.modelKey) private var sessionModel = "sonnet"
+    @AppStorage(LearningSettings.curationModelKey) private var curationModel = ""
+    @AppStorage(LearningSettings.searchModelKey) private var searchModel = "haiku"
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Modèles Claude Code").font(.callout.weight(.medium))
+            modelPicker("Bilan de session", selection: $sessionModel)
+            // Sans préférence dédiée, le service utilise le modèle du bilan.
+            modelPicker("Rangement des notes", selection: Binding(
+                get: { curationModel.isEmpty ? sessionModel : curationModel },
+                set: { curationModel = $0 }
+            ))
+            modelPicker("Recherche de plugins", selection: $searchModel)
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func modelPicker(_ title: String, selection: Binding<String>) -> some View {
+        Picker(title, selection: selection) {
+            ForEach(LearningSettings.availableModels, id: \.self) { model in
+                Text(model.capitalized).tag(model)
             }
         }
     }

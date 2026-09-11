@@ -1,0 +1,16 @@
+[
+  {
+    "case": "settings-codex",
+    "passed": false,
+    "failures": [
+      "Connexion à Codex",
+      "Vérifier la connexion",
+      "Modèle Codex",
+      "Choisir un modèle",
+      "état du volet inaccessible : Vérifier la connexion",
+      "option superflue visible : Choisir le dossier",
+      "option superflue visible : Vérifier avec Codex",
+      "choix du modèle inattendu : '' → None"
+    ]
+  }
+]

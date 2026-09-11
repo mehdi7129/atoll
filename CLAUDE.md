@@ -1,5 +1,15 @@
 # CLAUDE.md — instructions projet Atoll
 
+> **Réglages réorganisés — 2026-09-11, PR à relire avant fusion.**
+> Mehdi a validé la maquette des huit onglets et autorisé application, commit,
+> push et PR. Mémoire commune et modèles sont dans Apprentissage ; Codex y
+> ouvre le choix du modèle. Sons communs et reprise des anciens sons Claude
+> sont distingués. Les clés et services restent inchangés. Les aperçus de la
+> vraie scène Settings sont protégés et simulent les actions externes.
+> [Plan validé](docs/PLAN-2026-09-11-settings-organization.md),
+> [recette](docs/REVIEW-2026-09-11-settings-organization.md).
+> Aucune fusion, release ni substitution de l'app stable sans la suite demandée.
+
 > **v0.18.1, build 36 — publiée le 2026-09-10, PR #3 fusionnée.** Le compact
 > d'origine est rétabli : activité à gauche, quota à droite, une ligne en police
 > 10. La couleur distingue les CLI ; aucun « CL/CX », choix dans le panneau ouvert.

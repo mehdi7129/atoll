@@ -1,0 +1,69 @@
+{
+  "date": "2026-09-11",
+  "branch": "codex/settings-ux",
+  "base_commit": "a961c10",
+  "builds": {
+    "Debug": "passed",
+    "Release": "passed"
+  },
+  "core_tests": {
+    "executed": 1020,
+    "skipped": 1,
+    "failures": 0
+  },
+  "ui_cases": 58,
+  "sabotages_detected": 6,
+  "native_keyboard": {
+    "focus_checked": true,
+    "space_arrows_return_selection_checked_via_CUA": true,
+    "keyboard_navigation_restored": true
+  },
+  "manual_ui": [
+    "Propositions de skills visibles avec leur action de revue, panneau de 640 × 520 points."
+  ],
+  "configuration": {
+    "~/Library/Preferences/dev.mehdiguiard.atoll.plist": {
+      "unchanged": true,
+      "present": true
+    },
+    "~/.claude/settings.json": {
+      "unchanged": true,
+      "present": true
+    },
+    "~/.codex/hooks.json": {
+      "unchanged": true,
+      "present": true
+    },
+    "~/.codex/config.toml": {
+      "unchanged": false,
+      "present": true
+    },
+    "~/.atoll/proactive-recall.json": {
+      "unchanged": true,
+      "present": true
+    },
+    "~/.atoll/sound-settings.json": {
+      "unchanged": true,
+      "present": true
+    },
+    "~/.atoll/rockstar-parked-deny.json": {
+      "unchanged": true,
+      "present": false
+    },
+    "~/.atoll/parked-sound-hooks.json": {
+      "unchanged": true,
+      "present": true
+    }
+  },
+  "configuration_comparison_note": "config.toml a évolué pendant la session : comparaison non concluante pour ce fichier, modification non attribuée et laissée intacte.",
+  "stable_app": {
+    "version": "0.18.1",
+    "build": "36",
+    "replaced": false
+  },
+  "limits": [
+    "Actions externes simulées dans la recette UI.",
+    "Parcours CLI authentifiés non rejoués.",
+    "Phrases prononcées par VoiceOver non rejouées."
+  ]
+}
