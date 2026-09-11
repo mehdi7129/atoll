@@ -1,14 +1,14 @@
 # Réglages Atoll — audit des huit onglets et proposition d'organisation
 
-11 septembre 2026 · **proposition validée et PR #4 fusionnée ; release v0.18.2 autorisée, en préparation**.
+11 septembre 2026 · **proposition validée, PR #4 fusionnée et v0.18.2/build 37 publiée**.
 État de livraison courant dans [HANDOFF](HANDOFF.md).
 
 ## Périmètre et méthode
 
 Parcours des huit onglets de l'app installée **0.18.1 / 36**, puis lecture des
-vues et de leurs liaisons dans le travail local `codex/settings-ux`. Ce dernier
-contient déjà une première simplification ; elle n'est pas encore publiée.
-L'audit distingue donc ce que montre l'app et ce que corrige déjà la branche.
+vues et de leurs liaisons dans le travail local `codex/settings-ux`. Au moment de
+l'audit, ce dernier contenait une première simplification encore non publiée.
+L'audit distingue donc ce que montrait l'app et ce que corrigeait déjà la branche.
 Les contrôles de l'app n'ont pas été modifiés ; la navigation est revenue à
 l'onglet Alertes initial. Aucune analyse, importation, installation ou mise à
 jour n'a été déclenchée pour ce parcours.
@@ -301,4 +301,4 @@ la proposition, pas à recommander un abonnement ou un modèle.
 
 **Mehdi a validé la proposition et demandé son application, le commit, le push et une PR.**
 Après relecture, **Mehdi a demandé la fusion et la release**. La PR #4 est fusionnée ;
-la préparation de v0.18.2 est suivie dans [HANDOFF](HANDOFF.md).
+la v0.18.2/build 37 est publiée. Les preuves sont liées dans [HANDOFF](HANDOFF.md).

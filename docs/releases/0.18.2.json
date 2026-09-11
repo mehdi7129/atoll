@@ -1,0 +1,149 @@
+{
+  "version": "0.18.2",
+  "build": "37",
+  "sourceCommit": "66aaba421b6c37f7a027503168e1e88d1f0f06ce",
+  "checks": {
+    "app": "Developer ID verified",
+    "helper": "Developer ID verified",
+    "sparkle-framework": "Developer ID verified",
+    "sparkle-autoupdate": "Developer ID verified",
+    "sparkle-updater": "Developer ID verified",
+    "sparkle-downloader": "Developer ID verified",
+    "sparkle-installer": "Developer ID verified",
+    "dmg": "Developer ID verified",
+    "appStaple": "valid",
+    "dmgStaple": "valid",
+    "gatekeeper": "app and dmg accepted",
+    "sparkleEdDSA": "6 enclosures verified with embedded public key",
+    "deliveredZip": "version/build, signature, staple and Gatekeeper verified"
+  },
+  "architectures": [
+    "x86_64",
+    "arm64"
+  ],
+  "assets": [
+    {
+      "name": "Atoll-0.18.2.zip",
+      "bytes": 7891867,
+      "sha256": "0044c43d9d9f32587dd5a1760529aca310694fb0a360294730aa83153163375f",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.18.2/Atoll-0.18.2.zip"
+    },
+    {
+      "name": "Atoll37-36.delta",
+      "bytes": 1089734,
+      "sha256": "000b478948562d51a60b501d7de6cec3723193f87e83ee544840942fe4bfbc40",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.18.2/Atoll37-36.delta"
+    },
+    {
+      "name": "Atoll37-35.delta",
+      "bytes": 1456530,
+      "sha256": "534bb00abfeaa9d04a85db4c6230bab9979f6a554425f5346d9076d6e0acee8d",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.18.2/Atoll37-35.delta"
+    },
+    {
+      "name": "Atoll37-34.delta",
+      "bytes": 2916658,
+      "sha256": "3aaf78deb35814a1f7b9570ead43fd41e5055571586c813a5a880e36c9829b30",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.18.2/Atoll37-34.delta"
+    },
+    {
+      "name": "Atoll37-33.delta",
+      "bytes": 2945998,
+      "sha256": "7eb1fe14b2a1dde2701e644a36b74ab1e69cf874d5a2669d7b9bb42ca5a0f569",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.18.2/Atoll37-33.delta"
+    },
+    {
+      "name": "Atoll37-32.delta",
+      "bytes": 2962658,
+      "sha256": "2692d9c55324e1553d9300c604094127e1ee61d98f96b4b844f0b744a154f045",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.18.2/Atoll37-32.delta"
+    },
+    {
+      "name": "Atoll-0.18.2.dmg",
+      "bytes": 8731017,
+      "sha256": "1f5936eacce59ff6b211e67cfb1a7e851a324592996c1a5fe9f8c910141140f3",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.18.2/Atoll-0.18.2.dmg"
+    }
+  ],
+  "notarization": {
+    "app": {
+      "submissionID": "e1f03f49-067c-48b1-9cf5-f8963e3f95ec",
+      "status": "Accepted"
+    },
+    "dmg": {
+      "submissionID": "558e8cbb-af96-48fe-b929-fb2248a5b9ec",
+      "status": "Accepted"
+    }
+  },
+  "releaseURL": "https://github.com/mehdi7129/atoll/releases/tag/v0.18.2",
+  "publishedAt": "2026-09-11T11:55:09Z",
+  "pullRequest": "https://github.com/mehdi7129/atoll/pull/4",
+  "mergeCommit": "9e93bb3de95d862fa8a3eb1a38aeda86d28636bc",
+  "publicDownloads": {
+    "checkedAt": "2026-09-11T11:55:21.682902+00:00",
+    "enclosuresHTTP200": 18,
+    "dmgHTTP200": true,
+    "downloadedSHA256Matches": 7
+  },
+  "appcast": {
+    "url": "https://mehdi7129.github.io/atoll/appcast.xml",
+    "commit": "0121decfc4b6207ce385bb6499e20bd9b4da7edb",
+    "sha256": "51ec71a85a8ad0170cf3f07b6ccd72f7057d262000b990b30d0ab3477e4b603b",
+    "servedBytesEqualRepository": true,
+    "checkedAt": "2026-09-11T11:56:33.614818+00:00"
+  },
+  "deltaUpgrade": {
+    "fromBuild": "36",
+    "toBuild": "37",
+    "patch": "Atoll37-36.delta",
+    "sourceArchiveMatchesPublishedSHA256": true,
+    "filesLinksAndModesEqualFullArchive": true,
+    "codesign": "verified",
+    "staple": "valid",
+    "appLaunched": false,
+    "checkedAt": "2026-09-11T11:58:36.162657+00:00"
+  },
+  "validation": {
+    "featureCodeCommit": "e50e269d552253d4701d604574562939c48ae64c",
+    "featureCodeUnchangedAtRelease": true,
+    "builds": {
+      "Debug": "passed",
+      "Release": "passed"
+    },
+    "distributionBuild": "Release passed with Developer ID signing",
+    "core": {
+      "executed": 1020,
+      "skipped": 1,
+      "failures": 0
+    },
+    "uiCasesPassed": 58,
+    "uiSabotagesDetected": 6,
+    "nativeKeyboard": {
+      "focus_checked": true,
+      "space_arrows_return_selection_checked_via_CUA": true,
+      "keyboard_navigation_restored": true
+    },
+    "featureEvidence": "../REVIEW-2026-09-11-settings-organization.md",
+    "limits": [
+      "Actions externes simulées dans la recette UI.",
+      "Parcours CLI authentifiés non rejoués.",
+      "Phrases prononcées par VoiceOver non rejouées."
+    ],
+    "deferred": [
+      "Recette Claude authentifiée : abonnement absent sur la machine de test.",
+      "Retour visuel dans un onglet de terminal : refus du pilotage GUI par l’outil ; aucun défaut du bouton établi."
+    ]
+  },
+  "localVerification": {
+    "personalConfigurationsUnchanged": true,
+    "personalConfigurationsCompared": 8,
+    "stableAppUnchanged": true,
+    "debugBuildPreserved": true,
+    "debugBundlesCompared": 2,
+    "stableVersionObserved": "0.18.1",
+    "stableBuildObserved": "36",
+    "checkedAt": "2026-09-11T11:56:05.223003+00:00",
+    "scope": "Comparaison avant/après la release ; la recette UI antérieure conserve son propre relevé et ses limites."
+  },
+  "verifiedAt": "2026-09-11T11:59:04.452456+00:00"
+}

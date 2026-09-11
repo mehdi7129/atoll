@@ -4,13 +4,14 @@
 [CLAUDE.md](../CLAUDE.md). L'[ancien handoff](HANDOFF-2026-09-10-archive.md) conserve
 les mesures et pièges historiques, sans faire autorité sur l'état actuel.
 
-## Préparation de v0.18.2 — réglages réorganisés
+## v0.18.2 publiée — réglages réorganisés
 
 Mehdi a demandé la fusion et la release le 11 septembre. La
 [PR #4](https://github.com/mehdi7129/atoll/pull/4) est **fusionnée** sur `main`
 (`9e93bb3`), depuis le code vérifié `e50e269` de `codex/settings-ux`.
-La version préparée est **v0.18.2, build 37**. Publication et vérification du flux
-Sparkle restent à achever ; la version distribuée est encore v0.18.1.
+La **[v0.18.2, build 37](https://github.com/mehdi7129/atoll/releases/tag/v0.18.2)**
+est publiée depuis `66aaba4`, sans changement du code testé. Le flux Sparkle
+servi propose le build 37 ; les fichiers publics et leurs signatures sont vérifiés.
 
 [Plan validé](PLAN-2026-09-11-settings-organization.md),
 [recette et seconde lecture](REVIEW-2026-09-11-settings-organization.md).
@@ -30,25 +31,27 @@ préférences privé et simule ses actions externes. Ne jamais tester ces action
 sur la copie stable. Les anciens rapports de [première simplification](REVIEW-2026-09-11-settings-ux.md)
 sont historiques ; la maquette validée reste dans `docs/mockups/2026-09-11-settings/`.
 
-L'app stable reste **v0.18.1, build 36** ; la publication ne la remplace pas.
+L'app stable reste **v0.18.1, build 36**. Ses fichiers, les deux builds Debug
+et les huit configurations personnelles contrôlées sont identiques avant/après
+cette release ; la publication n'a installé aucune app.
 
 ## État de livraison
 
 | Élément | État vérifié |
 |---|---|
-| Version publiée | **[v0.18.1, build 36](https://github.com/mehdi7129/atoll/releases/tag/v0.18.1)** |
-| Fusion / source | [PR #3](https://github.com/mehdi7129/atoll/pull/3) fusionnée ; tag sur `ec6708a` ; fusion et publication demandées par Mehdi |
+| Version publiée | **[v0.18.2, build 37](https://github.com/mehdi7129/atoll/releases/tag/v0.18.2)** |
+| Fusion / source | [PR #4](https://github.com/mehdi7129/atoll/pull/4) fusionnée (`9e93bb3`) ; tag sur `66aaba4` ; fusion et publication demandées par Mehdi |
 | Distribution | Universelle arm64 / x86_64 ; app et DMG signés Developer ID, notarisés, staplés et acceptés par Gatekeeper |
-| Mise à jour | Appcast poussé après les assets (`b54a144`) et identique au flux servi ; 19 URL disponibles, SHA256 des sept fichiers publiés et six signatures EdDSA vérifiés |
-| Référence précédente | v0.18.0, build 35 ; `main` avant PR #3 : `25132e3` |
-| Tests fonctionnels | 1 020 tests Core, 1 skip live opt-in, 0 échec ; 60 scénarios runtime |
-| Recettes | PR #3 : 19 cas UI relus et sabotages détectés, trois TUI réels identifiés. Codex authentifié, VoiceOver et sons validés en v0.18.0 ; non répétés pour ce patch |
-| Installation de travail | `~/Applications/Atoll.app` **v0.18.1, build 36**, vérifiée le 11 septembre ; les retouches locales des réglages ne l'ont pas remplacée |
+| Mise à jour | Appcast poussé après les assets (`0121dec`) et identique au flux servi ; 19 URL disponibles, SHA256 des sept fichiers publiés et six signatures EdDSA vérifiés |
+| Référence précédente | v0.18.1, build 36 ; [preuves de sa livraison](releases/0.18.1.json) |
+| Tests fonctionnels | Code `e50e269` : 1 020 tests Core, 1 skip live opt-in, 0 échec ; builds Debug et Release réussis. Code inchangé pour la release ; nouveau build de distribution signé vérifié |
+| Recettes | PR #4 : 58 parcours UI, six sabotages détectés, captures clair/sombre des huit onglets et parcours clavier natif. Actions externes simulées ; CLI authentifiés et VoiceOver parlé non rejoués pour cette réorganisation |
+| Installation de travail | `~/Applications/Atoll.app` **v0.18.1, build 36**, vérifiée le 11 septembre ; copie stable, deux builds Debug et huit configurations personnelles préservés pendant la release |
 
 Vérifier l'état réel avant toute action : `git status --short --branch`,
 `git log -5 --oneline`, `git worktree list`, puis `gh release view`.
 Une source publiée et une app installée peuvent avoir des versions différentes.
-Le [relevé de livraison](releases/0.18.1.json) conserve les commits, identifiants
+Le [relevé de livraison](releases/0.18.2.json) conserve les commits, identifiants
 de notarisation, résultats et empreintes des fichiers distribués.
 
 ## Correctifs après le retour sur v0.18.0

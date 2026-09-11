@@ -1,16 +1,19 @@
 # CLAUDE.md — instructions projet Atoll
 
-> **v0.18.2, build 37 — préparation autorisée le 2026-09-11.**
+> **v0.18.2, build 37 — publiée le 2026-09-11, PR #4 fusionnée.**
 > Mehdi a demandé la fusion et la release. La [PR #4](https://github.com/mehdi7129/atoll/pull/4)
-> est fusionnée (`9e93bb3`) ; son code vérifié est `e50e269`.
+> est fusionnée (`9e93bb3`) ; le tag pointe sur `66aaba4`, sans changement
+> du code vérifié `e50e269`.
 > Les huit onglets sont réorganisés : modèles et mémoire dans Apprentissage,
 > accès direct depuis Codex, sons communs et anciens sons Claude distingués.
 > Préférences et contrats des services sont conservés. Builds Debug/Release,
 > 1 020 tests Core (un skip), 58 parcours UI et six sabotages validés.
 > [Plan](docs/PLAN-2026-09-11-settings-organization.md),
 > [recette et limites](docs/REVIEW-2026-09-11-settings-organization.md).
-> La publication suit `Scripts/release.sh` : assets vérifiés avant l'appcast.
-> L'app stable v0.18.1/build 36 et les produits Debug restent préservés.
+> App et DMG notarisés ; sept téléchargements et flux Sparkle servi vérifiés.
+> [Preuves de livraison](docs/releases/0.18.2.json). L'app stable v0.18.1/build 36,
+> les deux produits Debug et les huit configurations personnelles contrôlées
+> sont restés identiques pendant cette release.
 
 > **v0.18.1, build 36 — publiée le 2026-09-10, PR #3 fusionnée.** Le compact
 > d'origine est rétabli : activité à gauche, quota à droite, une ligne en police
