@@ -4,6 +4,19 @@
 [CLAUDE.md](../CLAUDE.md). L'[ancien handoff](HANDOFF-2026-09-10-archive.md) conserve
 les mesures et pièges historiques, sans faire autorité sur l'état actuel.
 
+## Audit du rendement de l'apprentissage — proposition de travail
+
+Mehdi a demandé une PR d'audit sur les tokens et le temps de revue du générateur
+de skills et des analyses automatiques. Le [rapport du 11 septembre](AUDIT-2026-09-11-learning-efficiency.md)
+réunit les constats, preuves hors ligne et cinq lots proposés. Les corrections
+produit ne sont **pas implémentées** : ne pas les considérer livrées en v0.18.2.
+
+Priorités : succès erroné après échec d'écriture, récupération sans nouvel appel
+au modèle, analyses répétées sur matière inchangée, puis mesures d'usage et
+antériorité des skills. Les sorties sont déjà bornées ; les données historiques
+ne mesurent pas le rendement actuel de Codex. Aucun run génératif Atoll n'a été
+déclenché pour cet audit ; ses harnesses utilisent des CLI fictifs.
+
 ## v0.18.2 publiée — réglages réorganisés
 
 Mehdi a demandé la fusion et la release le 11 septembre. La
