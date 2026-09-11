@@ -182,13 +182,15 @@ Si la session n'apparaît pas, ouvre « Vérifier la connexion », choisis le
 Le home Codex (`~/.codex` par défaut) est son dossier de configuration. Son choix,
 la réparation et le chemin de l'exécutable sont regroupés dans « Dépannage ».
 
-**Version courante : v0.18.1.** [Notes de version](https://github.com/mehdi7129/atoll/releases/tag/v0.18.1).
-Cette version rétablit le compact d'origine, affiche le contexte chiffré et simplifie
-le diagnostic Codex ; voir la [validation](docs/REVIEW-2026-09-10-island-context-setup.md).
+**Version courante : v0.18.2.** Release en préparation après fusion de la PR #4.
+La version distribuée reste [v0.18.1](https://github.com/mehdi7129/atoll/releases/tag/v0.18.1)
+jusqu'à la fin des vérifications de publication.
 
-L'organisation des réglages décrite sur cette branche attend la prochaine release ;
-le [plan et la maquette validés](docs/PLAN-2026-09-11-settings-organization.md)
-en détaillent les huit onglets.
+Les huit onglets conservent leur interface native et gagnent en lisibilité.
+Les modèles, limites et mémoire commune sont regroupés dans Apprentissage ;
+les actions nécessaires restent visibles et les détails se déplient à la demande.
+[Plan et maquette validés](docs/PLAN-2026-09-11-settings-organization.md),
+[captures et validation](docs/REVIEW-2026-09-11-settings-organization.md).
 
 ---
 

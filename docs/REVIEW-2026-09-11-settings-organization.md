@@ -2,8 +2,10 @@
 
 11 septembre 2026 · branche `codex/settings-ux`, base `a961c10`.
 Mehdi a validé le [plan des huit onglets](PLAN-2026-09-11-settings-organization.md)
-et sa maquette, puis demandé application, commit, push et PR. La fusion attend
-sa relecture ; aucune release ni remplacement de l'app stable dans ce lot.
+et sa maquette, puis demandé application, commit, push et PR. Après relecture,
+il a demandé la fusion et la release : PR #4 fusionnée, v0.18.2/build 37 en
+préparation. [HANDOFF](HANDOFF.md) porte l'état courant. Les mesures ci-dessous
+sont celles du code `e50e269`, conservé pour la release.
 
 ## Organisation livrée dans la branche
 

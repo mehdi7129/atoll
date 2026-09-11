@@ -6,8 +6,8 @@ sont publiés dans **v0.18.1, build 36** : voir leur
 [validation](REVIEW-2026-09-10-island-context-setup.md). L'[audit initial](AUDIT-2026-09-09-codex-claude.md)
 et le [rapport PR #2](REVIEW-2026-09-10-pr2-corrections.md) sont historiques.
 Les [réglages réorganisés du 11 septembre](PLAN-2026-09-11-settings-organization.md)
-sont implémentés sur `codex/settings-ux`, en attente de relecture de la PR et
-pas encore publiés.
+sont fusionnés dans `main` avec la PR #4 et préparés pour **v0.18.2, build 37**.
+La publication est en cours ; voir [HANDOFF](HANDOFF.md).
 
 ## Périmètre et choix de fournisseur
 

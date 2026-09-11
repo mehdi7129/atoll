@@ -1,6 +1,7 @@
 # Réglages Atoll — audit des huit onglets et proposition d'organisation
 
-11 septembre 2026 · **proposition validée par Mehdi ; implémentation sur `codex/settings-ux`, PR à relire avant fusion**.
+11 septembre 2026 · **proposition validée et PR #4 fusionnée ; release v0.18.2 autorisée, en préparation**.
+État de livraison courant dans [HANDOFF](HANDOFF.md).
 
 ## Périmètre et méthode
 
@@ -299,4 +300,5 @@ aucun réglage réel. Le moteur, le modèle et les états d'exemple servent à l
 la proposition, pas à recommander un abonnement ou un modèle.
 
 **Mehdi a validé la proposition et demandé son application, le commit, le push et une PR.**
-La fusion attend sa relecture de la PR ; aucune release n'est demandée dans ce lot.
+Après relecture, **Mehdi a demandé la fusion et la release**. La PR #4 est fusionnée ;
+la préparation de v0.18.2 est suivie dans [HANDOFF](HANDOFF.md).

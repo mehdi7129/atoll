@@ -4,11 +4,13 @@
 [CLAUDE.md](../CLAUDE.md). L'[ancien handoff](HANDOFF-2026-09-10-archive.md) conserve
 les mesures et pièges historiques, sans faire autorité sur l'état actuel.
 
-## Travail après v0.18.1 — PR des réglages
+## Préparation de v0.18.2 — réglages réorganisés
 
-Branche `codex/settings-ux`, base `a961c10`. Mehdi a validé la maquette des
-huit onglets et demandé l'application, le commit, le push et une PR. **La fusion
-attend sa relecture de la PR ; aucune release dans ce lot.**
+Mehdi a demandé la fusion et la release le 11 septembre. La
+[PR #4](https://github.com/mehdi7129/atoll/pull/4) est **fusionnée** sur `main`
+(`9e93bb3`), depuis le code vérifié `e50e269` de `codex/settings-ux`.
+La version préparée est **v0.18.2, build 37**. Publication et vérification du flux
+Sparkle restent à achever ; la version distribuée est encore v0.18.1.
 
 [Plan validé](PLAN-2026-09-11-settings-organization.md),
 [recette et seconde lecture](REVIEW-2026-09-11-settings-organization.md).
@@ -28,7 +30,7 @@ préférences privé et simule ses actions externes. Ne jamais tester ces action
 sur la copie stable. Les anciens rapports de [première simplification](REVIEW-2026-09-11-settings-ux.md)
 sont historiques ; la maquette validée reste dans `docs/mockups/2026-09-11-settings/`.
 
-La version publiée et l'app stable restent **v0.18.1, build 36**.
+L'app stable reste **v0.18.1, build 36** ; la publication ne la remplace pas.
 
 ## État de livraison
 

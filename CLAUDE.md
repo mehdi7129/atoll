@@ -1,14 +1,16 @@
 # CLAUDE.md — instructions projet Atoll
 
-> **Réglages réorganisés — 2026-09-11, PR à relire avant fusion.**
-> Mehdi a validé la maquette des huit onglets et autorisé application, commit,
-> push et PR. Mémoire commune et modèles sont dans Apprentissage ; Codex y
-> ouvre le choix du modèle. Sons communs et reprise des anciens sons Claude
-> sont distingués. Les clés et services restent inchangés. Les aperçus de la
-> vraie scène Settings sont protégés et simulent les actions externes.
-> [Plan validé](docs/PLAN-2026-09-11-settings-organization.md),
-> [recette](docs/REVIEW-2026-09-11-settings-organization.md).
-> Aucune fusion, release ni substitution de l'app stable sans la suite demandée.
+> **v0.18.2, build 37 — préparation autorisée le 2026-09-11.**
+> Mehdi a demandé la fusion et la release. La [PR #4](https://github.com/mehdi7129/atoll/pull/4)
+> est fusionnée (`9e93bb3`) ; son code vérifié est `e50e269`.
+> Les huit onglets sont réorganisés : modèles et mémoire dans Apprentissage,
+> accès direct depuis Codex, sons communs et anciens sons Claude distingués.
+> Préférences et contrats des services sont conservés. Builds Debug/Release,
+> 1 020 tests Core (un skip), 58 parcours UI et six sabotages validés.
+> [Plan](docs/PLAN-2026-09-11-settings-organization.md),
+> [recette et limites](docs/REVIEW-2026-09-11-settings-organization.md).
+> La publication suit `Scripts/release.sh` : assets vérifiés avant l'appcast.
+> L'app stable v0.18.1/build 36 et les produits Debug restent préservés.
 
 > **v0.18.1, build 36 — publiée le 2026-09-10, PR #3 fusionnée.** Le compact
 > d'origine est rétabli : activité à gauche, quota à droite, une ligne en police
