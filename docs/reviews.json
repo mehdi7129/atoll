@@ -595,6 +595,45 @@
         "Scripts/test-ui.py",
         "Shared/ProcessInspector.swift"
       ]
+    },
+    {
+      "date": "2026-09-11",
+      "document": "docs/REVIEW-2026-09-11-settings-ux.md",
+      "depth": "sweep",
+      "note": "Relecture ciblée des changements de réglages et des parcours UI. Ne vaut pas audit complet des services ou du fichier SettingsView.",
+      "files": [
+        "App/AnalysisSettingsSection.swift",
+        "App/CodexAnalysisModelPicker.swift",
+        "App/CodexCatalogSection.swift",
+        "App/CodexPreview.swift",
+        "App/CodexSettingsPane.swift",
+        "App/SettingsHelp.swift",
+        "App/SettingsView.swift"
+      ]
+    },
+    {
+      "date": "2026-09-11",
+      "document": "docs/REVIEW-2026-09-11-settings-organization.md",
+      "depth": "sweep",
+      "note": "Seconde lecture ciblée de la réorganisation des huit onglets : liaisons déplacées, actions visibles, isolation des aperçus, 58 parcours UI et six défauts compilés détectés. Ne revendique pas une relecture intégrale des services.",
+      "files": [
+        "App/SettingsView.swift",
+        "App/ClaudeCodeSettingsPane.swift",
+        "App/LearningSettingsPane.swift",
+        "App/MemorySettingsSection.swift",
+        "App/AnalysisSettingsSection.swift",
+        "App/CodexAnalysisModelPicker.swift",
+        "App/CodexSettingsPane.swift",
+        "App/CodexCatalogSection.swift",
+        "App/SoundSettingsView.swift",
+        "App/SettingsHelp.swift",
+        "App/CodexPreview.swift",
+        "App/AtollApp.swift",
+        "AtollCore/Sources/AtollCore/AutonomyLevel.swift",
+        "AtollCore/Sources/AtollCore/SoundPreferences.swift",
+        "Scripts/test-ui.py",
+        "Scripts/test-settings-sabotage.py"
+      ]
     }
   ]
 }

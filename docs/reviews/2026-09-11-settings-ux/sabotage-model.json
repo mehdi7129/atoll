@@ -1,0 +1,10 @@
+[
+  {
+    "case": "settings-codex",
+    "passed": false,
+    "failures": [
+      "Choisir un modèle",
+      "choix du modèle inattendu : '' → 'example-a'"
+    ]
+  }
+]

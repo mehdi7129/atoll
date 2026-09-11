@@ -1,0 +1,38 @@
+[
+  {
+    "mutation": "model",
+    "case": "settings-analysis",
+    "detected": true,
+    "failure": "choix du modèle inattendu"
+  },
+  {
+    "mutation": "recall",
+    "case": "settings-memory-off",
+    "detected": true,
+    "failure": "rappel resté actif"
+  },
+  {
+    "mutation": "sounds",
+    "case": "settings-alerts",
+    "detected": true,
+    "failure": "Tour terminé"
+  },
+  {
+    "mutation": "missing-sound",
+    "case": "settings-alerts-missing",
+    "detected": true,
+    "failure": "écoute active pour un événement muet"
+  },
+  {
+    "mutation": "navigation",
+    "case": "settings-codex-model-shared",
+    "detected": true,
+    "failure": "raccourci : choix du modèle inaccessible"
+  },
+  {
+    "mutation": "focus",
+    "case": "settings-codex-model-focus",
+    "detected": true,
+    "failure": "le raccourci n'a pas donné le focus au modèle"
+  }
+]

@@ -1,0 +1,470 @@
+<div id="atoll-reglages" lang="fr" aria-label="Proposition des réglages Atoll">
+  <div class="at-window">
+    <div class="at-titlebar"><span class="at-lights" aria-hidden="true"><b></b><b></b><b></b></span><span>Atoll · Réglages</span><span class="at-proposal">Proposition · exemples</span></div>
+    <div class="at-tabs" role="tablist" aria-label="Onglets des réglages">
+      <button type="button" id="at-tab-general" role="tab" aria-controls="at-general" aria-selected="true"><i data-lucide="palette" aria-hidden="true"></i>Général</button>
+      <button type="button" id="at-tab-claude" role="tab" aria-controls="at-claude" aria-selected="false"><i data-lucide="terminal" aria-hidden="true"></i>Claude Code</button>
+      <button type="button" id="at-tab-codex" role="tab" aria-controls="at-codex" aria-selected="false"><i data-lucide="square-terminal" aria-hidden="true"></i>Codex</button>
+      <button type="button" id="at-tab-autonomie" role="tab" aria-controls="at-autonomie" aria-selected="false"><i data-lucide="zap" aria-hidden="true"></i>Autonomie</button>
+      <button type="button" id="at-tab-alertes" role="tab" aria-controls="at-alertes" aria-selected="false"><i data-lucide="bell" aria-hidden="true"></i>Alertes</button>
+      <button type="button" id="at-tab-apprentissage" role="tab" aria-controls="at-apprentissage" aria-selected="false"><i data-lucide="graduation-cap" aria-hidden="true"></i>Apprentissage</button>
+      <button type="button" id="at-tab-maj" role="tab" aria-controls="at-maj" aria-selected="false"><i data-lucide="refresh-cw" aria-hidden="true"></i>Mises à jour</button>
+      <button type="button" id="at-tab-apropos" role="tab" aria-controls="at-apropos" aria-selected="false"><i data-lucide="info" aria-hidden="true"></i>À propos</button>
+    </div>
+    <div class="at-content">
+      <section id="at-general" role="tabpanel" aria-labelledby="at-tab-general">
+        <h2>Apparence</h2>
+        <div class="at-group">
+          <label class="at-row"><span>Thème</span><select id="at-theme"><option value="system">Auto (système)</option><option value="light">Clair</option><option value="dark">Sombre</option></select></label>
+          <label class="at-row"><span>Couleur de Claude Code</span><select aria-label="Couleur de Claude Code"><option>Mono · Orange</option><option>Mono · Cyan</option><option>Phosphore</option><option>Ambre</option><option>Solarized</option></select></label>
+          <label class="at-row"><span>Couleur de Codex</span><select aria-label="Couleur de Codex"><option>Mono · Cyan</option><option>Mono · Orange</option><option>Phosphore</option><option>Ambre</option><option>Solarized</option></select></label>
+          <p class="at-help">La couleur de l'îlot suit le CLI choisi dans le panneau ouvert.</p>
+          <label class="at-row"><span>Effets visuels</span><input id="at-effects" type="checkbox" class="at-switch" checked></label>
+          <details><summary>Ajuster les effets</summary><div class="at-detail">
+            <label class="at-range"><span>Intensité du verre <output>50 %</output></span><input id="at-glass" type="range" min="0" max="100" step="5" value="50" data-unit=" %"></label>
+            <p class="at-help">Sur macOS 26. Une intensité plus faible améliore le contraste. « Réduire les animations » désactive l'onde.</p>
+          </div></details>
+        </div>
+        <h2>Taille de l'îlot</h2>
+        <div class="at-group">
+          <label class="at-row"><span>Écran du MacBook</span><select aria-label="Taille sur le MacBook"><option>Petit</option><option selected>Moyen</option><option>Large</option></select></label>
+          <label class="at-row"><span>Écran externe</span><select aria-label="Taille sur l’écran externe"><option>Petit</option><option selected>Moyen</option><option>Large</option></select></label>
+          <p class="at-help">La largeur du compact se règle séparément pour chaque écran.</p>
+        </div>
+        <h2>Comportement</h2>
+        <div class="at-group">
+          <label class="at-range"><span>Ouverture au survol <output>150 ms</output></span><input type="range" min="0" max="500" step="50" value="150" data-unit=" ms"></label>
+          <label class="at-row"><span>Lancer Atoll au démarrage</span><input type="checkbox" class="at-switch" checked></label>
+        </div>
+      </section>
+
+      <section id="at-claude" role="tabpanel" aria-labelledby="at-tab-claude" hidden>
+        <h2>Connexion à Claude Code</h2>
+        <div class="at-group">
+          <div class="at-row"><span>Intégration Atoll</span><span>Installée</span></div>
+          <p class="at-help">Les hooks relient tes sessions à l'îlot. Après une installation, reprends tes sessions pour activer le suivi.</p>
+          <details><summary>Dépannage de la connexion</summary><div class="at-detail">
+            <div class="at-row"><span>Serveur local d'Atoll</span><span>Actif</span></div>
+            <p class="at-help">Cet état décrit la connexion locale d'Atoll. Il ne prouve pas qu'un événement Claude vient d'arriver.</p>
+            <button type="button" data-action="claude-remove">Retirer l'intégration Claude Code…</button>
+            <p class="at-help">Les skills appris pour Claude sont archivés et les anciens sons Claude restaurés. Réinstaller l'intégration ne réinstalle pas ces skills.</p>
+          </div></details>
+        </div>
+        <h2>Quota</h2>
+        <div class="at-group">
+          <label class="at-row"><span>Afficher le détail par modèle</span><input type="checkbox" class="at-switch"></label>
+          <p class="at-help">Complète les jauges quand ce détail est disponible. macOS peut demander l'accès au trousseau.</p>
+        </div>
+        <div class="at-group at-section-gap">
+          <details><summary>Plugins Claude Code</summary><div class="at-detail">
+            <div class="at-row"><span id="at-claude-plugins-count">Inventaire non chargé</span><button type="button" data-action="claude-refresh">Actualiser</button></div>
+            <div id="at-claude-plugins" hidden>
+              <div class="at-row"><div><span>Plugin d'exemple</span><small id="at-plugin-cost">Activé · catalogue de démonstration</small></div><button type="button" data-action="plugin-disable">Désactiver</button></div>
+              <button type="button" data-action="plugin-cost">Estimer le contexte des plugins</button>
+              <p class="at-help">Les erreurs de chargement et doublons restent signalés. Un plugin désactivé reste installé.</p>
+            </div>
+            <details><summary>Trouver un plugin</summary><div class="at-detail">
+              <label class="at-stack">Ton besoin<input id="at-plugin-need" type="text" placeholder="Par exemple : relire une interface" autocomplete="off"></label>
+              <div class="at-actions"><button type="button" data-action="plugin-search">Chercher dans le catalogue</button><button type="button" data-action="plugin-ai">Affiner avec l'IA…</button></div>
+              <p class="at-help">Catalogue Claude Code. L'option IA utilise l'abonnement choisi dans Apprentissage et transmet ton besoin avec les descriptions du catalogue.</p>
+              <div id="at-plugin-result" hidden><div class="at-row"><div>Plugin d'exemple<small>Résultat de démonstration</small></div><button type="button" data-action="plugin-install">Installer…</button></div></div>
+            </div></details>
+          </div></details>
+        </div>
+        <div class="at-group at-section-gap">
+          <div class="at-row"><div>Analyses et mémoire<small>Les réglages communs aux deux CLI.</small></div><button type="button" data-goto="apprentissage">Ouvrir Apprentissage…</button></div>
+        </div>
+      </section>
+
+      <section id="at-codex" role="tabpanel" aria-labelledby="at-tab-codex" hidden>
+        <h2>Connexion à Codex</h2>
+        <div class="at-group">
+          <div class="at-row"><span>Suivi des sessions</span><span id="at-codex-state">Événement reçu</span></div>
+          <p id="at-codex-help" class="at-help">Tes sessions apparaissent dans l'îlot.</p>
+          <div id="at-codex-setup" class="at-actions" hidden><button type="button" data-action="hooks-command">Afficher /hooks</button></div>
+          <div id="at-codex-install" class="at-actions" hidden><button type="button" data-action="codex-install">Installer l'intégration Codex</button></div>
+          <details id="at-codex-diagnostic"><summary>Vérifier la connexion</summary><div class="at-detail">
+            <div class="at-row"><div>Projet à vérifier<small class="at-project-name">Projet exemple</small></div><button type="button" data-action="choose-project">Choisir le dossier…</button></div>
+            <p class="at-help">Le dossier où tu travailles. Il sert au diagnostic et au catalogue ; les autres sessions restent suivies.</p>
+            <button type="button" data-action="check-hooks">Vérifier les hooks</button>
+            <p id="at-hook-result" class="at-help" aria-live="polite">Vérification non lancée.</p>
+            <div class="at-row"><span>Dernier événement reçu</span><span>À l'instant · exemple</span></div>
+            <p class="at-help">Si Codex était déjà ouvert lors de l'installation, reprends la session avec <code>codex resume</code>.</p>
+          </div></details>
+        </div>
+        <h2>Quota de l'abonnement</h2>
+        <div class="at-group">
+          <label class="at-row"><span>Afficher le quota Codex</span><input id="at-quota" type="checkbox" class="at-switch" checked></label>
+          <p class="at-help">Actualisé toutes les 2 minutes, sans générer de message.</p>
+          <div id="at-quota-values"><div class="at-row"><span>Codex · 7 jours</span><span>18 % utilisés</span></div><div class="at-row"><span>Remise à zéro</span><span>Jeudi · 13:44</span></div><button type="button" data-action="quota-refresh">Actualiser le quota</button></div>
+          <p class="at-help">Le contexte de chaque conversation se trouve dans son détail, depuis l'îlot.</p>
+        </div>
+        <h2>Analyses d'Atoll</h2>
+        <div class="at-group">
+          <div class="at-row"><span>Moteur</span><span id="at-analysis-engine-summary">Codex CLI</span></div>
+          <div class="at-row"><div>Modèle<small id="at-model-summary">À choisir dans Apprentissage</small></div><button id="at-model-shortcut" type="button" data-goto="apprentissage" data-focus="at-codex-model">Choisir le modèle…</button></div>
+        </div>
+        <div class="at-group at-section-gap">
+          <details><summary>Skills et plugins Codex</summary><div class="at-detail">
+            <div class="at-row"><div>Catalogue du projet<small class="at-project-name">Projet exemple</small></div><button type="button" data-action="choose-project">Changer de projet…</button></div>
+            <button type="button" data-action="codex-catalog">Lire le catalogue</button>
+            <p id="at-catalog-status" class="at-help">Catalogue non chargé.</p>
+            <div id="at-catalog-results" hidden>
+              <label class="at-stack">Rechercher dans la liste<input id="at-catalog-query" type="search" placeholder="Nom ou description"></label>
+              <details class="at-catalog-entry"><summary>atoll-recall · activé</summary><div class="at-detail"><p class="at-help">Skill utilisateur · retrouve des souvenirs.</p><code>~/.codex/skills/atoll-recall/SKILL.md</code></div></details>
+              <details class="at-catalog-entry"><summary>Plugin d'exemple · installé et activé</summary><div class="at-detail"><p class="at-help">Marketplace locale · aucune restriction dans cet exemple.</p></div></details>
+            </div>
+            <p class="at-help">L'installation et l'activation des plugins se gèrent dans Codex avec <code>/plugins</code>.</p>
+            <button type="button" data-goto="apprentissage" data-focus="at-memory-heading">Voir la mémoire commune…</button>
+          </div></details>
+        </div>
+        <div class="at-group at-section-gap">
+          <details><summary>Dépannage</summary><div class="at-detail">
+            <p class="at-help">Laisse les chemins vides pour la détection automatique.</p>
+            <label class="at-stack">Dossier de configuration · CODEX_HOME<input type="text" placeholder="Détection automatique"></label>
+            <button type="button" data-action="apply-home">Appliquer le dossier</button>
+            <details><summary>Chemins utilisés</summary><div class="at-detail"><p class="at-help">Dossier : <code>~/.codex</code><br>Hooks : <code>~/.codex/hooks.json</code></p></div></details>
+            <label class="at-stack">Exécutable Codex<input type="text" placeholder="Détection automatique"></label>
+            <button type="button" data-action="apply-executable">Appliquer l'exécutable</button>
+            <div class="at-actions"><button type="button" data-action="codex-repair">Réparer l'intégration</button><button type="button" data-action="codex-remove">Retirer l'intégration</button></div>
+            <p class="at-help">Réparer réinstalle les définitions Atoll. Retirer archive aussi les skills appris pour Codex ; leur réinstallation n'est pas automatique.</p>
+            <p class="at-help">Atoll sauvegarde ses modifications et conserve les autres hooks. Changer de dossier conserve l'intégration de l'ancien. La confiance se gère dans Codex.</p>
+          </div></details>
+        </div>
+      </section>
+
+      <section id="at-autonomie" role="tabpanel" aria-labelledby="at-tab-autonomie" hidden>
+        <h2>Autonomie de Claude Code</h2>
+        <div class="at-group">
+          <fieldset class="at-segment"><legend>Niveau</legend><label><input type="radio" name="at-autonomy" value="manual" checked><span>Manuel</span></label><label><input type="radio" name="at-autonomy" value="rockstar"><span>Rockstar</span></label></fieldset>
+          <p id="at-autonomy-summary" class="at-help">Atoll n'approuve aucune demande automatiquement.</p>
+          <div id="at-rockstar-status" hidden><p class="at-warning">Rockstar est actif pour Claude Code. Les demandes sont approuvées automatiquement et les règles deny sont suspendues.</p><div class="at-row"><span>Auto-approbations</span><span>3 · exemple</span></div></div>
+          <details><summary>Ce que change Rockstar</summary><div class="at-detail">
+            <p class="at-help">Atoll approuve les autorisations Claude, y compris destructrices, et répond aux questions et aux plans.</p>
+            <p class="at-help">Les règles deny de Claude sont mises de côté jusqu'à la sortie de ce mode, même si Atoll est fermé. Les sessions déjà ouvertes doivent être reprises pour relire ces règles. Tes autres hooks bloquants restent actifs.</p>
+          </div></details>
+        </div>
+        <h2>Codex</h2><div class="at-group"><p class="at-help">Les autorisations de Codex se règlent dans son terminal. Rockstar ne s'y applique pas.</p></div>
+      </section>
+
+      <section id="at-alertes" role="tabpanel" aria-labelledby="at-tab-alertes" hidden>
+        <h2>Sons d'Atoll</h2>
+        <div class="at-group"><label class="at-row"><span>Jouer des sons</span><input id="at-sounds" type="checkbox" class="at-switch" checked></label><p class="at-help">Pour Claude Code et Codex. Un son quand une décision t'attend, un autre quand le CLI termine sa réponse.</p></div>
+        <fieldset class="at-sound-group"><legend>Décision attendue</legend><div class="at-group">
+          <label class="at-row"><span>Son</span><select class="at-sound-choice"><option>Glass</option><option>Ping</option><option>Silencieux</option></select></label>
+          <div class="at-volume"><label class="at-range"><span>Volume <output>10 %</output></span><input type="range" min="0" max="100" step="5" value="10" data-unit=" %"></label><button type="button" class="at-listen" data-action="listen">Écouter</button></div>
+          <button type="button" data-action="import-sound">Importer un son…</button>
+          <p class="at-help">Autorisations des deux CLI ; questions et plans pour Claude Code.</p>
+        </div></fieldset>
+        <fieldset class="at-sound-group"><legend>Tour terminé</legend><div class="at-group">
+          <label class="at-row"><span>Son</span><select class="at-sound-choice"><option>Pop</option><option>Glass</option><option>Silencieux</option></select></label>
+          <div class="at-volume"><label class="at-range"><span>Volume <output>10 %</output></span><input type="range" min="0" max="100" step="5" value="10" data-unit=" %"></label><button type="button" class="at-listen" data-action="listen">Écouter</button></div>
+          <button type="button" data-action="import-sound">Importer un son…</button>
+          <p class="at-help">Quand Claude Code ou Codex termine sa réponse.</p>
+        </div></fieldset>
+        <div id="at-legacy-sounds" class="at-section-gap">
+          <h2>Anciens sons de Claude Code</h2><div class="at-group">
+            <p id="at-legacy-status" class="at-help">Tes anciens hooks sonores Claude sont conservés par Atoll pour éviter les doublons.</p>
+            <div class="at-actions"><button id="at-legacy-restore" type="button" data-action="restore-sounds">Restaurer les anciens sons Claude</button></div>
+            <details id="at-legacy-detail"><summary>Détails de la reprise</summary><div class="at-detail">
+              <p class="at-help">Ce bloc concerne uniquement les sons autrefois configurés dans Claude Code. Les sons d'Atoll au-dessus servent aux deux CLI.</p>
+              <div id="at-legacy-detected" hidden><p class="at-help">2 hooks sonores détectés · exemples.</p><code>PermissionRequest · afplay alerte.aiff<br>Stop · afplay fin.aiff</code><div class="at-actions"><button type="button" data-action="adopt-sounds">Confier ces sons à Atoll</button></div></div>
+              <p id="at-legacy-storage" class="at-help">Ils sont sauvegardés à l'identique, puis restaurés sur demande ou au retrait de l'intégration Claude Code.</p>
+              <p id="at-legacy-error" class="at-warning" hidden>La sauvegarde est illisible. Atoll la conserve ; une récupération manuelle est nécessaire.</p>
+            </div></details>
+          </div>
+        </div>
+      </section>
+
+      <section id="at-apprentissage" role="tabpanel" aria-labelledby="at-tab-apprentissage" hidden>
+        <h2>Analyses d'Atoll</h2>
+        <div class="at-group">
+          <label class="at-row"><span>Moteur</span><select id="at-engine"><option value="codex">Codex CLI</option><option value="claude">Claude Code</option></select></label>
+          <p class="at-help">L'abonnement utilisé pour les bilans, le rangement des notes et la recherche IA de plugins.</p>
+          <div id="at-codex-model-group">
+            <div class="at-row"><label for="at-codex-model">Modèle Codex</label><div class="at-inline"><select id="at-codex-model"><option value="">Choisir un modèle…</option><option value="example-a">Modèle d'exemple A</option><option value="example-b">Modèle d'exemple B</option><option value="obsolete" hidden>Ancien modèle · indisponible</option></select><button type="button" data-action="refresh-models" aria-label="Actualiser les modèles Codex"><i data-lucide="refresh-cw" aria-hidden="true"></i><span class="at-sr">Actualiser</span></button></div></div>
+            <p id="at-model-help" class="at-help">Choisis le modèle avant les prochaines analyses Codex.</p>
+          </div>
+          <div id="at-claude-model-group" hidden>
+            <label class="at-row"><span>Claude · bilan de session</span><select aria-label="Modèle Claude pour les bilans"><option>Haiku</option><option selected>Sonnet</option><option>Opus</option><option>Fable</option></select></label>
+            <label class="at-row"><span>Claude · rangement des notes</span><select aria-label="Modèle Claude pour le rangement"><option>Haiku</option><option selected>Sonnet</option><option>Opus</option><option>Fable</option></select></label>
+            <label class="at-row"><span>Claude · recherche de plugins</span><select aria-label="Modèle Claude pour la recherche"><option selected>Haiku</option><option>Sonnet</option><option>Opus</option><option>Fable</option></select></label>
+          </div>
+          <details><summary>Limites et second abonnement</summary><div class="at-detail">
+            <label class="at-row"><span>Analyses maximum par 5 h</span><input type="number" min="1" max="10" value="2" aria-label="Analyses maximum par 5 heures"></label>
+            <p class="at-help">Par abonnement, pour l'ensemble des analyses d'Atoll. Cette durée est une limite interne.</p>
+            <label class="at-row"><span>Quota utilisé maximum</span><select aria-label="Quota utilisé maximum"><option>50 %</option><option>60 %</option><option selected>70 %</option><option>80 %</option></select></label>
+            <label class="at-row"><span>Quota inconnu : une tentative par 5 h</span><input type="checkbox" class="at-switch" checked></label>
+            <label class="at-row"><span>Utiliser le second abonnement si nécessaire</span><input id="at-fallback" type="checkbox" class="at-switch"></label>
+            <p class="at-help">Seulement si le premier est épuisé et si les quotas des deux comptes sont connus. Les conversations dans tes terminaux ne basculent pas.</p>
+          </div></details>
+        </div>
+        <h2>Bilans de session</h2>
+        <div class="at-group"><label class="at-row"><span>Apprendre des sessions terminées</span><input type="checkbox" class="at-switch" checked></label><p class="at-help">Après une session importante, Atoll peut créer des notes et proposer des skills. Désactiver arrête ces bilans ; le rangement des notes se règle séparément.</p></div>
+        <h2 id="at-memory-heading">Mémoire commune</h2>
+        <div class="at-group">
+          <label class="at-row"><span>Indexer les conversations</span><input id="at-indexing" type="checkbox" class="at-switch" checked></label>
+          <p id="at-index-status" class="at-help">Indexation active · Claude Code et Codex</p>
+          <p class="at-help">Recherche locale avec <code>atoll-recall</code>. Les extraits utilisés dans une conversation sont ensuite traités par son fournisseur.</p>
+          <details><summary>Rappel automatique · Claude Code</summary><div class="at-detail">
+            <label class="at-row"><span>Joindre les souvenirs pertinents aux messages</span><input id="at-recall" type="checkbox" class="at-switch"></label>
+            <div id="at-recall-options" hidden><label class="at-row"><span>Extraits maximum</span><select aria-label="Nombre maximum de souvenirs"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option></select></label><label class="at-row"><span>Limiter au projet courant</span><input type="checkbox" class="at-switch" checked></label></div>
+            <p class="at-help">Pour Claude Code uniquement. Dans Codex, les souvenirs se retrouvent à ta demande.</p>
+          </div></details>
+          <details><summary>État et entretien de l'index</summary><div class="at-detail">
+            <div class="at-row"><span>Index local</span><span>120 sessions · exemple</span></div>
+            <button id="at-rebuild" type="button" data-action="rebuild">Reconstruire l'index…</button>
+            <p class="at-help">Les messages dont le transcript source n'existe plus ne pourront pas être reconstruits.</p>
+          </div></details>
+        </div>
+        <h2>Notes et rangement</h2>
+        <div class="at-group">
+          <label class="at-row"><span>Ranger les notes chaque semaine</span><input type="checkbox" class="at-switch"></label>
+          <div class="at-row"><div>Rangement manuel<small id="at-curation-status">8 notes disponibles · exemple</small></div><button id="at-curate" type="button" data-action="curate">Ranger maintenant</button></div>
+          <p class="at-help">Fusionne les doublons et signale les contradictions, en conservant une archive. Utilise ton abonnement.</p>
+          <details><summary>Voir les notes</summary><div class="at-detail">
+            <div class="at-note">Conserver les préférences lors d'un déplacement<small>Projet exemple · aujourd'hui</small></div>
+            <div class="at-note">Vérifier le rendu sur un écran externe<small>Projet exemple · hier</small></div>
+            <div class="at-row"><span>Volume</span><span>4 200 caractères · exemple</span></div>
+            <button type="button" data-action="finder">Ouvrir les notes dans le Finder</button>
+          </div></details>
+        </div>
+        <h2>Skills</h2>
+        <div class="at-group">
+          <label class="at-row"><span>Proposer les skills pour</span><select aria-label="Destination des skills"><option>Le CLI de la session source</option><option>Claude Code</option><option>Codex CLI</option></select></label>
+          <p class="at-help">La destination des skills est indépendante du moteur d'analyse.</p>
+          <div class="at-row"><div>1 proposition à revoir<small>Skill de démonstration</small></div><button type="button" data-action="review-skill">Revoir…</button></div>
+          <details><summary>Skills appris · 2</summary><div class="at-detail">
+            <div class="at-row"><div>atoll-exemple-relecture<small>Codex · usage non mesuré</small></div><button type="button" data-action="archive-skill">Archiver</button></div>
+            <div class="at-row"><div>atoll-exemple-recette<small>Claude Code · 2 usages observés · modifié</small></div><button type="button" data-action="archive-skill">Archiver</button></div>
+          </div></details>
+        </div>
+        <div class="at-group at-section-gap"><details><summary>Historique des analyses</summary><div class="at-detail"><div class="at-note">Bilan ignoré · session trop courte<small>Aujourd'hui · exemple</small></div><div class="at-note">Bilan terminé · 2 notes proposées<small>Hier · exemple</small></div><p class="at-help">Chaque analyse lancée ou ignorée garde son motif.</p></div></details></div>
+      </section>
+
+      <section id="at-maj" role="tabpanel" aria-labelledby="at-tab-maj" hidden>
+        <h2>Mises à jour d'Atoll</h2>
+        <div class="at-group">
+          <div class="at-row"><span>Version installée</span><span>0.18.1 · build 36</span></div>
+          <div class="at-row"><span id="at-update-status">Vérification non lancée</span><button type="button" data-action="updates">Vérifier maintenant</button></div>
+          <label class="at-row"><span>Vérifier automatiquement</span><input type="checkbox" class="at-switch"></label>
+          <p class="at-help">Vérifie chaque jour si une version est disponible. Atoll te le signale discrètement dans son menu.</p>
+          <p class="at-help">Désactiver arrête les vérifications automatiques de mises à jour. Les autres fonctions gardent leurs propres réglages.</p>
+        </div>
+      </section>
+      <section id="at-apropos" role="tabpanel" aria-labelledby="at-tab-apropos" hidden>
+        <h2>Atoll</h2><div class="at-group"><p class="at-help">La Dynamic Island pour Claude Code et Codex CLI dans le terminal.</p><div class="at-row"><span>Version</span><span>0.18.1 · build 36</span></div><div class="at-row"><span>Licence</span><span>GPL-3.0-or-later</span></div></div>
+      </section>
+    </div>
+    <div class="at-footer" aria-live="polite" id="at-feedback">Maquette interactive · aucune modification de tes réglages</div>
+  </div>
+  <dialog id="at-dialog" aria-labelledby="at-dialog-title"><h2 id="at-dialog-title"></h2><p id="at-dialog-copy"></p><div class="at-actions"><button type="button" id="at-dialog-cancel">Fermer</button><button type="button" id="at-dialog-confirm" hidden>Confirmer dans la maquette</button></div></dialog>
+</div>
+<style>
+#atoll-reglages{--at-bg:light-dark(#f4f4f4,#202020);--at-group:light-dark(#fff,#292929);--at-fg:light-dark(#222,#e6e6e6);--at-muted:light-dark(#626262,#b1b1b1);--at-line:light-dark(#dedede,#3b3b3b);--at-field:light-dark(#f6f6f6,#202020);--at-button:light-dark(#e9e9e9,#3c3c3c);--at-accent:light-dark(#006edb,#318fff);--at-warn:light-dark(#964000,#ffc07c);--at-gap:24px;color:var(--at-fg);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:14px;line-height:1.5;width:100%;color-scheme:inherit}
+#atoll-reglages{max-width:1024px;margin-inline:auto}
+#atoll-reglages *{box-sizing:border-box}
+#atoll-reglages [hidden]{display:none!important}
+#atoll-reglages .at-window{background:var(--at-bg);border:1px solid var(--at-line);border-radius:16px;overflow:clip}
+#atoll-reglages .at-titlebar{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:40px;padding:9px 16px;color:var(--at-muted);font-size:12px}
+#atoll-reglages .at-titlebar>span:nth-child(2){font-weight:500}
+#atoll-reglages .at-proposal{font-size:11px}
+#atoll-reglages .at-lights{display:flex;gap:7px;min-width:68px}
+#atoll-reglages .at-lights b{width:10px;height:10px;border-radius:50%;background:#ff6058}
+#atoll-reglages .at-lights b:nth-child(2){background:#ffbd2e}
+#atoll-reglages .at-lights b:nth-child(3){background:#28c840}
+#atoll-reglages .at-tabs{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:3px;padding:0 16px 12px;border-bottom:1px solid var(--at-line)}
+#atoll-reglages button,#atoll-reglages input,#atoll-reglages select{font:inherit;color:inherit}
+#atoll-reglages button{border:1px solid transparent;border-radius:6px;padding:5px 11px;background:var(--at-button);font-weight:500;cursor:pointer;max-width:100%;white-space:normal}
+#atoll-reglages button:disabled{cursor:default;opacity:.45}
+#atoll-reglages .at-tabs button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;background:transparent;color:var(--at-muted);font-size:11px;font-weight:400;padding:6px 2px;min-height:52px;line-height:1.25}
+#atoll-reglages .at-tabs button[aria-selected="true"]{background:var(--at-button);color:var(--at-accent)}
+#atoll-reglages .at-tabs svg{width:22px;height:22px}
+#atoll-reglages .at-content{padding:0 24px 28px;max-width:784px;margin:auto;min-height:560px}
+#atoll-reglages h2,#atoll-reglages .at-sound-group>legend{font-size:14px;font-weight:500;margin:var(--at-gap) 9px 9px;line-height:1.4}
+#atoll-reglages .at-group{border-radius:11px;background:var(--at-group);padding:0 14px}
+#atoll-reglages .at-group>button{margin:10px 0}
+#atoll-reglages .at-section-gap{margin-top:18px}
+#atoll-reglages .at-row{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:12px 0;min-height:48px}
+#atoll-reglages .at-row+.at-row,#atoll-reglages .at-row+details,#atoll-reglages .at-help+.at-row,#atoll-reglages .at-help+details,#atoll-reglages details+details,#atoll-reglages .at-range+.at-row{border-top:1px solid var(--at-line)}
+#atoll-reglages .at-row>span:first-child,#atoll-reglages .at-row>div:first-child{min-width:0;overflow-wrap:anywhere}
+#atoll-reglages small{display:block;color:var(--at-muted);font-size:12px;font-weight:400;line-height:1.5;margin-top:3px}
+#atoll-reglages .at-help{margin:0;padding:8px 0 12px;color:var(--at-muted);font-size:13px;line-height:1.55;overflow-wrap:anywhere}
+#atoll-reglages .at-group>.at-help:first-child{padding-top:14px}
+#atoll-reglages input[type=text],#atoll-reglages input[type=search],#atoll-reglages input[type=number],#atoll-reglages select{background:var(--at-field);border:1px solid var(--at-line);border-radius:6px;min-height:30px;padding:4px 9px;max-width:100%;min-width:0}
+#atoll-reglages select{max-width:53%;text-overflow:ellipsis}
+#atoll-reglages input[type=number]{width:70px}
+#atoll-reglages input[type=range]{width:100%;min-width:80px;accent-color:var(--at-accent);margin:5px 0}
+#atoll-reglages input[type=range]:disabled{opacity:.45}
+#atoll-reglages .at-switch{appearance:none;position:relative;flex:0 0 34px;width:34px;height:20px;border-radius:11px;background:var(--at-line);cursor:pointer;margin:0}
+#atoll-reglages .at-switch:after{content:"";position:absolute;left:3px;top:3px;width:14px;height:14px;border-radius:50%;background:light-dark(#fff,#e8e8e8)}
+#atoll-reglages .at-switch:checked{background:var(--at-accent)}
+#atoll-reglages .at-switch:checked:after{left:17px}
+#atoll-reglages .at-switch:disabled{opacity:.45;cursor:default}
+#atoll-reglages .at-range{display:block;padding:12px 0}
+#atoll-reglages .at-range>span{display:flex;justify-content:space-between;gap:14px}
+#atoll-reglages output{color:var(--at-muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+#atoll-reglages details summary{padding:13px 0;cursor:pointer;list-style-position:inside;font-weight:400}
+#atoll-reglages details summary::marker{color:var(--at-muted)}
+#atoll-reglages .at-detail{padding:0 0 10px 17px}
+#atoll-reglages .at-detail>button{margin:7px 0}
+#atoll-reglages .at-stack{display:flex;flex-direction:column;gap:7px;padding:9px 0}
+#atoll-reglages .at-actions{display:flex;gap:9px;align-items:center;flex-wrap:wrap;padding:8px 0 12px}
+#atoll-reglages .at-inline{display:flex;align-items:center;gap:7px;max-width:64%;min-width:0}
+#atoll-reglages .at-inline select{max-width:100%;flex:1}
+#atoll-reglages .at-inline button{display:flex;align-items:center;padding:5px}
+#atoll-reglages .at-inline svg{width:17px;height:17px}
+#atoll-reglages .at-sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+#atoll-reglages .at-volume{display:flex;align-items:center;gap:14px}
+#atoll-reglages .at-volume .at-range{flex:1}
+#atoll-reglages .at-sound-group{border:0;padding:0;margin:var(--at-gap) 0 0;min-width:0}
+#atoll-reglages .at-sound-group>legend{padding:0;float:none;margin:0 9px 9px}
+#atoll-reglages .at-sound-group:disabled .at-group{opacity:.5}
+#atoll-reglages .at-segment{border:0;margin:0;padding:14px 0;display:flex;align-items:center;gap:6px;min-width:0;flex-wrap:wrap}
+#atoll-reglages .at-segment legend{float:left;margin-right:auto;padding:4px 0;font-size:14px}
+#atoll-reglages .at-segment label{padding:4px 8px;display:flex;gap:5px;align-items:center;border-radius:6px;background:var(--at-button)}
+#atoll-reglages .at-segment input{accent-color:var(--at-accent)}
+#atoll-reglages .at-warning{color:var(--at-warn);font-size:13px;padding:8px 0 12px;margin:0;line-height:1.55}
+#atoll-reglages code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:inherit;overflow-wrap:anywhere;background:transparent}
+#atoll-reglages .at-note{padding:9px 0;font-size:13px;overflow-wrap:anywhere}
+#atoll-reglages .at-footer{font-size:11px;color:var(--at-muted);padding:10px 18px;border-top:1px solid var(--at-line)}
+#atoll-reglages dialog{background:var(--at-group);color:var(--at-fg);border:1px solid var(--at-line);border-radius:14px;max-width:min(440px,calc(100% - 32px));padding:20px;font:inherit}
+#atoll-reglages dialog h2{margin:0 0 12px;font-size:16px}
+#atoll-reglages dialog p{font-size:13px;line-height:1.6;white-space:pre-line}
+#atoll-reglages dialog::backdrop{background:light-dark(rgb(0 0 0 / .25),rgb(0 0 0 / .5))}
+@media(max-width:720px){#atoll-reglages .at-tabs{grid-template-columns:repeat(4,minmax(0,1fr));gap:4px}#atoll-reglages .at-content{padding:0 15px 22px}#atoll-reglages .at-titlebar{flex-wrap:wrap;gap:5px}#atoll-reglages .at-proposal{margin-left:auto}}
+@media(max-width:420px){#atoll-reglages .at-row{gap:9px;flex-wrap:wrap}#atoll-reglages .at-row select{max-width:100%}#atoll-reglages .at-row>.at-inline{max-width:100%;width:100%}#atoll-reglages .at-tabs{padding:0 8px 10px;grid-template-columns:repeat(2,minmax(0,1fr))}#atoll-reglages .at-content{padding:0 10px 18px}#atoll-reglages .at-group{padding:0 11px}#atoll-reglages .at-proposal{flex-basis:100%;text-align:right}#atoll-reglages .at-volume{flex-wrap:wrap}#atoll-reglages .at-detail{padding-left:9px}}
+@media(pointer:coarse){#atoll-reglages button,#atoll-reglages select{min-height:44px}#atoll-reglages .at-row{min-height:48px}}
+</style>
+<script>
+(() => {
+  const root = document.getElementById('atoll-reglages');
+  const $ = id => root.querySelector('#' + id);
+  const all = selector => [...root.querySelectorAll(selector)];
+  const scenario = { details: false, connection: 'active', legacy: 'managed', curation: 'ready', model: 'unset' };
+  let appliedModelScenario = null;
+  const feedback = text => { $('at-feedback').textContent = text + ' · simulation uniquement'; };
+  const showTab = name => {
+    all('[role=tab]').forEach(tab => { const active = tab.id === 'at-tab-' + name; tab.setAttribute('aria-selected', String(active)); });
+    all('[role=tabpanel]').forEach(panel => { panel.hidden = panel.id !== 'at-' + name; });
+  };
+  all('[role=tab]').forEach((button, index, tabs) => {
+    button.addEventListener('click', () => showTab(button.id.replace('at-tab-', '')));
+    button.addEventListener('keydown', event => {
+      const target = event.key === 'ArrowRight' ? tabs[(index + 1) % tabs.length] : event.key === 'ArrowLeft' ? tabs[(index + tabs.length - 1) % tabs.length] : event.key === 'Home' ? tabs[0] : event.key === 'End' ? tabs[tabs.length - 1] : null;
+      if (target) { event.preventDefault(); target.click(); target.focus(); }
+    });
+  });
+  all('[data-goto]').forEach(button => button.addEventListener('click', () => {
+    showTab(button.dataset.goto);
+    const target = button.dataset.focus && $(button.dataset.focus);
+    if (target) { target.scrollIntoView({ block: 'center', behavior: 'instant' }); if (target.matches('select,input,button')) target.focus(); }
+  }));
+  all('input[type=range]').forEach(input => {
+    input.setAttribute('aria-label', input.closest('label').querySelector('span').firstChild.textContent.trim());
+    input.addEventListener('input', () => { input.closest('label').querySelector('output').textContent = input.value + input.dataset.unit; });
+  });
+  $('at-theme').addEventListener('change', () => { root.style.colorScheme = $('at-theme').value === 'system' ? 'inherit' : $('at-theme').value; });
+  $('at-effects').addEventListener('change', () => { $('at-glass').disabled = !$('at-effects').checked; });
+  $('at-quota').addEventListener('change', () => { $('at-quota-values').hidden = !$('at-quota').checked; });
+  const updateModels = () => {
+    const codex = $('at-engine').value === 'codex', fallback = $('at-fallback').checked;
+    $('at-codex-model-group').hidden = !(codex || fallback);
+    $('at-claude-model-group').hidden = !(!codex || fallback);
+    $('at-analysis-engine-summary').textContent = codex ? 'Codex CLI' : 'Claude Code';
+    const value = $('at-codex-model').value;
+    const required = (codex || fallback) && !value;
+    $('at-model-summary').textContent = !(codex || fallback) ? 'Les analyses utilisent Claude Code' : value ? $('at-codex-model').selectedOptions[0].textContent : 'À choisir dans Apprentissage';
+    $('at-model-shortcut').textContent = required ? 'Choisir le modèle…' : 'Régler les analyses…';
+    $('at-model-help').textContent = scenario.model === 'offline' ? 'Catalogue indisponible. Le choix enregistré est conservé ; réessaie la lecture.' : value === 'obsolete' ? 'Ce modèle n’est plus proposé. Choisis-en un autre pour les prochaines analyses.' : value ? 'Modèle choisi pour les analyses d’Atoll avec Codex.' : 'Choisis le modèle avant les prochaines analyses Codex.';
+    $('at-model-help').className = value === 'obsolete' || scenario.model === 'offline' ? 'at-warning' : 'at-help';
+  };
+  $('at-engine').addEventListener('change', updateModels);
+  $('at-fallback').addEventListener('change', updateModels);
+  $('at-codex-model').addEventListener('change', () => { scenario.model = $('at-codex-model').value ? 'chosen' : 'unset'; appliedModelScenario = scenario.model; updateModels(); });
+  $('at-indexing').addEventListener('change', () => {
+    const enabled = $('at-indexing').checked;
+    $('at-index-status').textContent = enabled ? 'Indexation active · Claude Code et Codex' : 'Indexation arrêtée pour les deux CLI. Les données déjà indexées sont conservées.';
+    $('at-recall').disabled = !enabled; $('at-rebuild').disabled = !enabled;
+    if (!enabled) { $('at-recall').checked = false; $('at-recall-options').hidden = true; }
+  });
+  $('at-recall').addEventListener('change', () => { $('at-recall-options').hidden = !$('at-recall').checked; });
+  $('at-sounds').addEventListener('change', () => { all('.at-sound-group').forEach(group => { group.disabled = !$('at-sounds').checked; }); });
+  all('.at-sound-choice').forEach(select => select.addEventListener('change', () => { select.closest('fieldset').querySelector('.at-listen').disabled = select.value === 'Silencieux'; }));
+  $('at-catalog-query').addEventListener('input', () => { const query = $('at-catalog-query').value.toLocaleLowerCase(); all('.at-catalog-entry').forEach(entry => { entry.hidden = !entry.textContent.toLocaleLowerCase().includes(query); }); });
+  let confirmAction = null;
+  function dialog(title, copy, action) {
+    $('at-dialog-title').textContent = title; $('at-dialog-copy').textContent = copy;
+    confirmAction = action || null; $('at-dialog-confirm').hidden = !action;
+    $('at-dialog-cancel').textContent = action ? 'Annuler' : 'Fermer'; $('at-dialog').showModal();
+  }
+  $('at-dialog-cancel').addEventListener('click', () => { $('at-dialog').close(); confirmAction = null; });
+  $('at-dialog-confirm').addEventListener('click', () => { const action = confirmAction; $('at-dialog').close(); confirmAction = null; if (action) action(); });
+  all('input[name=at-autonomy]').forEach(radio => radio.addEventListener('change', () => {
+    if (radio.value === 'rockstar') {
+      root.querySelector('input[name=at-autonomy][value=manual]').checked = true;
+      dialog('Activer Rockstar pour Claude Code ?', 'Atoll approuvera les demandes, y compris destructrices, et répondra aux questions et aux plans. Les règles deny de Claude seront suspendues jusqu’à la sortie de ce mode.\n\nLes sessions déjà ouvertes doivent être reprises pour relire ces règles. Codex n’est pas concerné.', () => {
+        radio.checked = true; $('at-rockstar-status').hidden = false; $('at-autonomy-summary').textContent = 'Rockstar · Claude Code uniquement'; feedback('Rockstar activé dans la maquette');
+      });
+    } else { $('at-rockstar-status').hidden = true; $('at-autonomy-summary').textContent = 'Atoll n’approuve aucune demande automatiquement.'; }
+  }));
+  function renderScenario() {
+    all('details').forEach(detail => { detail.open = scenario.details; });
+    const states = { active: ['Événement reçu', 'Tes sessions apparaissent dans l’îlot.'], waiting: ['En attente d’une session', 'Dans Codex, ouvre /hooks, approuve les hooks Atoll puis envoie un message.'], absent: ['À installer', 'Relie Codex à Atoll pour suivre tes sessions et leurs autorisations.'] };
+    $('at-codex-state').textContent = states[scenario.connection][0]; $('at-codex-help').textContent = states[scenario.connection][1];
+    $('at-codex-setup').hidden = scenario.connection !== 'waiting'; $('at-codex-install').hidden = scenario.connection !== 'absent';
+    const legacy = scenario.legacy;
+    $('at-legacy-sounds').hidden = legacy === 'none';
+    $('at-legacy-status').textContent = legacy === 'managed' ? 'Tes anciens hooks sonores Claude sont conservés par Atoll pour éviter les doublons.' : legacy === 'detected' ? '2 anciens hooks Claude jouent déjà un son. Tu peux les confier à Atoll pour éviter les doublons.' : 'La sauvegarde des anciens sons Claude est illisible. Atoll la conserve pour permettre sa récupération.';
+    $('at-legacy-status').className = legacy === 'error' ? 'at-warning' : 'at-help';
+    $('at-legacy-restore').hidden = legacy !== 'managed'; $('at-legacy-detected').hidden = legacy !== 'detected';
+    $('at-legacy-storage').hidden = legacy !== 'managed'; $('at-legacy-error').hidden = legacy !== 'error';
+    $('at-curation-status').textContent = scenario.curation === 'ready' ? '8 notes disponibles · exemple' : scenario.curation === 'empty' ? 'Une seule note : rien à regrouper' : 'Dernier rangement refusé : corpus trop volumineux';
+    $('at-curation-status').style.color = scenario.curation === 'blocked' ? 'var(--at-warn)' : '';
+    $('at-curate').disabled = scenario.curation === 'empty';
+    const model = $('at-codex-model'); model.querySelector('[value=obsolete]').hidden = scenario.model !== 'obsolete';
+    if (scenario.model !== appliedModelScenario) {
+      if (scenario.model === 'unset') model.value = ''; else if (scenario.model === 'obsolete') model.value = 'obsolete'; else if (scenario.model === 'chosen') model.value = 'example-b';
+      appliedModelScenario = scenario.model;
+    }
+    updateModels();
+  }
+  all('[data-action]').forEach(button => button.addEventListener('click', () => {
+    const action = button.dataset.action;
+    if (action === 'choose-project') { all('.at-project-name').forEach(el => { el.textContent = 'Autre projet exemple'; }); $('at-catalog-results').hidden = true; $('at-catalog-status').textContent = 'Catalogue à relire pour ce projet.'; $('at-hook-result').textContent = 'Vérification à relancer pour ce projet.'; feedback('Projet de démonstration changé'); }
+    else if (action === 'check-hooks') { $('at-hook-result').textContent = 'Exemple : 12 hooks actifs et approuvés. Le suivi se confirme à réception d’un événement.'; }
+    else if (action === 'codex-catalog') { $('at-catalog-results').hidden = false; $('at-catalog-status').textContent = '1 skill et 1 plugin · exemples du catalogue'; }
+    else if (action === 'claude-refresh') { $('at-claude-plugins').hidden = false; $('at-claude-plugins-count').textContent = '1 plugin actif · exemple'; }
+    else if (action === 'plugin-cost') { $('at-plugin-cost').textContent = 'Activé · environ 300 tokens de contexte · exemple'; }
+    else if (action === 'plugin-disable') { button.disabled = true; $('at-plugin-cost').textContent = 'Désactivé · réactivable dans Claude Code'; }
+    else if (action === 'plugin-search') { if (!$('at-plugin-need').value.trim()) { $('at-plugin-need').focus(); feedback('Décris ton besoin pour chercher'); } else { $('at-plugin-result').hidden = false; } }
+    else if (action === 'plugin-ai') { dialog('Affiner avec l’IA', 'Dans Atoll, cette action utilise le moteur choisi dans Apprentissage. La maquette ne lance aucune analyse.'); }
+    else if (action === 'plugin-install') { dialog('Installer ce plugin Claude ?', 'Un plugin peut exécuter des hooks et démarrer des serveurs MCP avec tes droits.', () => feedback('Installation du plugin simulée')); }
+    else if (action === 'hooks-command') { dialog('Dans ton terminal Codex', '/hooks\n\nApprouve les hooks Atoll puis envoie un message.'); }
+    else if (action === 'listen') { feedback('Préécoute simulée : aucun son joué'); }
+    else if (action === 'import-sound') { dialog('Importer un son', 'Formats : AIFF, WAV, MP3, M4A ou CAF. Maximum 10 Mo.\n\nLe choix d’un fichier sera proposé dans Atoll.'); }
+    else if (action === 'restore-sounds') { scenario.legacy = 'detected'; renderScenario(); feedback('Anciens sons Claude restaurés ; les choix des sons d’Atoll sont conservés'); }
+    else if (action === 'adopt-sounds') { scenario.legacy = 'managed'; renderScenario(); feedback('Reprise des anciens sons Claude simulée'); }
+    else if (action === 'rebuild') { dialog('Reconstruire l’index mémoire ?', 'Les messages dont le transcript source a disparu ne pourront pas être reconstruits. Cette opération peut donc supprimer des souvenirs qui n’existent plus que dans l’index.', () => feedback('Reconstruction simulée')); }
+    else if (action === 'claude-remove') { dialog('Retirer l’intégration Claude Code ?', 'Cela retire aussi les skills appris pour Claude en les archivant. Leur réinstallation ne sera pas automatique. Les anciens sons Claude sont restaurés.', () => feedback('Retrait simulé')); }
+    else if (action === 'codex-remove') { scenario.connection = 'absent'; renderScenario(); feedback('Retrait Codex et archivage simulés'); }
+    else if (action === 'codex-repair') { feedback('Réparation simulée ; la confiance des hooks reste à vérifier dans Codex'); }
+    else if (action === 'refresh-models') { scenario.model = $('at-codex-model').value === 'obsolete' ? 'obsolete' : $('at-codex-model').value ? 'chosen' : 'unset'; appliedModelScenario = scenario.model; feedback('Catalogue relu ; le choix du modèle est conservé'); updateModels(); }
+    else if (action === 'updates') { $('at-update-status').textContent = 'Exemple : une vérification Sparkle s’ouvrirait'; dialog('Vérifier les mises à jour', 'Le bouton utilisera la même vérification Sparkle que le menu d’Atoll. Aucun accès réseau dans cette maquette.'); }
+    else if (action === 'review-skill') { dialog('Revoir la proposition', 'La fenêtre de revue existante affiche le skill, les différences et sa destination avant installation.\n\nExemple : atoll-exemple-relecture → Codex.'); }
+    else if (action === 'curate') { feedback('Rangement simulé ; aucune analyse lancée'); }
+    else if (action === 'archive-skill') { feedback('Archivage du skill simulé'); }
+    else if (action === 'finder') { feedback('Ouverture du dossier des notes simulée'); }
+    else { feedback('Action simulée'); }
+  }));
+  renderScenario();
+  if (globalThis.Tweak) {
+    const tweak = new Tweak({ container: root, onChange: renderScenario });
+    tweak.addToggle(scenario, 'details', { label: 'Déplier tous les sous-réglages' });
+    tweak.addSelect(scenario, 'connection', { label: 'Connexion Codex', options: [{label:'Événement reçu',value:'active'},{label:'En attente',value:'waiting'},{label:'À installer',value:'absent'}] });
+    tweak.addSelect(scenario, 'legacy', { label: 'Anciens sons Claude', options: [{label:'Conservés par Atoll',value:'managed'},{label:'Détectés',value:'detected'},{label:'Aucun',value:'none'},{label:'Sauvegarde illisible',value:'error'}] });
+    tweak.addSelect(scenario, 'model', { label: 'Modèle Codex', options: [{label:'À choisir',value:'unset'},{label:'Choisi',value:'chosen'},{label:'Retiré du catalogue',value:'obsolete'},{label:'Catalogue indisponible',value:'offline'}] });
+    tweak.addSelect(scenario, 'curation', { label: 'Rangement des notes', options: [{label:'Disponible',value:'ready'},{label:'Pas assez de notes',value:'empty'},{label:'Corpus trop volumineux',value:'blocked'}] });
+  }
+})();
+</script>

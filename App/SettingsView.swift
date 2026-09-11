@@ -2,7 +2,7 @@ import SwiftUI
 import ServiceManagement
 import AtollCore
 
-/// Réglages en ONGLETS (standard macOS) : sept volets plutôt qu'une seule
+/// Réglages en ONGLETS (standard macOS) : huit volets plutôt qu'une seule
 /// colonne plus haute que l'écran (vécu).
 ///
 /// La fenêtre garde une taille STABLE d'un onglet à l'autre et se
@@ -16,17 +16,18 @@ struct SettingsView: View {
     let updaterModel: UpdaterModel
 
     @AppStorage("settingsTab") private var selectedTab = "general"
+    @State private var analysisFocusRequest: UUID?
 
     var body: some View {
         TabView(selection: $selectedTab) {
             GeneralPane()
                 .tabItem { Label("Général", systemImage: "paintpalette") }
                 .tag("general")
-            ClaudeCodePane()
+            ClaudeCodePane(onShowAnalyses: showAnalyses)
                 .tabItem { Label("Claude Code", systemImage: "terminal") }
                 .tag("claude")
-            CodexSettingsPane()
-                .tabItem { Label("Codex", systemImage: "terminal.fill") }
+            CodexSettingsPane(onShowAnalyses: showAnalyses)
+                .tabItem { Label("Codex", systemImage: "terminal.fill").accessibilityIdentifier("settings-tab-codex") }
                 .tag("codex")
             AutonomyPane()
                 .tabItem { Label("Autonomie", systemImage: "bolt") }
@@ -34,7 +35,7 @@ struct SettingsView: View {
             AlertsPane()
                 .tabItem { Label("Alertes", systemImage: "bell") }
                 .tag("alertes")
-            LearningPane()
+            LearningPane(focusRequest: analysisFocusRequest)
                 .tabItem { Label("Apprentissage", systemImage: "graduationcap") }
                 .tag("apprentissage")
             UpdatesPane(updaterModel: updaterModel)
@@ -51,12 +52,34 @@ struct SettingsView: View {
         // d'étirer), et chaque volet imposait sa propre hauteur — les uns par
         // `fixedSize` (fenêtre riquiqui sur « À propos »), les autres par un
         // plafond à 620 (impossible d'agrandir « Claude Code »). Le plancher
-        // de 640 reste : en deçà, la barre à 7 onglets déborde et macOS en
+        // de 640 reste : en deçà, la barre à 8 onglets déborde et macOS en
         // replie derrière un chevron.
         .frame(minWidth: 640, idealWidth: 700, maxWidth: .infinity,
                minHeight: 520, idealHeight: 640, maxHeight: .infinity)
         .background(ResizableWindow())
+        .disclosureGroupStyle(SettingsDisclosureStyle())
     }
+
+    private func showAnalyses() {
+        analysisFocusRequest = UUID()
+        selectedTab = "apprentissage"
+    }
+
+    #if DEBUG
+    /// Les mêmes vues sur préférences privées ; leurs actions externes sont
+    /// neutralisées en aperçu, sans désactiver navigation, volets et contrôles.
+    @ViewBuilder static func previewPane(_ pane: String) -> some View {
+        Group {
+            if pane == "general" { GeneralPane() }
+            else if pane == "claude" { ClaudeCodePane(onShowAnalyses: {}) }
+            else if pane == "autonomy" { AutonomyPane() }
+            else if pane == "alerts" { AlertsPane() }
+            else if pane == "about" { AboutPane() }
+            else { LearningPane() }
+        }
+        .disclosureGroupStyle(SettingsDisclosureStyle())
+    }
+    #endif
 }
 
 /// Rend la fenêtre des Réglages étirable.
@@ -94,6 +117,8 @@ private struct GeneralPane: View {
     @AppStorage(VisualEffects.enabledKey) private var visualEffects = true
     @AppStorage(VisualEffects.glassIntensityKey) private var glassIntensity = VisualEffects.defaultGlassIntensity
     @State private var launchAtLogin = false
+    @State private var launchError: String?
+    @State private var previewWidths: [String: IslandWidth] = [:]
     /// Recalculé à l'apparition (branchement/débranchement d'écran).
     @State private var screens: [ScreenChoice] = []
 
@@ -105,6 +130,42 @@ private struct GeneralPane: View {
 
     var body: some View {
         Form {
+            Section("Apparence") {
+                Picker("Thème", selection: $themePreference) {
+                    ForEach(ThemePreference.allCases) { preference in
+                        Text(preference.displayName).tag(preference.rawValue)
+                    }
+                }
+                .onChange(of: themePreference) { _, newValue in
+                    if !CodexPreview.enabled { ThemeManager.apply(ThemePreference(rawValue: newValue) ?? .system) }
+                }
+
+                Picker("Couleur de Claude Code", selection: $paletteID) {
+                    ForEach(Palette.all) { palette in
+                        Text(palette.displayName).tag(palette.id)
+                    }
+                }
+                Picker("Couleur de Codex", selection: $codexPaletteID) {
+                    ForEach(Palette.all) { palette in Text(palette.displayName).tag(palette.id) }
+                }
+
+                Toggle("Effets visuels", isOn: $visualEffects)
+                SettingsHelp("La couleur de l'îlot suit le CLI choisi dans le panneau ouvert.")
+                DisclosureGroup("Ajuster les effets") {
+                    if #available(macOS 26.0, *) {
+                        HStack {
+                            Slider(value: $glassIntensity, in: 0...1, step: 0.05) {
+                                Text("Intensité du Liquid Glass")
+                            }
+                            Text("\(Int(glassIntensity * 100)) %").monospacedDigit()
+                                .frame(width: 44, alignment: .trailing)
+                        }
+                        .disabled(!visualEffects)
+                    }
+                    SettingsHelp("Une intensité de verre plus faible améliore le contraste (macOS 26).\nL'onde est désactivée avec « Réduire les animations » dans macOS.")
+                }
+            }
+
             Section("Taille de l'îlot") {
                 // Réglable INDÉPENDAMMENT par écran (ex. large sur le moniteur
                 // externe, petit sur le MacBook). N'affecte que la barre compacte.
@@ -116,51 +177,7 @@ private struct GeneralPane: View {
                     }
                     .pickerStyle(.segmented)
                 }
-                Text("La largeur de la petite barre autour du notch (et de la pilule sur un écran sans encoche). L'encoche physique, elle, ne change pas.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Section("Apparence") {
-                Picker("Thème", selection: $themePreference) {
-                    ForEach(ThemePreference.allCases) { preference in
-                        Text(preference.displayName).tag(preference.rawValue)
-                    }
-                }
-                .onChange(of: themePreference) { _, newValue in
-                    ThemeManager.apply(ThemePreference(rawValue: newValue) ?? .system)
-                }
-
-                Picker("Palette Claude", selection: $paletteID) {
-                    ForEach(Palette.all) { palette in
-                        Text(palette.displayName).tag(palette.id)
-                    }
-                }
-                Picker("Palette Codex", selection: $codexPaletteID) {
-                    ForEach(Palette.all) { palette in Text(palette.displayName).tag(palette.id) }
-                }
-
-                Toggle("Effets visuels", isOn: $visualEffects)
-                if #available(macOS 26.0, *) {
-                    VStack(alignment: .leading) {
-                        Slider(value: $glassIntensity, in: 0...1, step: 0.05) {
-                            Text("Intensité du Liquid Glass")
-                        }
-                        Text("\(Int(glassIntensity * 100)) %")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .disabled(!visualEffects)
-                }
-                Text("""
-                Fond en Liquid Glass autour du notch (macOS 26 ; aplat sobre en deçà) \
-                et une onde discrète à l'ouverture de l'îlot. Plus l'intensité monte, \
-                plus le verre réfracte ce qu'il y a derrière (au prix du contraste) ; \
-                à 0 %, fond plein, aucun verre. Désactiver coupe verre et animation. \
-                L'onde respecte toujours « Réduire les animations » du système.
-                """)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                SettingsHelp("La largeur de l'îlot compact se règle séparément pour chaque écran.")
             }
 
             Section("Comportement") {
@@ -175,19 +192,25 @@ private struct GeneralPane: View {
 
                 Toggle("Lancer au démarrage", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, newValue in
-                        setLaunchAtLogin(newValue)
+                        if !CodexPreview.enabled { setLaunchAtLogin(newValue) }
                     }
+                if let launchError { SettingsHelp(launchError) }
             }
         }
         .formStyle(.grouped)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
-            launchAtLogin = SMAppService.mainApp.status == .enabled
+            launchAtLogin = CodexPreview.enabled ? true : SMAppService.mainApp.status == .enabled
             refreshScreens()
         }
     }
 
     private func refreshScreens() {
+        if CodexPreview.enabled {
+            screens = [ScreenChoice(id: "macbook", label: "Écran du MacBook"),
+                       ScreenChoice(id: "external", label: "Écran externe")]
+            return
+        }
         let main = NSScreen.main
         screens = NSScreen.screens.enumerated().map { index, screen in
             var label = screen.localizedName
@@ -199,12 +222,16 @@ private struct GeneralPane: View {
 
     private func widthBinding(for displayID: String) -> Binding<IslandWidth> {
         Binding(
-            get: { IslandSettings.shared.width(for: displayID) },
-            set: { IslandSettings.shared.setWidth($0, for: displayID) }
+            get: { CodexPreview.enabled ? previewWidths[displayID] ?? .medium : IslandSettings.shared.width(for: displayID) },
+            set: { value in
+                if CodexPreview.enabled { previewWidths[displayID] = value }
+                else { IslandSettings.shared.setWidth(value, for: displayID) }
+            }
         )
     }
 
     private func setLaunchAtLogin(_ enabled: Bool) {
+        launchError = nil
         do {
             if enabled {
                 try SMAppService.mainApp.register()
@@ -214,814 +241,8 @@ private struct GeneralPane: View {
         } catch {
             // L'utilisateur a pu refuser ; on resynchronise l'interrupteur.
             launchAtLogin = SMAppService.mainApp.status == .enabled
+            launchError = "Le lancement au démarrage n'a pas été modifié : " + error.localizedDescription
         }
-    }
-}
-
-// MARK: - Claude Code (hooks + quota)
-
-private struct ClaudeCodePane: View {
-    @State private var hooksInstalled = false
-    @State private var hookError: String?
-    @State private var confirmingUninstall = false
-    @State private var confirmingRebuild = false
-    @State private var denyParkingError: String?
-    @State private var proactiveRecallError: String?
-    @State private var plugins = PluginInventory.shared
-    @State private var pluginError: String?
-    @State private var pluginNeed = ""
-    @State private var confirmingInstall: PluginSearchResult.Match?
-
-    private var store: SessionStore { .shared }
-
-    var body: some View {
-        Form {
-            Section("Branchement") {
-                LabeledContent("Hooks", value: hooksInstalled ? "installés ✓" : "non installés")
-                LabeledContent(
-                    "Réception",
-                    value: store.serverRunning
-                        ? "active · \(store.eventCount) événement(s)"
-                        : "inactive"
-                )
-                Button(hooksInstalled ? "Désinstaller les hooks" : "Installer les hooks") {
-                    // Désinstaller retire AUSSI les skills appris (le helper
-                    // pilote `uninstallAll`) et réinstaller ne les remet pas.
-                    // Ce n'était écrit nulle part et rien ne le demandait.
-                    if hooksInstalled, !SkillReviewCenter.shared.installed.isEmpty {
-                        confirmingUninstall = true
-                    } else {
-                        toggleHooks()
-                    }
-                }
-                if let hookError {
-                    Text(hookError)
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                }
-                if let denyParkingError {
-                    Text(denyParkingError)
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                }
-                Text("""
-                Fail-open : Atoll fermé ou planté, Claude Code fonctionne exactement comme avant. \
-                Vos hooks existants sont préservés ; backup unique dans \
-                ~/.claude/settings.json.atoll-backup. Les sessions déjà ouvertes prennent \
-                les hooks à leur prochain démarrage.
-                """)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-
-            Section("Quota") {
-                Toggle("Jauges par modèle (Fable…)", isOn: perModelQuota)
-                Text("""
-                Complète le 5h/7j officiel avec le détail par modèle de la page \
-                Utilisation de claude.ai (endpoint non documenté, lecture seule avec \
-                votre jeton local, jamais de renouvellement). Peut cesser de fonctionner \
-                à tout moment ; macOS demandera une fois l'accès au trousseau.
-                """)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-
-            Section("Mémoire") {
-                Toggle("Indexer les sessions passées", isOn: memoryIndexing)
-                if let stats = MemoryIndexer.shared.stats {
-                    LabeledContent("Index", value: indexSummary(stats))
-                }
-                Button("Reconstruire l'index") {
-                    confirmingRebuild = true
-                }
-                .disabled(MemoryIndexer.shared.isIndexing || !memoryIndexing.wrappedValue)
-                Text("""
-                Index local (~/.atoll/memory.db) de tous vos transcripts — Claude Code \
-                ET Codex, dans le MÊME index : un souvenir venu d'une session Codex peut \
-                donc remonter dans une session Claude. Interrogeable via le skill \
-                « atoll-recall » — « retrouve quand on a parlé de… ». La recherche est locale ; \
-                les extraits joints à une conversation sont ensuite traités par son fournisseur. \
-                Désactiver stoppe l'indexation des DEUX ; supprimer ~/.atoll \
-                efface l'index et les notes. \
-                Les skills appris vivent dans les skills de leur destination Claude ou Codex : \
-                passez par le retrait de l'intégration correspondante pour les retirer proprement (supprimer \
-                ~/.atoll d'abord emporterait le manifeste, et Atoll refuserait \
-                alors d'y toucher).
-                """)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-
-            Section("Plugins") {
-                if let snapshot = plugins.snapshot {
-                    LabeledContent("Installés", value: pluginSummary(snapshot))
-                    // ÂGE de la lecture : `PluginInventory` est un singleton et
-                    // le panneau ne relit rien tout seul — il pouvait afficher
-                    // « 4 activés » et proposer « Désactiver » sur un plugin
-                    // désactivé depuis le terminal, sans le moindre signal.
-                    if let readAt = plugins.lastRefreshedAt {
-                        Text("lu \(readAt.formatted(date: .omitted, time: .shortened)) — « Actualiser » pour relire")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    // Les anomalies AVANT la liste : c'est ce pour quoi on
-                    // ouvre ce panneau.
-                    if !snapshot.broken.isEmpty {
-                        // La liste `broken` contient AUSSI des plugins
-                        // désactivés (donc chargés dans aucune session) :
-                        // affirmer « activé(s) » était faux et alarmant.
-                        Text("⚠ cassé(s) : \(snapshot.broken.map { $0.isEnabled ? "\($0.name) (activé)" : "\($0.name) (désactivé)" }.joined(separator: ", ")) — des fichiers déclarés manquent")
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                    }
-                    if !snapshot.duplicateNames.isEmpty {
-                        Text("⚠ présents dans deux marketplaces : \(snapshot.duplicateNames.joined(separator: ", "))")
-                            .font(.caption)
-                            .foregroundStyle(.orange)
-                    }
-                    ForEach(snapshot.installed.filter(\.isEnabled)) { plugin in
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(plugin.name)
-                                Text(pluginDetail(plugin))
-                                    .font(.caption)
-                                    .foregroundStyle(plugin.hasLoadError ? .red : .secondary)
-                            }
-                            Spacer()
-                            Button("Désactiver") {
-                                Task { pluginError = await plugins.setEnabled(false, pluginID: plugin.id) }
-                            }
-                            .help("Le plugin reste installé ; réactivable par `claude plugin enable`.")
-                            .buttonStyle(.borderless)
-                            .disabled(plugins.busyPluginID != nil)
-                        }
-                    }
-                    if !snapshot.installedButDisabled.isEmpty {
-                        LabeledContent("Installés mais inactifs",
-                                       value: "\(snapshot.installedButDisabled.count) — aucun coût en contexte")
-                            .font(.caption)
-                    }
-                } else if plugins.isRefreshing {
-                    HStack { ProgressView().controlSize(.small); Text("Lecture…").font(.caption) }
-                } else {
-                    Text("Aucun inventaire — cliquez pour interroger `claude plugin list`.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                HStack {
-                    Button("Actualiser") {
-                        pluginError = nil // une erreur passée ne survit pas à un succès
-                        plugins.refresh()
-                    }
-                        .disabled(plugins.isRefreshing)
-                    Button("Coût en tokens") {
-                        // À la demande : `claude plugin details` par plugin activé.
-                        for plugin in plugins.snapshot?.installed.filter(\.isEnabled) ?? [] {
-                            plugins.loadTokenCost(for: plugin.id)
-                        }
-                    }
-                    .disabled(plugins.snapshot == nil)
-                }
-                if let error = pluginError ?? plugins.lastError {
-                    Text(error).font(.caption).foregroundStyle(.red)
-                }
-                Text("""
-                Ce que vos plugins coûtent à chaque session et ce qui ne tourne pas. \
-                Atoll passe TOUJOURS par la commande `claude plugin` — il ne touche \
-                jamais lui-même à votre settings.json. Installer un plugin exécute du \
-                code tiers (hooks au démarrage, serveurs MCP) : ça ne se fait que sur \
-                votre geste explicite.
-                """)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-
-            Section("Trouver un plugin") {
-                HStack {
-                    TextField("de quoi avez-vous besoin ?", text: $pluginNeed)
-                        .textFieldStyle(.roundedBorder)
-                        .onSubmit { runPluginSearch() }
-                    Button("Chercher") { runPluginSearch() }
-                        .disabled(pluginNeed.trimmingCharacters(in: .whitespaces).isEmpty
-                                  || plugins.isSearching)
-                }
-                Button("Affiner avec l'IA · \(LearningSettings.shared.analysisProvider.label)") { runPluginSearch(useAI: true) }
-                    .disabled(pluginNeed.trimmingCharacters(in: .whitespaces).isEmpty || plugins.isSearching)
-                Text("Catalogue Claude Code · recherche locale gratuite ; l'analyse IA utilise l'abonnement choisi dans Apprentissage.")
-                    .font(.caption).foregroundStyle(.secondary)
-                if plugins.isSearching {
-                    HStack {
-                        ProgressView().controlSize(.small)
-                        Text("comparaison au catalogue public…").font(.caption)
-                        Button("Annuler") { plugins.cancel() }
-                    }
-                }
-                ForEach(plugins.searchMatches, id: \.pluginID) { match in
-                    HStack(alignment: .top) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(match.pluginID)
-                            Text(match.reason)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        // Installer = exécuter du code tiers : confirmation
-                        // explicite, jamais un simple clic.
-                        Button("Installer…") { confirmingInstall = match }
-                            .buttonStyle(.borderless)
-                            .disabled(plugins.busyPluginID != nil)
-                    }
-                }
-                Text("""
-                Décrivez un besoin en français : Atoll le compare aux 268 plugins du \
-                catalogue public (rien n'est envoyé d'autre que votre phrase et les \
-                descriptions publiques). Un plugin qu'il aurait inventé est écarté \
-                d'office — seul un identifiant présent au catalogue peut être proposé.
-                """)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-
-            Section("Souvenirs joints à tes messages") {
-                Toggle("Rappeler les sessions liées à chaque message", isOn: proactiveRecall)
-                    .disabled(!memoryIndexing.wrappedValue)
-                if proactiveRecall.wrappedValue {
-                    Picker("Souvenirs injectés", selection: proactiveRecallMaxHits) {
-                        ForEach(1...5, id: \.self) { count in
-                            Text("\(count)").tag(count)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    Toggle("Limiter au projet courant", isOn: proactiveRecallProjectScoped)
-                }
-                if let proactiveRecallError {
-                    Text(proactiveRecallError)
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                }
-                Text("""
-                Sans attendre que Claude pense au skill : à chaque message, Atoll cherche \
-                localement les extraits de vos sessions passées liés à ce que vous écrivez \
-                et les joint en contexte, marqués comme DONNÉES (jamais des instructions). \
-                Activer rend le hook UserPromptSubmit bloquant — quelques millisecondes, \
-                et fail-open : à la moindre anicroche, rien n'est injecté.
-                """)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-
-        }
-        .formStyle(.grouped)
-        // Le volet REMPLIT la fenêtre et son Form défile : c'est la fenêtre
-        // qui décide de la taille, plus le contenu. (Avant, un plafond à 620
-        // empêchait d'agrandir ce volet même en étirant la fenêtre.)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .alert("Installer ce plugin ?", isPresented: Binding(
-            get: { confirmingInstall != nil },
-            set: { if !$0 { confirmingInstall = nil } }
-        ), presenting: confirmingInstall) { match in
-            Button("Annuler", role: .cancel) { confirmingInstall = nil }
-            Button("Installer", role: .destructive) {
-                let id = match.pluginID
-                confirmingInstall = nil
-                Task { pluginError = await plugins.install(pluginID: id) }
-            }
-        } message: { match in
-            Text("""
-            \(match.pluginID) sera installé par `claude plugin install`. Un plugin \
-            peut enregistrer des hooks exécutés au démarrage de CHAQUE session et \
-            lancer des serveurs MCP : c'est du code tiers qui s'exécutera avec vos \
-            droits. Il restera désactivable à tout moment.
-            """)
-        }
-        .alert("Reconstruire l'index mémoire ?", isPresented: $confirmingRebuild) {
-            Button("Annuler", role: .cancel) { }
-            Button("Reconstruire", role: .destructive) { MemoryIndexer.shared.rebuild() }
-        } message: {
-            // Presque tout se reconstruit depuis les JSONL — SAUF les messages
-            // des transcripts que Claude Code a purgés à 30 jours, qu'Atoll
-            // conserve exprès (`markMissing`). Ceux-là ne reviendront pas.
-            Text("""
-            L'index est reconstruit depuis tes transcripts. Les messages des \
-            sessions que Claude Code a déjà purgées (au-delà de 30 jours) \
-            n'existent plus que dans cet index : ils seront perdus.
-            """)
-        }
-        .alert("Désinstaller les hooks ?", isPresented: $confirmingUninstall) {
-            Button("Annuler", role: .cancel) { }
-            Button("Désinstaller", role: .destructive) { toggleHooks() }
-        } message: {
-            let noms = SkillReviewCenter.shared.installed
-                .map { SkillSlug.dirName(for: $0.skill.slug) }
-                .joined(separator: ", ")
-            Text("""
-            Cela retire aussi tes skills appris de ~/.claude/skills (\(noms)). \
-            Ils sont copiés dans ~/.atoll/learning/archive/uninstalled/, mais \
-            réinstaller les hooks ne les remettra PAS en place : il faudra les \
-            recopier à la main. Tes hooks sonores mis de côté, eux, reviennent.
-            """)
-        }
-        .onAppear {
-            hooksInstalled = HookInstaller.isInstalled
-            MemoryIndexer.shared.refreshStats()
-        }
-    }
-
-    private func runPluginSearch(useAI: Bool = false) {
-        let need = pluginNeed
-        Task { pluginError = await plugins.search(need: need, useAI: useAI) }
-    }
-
-    /// « 31 installés · 4 activés · 1 cassé ».
-    private func pluginSummary(_ snapshot: PluginSnapshot) -> String {
-        var parts = ["\(snapshot.installed.count) installés",
-                     "\(snapshot.enabledCount) activés"]
-        if !snapshot.broken.isEmpty { parts.append("\(snapshot.broken.count) cassé(s)") }
-        return parts.joined(separator: " · ")
-    }
-
-    /// « v6.2.0 · ~688 tok/session · 2 serveurs MCP ».
-    private func pluginDetail(_ plugin: InstalledPlugin) -> String {
-        var parts: [String] = []
-        if let version = plugin.version, version != "unknown" { parts.append("v\(version)") }
-        if let tokens = plugins.tokenCosts[plugin.id] {
-            parts.append("~\(tokens) tok/session")
-        }
-        if !plugin.mcpServerNames.isEmpty {
-            parts.append("\(plugin.mcpServerNames.count) serveur(s) MCP")
-        }
-        if plugin.hasLoadError { parts.append("chargement en échec") }
-        return parts.isEmpty ? (plugin.marketplace ?? "") : parts.joined(separator: " · ")
-    }
-
-    private var proactiveRecall: Binding<Bool> {
-        Binding(
-            get: { UserDefaults.standard.bool(forKey: LearningSettings.proactiveRecallKey) },
-            set: {
-                UserDefaults.standard.set($0, forKey: LearningSettings.proactiveRecallKey)
-                proactiveRecallError = LearningSettings.shared.syncProactiveRecall()
-            }
-        )
-    }
-
-    private var proactiveRecallMaxHits: Binding<Int> {
-        Binding(
-            get: {
-                UserDefaults.standard.object(forKey: LearningSettings.proactiveRecallMaxHitsKey)
-                    as? Int ?? ProactiveRecallConfig.defaultMaxHits
-            },
-            set: {
-                UserDefaults.standard.set($0, forKey: LearningSettings.proactiveRecallMaxHitsKey)
-                proactiveRecallError = LearningSettings.shared.syncProactiveRecall()
-            }
-        )
-    }
-
-    private var proactiveRecallProjectScoped: Binding<Bool> {
-        Binding(
-            get: {
-                UserDefaults.standard.object(
-                    forKey: LearningSettings.proactiveRecallProjectScopedKey) as? Bool ?? true
-            },
-            set: {
-                UserDefaults.standard.set($0, forKey: LearningSettings.proactiveRecallProjectScopedKey)
-                proactiveRecallError = LearningSettings.shared.syncProactiveRecall()
-            }
-        )
-    }
-
-    private func indexSummary(_ stats: MemoryIndex.Stats) -> String {
-        let bytes = ByteCountFormatter.string(fromByteCount: stats.databaseBytes,
-                                              countStyle: .file)
-        return "\(stats.sessionCount) session(s) · \(stats.messageCount) message(s) · \(bytes)"
-    }
-
-    private var memoryIndexing: Binding<Bool> {
-        Binding(
-            get: { UserDefaults.standard.object(forKey: MemoryIndexer.enabledKey) as? Bool ?? true },
-            set: { enabled in
-                UserDefaults.standard.set(enabled, forKey: MemoryIndexer.enabledKey)
-                MemoryIndexer.shared.syncWithSettings()
-                // Couper l'indexation coupe aussi le recall proactif (revue) :
-                // son interrupteur devient grisé, il ne faut pas qu'il reste
-                // actif — et surtout pas que le hook UserPromptSubmit reste
-                // BLOQUANT sans plus rien à proposer.
-                if !enabled, LearningSettings.shared.isProactiveRecallEnabled {
-                    UserDefaults.standard.set(false, forKey: LearningSettings.proactiveRecallKey)
-                    proactiveRecallError = LearningSettings.shared.syncProactiveRecall()
-                }
-            }
-        )
-    }
-
-    private var perModelQuota: Binding<Bool> {
-        Binding(
-            get: { UserDefaults.standard.bool(forKey: ModelQuotaPoller.enabledKey) },
-            set: {
-                UserDefaults.standard.set($0, forKey: ModelQuotaPoller.enabledKey)
-                ModelQuotaPoller.shared.syncWithSettings()
-            }
-        )
-    }
-
-    private func toggleHooks() {
-        hookError = nil
-        do {
-            if hooksInstalled {
-                try HookInstaller.uninstall()
-            } else {
-                try HookInstaller.install()
-            }
-        } catch {
-            hookError = error.localizedDescription
-        }
-        hooksInstalled = HookInstaller.isInstalled
-        // Le parking suit la disponibilité des hooks : désinstaller restaure les
-        // règles (fait par le helper), réinstaller en Rockstar les reparque.
-        let level = AutonomyLevel.resolve(UserDefaults.standard.string(forKey: InteractionCenter.autonomyKey))
-        denyParkingError = HookInstaller.syncDenyParking(level: level)
-    }
-}
-
-// MARK: - Apprentissage (mémoire + rétrospective + revue des skills)
-
-private struct LearningPane: View {
-    @State private var center = SkillReviewCenter.shared
-    @State private var indexer = MemoryIndexer.shared
-    @State private var curation = NotesCurationService.shared
-    /// Inventaire des notes, relu à l'apparition et après chaque curation.
-    @State private var notes: [LearningNoteSummary] = []
-    @State private var noteProjects: [(project: String, count: Int)] = []
-    @State private var noteVolume = 0
-    /// Journal des évaluations de fin de session (relu à l'apparition).
-    @State private var attempts: [RetrospectiveRunner.AttemptRecord] = []
-
-    var body: some View {
-        Form {
-            Section("Bilan de fin de session") {
-                Toggle("Apprendre des sessions terminées", isOn: learningEnabled)
-                if learningEnabled.wrappedValue {
-                    Picker("Seuil de quota 5 h", selection: learningThreshold) {
-                        Text("50 %").tag(0.5)
-                        Text("60 %").tag(0.6)
-                        Text("70 %").tag(0.7)
-                        Text("80 %").tag(0.8)
-                    }
-                }
-                Text("""
-                Après chaque session substantielle (si votre fenêtre 5 h a de la marge), \
-                une analyse en LECTURE SEULE extrait les leçons durables — notes mémoire \
-                et skills proposés en QUARANTAINE. Consomme du quota ; désactiver arrête \
-                tout immédiatement.
-                """)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-
-            AnalysisSettingsSection()
-
-            Section("Modèles des analyses Claude") {
-                // Un modèle PAR TÂCHE : chercher (comparer un besoin à des
-                // centaines de descriptions) et analyser (extraire un skill
-                // d'une session) n'ont ni la même difficulté ni la même
-                // fréquence — les payer au même prix serait absurde.
-                Picker("Bilan de session", selection: modelBinding(LearningSettings.modelKey, "sonnet")) {
-                    ForEach(LearningSettings.availableModels, id: \.self) { Text(modelLabel($0)).tag($0) }
-                }
-                // Le repli DOIT être le même que celui du modèle métier
-                // (`LearningSettings.curationModel` retombe sur le modèle du
-                // bilan) : sinon le picker affichait « Sonnet » pendant que la
-                // curation tournait en Opus, et re-sélectionner « Sonnet »
-                // n'écrivait rien puisque c'était déjà la valeur montrée.
-                Picker("Rangement des notes",
-                       selection: modelBinding(LearningSettings.curationModelKey,
-                                               LearningSettings.shared.model)) {
-                    ForEach(LearningSettings.availableModels, id: \.self) { Text(modelLabel($0)).tag($0) }
-                }
-                Picker("Recherche", selection: modelBinding(LearningSettings.searchModelKey, "haiku")) {
-                    ForEach(LearningSettings.availableModels, id: \.self) { Text(modelLabel($0)).tag($0) }
-                }
-                Text("""
-                La recherche (« ce skill existe-t-il déjà ? », « quel plugin répond à ce \
-                besoin ? ») est fréquente et facile : Haiku suffit. L'extraction d'un \
-                skill demande du jugement : Sonnet. Opus pour peu de propositions mais \
-                excellentes ; Fable pour la vitesse.
-                """)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-
-            Section("Journal d'apprentissage") {
-                if attempts.isEmpty {
-                    Text("Aucune évaluation enregistrée pour l'instant.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else {
-                    // Chaque fin de session laisse une trace, même refusée :
-                    // c'est ce qui manquait pour comprendre pourquoi rien ne
-                    // sortait (le gate refusait en silence).
-                    ForEach(attempts) { attempt in
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(attemptTitle(attempt))
-                            Text(attemptDetail(attempt))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            if let reason = attempt.failureReason {
-                                Text(reason).font(.caption).foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                }
-                Text("""
-                Ce que fait Atoll à chaque fin de session : lancé, ou sauté et pourquoi \
-                (quota inconnu, session trop courte, déjà traitée…).
-                """)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-
-            Section("Ranger les notes") {
-                Toggle("Ranger les notes chaque semaine", isOn: curationScheduled)
-                HStack {
-                    Button(curation.phase == .running ? "Rangement en cours…" : "Ranger maintenant") {
-                        curation.curateNow()
-                    }
-                    .disabled(curation.phase == .running || notes.count < 2)
-                    if curation.phase == .running {
-                        ProgressView().controlSize(.small)
-                    }
-                }
-                if let outcome = curation.lastOutcome {
-                    LabeledContent("Dernier passage", value: outcome)
-                        .font(.caption)
-                }
-                ForEach(curation.warnings, id: \.self) { warning in
-                    // Les contradictions ne sont JAMAIS tranchées automatiquement :
-                    // elles remontent ici, à vous d'arbitrer dans les fichiers.
-                    Text(warning)
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                }
-                Text("""
-                Une analyse en lecture seule relit toutes vos notes et en propose une \
-                version fusionnée (doublons réunis, contradictions SIGNALÉES, jamais \
-                tranchées). L'ancienne version part d'abord dans ~/.atoll/learning/archive \
-                — vérifiée avant tout remplacement. Consomme du quota ; refusée si le \
-                corpus est trop gros ou si le résultat rétrécit trop.
-                """)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-
-            Section("Skills proposés (\(center.pendingCount))") {
-                if center.proposals.isEmpty {
-                    Text("Aucune proposition — elles apparaissent après les rétrospectives.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(center.proposals) { proposal in
-                        LabeledContent(proposal.title,
-                                       value: proposal.createdAt.formatted(date: .abbreviated, time: .omitted))
-                    }
-                    Button("Revoir…") { center.requestReviewWindow() }
-                }
-            }
-
-            Section("Skills appris") {
-                if center.installed.isEmpty {
-                    Text("Aucun skill appris actif.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(center.installed) { row in
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(SkillSlug.dirName(for: row.skill.slug))
-                                Text(usageLabel(row))
-                                    .font(.caption)
-                                    .foregroundStyle(row.suggestedForArchive ? .orange : .secondary)
-                            }
-                            Spacer()
-                            if row.userModified {
-                                Text("modifié").font(.caption).foregroundStyle(.orange)
-                            }
-                            Button("Archiver") { center.archiveInstalled(slug: row.skill.slug, destination: row.skill.destination) }
-                                .buttonStyle(.borderless)
-                        }
-                    }
-                }
-                ForEach(center.reconcileNotes, id: \.self) { note in
-                    Text(note).font(.caption).foregroundStyle(.secondary)
-                }
-                // « Archiver » pouvait échouer (manifeste illisible, volume en
-                // lecture seule) sans le moindre message : le skill restait
-                // dans la liste et le bouton semblait sans effet. La fenêtre de
-                // revue affichait déjà cette erreur — pas ce volet.
-                if let error = center.lastError {
-                    Text(error).font(.caption).foregroundStyle(.red)
-                }
-                Text("""
-                Un skill appris est actif dans TOUS vos projets (il vit dans \
-                ~/.claude/skills) : ce qu'Atoll apprend d'un dépôt sert aux autres.
-                """)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-
-            Section("Notes mémoire (\(notes.count))") {
-                if notes.isEmpty {
-                    Text("Aucune note — elles arrivent avec les rétrospectives.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else {
-                    // Les 5 plus récentes : un aperçu, pas un explorateur.
-                    ForEach(notes.prefix(5)) { note in
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(note.title)
-                            Text(noteSubtitle(note))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    if noteProjects.count > 1 {
-                        LabeledContent("Projets", value: projectsSummary)
-                            .font(.caption)
-                    }
-                    LabeledContent("Volume", value: volumeSummary)
-                        .font(.caption)
-                }
-                if let stats = indexer.stats {
-                    LabeledContent("Index", value: "\(stats.sessionCount) session(s) · \(stats.messageCount) message(s)")
-                }
-                Button("Ouvrir le dossier ~/.atoll/learning") {
-                    NSWorkspace.shared.open(BridgePaths.learningDirectory)
-                }
-            }
-        }
-        .formStyle(.grouped)
-        // Volet le plus long (six sections) : il remplit la fenêtre et défile.
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onAppear {
-            center.refresh()
-            indexer.refreshStats()
-            refreshNotes()
-            attempts = RetrospectiveRunner.shared.recentAttempts()
-        }
-        // Une curation qui se termine réécrit les fichiers : on relit.
-        .onChange(of: curation.lastRunAt) { _, _ in refreshNotes() }
-    }
-
-    private func refreshNotes() {
-        let inventory = LearningInventory()
-        notes = inventory.notes()
-        noteProjects = inventory.projects()
-        // MÊME mesure que le garde-fou (`NotesCurationPrompt.fitsBudget`) :
-        // l'inventaire ne compte que les CORPS, sans front-matter ni noms de
-        // fichiers. Le panneau annonçait « 95 % du budget » là où la curation
-        // refusait pour dépassement — deux chiffres contradictoires pour la
-        // même grandeur (audit du 2026-07-27).
-        noteVolume = NotesCurationPrompt.corpusCharacterCount(
-            notes: NotesCurationService.readNotes())
-    }
-
-    /// « 12 400 caractères · 15 % du budget de rangement » — le budget est ce
-    /// qui décide si une curation est possible, autant le montrer.
-    private var volumeSummary: String {
-        let percent = Int(Double(noteVolume) / Double(NotesCurationPrompt.maxCorpusCharacters) * 100)
-        return "\(noteVolume) caractères · \(percent) % du budget de rangement"
-    }
-
-    /// « pitfall · Dynamic_Island · 20 juil. » — les champs absents disparaissent.
-    private func noteSubtitle(_ note: LearningNoteSummary) -> String {
-        var parts: [String] = []
-        if let category = note.category { parts.append(category) }
-        if let project = note.project, !project.isEmpty {
-            parts.append((project as NSString).lastPathComponent)
-        }
-        if let date = note.createdAt {
-            parts.append(date.formatted(date: .abbreviated, time: .omitted))
-        }
-        return parts.isEmpty ? note.fileName : parts.joined(separator: " · ")
-    }
-
-    /// « Dynamic_Island 12 · site-vitrine 3 » (3 premiers projets).
-    private var projectsSummary: String {
-        noteProjects.prefix(3).map { entry in
-            let name = entry.project.isEmpty
-                ? "sans projet"
-                : (entry.project as NSString).lastPathComponent
-            return "\(name) \(entry.count)"
-        }
-        .joined(separator: " · ")
-    }
-
-    private var curationScheduled: Binding<Bool> {
-        Binding(
-            get: { UserDefaults.standard.bool(forKey: LearningSettings.curationScheduledKey) },
-            set: {
-                UserDefaults.standard.set($0, forKey: LearningSettings.curationScheduledKey)
-                NotesCurationService.shared.syncWithSettings()
-            }
-        )
-    }
-
-    private func usageLabel(_ row: InstalledSkillRow) -> String {
-        guard let count = row.usageCount else { return "\(row.skill.destination.label) · usage non mesuré" }
-        if let last = row.lastUsedAt {
-            return "\(row.skill.destination.label) · ≥ \(count) usage(s) observé(s) · dernier \(last.formatted(.relative(presentation: .named)))"
-        }
-        return "\(row.skill.destination.label) · ≥ \(count) usage(s) observé(s), date inconnue"
-    }
-
-    private var learningEnabled: Binding<Bool> {
-        Binding(
-            get: { UserDefaults.standard.bool(forKey: LearningSettings.enabledKey) },
-            set: {
-                UserDefaults.standard.set($0, forKey: LearningSettings.enabledKey)
-                LearningSettings.shared.syncWithSettings()
-            }
-        )
-    }
-
-    private var learningThreshold: Binding<Double> {
-        Binding(
-            get: { UserDefaults.standard.object(forKey: LearningSettings.thresholdKey) as? Double ?? 0.7 },
-            set: { UserDefaults.standard.set($0, forKey: LearningSettings.thresholdKey) }
-        )
-    }
-
-    private func modelBinding(_ key: String, _ fallback: String) -> Binding<String> {
-        Binding(
-            get: { UserDefaults.standard.string(forKey: key) ?? fallback },
-            set: { UserDefaults.standard.set($0, forKey: key) }
-        )
-    }
-
-    private func modelLabel(_ model: String) -> String {
-        switch model {
-        case "haiku": return "Haiku · rapide"
-        case "sonnet": return "Sonnet · équilibré"
-        case "opus": return "Opus · le plus fin"
-        case "fable": return "Fable · véloce"
-        default: return model
-        }
-    }
-
-    /// « 14:32 · lancée » ou « 14:32 · sautée : quota inconnu ».
-    private func attemptTitle(_ attempt: RetrospectiveRunner.AttemptRecord) -> String {
-        let time = attempt.decidedAt.formatted(date: .abbreviated, time: .shortened)
-        if attempt.decision == "run" {
-            return "\(time) · analysée"
-        }
-        let reason = attempt.decision
-            .replacingOccurrences(of: "skip(", with: "")
-            .replacingOccurrences(of: ")", with: "")
-        return "\(time) · sautée : \(reasonLabel(reason))"
-    }
-
-    /// Traduction des raisons du gate — l'utilisateur ne lit pas des rawValue.
-    private func reasonLabel(_ raw: String) -> String {
-        switch raw {
-        case "disabled": return "apprentissage désactivé"
-        case "sessionResumed": return "session encore vivante"
-        case "sessionTooShort": return "session trop courte"
-        case "transcriptMissing": return "transcript introuvable"
-        case "transcriptTooSmall": return "session trop légère"
-        case "tooFewUserPrompts": return "trop peu d'échanges"
-        case "alreadyProcessed": return "déjà analysée"
-        case "quotaMissing": return "quota inconnu"
-        case "quotaStale": return "quota périmé"
-        case "quotaAboveThreshold": return "quota trop consommé"
-        case "windowCapReached": return "plafond de la fenêtre 5 h"
-        default: return raw
-        }
-    }
-
-    /// « 2,1 Mo · quota 12 % · 1 note, 1 skill · 0,04 $ ».
-    private func attemptDetail(_ attempt: RetrospectiveRunner.AttemptRecord) -> String {
-        var parts: [String] = []
-        if let bytes = attempt.transcriptBytes {
-            parts.append(ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file))
-        }
-        if let quota = attempt.quotaFraction {
-            parts.append("quota \(Int(quota * 100)) %")
-        }
-        if let outcome = attempt.outcome {
-            parts.append(outcomeLabel(outcome, attempt: attempt))
-        }
-        if let cost = attempt.costUSD {
-            let model = attempt.dominantModel.map { " (\($0.replacingOccurrences(of: "claude-", with: "")))" } ?? ""
-            parts.append(String(format: "%.2f $", cost) + model)
-        }
-        return parts.isEmpty ? attempt.sessionID.prefix(8).description : parts.joined(separator: " · ")
-    }
-
-    private func outcomeLabel(_ outcome: String, attempt: RetrospectiveRunner.AttemptRecord) -> String {
-        if outcome == "nothing_learned" { return "rien de durable" }
-        if outcome.hasPrefix("failed") { return "échec (\(outcome))" }
-        let notes = attempt.notesWritten ?? 0
-        let skills = attempt.skillsProposed ?? 0
-        return "\(notes) note(s), \(skills) skill(s)"
     }
 }
 
@@ -1031,13 +252,15 @@ private struct AutonomyPane: View {
     @AppStorage(InteractionCenter.autonomyKey) private var autonomyRaw = AutonomyLevel.manual.rawValue
     @State private var confirmingRockstar = false
     @State private var denyParkingError: String?
+    @State private var previewParked = CommandLine.arguments.contains("--preview-parked-deny")
 
     private var center: InteractionCenter { .shared }
+    private var denyRulesParked: Bool { CodexPreview.enabled ? previewParked : HookInstaller.denyRulesParked }
     private var currentLevel: AutonomyLevel { AutonomyLevel.resolve(autonomyRaw) }
 
     var body: some View {
         Form {
-            Section("Niveau d'autonomie") {
+            Section("Autonomie de Claude Code") {
                 // Un seul réglage exclusif : Manuel ou Rockstar. Le niveau « Auto »
                 // a été retiré le 2026-08-03 — `claude auto-mode` le fait mieux,
                 // par défaut, et notre allowlist était une dette de sécurité.
@@ -1049,7 +272,7 @@ private struct AutonomyPane: View {
                         } else {
                             autonomyRaw = newLevel.rawValue
                             // Quitter Rockstar restaure les règles deny parquées.
-                            denyParkingError = HookInstaller.syncDenyParking(level: newLevel)
+                            denyParkingError = syncParking(level: newLevel)
                         }
                     }
                 )) {
@@ -1063,15 +286,15 @@ private struct AutonomyPane: View {
                     .font(.caption)
                     .foregroundStyle(currentLevel == .rockstar ? .red : .secondary)
 
-                if currentLevel != .manual, center.autoAcceptedCount > 0 {
+                if !CodexPreview.enabled, currentLevel != .manual, center.autoAcceptedCount > 0 {
                     LabeledContent("Auto-approuvées", value: "\(center.autoAcceptedCount)")
                 }
 
-                if currentLevel == .rockstar, HookInstaller.denyRulesParked {
+                if currentLevel == .rockstar, denyRulesParked {
                     LabeledContent("Règles deny", value: "suspendues")
                 }
 
-                if currentLevel != .rockstar, HookInstaller.denyRulesParked {
+                if currentLevel != .rockstar, denyRulesParked {
                     // État le plus dangereux : parqué HORS Rockstar (restauration
                     // échouée ?). Toujours visible, jamais silencieux.
                     Text("⚠ Vos règles deny sont encore suspendues — restauration à retenter (relancez Atoll ou rechangez de niveau).")
@@ -1085,15 +308,17 @@ private struct AutonomyPane: View {
                         .foregroundStyle(.red)
                 }
 
-                Text("""
-                Rockstar n'a AUCUNE protection : tout est approuvé et vos règles deny \
-                (ex. Bash(rm -rf *)) sont suspendues — parquées tant que le niveau reste \
-                Rockstar, même app fermée, puis restaurées dès que vous le quittez. Les \
-                sessions déjà ouvertes gardent les règles qu'elles ont lues : redémarrez-les \
-                pour appliquer. Vos propres hooks bloquants restent toujours actifs.
-                """)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                SettingsHelp("Rockstar approuve automatiquement les autorisations, questions et plans de Claude Code. Les règles deny sont suspendues pendant ce mode.")
+                DisclosureGroup("Ce que change Rockstar") {
+                    VStack(alignment: .leading, spacing: 12) {
+                        SettingsHelp("Les règles restent suspendues même si Atoll est fermé. Quitter Rockstar les restaure.")
+                        SettingsHelp("Les sessions déjà ouvertes gardent les règles qu'elles ont lues : redémarre-les pour appliquer le changement.")
+                        SettingsHelp("Tes propres hooks bloquants restent actifs.")
+                    }
+                }
+            }
+            Section("Codex") {
+                SettingsHelp("Les autorisations de Codex se règlent dans son terminal. Rockstar ne s'y applique pas.")
             }
         }
         .formStyle(.grouped)
@@ -1101,7 +326,7 @@ private struct AutonomyPane: View {
         .onAppear {
             // Auto-réparation : si un état incohérent subsiste (règles parquées
             // hors Rockstar après un échec), on retente en ouvrant les Réglages.
-            denyParkingError = HookInstaller.syncDenyParking(level: currentLevel)
+            if !CodexPreview.enabled { denyParkingError = syncParking(level: currentLevel) }
         }
         .alert("Activer le mode Rockstar ?", isPresented: $confirmingRockstar) {
             Button("Annuler", role: .cancel) { }
@@ -1109,8 +334,8 @@ private struct AutonomyPane: View {
                 autonomyRaw = AutonomyLevel.rockstar.rawValue
                 // Entrer en Rockstar suspend (parque) les règles deny et
                 // résout les cartes déjà en attente.
-                denyParkingError = HookInstaller.syncDenyParking(level: .rockstar)
-                InteractionCenter.shared.resolvePendingAsRockstar()
+                denyParkingError = syncParking(level: .rockstar)
+                if !CodexPreview.enabled { InteractionCenter.shared.resolvePendingAsRockstar() }
             }
         } message: {
             Text("""
@@ -1122,36 +347,46 @@ private struct AutonomyPane: View {
             """)
         }
     }
+    private func syncParking(level: AutonomyLevel) -> String? {
+        if CodexPreview.enabled { previewParked = level == .rockstar; return nil }
+        return HookInstaller.syncDenyParking(level: level)
+    }
+
 }
 
 // MARK: - Mises à jour
 
 private struct UpdatesPane: View {
-    let updaterModel: UpdaterModel
+    @ObservedObject var updaterModel: UpdaterModel
+    @State private var previewAutomatic = false
+    @State private var previewMessage: String?
 
     var body: some View {
         Form {
             Section("Mises à jour") {
+                LabeledContent("Version installée", value: settingsAppVersion)
                 Toggle("Vérifier automatiquement", isOn: automaticUpdateChecks)
-                Text("""
-                Opt-in — désactivé, Atoll ne contacte jamais le réseau (zéro télémétrie). \
-                Activé, Sparkle interroge une fois par jour le flux du projet (GitHub Pages) \
-                et signale les mises à jour d'un ◆ discret dans le menu. Vérification \
-                manuelle à tout moment via le menu ≋.
-                """)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                SettingsHelp("Vérifie chaque jour si une version est disponible. Désactiver arrête uniquement cette vérification automatique.")
+                Button(updaterModel.updateAvailable ? "Voir la mise à jour…" : "Vérifier maintenant") {
+                    if CodexPreview.enabled { previewMessage = "Vérification simulée : aucun accès réseau." }
+                    else { updaterModel.checkForUpdates() }
+                }
+                .disabled(!CodexPreview.enabled && !updaterModel.canCheckForUpdates)
+                if let previewMessage { SettingsHelp(previewMessage) }
+                SettingsHelp("Le quota et les analyses conservent leurs propres réglages. Atoll ne collecte aucune télémétrie.")
             }
         }
         .formStyle(.grouped)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    /// Persisté par Sparkle dans les user defaults (prime sur l'Info.plist).
     private var automaticUpdateChecks: Binding<Bool> {
         Binding(
-            get: { updaterModel.updater.automaticallyChecksForUpdates },
-            set: { updaterModel.updater.automaticallyChecksForUpdates = $0 }
+            get: { CodexPreview.enabled ? previewAutomatic : updaterModel.updater.automaticallyChecksForUpdates },
+            set: {
+                if CodexPreview.enabled { previewAutomatic = $0 }
+                else { updaterModel.updater.automaticallyChecksForUpdates = $0 }
+            }
         )
     }
 }
@@ -1162,20 +397,20 @@ private struct AboutPane: View {
     var body: some View {
         Form {
             Section("À propos") {
-                LabeledContent("Version", value: appVersion)
+                LabeledContent("Version", value: settingsAppVersion)
                 LabeledContent("Licence", value: "GPL-3.0-or-later")
-                Text("Atoll — une Dynamic Island ASCII pour Claude Code et Codex CLI dans le terminal.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Text("Les boutons Claude / Codex choisissent la vue et sa palette. Le moteur des analyses et la destination des skills se choisissent séparément dans Apprentissage. Rockstar reste propre à Claude.")
-                    .font(.caption).foregroundStyle(.secondary)
+                SettingsHelp("La Dynamic Island pour Claude Code et Codex CLI.")
             }
         }
         .formStyle(.grouped)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private var appVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev"
-    }
+}
+
+private var settingsAppVersion: String {
+    let info = Bundle.main.infoDictionary
+    let version = info?["CFBundleShortVersionString"] as? String ?? "dev"
+    let build = info?["CFBundleVersion"] as? String ?? "?"
+    return "\(version) · build \(build)"
 }

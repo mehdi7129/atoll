@@ -14,16 +14,16 @@ public enum SoundEvent: String, Codable, CaseIterable, Sendable {
     public var title: String {
         switch self {
         case .decisionNeeded: return "Décision attendue"
-        case .taskCompleted: return "Tâche terminée"
+        case .taskCompleted: return "Tour terminé"
         }
     }
 
     public var explanation: String {
         switch self {
         case .decisionNeeded:
-            return "Une permission, un plan ou une question attend ta réponse."
+            return "Une autorisation attend ta réponse dans Claude Code ou Codex. Les questions et les plans concernent Claude Code."
         case .taskCompleted:
-            return "Une session a fini de travailler."
+            return "Le CLI a terminé sa réponse et attend la suite."
         }
     }
 

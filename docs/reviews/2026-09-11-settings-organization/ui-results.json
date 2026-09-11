@@ -1,0 +1,292 @@
+[
+  {
+    "case": "settings-codex",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-codex-connected",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-codex-diagnostic",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-codex-model-choice",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-codex-model-shared",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-codex-analysis-claude",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-general",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-claude",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-claude-error",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-learning",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-codex-short",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-codex-model-existing",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-codex-model-obsolete",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-codex-model-offline",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-codex-narrow-light",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-codex-quota-off",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-codex-removal",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-codex-uninstalled",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-codex-advanced",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-analysis",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-analysis-switch",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-analysis-claude",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-analysis-options",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-analysis-fallback",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-curation-blocked",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-memory-off",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-memory-rebuild",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-skills-destination",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-autonomy",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-autonomy-cancel",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-autonomy-parked",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-alerts",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-alerts-parked",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-alerts-unreadable",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-alerts-detected",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-alerts-missing",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-catalog-error",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-alerts-silent",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-updates",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-updates-manual",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-about",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-window-general-dark",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-window-general-light",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-window-claude-dark",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-window-claude-light",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-window-codex-dark",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-window-codex-light",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-window-autonomy-dark",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-window-autonomy-light",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-window-alerts-dark",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-window-alerts-light",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-window-learning-dark",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-window-learning-light",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-window-updates-dark",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-window-updates-light",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-window-about-dark",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-window-about-light",
+    "passed": true,
+    "failures": []
+  },
+  {
+    "case": "settings-codex-model-focus",
+    "passed": true,
+    "failures": []
+  }
+]

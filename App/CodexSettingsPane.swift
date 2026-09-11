@@ -3,111 +3,104 @@ import AppKit
 import AtollCore
 
 struct CodexSettingsPane: View {
+    let onShowAnalyses: () -> Void
     @AppStorage(CodexService.quotaEnabledKey) private var quotaEnabled = false
     @AppStorage(CodexService.executableKey) private var executablePath = ""
+    @AppStorage(LearningSettings.analysisProviderKey) private var analysisProvider = AgentProvider.claude.rawValue
+    @AppStorage(LearningSettings.failoverEnabledKey) private var analysisFallback = false
     @AppStorage(LearningSettings.codexModelKey) private var analysisModel = ""
+    @AppStorage("codexDiagnosticProjectPath") private var projectPath = ""
     @State private var installed = false
     @State private var message: String?
-    @State private var homePath = CodexPaths.configuredHome ?? ""
-    @AppStorage("codexDiagnosticProjectPath") private var projectPath = ""
-    @State private var diagnostic = "Choisis le dossier où tu utilises Codex, puis vérifie l'intégration."
+    @State private var homePath = CodexPreview.enabled ? "" : CodexPaths.configuredHome ?? ""
+    @State private var diagnostic: String?
     @State private var checking = false
-    @State private var models: [CodexModel] = []
-    @State private var loadingModels = false
+    @State private var diagnosticExpanded = false
     @State private var advancedExpanded = false
-    @State private var modelMessage = "Lecture du catalogue natif, sans génération de message."
+
+    private var configurationError: String? { CodexPreview.enabled ? nil : CodexPaths.configurationError }
+    private var lastEvent: Date? {
+        if CodexPreview.enabled {
+            return CommandLine.arguments.contains("--preview-connected") ? Date() : nil
+        }
+        return CodexService.shared.lastEventAt
+    }
 
     var body: some View {
         Form {
-            Section("Codex CLI · terminal") {
-                LabeledContent("Intégration Atoll", value: installed ? "Installée" : "À installer")
-                if let error = CodexPaths.configurationError { Text(error).foregroundStyle(.red) }
-                if !installed {
-                    Button("Installer l'intégration Codex") { configure(install: true) }
+            Section("Connexion à Codex") {
+                VStack(alignment: .leading, spacing: 10) {
+                    LabeledContent("Suivi des sessions", value: configurationError != nil ? "À configurer"
+                        : !installed ? "À installer" : lastEvent != nil ? "Événements reçus" : "En attente d'une session")
+                    if let error = configurationError {
+                        SettingsHelp(error)
+                        Button("Ouvrir le dépannage") { advancedExpanded = true }
+                    } else if !installed {
+                        SettingsHelp("Relie Codex à Atoll pour voir tes sessions et leurs demandes d'autorisation dans l'îlot.")
+                        Button("Installer l'intégration Codex") { configure(install: true) }
+                            .buttonStyle(.borderedProminent)
+                    } else if lastEvent == nil {
+                        SettingsHelp("Dans ton terminal Codex, ouvre /hooks et approuve les hooks Atoll.\nEnvoie ensuite un message pour faire apparaître la session.")
+                        Button("Copier /hooks") {
+                            guard !CodexPreview.enabled else { return }
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString("/hooks", forType: .string)
+                        }
+                    } else {
+                        SettingsHelp("Tes sessions apparaissent automatiquement dans l'îlot.")
+                    }
+                    if let message { SettingsHelp(message).textSelection(.enabled) }
+                }
+                .padding(.vertical, 4)
+                DisclosureGroup("Vérifier la connexion", isExpanded: $diagnosticExpanded) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Projet à vérifier").fontWeight(.medium)
+                            SettingsHelp("Le dossier où tu travailles avec Codex. Ce choix sert uniquement à la vérification et au catalogue de skills.")
+                            if !projectPath.isEmpty {
+                                Text(projectPath).font(.callout).textSelection(.enabled)
+                                    .lineLimit(2).truncationMode(.middle).help(projectPath)
+                            }
+                            Button("Choisir le dossier du projet…") { chooseProject() }
+                        }
+                        Button(checking ? "Vérification…" : "Vérifier les hooks") { verify() }
+                            .disabled(checking || !validProject || configurationError != nil)
+                        if let diagnostic { SettingsHelp(diagnostic).textSelection(.enabled) }
+                        if let date = lastEvent {
+                            LabeledContent("Dernier événement reçu", value: date.formatted(date: .omitted, time: .standard))
+                                .font(.callout)
+                        }
+                        SettingsHelp("Codex était déjà ouvert lors de l'installation ? Reprends la session avec codex resume.")
+                    }
+                    .padding(.vertical, 8)
+                }
+                if !diagnosticExpanded, let diagnostic {
+                    SettingsHelp(diagnostic).textSelection(.enabled)
+                }
+            }
+            Section("Analyses d'Atoll") {
+                LabeledContent("Moteur", value: analysisProvider == AgentProvider.codex.rawValue ? "Codex CLI" : "Claude Code")
+                if analysisProvider == AgentProvider.codex.rawValue || analysisFallback {
+                    LabeledContent("Modèle Codex", value: analysisModel.isEmpty ? "À choisir" : analysisModel)
                 }
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Dans ton terminal Codex, ouvre /hooks et approuve les hooks Atoll.")
-                    Button("Copier /hooks") {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString("/hooks", forType: .string)
-                    }
-                    Text("Envoie ensuite un message dans Codex : la session doit apparaître dans l'îlot.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                LabeledContent("Projet", value: projectPath.isEmpty ? "Aucun dossier choisi" : projectPath)
-                    .textSelection(.enabled)
-                Button("Choisir le dossier du projet…") { chooseProject() }
-                Button(checking ? "Vérification…" : "Vérifier avec Codex") { verify() }
-                    .disabled(checking || !validProject || CodexPaths.configurationError != nil)
-                Text(diagnostic).font(.caption).textSelection(.enabled)
-                if let date = CodexService.shared.lastEventAt {
-                    LabeledContent("Dernier événement reçu", value: date.formatted(date: .omitted, time: .standard))
-                } else { Text("En attente du premier événement de Codex.").font(.caption).foregroundStyle(.secondary) }
-                if let message { Text(message).font(.caption).textSelection(.enabled) }
-                Text("Si Codex était ouvert avant l'installation, reprends la session avec codex resume. Questions et plans restent dans le terminal ; Rockstar est réservé à Claude.")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            Section("Quota de l'abonnement ChatGPT / Codex") {
-                Toggle("Lire le quota Codex (toutes les 2 minutes)", isOn: $quotaEnabled)
-                    .onChange(of: quotaEnabled) { _, _ in CodexService.shared.syncQuotaSettings() }
-                Button("Actualiser le quota") { CodexService.shared.syncQuotaSettings() }
-                    .disabled(CodexService.shared.isLoading)
-                Text(CodexService.shared.status).font(.caption).foregroundStyle(.secondary)
-                TimelineView(.periodic(from: .now, by: 30)) { context in
-                    if let quota = CodexService.shared.quota {
-                        ForEach(quota.buckets) { bucket in
-                            ForEach(bucket.windows) { window in
-                                if quota.isFresh(at: context.date), window.isCurrent(at: context.date) {
-                                    HStack {
-                                        Text("\(bucket.label) · \(window.label)")
-                                        Spacer()
-                                        Text("\(Int(window.usedFraction * 100)) % utilisés")
-                                        if let reset = window.resetsAt { ResetCountdown(resetsAt: reset) }
-                                    }
-                                } else {
-                                    Text("\(bucket.label) · \(window.label) : en attente d'une mesure récente")
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                    }
-                }
-                Text("Utilise ta connexion codex login, sans générer de message. Le contexte de chaque conversation s'affiche dans son détail, séparément de ce quota d'abonnement.")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            Section("Analyses Atoll") {
-                Button("Choisir le moteur et les limites dans Apprentissage") {
-                    UserDefaults.standard.set("apprentissage", forKey: "settingsTab")
+                    Button((analysisProvider == AgentProvider.codex.rawValue || analysisFallback) && analysisModel.isEmpty
+                           ? "Choisir le modèle…" : "Régler les analyses…", action: onShowAnalyses)
+                    SettingsHelp("Le moteur, les modèles et les limites se règlent dans Apprentissage.")
                 }
             }
-            CodexCatalogSection(projectPath: projectPath, executableOverride: executablePath)
-            Section {
-                DisclosureGroup("Modèle des analyses Codex") {
-                    Picker("Modèle", selection: $analysisModel) {
-                        Text("Choisir un modèle").tag("")
-                        if !analysisModel.isEmpty && !models.contains(where: { $0.model == analysisModel }) {
-                            Text("\(analysisModel) · à vérifier").tag(analysisModel)
-                        }
-                        ForEach(models.filter { !$0.hidden }) { value in
-                            Text(value.displayName + (value.isDefault ? " · défaut Codex" : "")).tag(value.model)
-                        }
-                    }
-                    Button(loadingModels ? "Lecture…" : "Actualiser les modèles disponibles") { refreshModels() }
-                        .disabled(loadingModels || CodexPaths.configurationError != nil)
-                    Text(modelMessage).font(.caption).foregroundStyle(.secondary)
-                    Text("Ce choix concerne les analyses d'Atoll ; il n'est pas nécessaire au suivi des sessions.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-            }
+            quotaSection
+            CodexCatalogSection(projectPath: projectPath, executableOverride: executablePath,
+                                chooseProject: chooseProject)
             advancedSettings
         }
         .formStyle(.grouped)
+        .disclosureGroupStyle(SettingsDisclosureStyle())
         .onAppear {
             refreshInstalled()
             if CodexPreview.enabled {
-                installed = true
-                projectPath = "/projet-exemple"
-                diagnostic = CodexPreview.hookDiagnosticSummary
+                projectPath = "/projets/projet-exemple"
+                diagnosticExpanded = CommandLine.arguments.contains("--preview-diagnostic")
                 advancedExpanded = CommandLine.arguments.contains("--preview-advanced")
             } else if projectPath.isEmpty, let cwd = CodexService.shared.sessions.first?.cwd {
                 projectPath = cwd
@@ -115,13 +108,53 @@ struct CodexSettingsPane: View {
         }
     }
 
+    private var quotaSection: some View {
+        Section("Quota de l'abonnement") {
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle("Afficher le quota Codex", isOn: $quotaEnabled)
+                    .onChange(of: quotaEnabled) { _, _ in
+                        if !CodexPreview.enabled { CodexService.shared.syncQuotaSettings() }
+                    }
+                SettingsHelp("Actualisé toutes les 2 minutes, sans générer de message.")
+            }
+            if quotaEnabled {
+                VStack(alignment: .leading, spacing: 10) {
+                    TimelineView(.periodic(from: .now, by: 30)) { context in
+                        if let quota = CodexService.shared.quota {
+                            ForEach(quota.buckets) { bucket in
+                                ForEach(bucket.windows) { window in
+                                    HStack(alignment: .firstTextBaseline) {
+                                        Text("\(bucket.label) · \(window.label)")
+                                        Spacer()
+                                        if quota.isFresh(at: context.date), window.isCurrent(at: context.date) {
+                                            Text("\(Int(window.usedFraction * 100)) % utilisés").monospacedDigit()
+                                            if let reset = window.resetsAt { ResetCountdown(resetsAt: reset) }
+                                        } else { Text("À actualiser").foregroundStyle(.secondary) }
+                                    }
+                                }
+                            }
+                        } else { SettingsHelp(CodexService.shared.status) }
+                    }
+                    Button("Actualiser le quota") {
+                        if !CodexPreview.enabled { CodexService.shared.syncQuotaSettings() }
+                    }
+                    .disabled(CodexService.shared.isLoading)
+                    .controlSize(.small)
+                }
+            }
+            SettingsHelp("Le contexte d'une conversation est visible dans son détail, depuis l'îlot.")
+        }
+    }
+
     private var validProject: Bool {
+        if CodexPreview.enabled { return !projectPath.isEmpty }
         var directory: ObjCBool = false
         return projectPath.hasPrefix("/") && FileManager.default.fileExists(atPath: projectPath, isDirectory: &directory)
             && directory.boolValue
     }
 
     private func chooseProject() {
+        guard !CodexPreview.enabled else { return }
         let panel = NSOpenPanel()
         panel.title = "Dossier où tu utilises Codex"
         panel.canChooseDirectories = true
@@ -131,89 +164,81 @@ struct CodexSettingsPane: View {
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
             projectPath = url.resolvingSymlinksInPath().path
-            diagnostic = "Projet choisi — vérifier l'intégration."
+            diagnostic = nil
         }
     }
 
     private func configure(install: Bool) {
+        guard !CodexPreview.enabled else {
+            installed = install
+            message = install ? "Approuve les hooks Atoll dans /hooks." : "Intégration retirée pour cet aperçu."
+            return
+        }
         do {
             try HookInstaller.configureCodex(install: install)
             refreshInstalled()
-            diagnostic = "Intégration modifiée — vérifier avec Codex."
+            diagnostic = nil
             message = install ? "Définitions à jour. Approuve les hooks Atoll dans /hooks."
-                : "Intégration retirée. Les hooks étrangers et la mémoire commune sont préservés."
+                : "Intégration retirée. Tes autres hooks et la mémoire commune sont conservés."
         } catch { message = error.localizedDescription }
     }
 
     private var advancedSettings: some View {
         Section {
-            DisclosureGroup("Configuration avancée", isExpanded: $advancedExpanded) {
-                TextField("CODEX_HOME (vide = détection)", text: $homePath)
-                    .textFieldStyle(.roundedBorder)
-                Button("Appliquer le dossier Codex") {
-                    do {
-                        let path = homePath.trimmingCharacters(in: .whitespacesAndNewlines)
-                        try CodexService.shared.changeHome(to: path.isEmpty ? nil : (path as NSString).expandingTildeInPath)
-                        refreshInstalled()
-                        diagnostic = "Dossier Codex changé — vérifier l'intégration."
-                        message = nil
-                    } catch { message = error.localizedDescription }
+            DisclosureGroup("Dépannage", isExpanded: $advancedExpanded) {
+                VStack(alignment: .leading, spacing: 20) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        SettingsHelp("Laisse les chemins vides pour la détection automatique.")
+                        TextField("CODEX_HOME", text: $homePath, prompt: Text("Détection automatique"))
+                            .textFieldStyle(.roundedBorder)
+                        Button("Appliquer le dossier Codex") {
+                            guard !CodexPreview.enabled else { return }
+                            do {
+                                let path = homePath.trimmingCharacters(in: .whitespacesAndNewlines)
+                                try CodexService.shared.changeHome(to: path.isEmpty ? nil : (path as NSString).expandingTildeInPath)
+                                refreshInstalled()
+                                diagnostic = nil
+                                message = nil
+                            } catch { message = error.localizedDescription }
+                        }
+                        SettingsHelp("Home utilisé : \(CodexPreview.enabled ? "/compte-codex" : CodexPaths.homeURL.path)\nFichier des hooks : \(CodexPreview.enabled ? "/compte-codex/hooks.json" : CodexPaths.hooksURL.path)")
+                            .textSelection(.enabled)
+                    }
+                    VStack(alignment: .leading, spacing: 8) {
+                        TextField("Chemin de codex", text: $executablePath, prompt: Text("Détection automatique"))
+                            .textFieldStyle(.roundedBorder).onSubmit { applyExecutable() }
+                        Button("Appliquer l'exécutable") { applyExecutable() }
+                    }
+                    if installed {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Button("Réparer les définitions et le lanceur") { configure(install: true) }
+                            SettingsHelp("Sauvegarde puis réinstalle les hooks Atoll. Leur approbation reste à faire dans Codex.")
+                            Button("Retirer l'intégration Codex") { configure(install: false) }
+                        }
+                    }
+                    SettingsHelp("Tes autres hooks sont préservés. Changer de home conserve l'intégration de l'ancien dossier.")
                 }
-                LabeledContent("Home utilisé", value: CodexPaths.homeURL.path)
-                LabeledContent("Fichier des hooks", value: CodexPaths.hooksURL.path)
-                TextField("Chemin de codex (vide = détection)", text: $executablePath)
-                    .textFieldStyle(.roundedBorder).onSubmit { applyExecutable() }
-                Button("Appliquer l'exécutable") { applyExecutable() }
-                if installed {
-                    Button("Réparer les définitions et le lanceur") { configure(install: true) }
-                    Button("Retirer l'intégration Codex") { configure(install: false) }
-                }
-                Text("Laisse les chemins vides pour la détection automatique. Atoll sauvegarde les hooks avant modification et préserve tes personnalisations au démarrage. « Réparer » réinstalle ses définitions. La confiance reste gérée dans Codex. Changer de home conserve l'installation de l'ancien.")
-                    .font(.caption).foregroundStyle(.secondary)
+                .padding(.vertical, 8)
             }
         }
     }
 
     private func refreshInstalled() {
-        installed = CodexHookSettingsEditor.hasManagedHooks(try? Data(contentsOf: CodexPaths.hooksURL))
+        installed = CodexPreview.enabled ? !CommandLine.arguments.contains("--preview-uninstalled")
+            : CodexHookSettingsEditor.hasManagedHooks(try? Data(contentsOf: CodexPaths.hooksURL))
     }
 
     private func applyExecutable() {
+        guard !CodexPreview.enabled else { return }
         CodexExecutable.invalidateCache()
         CodexService.shared.syncQuotaSettings()
-        diagnostic = "exécutable changé — vérifier l'intégration"
-    }
-
-    private func refreshModels() {
-        loadingModels = true
-        let home = CodexPaths.homeURL
-        let override = executablePath
-        Task { @MainActor in
-            defer { loadingModels = false }
-            guard let path = await CodexExecutable.resolve(overridePath: override) else {
-                modelMessage = CodexExecutable.notFoundMessage; return
-            }
-            let catalog = await Task.detached(priority: .utility) {
-                CodexRun.readModelCatalog(executable: URL(fileURLWithPath: path), home: home)
-            }.value
-            guard home == CodexPaths.homeURL, override == executablePath else { return }
-            switch catalog {
-            case .available(let values):
-                models = values
-                modelMessage = values.isEmpty ? "Catalogue reçu sans modèle disponible."
-                    : "\(values.count) modèles disponibles. Sélectionne celui des analyses Atoll."
-            case .unavailable(let reason):
-                models = []
-                modelMessage = "Catalogue indisponible : \(reason)"
-            }
-        }
+        diagnostic = nil
     }
 
     private func verify() {
+        guard !CodexPreview.enabled else { diagnostic = CodexPreview.hookDiagnosticSummary; return }
         checking = true
-        let home = CodexPaths.homeURL
-        let cwd = projectPath
-        let override = executablePath
+        let home = CodexPaths.homeURL, cwd = projectPath, override = executablePath
         Task { @MainActor in
             defer { checking = false }
             guard let path = await CodexExecutable.resolve(overridePath: override) else {
@@ -224,8 +249,7 @@ struct CodexSettingsPane: View {
             }.value
             guard home == CodexPaths.homeURL, cwd == projectPath, override == executablePath else { return }
             switch result {
-            case .available(let data):
-                diagnostic = CodexHookDiagnostics(data: data)?.summary ?? "réponse hooks/list non reconnue"
+            case .available(let data): diagnostic = CodexHookDiagnostics(data: data)?.summary ?? "Réponse Codex non reconnue."
             case .unavailable(let reason): diagnostic = reason
             }
         }

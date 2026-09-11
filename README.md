@@ -174,17 +174,21 @@ La seconde intégration peut être installée séparément dans les réglages. P
 
 1. Installe l'intégration dans Réglages › Codex.
 2. Dans ton terminal Codex, ouvre `/hooks`, relis et approuve les hooks Atoll.
-3. Choisis le **dossier de ton projet** dans les réglages, puis « Vérifier avec Codex ».
-   Le diagnostic nomme les hooks qui restent à approuver.
-4. Envoie un message dans Codex. Si le CLI était ouvert avant l'installation,
+3. Envoie un message dans Codex. Si le CLI était ouvert avant l'installation,
    reprends-le avec `codex resume` ; la session apparaît au prochain événement.
 
+Si la session n'apparaît pas, ouvre « Vérifier la connexion », choisis le
+**dossier de ton projet**, puis « Vérifier les hooks ».
 Le home Codex (`~/.codex` par défaut) est son dossier de configuration. Son choix,
-la réparation et le chemin de l'exécutable sont dans « Configuration avancée ».
+la réparation et le chemin de l'exécutable sont regroupés dans « Dépannage ».
 
 **Version courante : v0.18.1.** [Notes de version](https://github.com/mehdi7129/atoll/releases/tag/v0.18.1).
 Cette version rétablit le compact d'origine, affiche le contexte chiffré et simplifie
 le diagnostic Codex ; voir la [validation](docs/REVIEW-2026-09-10-island-context-setup.md).
+
+L'organisation des réglages décrite sur cette branche attend la prochaine release ;
+le [plan et la maquette validés](docs/PLAN-2026-09-11-settings-organization.md)
+en détaillent les huit onglets.
 
 ---
 
@@ -282,7 +286,9 @@ pas cette préférence.
   passe toujours par la commande officielle `claude plugin`, sur ton geste explicite —
   jamais automatiquement.
 - **Modèles d'analyse** : choix par tâche côté Claude ; modèle choisi dans le catalogue
-  natif côté Codex. Le moteur d'analyse se règle dans Apprentissage, séparément de la vue.
+  natif côté Codex. Moteur, modèles et limites se règlent dans Apprentissage ;
+  l'onglet Codex y donne un accès direct. La mémoire commune et la destination
+  des skills sont regroupées dans le même onglet.
 
 </details>
 

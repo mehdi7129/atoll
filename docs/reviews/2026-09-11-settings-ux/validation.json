@@ -1,0 +1,56 @@
+{
+  "date": "2026-09-11",
+  "branch": "codex/settings-ux",
+  "base_commit": "a961c101260d4d779647831a5a14154fab6fe63d",
+  "source_sha256": {
+    "App/AnalysisSettingsSection.swift": "4cbf94d3df4411cadc062e34e81b645bce4b794563f88727e0e4fdf7be64792f",
+    "App/CodexCatalogSection.swift": "21b56640984db5eb6a1dba3387f2767cca6db80a376b17f0574127165a41a043",
+    "App/CodexPreview.swift": "6b2fe80eec0bdb48dc14516df858d15d492945cc67225c182205f449698e5924",
+    "App/CodexSettingsPane.swift": "59a9a6480be4e584f7405f8173719034500a10da39a78f493e30e7cd90454365",
+    "App/SettingsView.swift": "3a809f86602c3ad195f5a58d1ddfbf9dada7823c0794b50908743f4f05fd726f",
+    "App/CodexAnalysisModelPicker.swift": "698a3c8d050a355002062edec1f8588118790d3db0d700edf1af2f0dd93200c3",
+    "App/SettingsHelp.swift": "1d9a03e10be8a02b8a246f7dc95bd84b12529179cdb11ff74d1b45c867c13877",
+    "Scripts/test-ui.py": "c50ef765a5eb516c7475771b69c8234557e35a2e0f8993abaa9dcd9c93a92b96",
+    "Scripts/test-settings-sabotage.py": "3444e167a6309c513e73daf5354664d71735698366cbf04fe7d73f748dc6fb5a"
+  },
+  "build": "passed",
+  "core_tests": {
+    "total": 1020,
+    "skipped": 1,
+    "failures": 0
+  },
+  "ui_cases": {
+    "total": 21,
+    "passed": 21
+  },
+  "sabotage": {
+    "old_layout": "detected",
+    "disclosure_action": "detected",
+    "automatic_model_selection": "detected_after_successful_build"
+  },
+  "personal_configuration_unchanged": {
+    ".claude/settings.json": true,
+    ".codex/hooks.json": true,
+    ".codex/config.toml": true,
+    ".atoll/codex-home.json": true,
+    ".atoll/bin/atoll-codex-bridge": true,
+    "preferences": true
+  },
+  "stable_app": {
+    "version": "0.18.1",
+    "build": "36"
+  },
+  "capture_scope": "Protected preview copies, private preferences and synthetic Codex catalog; General, Claude and full Learning commands disabled.",
+  "captures": [
+    "settings-codex-connected",
+    "settings-codex-narrow-light",
+    "settings-codex-short",
+    "settings-codex-diagnostic",
+    "settings-codex-model-shared",
+    "settings-codex-model-obsolete",
+    "settings-analysis-options",
+    "settings-general",
+    "settings-claude",
+    "settings-learning"
+  ]
+}
