@@ -634,6 +634,35 @@
         "Scripts/test-ui.py",
         "Scripts/test-settings-sabotage.py"
       ]
+    },
+    {
+      "date": "2026-09-11",
+      "document": "docs/AUDIT-2026-09-11-learning-efficiency.md",
+      "depth": "sweep",
+      "note": "Audit ciblé du rendement des analyses et propositions de skills : déclencheurs, budget, digest, catalogues, écriture et revue. Sources intégrales/ciblées distinguées dans le rapport ; reproductions sur types Core et services réels avec CLI fictifs. Aucun changement produit.",
+      "files": [
+        "App/AnalysisExecution.swift",
+        "App/LearningSettings.swift",
+        "App/CodexRun.swift",
+        "App/SkillDestination.swift",
+        "App/RetrospectiveRunner.swift",
+        "App/NotesCurationService.swift",
+        "App/PluginInventory.swift",
+        "App/SkillReviewCenter.swift",
+        "AtollCore/Sources/AtollCore/CodexExecPlan.swift",
+        "AtollCore/Sources/AtollCore/RetrospectivePrompt.swift",
+        "AtollCore/Sources/AtollCore/CodexSkillCatalog.swift",
+        "AtollCore/Sources/AtollCore/TranscriptLine.swift",
+        "AtollCore/Sources/AtollCore/LearningGate.swift",
+        "AtollCore/Sources/AtollCore/CodexTranscriptParser.swift",
+        "AtollCore/Sources/AtollCore/TranscriptDigest.swift",
+        "AtollCore/Sources/AtollCore/RetrospectiveReport.swift",
+        "AtollCore/Sources/AtollCore/SkillCatalog.swift",
+        "AtollCore/Sources/AtollCore/LearningArtifacts.swift",
+        "AtollCore/Sources/AtollCore/LearnedSkillStore.swift",
+        "AtollCore/Sources/AtollCore/NotesCurationPrompt.swift",
+        "AtollCore/Sources/AtollCore/NotesCuration.swift"
+      ]
     }
   ]
 }

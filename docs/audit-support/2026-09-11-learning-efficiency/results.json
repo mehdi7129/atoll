@@ -1,0 +1,97 @@
+{
+  "baselineCommit": "53c0a59fe28e40dd18d7a5b6fc0cea109cec37c3",
+  "realGenerativeCLICalls": 0,
+  "value": {
+    "catalogIDs": [
+      "known-command"
+    ],
+    "catalogUnchangedAfterPendingAndRejected": true,
+    "digestEntriesKept": 1,
+    "digestFinalEvidencePresent": false,
+    "digestInputCharacters": 2659,
+    "digestOutputCharacters": 2012,
+    "digestTruncatedFlag": false,
+    "digestTruncationMarkerPresent": true,
+    "projectCommandFound": true,
+    "projectSkillFound": false
+  },
+  "growth": {
+    "digestCharacters": 124215,
+    "digestEntries": 103,
+    "digestIdentical": true,
+    "digestTruncated": false,
+    "durationSeconds": 1200,
+    "firstBytes": 146319,
+    "firstDecision": "run",
+    "firstDigestSHA256": "c896251171f62bd40a16934f656763a63007c88c8a83e1156ea38b779e3e3415",
+    "firstParsedLines": 103,
+    "growthThresholdBytes": 50000,
+    "newMetadataParsedAsNil": true,
+    "priorRunsInWindow": 1,
+    "quotaUsedFraction": 0.2,
+    "rawGrowthBytes": 60099,
+    "sameBytesControlDecision": "skip(growth.LearningGate.Reason.alreadyProcessed)",
+    "secondBytes": 206418,
+    "secondDecision": "run",
+    "secondDigestSHA256": "c896251171f62bd40a16934f656763a63007c88c8a83e1156ea38b779e3e3415",
+    "secondParsedLines": 103,
+    "sessionID": "audit-same-material",
+    "userPromptCount": 3,
+    "windowCapControlDecision": "skip(growth.LearningGate.Reason.windowCapReached)"
+  },
+  "writes": {
+    "nominal": {
+      "actualNoteFiles": 1,
+      "actualProposalDirectories": 1,
+      "decision": "run",
+      "fakeCLISpawns": 1,
+      "noteSinkCalls": 1,
+      "notesWrittenReported": 1,
+      "outcome": "success(1n/1s)",
+      "processedSessions": 1,
+      "sameTranscriptSecondDecision": "skip(alreadyProcessed)",
+      "scenario": "nominal",
+      "skillsProposedReported": 1
+    },
+    "blocked": {
+      "actualNoteFiles": 0,
+      "actualProposalDirectories": 0,
+      "decision": "run",
+      "fakeCLISpawns": 1,
+      "noteSinkCalls": 0,
+      "notesWrittenReported": 1,
+      "outcome": "success(1n/1s)",
+      "processedSessions": 1,
+      "sameTranscriptSecondDecision": "skip(alreadyProcessed)",
+      "scenario": "blocked",
+      "skillsProposedReported": 1
+    }
+  },
+  "curation": {
+    "cancelledDueCurationSpawns": 2,
+    "cadenceStateUnchangedAfterCancellation": true,
+    "corpusUnchangedAfterCancellation": true,
+    "unchangedCorpusExtraSpawn": 1,
+    "corpusHashesAfterBaseline": {
+      "01-connaissance-0.md": "f92b5762dd65b67395c932306961637ff4ebcf6b6989eb71d7ac018cd8c11c43",
+      "02-connaissance-1.md": "0f5f2407b24f66255add12440874311409009c25fc0c1e52e54df0c410243940"
+    },
+    "corpusHashesBeforeNextDueRun": {
+      "01-connaissance-0.md": "f92b5762dd65b67395c932306961637ff4ebcf6b6989eb71d7ac018cd8c11c43",
+      "02-connaissance-1.md": "0f5f2407b24f66255add12440874311409009c25fc0c1e52e54df0c410243940"
+    }
+  },
+  "sourceSHA256": {
+    "App/AnalysisExecution.swift": "c58462234dca5c969706b5e25be894dfd331f5f6ca8686527bb7dd050f327b0c",
+    "App/CodexInteractionCenter.swift": "eb67bf04f41bc1772657d6b91169094cc94b75c09e020f637a754fd764ce0f3c",
+    "App/NotesCurationService.swift": "bc84f370043a0af25161c23b4ad97f253f9346c3bcd6353169e73a48c2e067bf",
+    "App/PluginInventory.swift": "f1a1c5c0864d13bc3b6aa7c17292ce615c773f9df3841896e02152262bf95842",
+    "App/RetrospectiveRunner.swift": "53264dd8db6c4d18a55cfe2051e99d208ad5aa77b4a74348f470ce9fa16ccdad",
+    "AtollCore/Sources/AtollCore/CodexTranscriptParser.swift": "8fb1a8aa94b238a7e04557e31c8db362bc2b3b6aca4562b3cce56310c6fd36e7",
+    "AtollCore/Sources/AtollCore/LearningGate.swift": "a599b3626b8e7cc167f0a086f8ffdcb07e27f99a1a29553172c1451af33ae677",
+    "AtollCore/Sources/AtollCore/SkillCatalog.swift": "01c3a6f938287079225369c820bf5477f2194238f1c3f0e2077f50a1bcf80439",
+    "AtollCore/Sources/AtollCore/TranscriptDigest.swift": "285b93bded67ca9dfef5162d3e9aaf580bca54c8d4db933b12f29fdd159ceaa0",
+    "AtollCore/Sources/AtollCore/TranscriptLine.swift": "87ed7252bc25a2fe2e86c6374cd9b4f654633e6e43a56fed2f39e5126e096e6c",
+    "Scripts/runtime-tests/Stubs.swift": "5f59000e3f6d21afc4c67a24a28b8bc80ee5555eea7104d42ebff3386373992a"
+  }
+}
