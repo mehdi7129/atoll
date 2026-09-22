@@ -78,6 +78,18 @@ final class AnalysisBudget {
         var launchAttemptAt: Date?
         var launchedAt: Date?
         var outcome: String
+        // Optionnels pour relire les anciens journaux sans inventer des mesures.
+        var endedAt: Date?
+        /// Temps total de réservation à clôture, préparation comprise. Après
+        /// crash, l'instant de fin réel est inconnu : ne pas utiliser la reprise.
+        var durationSeconds: TimeInterval?
+        var promptCharacters: Int?
+        var usage: AnalysisUsage?
+        var notesWritten: Int?
+        var skillsProposed: Int?
+        var digestFragmentsShortened: Int?
+        var digestEntriesDropped: Int?
+        var digestSourceReadStopped: Bool?
     }
 
     private struct State: Codable {
@@ -95,7 +107,8 @@ final class AnalysisBudget {
         let id = UUID()
         records.append(Record(id: id, kind: kind, origin: origin, destination: destination,
                               provider: context.provider, model: context.model, quota: context.quota,
-                              providerReason: context.reason, preparedAt: Date(), outcome: "preparing"))
+                              providerReason: context.reason, preparedAt: Date(), outcome: "preparing",
+                              usage: .unknown))
         do { try save() }
         catch { records.removeAll { $0.id == id }; throw error }
         active = id
@@ -172,10 +185,44 @@ final class AnalysisBudget {
 
     func finish(_ id: UUID, outcome: String) {
         guard active == id else { return }
-        if let index = records.firstIndex(where: { $0.id == id }) { records[index].outcome = outcome }
+        if let index = records.firstIndex(where: { $0.id == id }) {
+            let now = Date()
+            records[index].outcome = outcome
+            records[index].endedAt = now
+            let elapsed = now.timeIntervalSince(records[index].preparedAt)
+            records[index].durationSeconds = elapsed >= 0 ? elapsed : nil
+        }
         try? save()
         active = nil
         activeProvider = nil
+    }
+
+    /// Seuls les compteurs réellement établis sont fournis par les écrivains.
+    /// nil laisse l'inconnue intacte ; une reprise peut compléter le même reçu.
+    func updateMetrics(_ id: UUID, promptCharacters: Int? = nil,
+                       notesWritten: Int? = nil, skillsProposed: Int? = nil,
+                       digestFragmentsShortened: Int? = nil, digestEntriesDropped: Int? = nil,
+                       digestSourceReadStopped: Bool? = nil) {
+        // La reprise démarre avant la première capture d'analyse : son reçu
+        // peut n'exister que sur disque. Un journal illisible reste intact.
+        do { try load() } catch { return }
+        guard let index = records.firstIndex(where: { $0.id == id }) else { return }
+        if let promptCharacters, promptCharacters >= 0 { records[index].promptCharacters = promptCharacters }
+        if let notesWritten, notesWritten >= 0 { records[index].notesWritten = notesWritten }
+        if let skillsProposed, skillsProposed >= 0 { records[index].skillsProposed = skillsProposed }
+        if let digestFragmentsShortened, digestFragmentsShortened >= 0 { records[index].digestFragmentsShortened = digestFragmentsShortened }
+        if let digestEntriesDropped, digestEntriesDropped >= 0 { records[index].digestEntriesDropped = digestEntriesDropped }
+        if let digestSourceReadStopped { records[index].digestSourceReadStopped = digestSourceReadStopped }
+        try? save()
+    }
+
+    /// Appelé après drainage, même si le run a été annulé entre-temps. On ne
+    /// rouvre jamais son issue, son créneau de quota ni sa durée terminée.
+    func recordUsage(_ id: UUID, stdout: Data) {
+        do { try load() } catch { return }
+        guard let index = records.firstIndex(where: { $0.id == id }) else { return }
+        records[index].usage = AnalysisUsage.parse(stdout: stdout, provider: records[index].provider)
+        try? save()
     }
 
     private func load() throws {

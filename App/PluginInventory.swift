@@ -445,10 +445,13 @@ final class PluginInventory {
         }
         let catalog = snapshot.promptCatalog()
         let prompt = PluginSearchPrompt.userPrompt(need: trimmed, catalog: catalog.text)
+        let fullPrompt = CodexExecPlan.fullPrompt(system: PluginSearchPrompt.systemPrompt, user: prompt)
+        AnalysisBudget.shared.updateMetrics(lease, promptCharacters: execution.provider == .codex
+            ? fullPrompt.count : PluginSearchPrompt.systemPrompt.count + prompt.count)
         let launch: CodexRun.Launch?
         if execution.provider == .codex {
             launch = await CodexRun.prepare(schema: PluginSearchPrompt.jsonSchema,
-                prompt: CodexExecPlan.fullPrompt(system: PluginSearchPrompt.systemPrompt, user: prompt),
+                prompt: fullPrompt,
                 label: "plugins", home: execution.home, model: execution.model,
                 executableOverride: execution.executableOverride)
         } else {
@@ -471,6 +474,7 @@ final class PluginInventory {
                 AnalysisBudget.shared.launched(lease)
                 self.searchProcessIdentity = ProcessInspector.identity(of: process.processIdentifier)
             })
+        AnalysisBudget.shared.recordUsage(lease, stdout: outcome.output)
         guard generation == searchGeneration, !Task.isCancelled else { return "Recherche annulée." }
         resultLabel = "exit(\(outcome.status))"
         guard outcome.status == 0 else { return "Recherche impossible : \(outcome.diagnostic)" }

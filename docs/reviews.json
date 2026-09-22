@@ -663,6 +663,29 @@
         "AtollCore/Sources/AtollCore/NotesCurationPrompt.swift",
         "AtollCore/Sources/AtollCore/NotesCuration.swift"
       ]
+    },
+    {
+      "date": "2026-09-22",
+      "document": "docs/REVIEW-2026-09-22-learning-efficiency.md",
+      "depth": "sweep",
+      "note": "Corrections de PR #5 sur 15 fichiers produit : livraison/reprise, cadence, antériorité, mesures et digest. Relecture ciblée des interactions et tests de sabotage ; ne revendique pas une relecture ligne à ligne de toute l’app. Commandes et limites dans le rapport.",
+      "files": [
+        "App/AnalysisExecution.swift",
+        "App/AppDelegate.swift",
+        "App/NotesCurationService.swift",
+        "App/PluginInventory.swift",
+        "App/RetrospectiveRunner.swift",
+        "AtollCore/Sources/AtollCore/AnalysisUsage.swift",
+        "AtollCore/Sources/AtollCore/CodexExecPlan.swift",
+        "AtollCore/Sources/AtollCore/CurationCorpusFingerprint.swift",
+        "AtollCore/Sources/AtollCore/LearnedSkillStore.swift",
+        "AtollCore/Sources/AtollCore/LearningArtifacts.swift",
+        "AtollCore/Sources/AtollCore/LearningNovelty.swift",
+        "AtollCore/Sources/AtollCore/RetrospectiveDelivery.swift",
+        "AtollCore/Sources/AtollCore/RetrospectiveReport.swift",
+        "AtollCore/Sources/AtollCore/SkillCatalog.swift",
+        "AtollCore/Sources/AtollCore/TranscriptDigest.swift"
+      ]
     }
   ]
 }

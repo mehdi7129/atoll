@@ -40,7 +40,7 @@ import Foundation
 public struct RetrospectiveReport: Equatable, Sendable {
 
     /// Une note mémoire proposée, destinée aux fichiers `memory/*.md`.
-    public struct Note: Equatable, Sendable {
+    public struct Note: Equatable, Sendable, Codable {
         /// Catégories acceptées — ALIGNÉES sur l'enum du jsonSchema de
         /// RetrospectivePrompt (source unique) ; toute autre valeur retombe
         /// sur « project-fact ».
@@ -63,7 +63,7 @@ public struct RetrospectiveReport: Equatable, Sendable {
 
     /// Une proposition de skill (`.claude/skills/<slug>/SKILL.md`) — jamais
     /// écrite sur disque sans validation humaine explicite (UI 7c).
-    public struct SkillProposal: Equatable, Sendable {
+    public struct SkillProposal: Equatable, Sendable, Codable {
         public let slug: String
         public let title: String
         public let description: String

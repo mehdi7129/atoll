@@ -144,7 +144,7 @@ import AtollCore
                 NotesCurationService.shared.cancel()
                 try Data().write(to: BridgePaths.root.appendingPathComponent("release"))
             }
-            try await waitFor { NotesCurationService.shared.phase == .idle }
+            try await waitFor { NotesCurationService.shared.phase == .idle && AnalysisBudget.shared.active == nil && Resolver.continuation == nil }
             if cancellation != "nominal" {
                 try await waitFor { NotesCurationService.shared.lastOutcome == "analyse annulée" }
             }
@@ -352,7 +352,7 @@ import AtollCore
                 try String(repeating: "connaissance ", count: 100_000).write(to: BridgePaths.learningNotesDirectory.appendingPathComponent("one.md"), atomically: true, encoding: .utf8)
             }
             NotesCurationService.shared.curateNow(manual: true)
-            try await waitFor { NotesCurationService.shared.phase == .idle }
+            try await waitFor { NotesCurationService.shared.phase == .idle && AnalysisBudget.shared.active == nil && Resolver.continuation == nil }
             let data = try Data(contentsOf: BridgePaths.learningDirectory.appendingPathComponent("curation.json"))
             let state = try JSONSerialization.jsonObject(with: data) as! [String: Any]
             try check((state["lastOutcome"] as? String)?.isEmpty == false, "refus curation non persisté : \(refusal)")

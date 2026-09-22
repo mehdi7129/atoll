@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import OSLog
 import AtollCore
+import Darwin
 
 private let log = Logger(subsystem: "dev.mehdiguiard.atoll", category: "curation")
 
@@ -68,6 +69,7 @@ final class NotesCurationService {
     @ObservationIgnored private var activeLease: UUID?
     @ObservationIgnored private var activeManual = true
     @ObservationIgnored private var runLaunched = false
+    @ObservationIgnored private var lastSuccessfulCorpus: CurationCorpusFingerprint?
     private(set) var retryAt: Date?
 
     private static let timeoutSeconds: TimeInterval = 600
@@ -81,6 +83,7 @@ final class NotesCurationService {
         lastOutcome = state.lastOutcome
         warnings = state.warnings
         retryAt = state.retryAt
+        lastSuccessfulCorpus = state.lastSuccessfulCorpus
     }
 
     // MARK: - Planification
@@ -101,8 +104,7 @@ final class NotesCurationService {
         // tout de suite, il y a le bouton juste à côté.
         if lastRunAt == nil {
             lastRunAt = Date()
-            Self.saveState(.init(lastRunAt: lastRunAt, lastOutcome: lastOutcome,
-                                 warnings: warnings))
+            persistState()
         }
         schedulerTask = Task { [weak self] in
             while !Task.isCancelled {
@@ -142,6 +144,9 @@ final class NotesCurationService {
         // double-clic lançait deux `claude` en Phase 9).
         phase = .running
         activeManual = manual
+        // L'annulation peut arriver avant le premier tour de la Task : elle
+        // ne doit pas reprendre le drapeau de dépense du cycle précédent.
+        runLaunched = false
         lastOutcome = nil
         let generation = UUID()
         runGeneration = generation
@@ -161,6 +166,12 @@ final class NotesCurationService {
 
     func cancel() {
         runGeneration = UUID()
+        if cycleTask != nil {
+            // Persisté AVANT le signal, pas dans le retour asynchrone : la
+            // fermeture d'Atoll n'attend pas ce retour. Une analyse déjà
+            // lancée consomme son échéance ; une préparation attend 30 min.
+            recordOutcome("analyse annulée", touched: false)
+        }
         timeoutTask?.cancel()
         timeoutTask = nil
         terminateWithEscalation()
@@ -199,6 +210,11 @@ final class NotesCurationService {
                    touched: false, retry: false)
             return
         }
+        if !manual, lastSuccessfulCorpus == CurationCorpusFingerprint(notes: notes) {
+            finish(outcome: "notes inchangées depuis le dernier rangement — analyse évitée",
+                   touched: false, retry: false, preserveWarnings: true)
+            return
+        }
         let execution: AnalysisExecution
         let lease: UUID
         do {
@@ -217,6 +233,9 @@ final class NotesCurationService {
         }
         let provider = execution.provider
         let userPrompt = NotesCurationPrompt.userPrompt(notes: notes)
+        AnalysisBudget.shared.updateMetrics(lease, promptCharacters: provider == .codex
+            ? CodexExecPlan.fullPrompt(system: NotesCurationPrompt.systemPrompt, user: userPrompt).count
+            : NotesCurationPrompt.systemPrompt.count + userPrompt.count)
         var parsed: NotesCurationOutput?
         switch provider {
         case .claude:
@@ -303,8 +322,12 @@ final class NotesCurationService {
         let fm = FileManager.default
         let notesDirectory = BridgePaths.learningNotesDirectory
         let stamp = Self.timestamp()
-        let archive = BridgePaths.learningArchiveDirectory
-            .appendingPathComponent("notes-\(stamp)", isDirectory: true)
+        let archive: URL
+        do { archive = try Self.reserveArchive(stamp: stamp) }
+        catch {
+            finish(outcome: "non appliquée : \(error.localizedDescription)", touched: false)
+            return
+        }
         /// Passe à true à la première suppression : au-delà, un échec ne peut
         /// plus être annoncé comme inoffensif.
         var swapStarted = false
@@ -316,7 +339,6 @@ final class NotesCurationService {
         do {
             // (1) ARCHIVE d'abord — puis VÉRIFICATION avant de toucher à quoi
             // que ce soit : nombre de fichiers ET octets identiques.
-            try fm.createDirectory(at: archive, withIntermediateDirectories: true)
             for note in previous {
                 let source = notesDirectory.appendingPathComponent(note.name)
                 let destination = archive.appendingPathComponent(note.name)
@@ -402,6 +424,12 @@ final class NotesCurationService {
                 + (plan.warnings.isEmpty ? "" : " · \(plan.warnings.count) contradiction(s)")
             log.info("curation appliquée : \(summary, privacy: .public) (archive : \(archive.lastPathComponent, privacy: .public))")
             Self.pruneArchives()
+            // L'entrée a été remplacée : comparer au corpus AVANT le swap
+            // relancerait le modèle sur ses propres sorties au prochain tick.
+            lastSuccessfulCorpus = CurationCorpusFingerprint(notes: Self.readNotes())
+            if let lease = activeLease {
+                AnalysisBudget.shared.updateMetrics(lease, notesWritten: written.count, skillsProposed: 0)
+            }
             finish(outcome: summary + (manual ? "" : " (auto)"), touched: true)
         } catch {
             guard swapStarted else {
@@ -421,6 +449,24 @@ final class NotesCurationService {
                    : "interrompue — \(restored)/\(previous.count) note(s) restaurées, le reste est dans \(archive.lastPathComponent)",
                    touched: false)
         }
+    }
+
+    /// `mkdir` réserve réellement le nom (createDirectory réussit aussi sur
+    /// un dossier déjà présent). Les suffixes ordonnés gardent la dernière
+    /// archive identifiable par repairInterruptedSwap et pruneArchives.
+    static func reserveArchive(stamp: String) throws -> URL {
+        let directory = BridgePaths.learningArchiveDirectory
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        for index in 0..<10_000 {
+            let suffix = index == 0 ? "" : String(format: "-%04d", index)
+            let candidate = directory.appendingPathComponent("notes-\(stamp)\(suffix)", isDirectory: true)
+            if mkdir(candidate.path, 0o700) == 0 { return candidate }
+            let failure = errno
+            guard failure == EEXIST else {
+                throw POSIXError(POSIXErrorCode(rawValue: failure) ?? .EIO)
+            }
+        }
+        throw CocoaError(.fileWriteFileExists)
     }
 
     /// Remet les notes archivées à leur place (best-effort, fichier par
@@ -596,7 +642,14 @@ final class NotesCurationService {
     ///
     /// `touched` ne sert qu'à savoir si les avertissements affichés
     /// (contradictions) proviennent de ce cycle ou doivent être effacés.
-    private func finish(outcome: String, touched: Bool, retry: Bool = true) {
+    private func finish(outcome: String, touched: Bool, retry: Bool = true,
+                        preserveWarnings: Bool = false) {
+        recordOutcome(outcome, touched: touched, retry: retry, preserveWarnings: preserveWarnings)
+        phase = .idle
+    }
+
+    private func recordOutcome(_ outcome: String, touched: Bool, retry: Bool = true,
+                               preserveWarnings: Bool = false) {
         let now = Date()
         if runLaunched || touched || !retry {
             lastRunAt = now
@@ -605,9 +658,17 @@ final class NotesCurationService {
             retryAt = now.addingTimeInterval(30 * 60)
         }
         lastOutcome = outcome
-        if !touched { warnings = [] }
-        phase = .idle
-        Self.saveState(.init(lastRunAt: lastRunAt, lastOutcome: outcome, warnings: warnings, retryAt: retryAt))
+        if !touched, !preserveWarnings { warnings = [] }
+        if !touched, let lease = activeLease {
+            AnalysisBudget.shared.updateMetrics(lease, notesWritten: 0, skillsProposed: 0)
+        }
+        persistState()
+    }
+
+    private func persistState() {
+        Self.saveState(.init(lastRunAt: lastRunAt, lastOutcome: lastOutcome,
+                             warnings: warnings, retryAt: retryAt,
+                             lastSuccessfulCorpus: lastSuccessfulCorpus))
     }
 
     // MARK: - Sous-processus
@@ -699,6 +760,7 @@ final class NotesCurationService {
         }.value
         let output = await outputTask
         let errorTail = await errorTask
+        AnalysisBudget.shared.recordUsage(lease, stdout: output)
 
         // Hors MainActor : `waitUntilExit` boucle en attendant le SIGCHLD.
         await Task.detached(priority: .utility) { process.waitUntilExit() }.value
@@ -749,6 +811,30 @@ final class NotesCurationService {
         var lastOutcome: String?
         var warnings: [String] = []
         var retryAt: Date? = nil
+        // Optionnel : un état antérieur garde sa cadence et ses opt-ins. Ni
+        // une migration, ni un changement de modèle ne rendent une date due.
+        var lastSuccessfulCorpus: CurationCorpusFingerprint? = nil
+
+        init(lastRunAt: Date? = nil, lastOutcome: String? = nil, warnings: [String] = [],
+             retryAt: Date? = nil, lastSuccessfulCorpus: CurationCorpusFingerprint? = nil) {
+            self.lastRunAt = lastRunAt
+            self.lastOutcome = lastOutcome
+            self.warnings = warnings
+            self.retryAt = retryAt
+            self.lastSuccessfulCorpus = lastSuccessfulCorpus
+        }
+
+        // Une empreinte illisible ne doit pas remettre à zéro une échéance
+        // valide : cette donnée ajoutée n'autorise jamais une dépense.
+        init(from decoder: Decoder) throws {
+            let values = try decoder.container(keyedBy: CodingKeys.self)
+            lastRunAt = try values.decodeIfPresent(Date.self, forKey: .lastRunAt)
+            lastOutcome = try values.decodeIfPresent(String.self, forKey: .lastOutcome)
+            warnings = try values.decodeIfPresent([String].self, forKey: .warnings) ?? []
+            retryAt = try values.decodeIfPresent(Date.self, forKey: .retryAt)
+            lastSuccessfulCorpus = try? values.decodeIfPresent(CurationCorpusFingerprint.self,
+                                                               forKey: .lastSuccessfulCorpus)
+        }
     }
 
     private static var stateURL: URL {

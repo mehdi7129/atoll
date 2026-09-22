@@ -2,9 +2,13 @@
 
 **11 septembre 2026 · base `53c0a59fe28e40dd18d7a5b6fc0cea109cec37c3` (v0.18.2).**
 Demandé par Mehdi pour identifier les pertes de tokens et de temps de revue.
-Cette PR livre l'audit, ses reproductions et un plan ; elle ne modifie pas le
+Cet audit livre l'audit, ses reproductions et un plan ; elle ne modifie pas le
 produit, ses préférences ni les skills installés. Aucun appel génératif Atoll
 n'a été déclenché pendant cet audit.
+
+**Suite au 22 septembre :** les corrections autorisées sont maintenant développées
+dans la même PR #5. Le [rapport de correction](REVIEW-2026-09-22-learning-efficiency.md)
+décrit le code actuel ; les constats et probes ci-dessous restent ceux de la base du 11 septembre.
 
 ## Décision proposée
 

@@ -1,21 +1,43 @@
 # HANDOFF — reprendre Atoll
 
-État du **11 septembre 2026**. Fiche courante ; les règles détaillées restent dans
+État du **22 septembre 2026**. Fiche courante ; les règles détaillées restent dans
 [CLAUDE.md](../CLAUDE.md). L'[ancien handoff](HANDOFF-2026-09-10-archive.md) conserve
 les mesures et pièges historiques, sans faire autorité sur l'état actuel.
 
-## Audit du rendement de l'apprentissage — proposition de travail
+## PR #5 — corrections du rendement de l’apprentissage
 
-Mehdi a demandé une PR d'audit sur les tokens et le temps de revue du générateur
-de skills et des analyses automatiques. Le [rapport du 11 septembre](AUDIT-2026-09-11-learning-efficiency.md)
-réunit les constats, preuves hors ligne et cinq lots proposés. Les corrections
-produit ne sont **pas implémentées** : ne pas les considérer livrées en v0.18.2.
+Mehdi a autorisé les corrections de l’[audit du 11 septembre](AUDIT-2026-09-11-learning-efficiency.md).
+Elles sont sur `codex/audit-learning-efficiency`, dans la
+[PR #5](https://github.com/mehdi7129/atoll/pull/5), **en attente de revue, sans fusion ni release**.
+Le [rapport de correction](REVIEW-2026-09-22-learning-efficiency.md) décrit les preuves,
+les commandes de test et les limites ; l’audit initial reste un constat historique.
 
-Priorités : succès erroné après échec d'écriture, récupération sans nouvel appel
-au modèle, analyses répétées sur matière inchangée, puis mesures d'usage et
-antériorité des skills. Les sorties sont déjà bornées ; les données historiques
-ne mesurent pas le rendement actuel de Codex. Aucun run génératif Atoll n'a été
-déclenché pour cet audit ; ses harnesses utilisent des CLI fictifs.
+- Sorties sauvegardées avant livraison, écritures confirmées et reprise locale
+  au démarrage ou avant une nouvelle analyse. Un résultat incomplet ne marque
+  pas la session traitée ; une destination différente ne reçoit jamais l’ancien résultat.
+- Même condensé déjà traité : aucun nouvel appel automatique. Rangement :
+  annulation persistée, empreinte du corpus après succès, relance manuelle conservée.
+- Antériorité bornée des notes, propositions, refus et installations ; catalogue
+  Claude remontant au projet. Les doublons exacts sont filtrés avant livraison.
+- Usage natif et inconnues explicites, durée, taille du prompt et résultats
+  conservés dans le journal existant. Digest : coupures et bornes distinctes,
+  conclusions mieux préservées, commandes tronquées signalées.
+
+Validation du 22 septembre : **1 070 tests Core, un skip opt-in et aucun échec**,
+**135 parcours** dans les quatre harnesses runtime, **34 sabotages détectés**,
+builds Debug/Release et contrôle documentaire réussis. L’interface n’a pas été
+réorganisée dans ce lot ; aucune app n’a été lancée pour cette validation.
+
+Aucun CLI génératif réel lancé pour ce lot. Les nouvelles protections sont
+vérifiées par des CLI fictifs et des sabotages ; aucun gain de tokens ni de
+qualité des modèles n’est déduit de ces fixtures. Apprentissage toujours opt-in,
+choix de modèle et revue humaine des skills conservés.
+
+Les fichiers du Bureau étant partiellement déchargés par iCloud, la validation
+utilise une copie locale : `/private/tmp/atoll-learning-local-20260922`.
+Les changements sont aussi présents dans le dossier d’origine. Xcode 27 nécessite
+le composant Metal ; les harnesses Swift utilisent provisoirement `--build-system native`.
+Ne pas relancer des builds dans le Bureau tant que les fichiers ne sont pas hydratés.
 
 ## v0.18.2 publiée — réglages réorganisés
 

@@ -55,6 +55,9 @@ public enum CodexExecPlan {
             // d'AGENTS.md ou de skills globaux. Le cwd est contrôlé séparément.
             "--ignore-user-config",
             "--skip-git-repo-check",
+            // L'usage natif arrive sur stdout ; le résultat structuré reste
+            // dans son fichier dédié, et ne dépend jamais de ces événements.
+            "--json",
             "--output-schema", schemaPath,
             "--output-last-message", outputPath,
         ]

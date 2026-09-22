@@ -1,5 +1,11 @@
 # CLAUDE.md — instructions projet Atoll
 
+> **Travail courant — PR #5, 2026-09-22.** Corrections du rendement de
+> l’apprentissage autorisées : sauvegarde/reprise locale, répétitions évitées,
+> antériorité bornée et mesures d’usage. Branche `codex/audit-learning-efficiency`,
+> sans fusion ni nouvelle release. Lire [HANDOFF](docs/HANDOFF.md) puis le
+> [rapport de validation](docs/REVIEW-2026-09-22-learning-efficiency.md).
+
 > **v0.18.2, build 37 — publiée le 2026-09-11, PR #4 fusionnée.**
 > Mehdi a demandé la fusion et la release. La [PR #4](https://github.com/mehdi7129/atoll/pull/4)
 > est fusionnée (`9e93bb3`) ; le tag pointe sur `66aaba4`, sans changement

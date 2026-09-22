@@ -1,0 +1,203 @@
+{
+  "schemaVersion": 1,
+  "fixtureCount": 9,
+  "sourceSHA256": "0516b80ad2bb5aaa3392cf87d15e654202554bffda98a02b494d5093659811d4",
+  "scope": "Synthetic offline excerpt retention; no model generation or quality claim.",
+  "tokenUsageMeasured": false,
+  "reviewTimeMeasured": false,
+  "baseline": [
+    {
+      "annotation": "Aucun skill attendu : lecture et opération ordinaires.",
+      "characters": 86,
+      "entriesDropped": 0,
+      "expectedProofs": 1,
+      "fragmentsShortened": 0,
+      "name": "routine",
+      "preservedProofs": 1,
+      "sourceReadStopped": false
+    },
+    {
+      "annotation": "Aucun skill attendu : procédure déjà présente au catalogue annoté.",
+      "characters": 113,
+      "entriesDropped": 0,
+      "expectedProofs": 1,
+      "fragmentsShortened": 0,
+      "name": "already-covered",
+      "preservedProofs": 1,
+      "sourceReadStopped": false
+    },
+    {
+      "annotation": "Candidat possible : échec, correction puis contrôle concret.",
+      "characters": 127,
+      "entriesDropped": 0,
+      "expectedProofs": 2,
+      "fragmentsShortened": 0,
+      "name": "verified-pitfall",
+      "preservedProofs": 2,
+      "sourceReadStopped": false
+    },
+    {
+      "annotation": "Candidat possible seulement si la correction finale reste visible.",
+      "characters": 2012,
+      "entriesDropped": 0,
+      "expectedProofs": 2,
+      "fragmentsShortened": 1,
+      "name": "final-correction",
+      "preservedProofs": 1,
+      "sourceReadStopped": false
+    },
+    {
+      "annotation": "La synthèse doit conserver sa conclusion, sans créer de nouveau fait.",
+      "characters": 2010,
+      "entriesDropped": 0,
+      "expectedProofs": 2,
+      "fragmentsShortened": 1,
+      "name": "compaction-summary",
+      "preservedProofs": 1,
+      "sourceReadStopped": false
+    },
+    {
+      "annotation": "Ne pas proposer de commande rejouable à partir d'un extrait incomplet.",
+      "characters": 2007,
+      "entriesDropped": 0,
+      "expectedProofs": 0,
+      "fragmentsShortened": 1,
+      "fullCommandPreserved": false,
+      "incompleteCommandMarked": false,
+      "name": "long-command",
+      "preservedProofs": 0,
+      "sourceReadStopped": false
+    },
+    {
+      "annotation": "Antériorité de reprise distincte de la nouvelle demande.",
+      "characters": 166,
+      "entriesDropped": 0,
+      "expectedProofs": 2,
+      "fragmentsShortened": 0,
+      "name": "resumed-session",
+      "preservedProofs": 2,
+      "sourceReadStopped": false
+    },
+    {
+      "annotation": "Aucun succès établi malgré la prose ; aucun skill de procédure validée attendu.",
+      "characters": 105,
+      "entriesDropped": 0,
+      "expectedProofs": 1,
+      "fragmentsShortened": 0,
+      "name": "unknown-success",
+      "preservedProofs": 1,
+      "sourceReadStopped": false
+    },
+    {
+      "annotation": "Les fragments perdus ne gonflent pas le compteur des fragments raccourcis gardés.",
+      "characters": 25,
+      "entriesDropped": 2,
+      "expectedProofs": 1,
+      "fragmentsShortened": 0,
+      "name": "pruned-and-read-limited",
+      "preservedProofs": 1,
+      "sourceReadStopped": true
+    }
+  ],
+  "current": [
+    {
+      "annotation": "Aucun skill attendu : lecture et opération ordinaires.",
+      "characters": 86,
+      "entriesDropped": 0,
+      "expectedProofs": 1,
+      "fragmentsShortened": 0,
+      "name": "routine",
+      "preservedProofs": 1,
+      "sourceReadStopped": false
+    },
+    {
+      "annotation": "Aucun skill attendu : procédure déjà présente au catalogue annoté.",
+      "characters": 113,
+      "entriesDropped": 0,
+      "expectedProofs": 1,
+      "fragmentsShortened": 0,
+      "name": "already-covered",
+      "preservedProofs": 1,
+      "sourceReadStopped": false
+    },
+    {
+      "annotation": "Candidat possible : échec, correction puis contrôle concret.",
+      "characters": 127,
+      "entriesDropped": 0,
+      "expectedProofs": 2,
+      "fragmentsShortened": 0,
+      "name": "verified-pitfall",
+      "preservedProofs": 2,
+      "sourceReadStopped": false
+    },
+    {
+      "annotation": "Candidat possible seulement si la correction finale reste visible.",
+      "characters": 2030,
+      "entriesDropped": 0,
+      "expectedProofs": 2,
+      "fragmentsShortened": 1,
+      "name": "final-correction",
+      "preservedProofs": 2,
+      "sourceReadStopped": false
+    },
+    {
+      "annotation": "La synthèse doit conserver sa conclusion, sans créer de nouveau fait.",
+      "characters": 2028,
+      "entriesDropped": 0,
+      "expectedProofs": 2,
+      "fragmentsShortened": 1,
+      "name": "compaction-summary",
+      "preservedProofs": 2,
+      "sourceReadStopped": false
+    },
+    {
+      "annotation": "Ne pas proposer de commande rejouable à partir d'un extrait incomplet.",
+      "characters": 2026,
+      "entriesDropped": 0,
+      "expectedProofs": 0,
+      "fragmentsShortened": 1,
+      "fullCommandPreserved": false,
+      "incompleteCommandMarked": true,
+      "name": "long-command",
+      "preservedProofs": 0,
+      "sourceReadStopped": false
+    },
+    {
+      "annotation": "Antériorité de reprise distincte de la nouvelle demande.",
+      "characters": 166,
+      "entriesDropped": 0,
+      "expectedProofs": 2,
+      "fragmentsShortened": 0,
+      "name": "resumed-session",
+      "preservedProofs": 2,
+      "sourceReadStopped": false
+    },
+    {
+      "annotation": "Aucun succès établi malgré la prose ; aucun skill de procédure validée attendu.",
+      "characters": 105,
+      "entriesDropped": 0,
+      "expectedProofs": 1,
+      "fragmentsShortened": 0,
+      "name": "unknown-success",
+      "preservedProofs": 1,
+      "sourceReadStopped": false
+    },
+    {
+      "annotation": "Les fragments perdus ne gonflent pas le compteur des fragments raccourcis gardés.",
+      "characters": 25,
+      "entriesDropped": 2,
+      "expectedProofs": 1,
+      "fragmentsShortened": 0,
+      "name": "pruned-and-read-limited",
+      "preservedProofs": 1,
+      "sourceReadStopped": true
+    }
+  ],
+  "totals": {
+    "expectedProofs": 12,
+    "baselineProofs": 10,
+    "currentProofs": 12,
+    "baselineCharacters": 6651,
+    "currentCharacters": 6706
+  }
+}

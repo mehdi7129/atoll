@@ -210,6 +210,12 @@ contrôles utiles. Une tâche banale ou déjà couverte ne produit pas de skill.
 vise généralement 200–600 tokens ; une procédure trop longue est écartée et signalée,
 jamais coupée au milieu d'une commande.
 
+Pour limiter les appels inutiles, Atoll compare la matière à ce qui a déjà été
+traité et fournit au modèle une antériorité courte des notes et skills. Les copies
+exactes sont filtrées avant enregistrement. Un résultat sauvegardé mais mal enregistré
+reste disponible pour une reprise locale, sans nouvelle génération. Le journal distingue
+les écritures confirmées, l’usage communiqué par le CLI et les mesures inconnues.
+
 Les skills proposés arrivent en **quarantaine** : tu lis le `SKILL.md` complet dans une
 fenêtre dédiée, tu approuves (⌘⏎) ou tu rejettes (⌘⌫). Rien n'est actif sans ton accord. Un
 skill approuvé vit dans les skills de sa destination : `~/.claude/skills` pour Claude,

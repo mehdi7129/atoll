@@ -218,6 +218,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         RetrospectiveRunner.shared.onProposalsChanged = {
             SkillReviewCenter.shared.refresh()
         }
+        RetrospectiveRunner.shared.recoverPendingDeliveries()
 
         // Curation : réconcilie le manifeste des skills appris avec le disque
         // (orphelins, déplacements inachevés) puis découvre les propositions.

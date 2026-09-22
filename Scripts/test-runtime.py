@@ -9,9 +9,9 @@ import tempfile
 repo = Path(__file__).resolve().parent.parent
 if sum(argument.startswith("--sabotage-") for argument in sys.argv) > 1:
     raise SystemExit("Tester un sabotage à la fois.")
-subprocess.run(["swift", "build", "--package-path", str(repo / "AtollCore")], check=True)
+subprocess.run(["swift", "build", "--build-system", "native", "--package-path", str(repo / "AtollCore")], check=True)
 build = Path(subprocess.check_output(
-    ["swift", "build", "--package-path", str(repo / "AtollCore"), "--show-bin-path"],
+    ["swift", "build", "--build-system", "native", "--package-path", str(repo / "AtollCore"), "--show-bin-path"],
     text=True).strip())
 with tempfile.TemporaryDirectory(prefix="atoll-runtime-") as directory:
     root = Path(directory)

@@ -92,11 +92,16 @@ public enum LearningNoteFile {
 /// - dates UTC, `created_at` ISO-8601, comme pour les notes.
 public enum LearningSkillProposalFile {
 
+    /// Même corps pour le rendu et l'empreinte d'antériorité : ne jamais
+    /// faire diverger les règles de retrait du front matter généré.
+    static func body(of markdown: String) -> String {
+        LearningRender.strippedLeadingFrontMatter(markdown).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     /// `SKILL.md` FINAL : front-matter Atoll + corps nettoyé, terminé par un
     /// saut de ligne. Un corps vide après strip rend le front-matter seul.
     public static func renderSkillMD(_ proposal: RetrospectiveReport.SkillProposal) -> String {
-        let body = LearningRender.strippedLeadingFrontMatter(proposal.skillMD)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let body = body(of: proposal.skillMD)
 
         var output = """
         ---
