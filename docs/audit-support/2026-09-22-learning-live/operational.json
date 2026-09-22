@@ -1,0 +1,43 @@
+{
+  "durationSeconds": 43.78276610374451,
+  "model": "gpt-5.6-luna",
+  "nativeUsage": {
+    "cache_write_input_tokens": 0,
+    "cached_input_tokens": 0,
+    "input_tokens": 14658,
+    "output_tokens": 840,
+    "reasoning_output_tokens": 148
+  },
+  "notes": [
+    {
+      "content": "SourceSim stocke les points en centimètres, tandis que CibleSim v3 attend des mètres. À la frontière d’export, la conversion appliquée est (-y, z, x) multipliée par 0,01.",
+      "slug": "conversion-coordonnees-ciblesim-v3"
+    },
+    {
+      "content": "La conversion d’unités et de repère doit rester limitée à la frontière d’export. Les identifiants et les timestamps des points doivent être conservés sans modification.",
+      "slug": "conversion-limitee-a-lexport"
+    },
+    {
+      "content": "Exporter directement les coordonnées SourceSim vers CibleSim v3 produit à la fois un mauvais axe et une échelle cent fois trop grande. Ce piège se reproduit avec chaque nouveau fichier SourceSim si la transformation d’export n’est pas appliquée.",
+      "slug": "export-brut-incompatible-ciblesim"
+    }
+  ],
+  "nothingLearned": false,
+  "promptCharacters": 4562,
+  "provider": "codex",
+  "rejectedSkills": [],
+  "reportedModels": [],
+  "requestedModel": "gpt-5.6-luna",
+  "skills": [],
+  "stdoutBytes": 3391,
+  "summary": "La correction d’export CibleSim v3 consiste à convertir les coordonnées SourceSim en appliquant (-y,z,x)*0,01 à l’export, tout en préservant les identifiants et timestamps. La transformation a été validée par un test unitaire, un aller-retour sur plusieurs points et une vérification avec l’espace cible en mètres.",
+  "usage": {
+    "availability": "reported",
+    "cachedInputTokens": 0,
+    "inputTokens": 14658,
+    "outputTokens": 840,
+    "reasoningOutputTokens": 148,
+    "source": "codexTurnCompleted"
+  },
+  "cliVersion": "codex-cli 0.155.1"
+}

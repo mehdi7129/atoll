@@ -1,0 +1,30 @@
+{
+  "durationSeconds": 9.021759986877441,
+  "model": "gpt-5.6-luna",
+  "nativeUsage": {
+    "cache_write_input_tokens": 0,
+    "cached_input_tokens": 0,
+    "input_tokens": 14330,
+    "output_tokens": 119,
+    "reasoning_output_tokens": 80
+  },
+  "notes": [],
+  "nothingLearned": true,
+  "promptCharacters": 4095,
+  "provider": "codex",
+  "rejectedSkills": [],
+  "reportedModels": [],
+  "requestedModel": "gpt-5.6-luna",
+  "skills": [],
+  "stdoutBytes": 470,
+  "summary": "Aucun savoir durable distinct n’a été établi.",
+  "usage": {
+    "availability": "reported",
+    "cachedInputTokens": 0,
+    "inputTokens": 14330,
+    "outputTokens": 119,
+    "reasoningOutputTokens": 80,
+    "source": "codexTurnCompleted"
+  },
+  "cliVersion": "codex-cli 0.155.1"
+}

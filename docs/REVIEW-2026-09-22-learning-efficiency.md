@@ -9,6 +9,11 @@ incomplète sans rappeler le modèle. Les automatismes évitent la matière inch
 les journaux distinguent usage natif, écritures confirmées et données inconnues.
 Les plafonds de génération et le budget commun par abonnement ne sont pas relevés.
 
+**Complément après cette validation hors ligne :** la [recette Codex réelle](REVIEW-2026-09-22-learning-live.md)
+valide les compteurs natifs sur trois appels, mais conserve un échec du cas
+qualitatif positif. Les limites « aucun CLI réel » ci-dessous décrivent uniquement
+la première campagne de tests de ce rapport.
+
 ## Comportements corrigés
 
 | Constat | Comportement du changement |

@@ -28,9 +28,12 @@ Validation du 22 septembre : **1 070 tests Core, un skip opt-in et aucun échec*
 builds Debug/Release et contrôle documentaire réussis. L’interface n’a pas été
 réorganisée dans ce lot ; aucune app n’a été lancée pour cette validation.
 
-Aucun CLI génératif réel lancé pour ce lot. Les nouvelles protections sont
-vérifiées par des CLI fictifs et des sabotages ; aucun gain de tokens ni de
-qualité des modèles n’est déduit de ces fixtures. Apprentissage toujours opt-in,
+La [recette réelle demandée ensuite](REVIEW-2026-09-22-learning-live.md) comprend
+**trois appels Codex / gpt-5.6-luna** : 42 385 tokens d’entrée, 1 017 de sortie,
+usage natif et persistance vérifiés. Le cas banal ne propose rien ; le cas
+réutilisable produit trois notes et aucun skill, contrairement à l’objectif du
+benchmark. Cet échec qualitatif reste visible. Aucun gain dans la durée ni
+comparaison de modèles ne peut être déduit de ces trois appels. Apprentissage toujours opt-in,
 choix de modèle et revue humaine des skills conservés.
 
 Les fichiers du Bureau étant partiellement déchargés par iCloud, la validation
