@@ -621,15 +621,17 @@ final class RetrospectiveRunner {
             return
         }
         let noteHistory = LearningNoteHistory.read(from: BridgePaths.learningNotesDirectory)
+        let noteContext = noteHistory.promptContext(project: job.snapshot.cwd, query: digest.text)
         let skillHistory = destination.store.noveltyHistory()
         let userPrompt = RetrospectivePrompt.userPrompt(
             digest: digest.text,
             projectPath: job.snapshot.cwd,
             gitBranch: job.snapshot.gitBranch,
             model: job.snapshot.model,
-            existingNoteSlugs: noteHistory.slugs(project: job.snapshot.cwd, query: digest.text),
-            existingCapabilities: SkillDestination.summary(catalog)
-        ) + "\n" + noteHistory.summary(project: job.snapshot.cwd, query: digest.text)
+            existingNoteSlugs: noteContext.additionalSlugs,
+            existingCapabilities: SkillDestination.summary(catalog),
+            existingNotesListedInSummary: noteContext.hasSummarizedNotes
+        ) + "\n" + noteContext.summary
           + "\n" + skillHistory.summary(query: digest.text)
           + "\nSkill destination: \(destination.provider.label). Produce instructions for that CLI only; never assume tools or commands from the other agent are available."
         AnalysisBudget.shared.updateMetrics(lease, promptCharacters: provider == .codex
@@ -832,7 +834,7 @@ final class RetrospectiveRunner {
             let duplicates = report.notes.count + report.skills.count - filtered.notes.count - filtered.skills.count
             if duplicates > 0 { outcome += " · \(duplicates) doublon(s) évité(s)" }
             if !report.rejectedSkills.isEmpty {
-                outcome += " · \(report.rejectedSkills.count) skill(s) trop long(s), non proposé(s)"
+                outcome += " · \(report.rejectedSkills.count) proposition(s) invalide(s) ou trop longue(s), écartée(s)"
             }
             if let cost = report.costUSD {
                 log.info("rétrospective terminée : \(outcome, privacy: .public), coût \(cost) $")

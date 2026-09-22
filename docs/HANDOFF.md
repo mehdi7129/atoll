@@ -28,25 +28,28 @@ Validation du 22 septembre : **1 070 tests Core, un skip opt-in et aucun échec*
 builds Debug/Release et contrôle documentaire réussis. L’interface n’a pas été
 réorganisée dans ce lot ; aucune app n’a été lancée pour cette validation.
 
-La [recette réelle demandée ensuite](REVIEW-2026-09-22-learning-live.md) comprend
-**trois appels Codex / gpt-5.6-luna** : 42 385 tokens d’entrée, 1 017 de sortie,
-usage natif et persistance vérifiés. Le cas banal ne propose rien ; le cas
-réutilisable produit trois notes et aucun skill, contrairement à l’objectif du
-benchmark. Cet échec qualitatif reste visible. Aucun gain dans la durée ni
-comparaison de modèles ne peut être déduit de ces trois appels. Apprentissage toujours opt-in,
-choix de modèle et revue humaine des skills conservés.
+Les premières recettes ([initiale](REVIEW-2026-09-22-learning-live.md),
+[profil allégé](REVIEW-2026-09-22-codex-lean.md)) sont historiques.
+La [correction suivante du générateur](REVIEW-2026-09-22-generator-quality.md)
+traite la séparation note/skill, les comptes rendus inutiles et le rejet silencieux
+pour identifiant trop long. Le schéma annonce les 2–40 caractères réellement admis ;
+le parseur signale les rejets sans exposer de champ non validé. Les identifiants
+présents dans le résumé ne sont plus envoyés deux fois ; les autres sont conservés.
 
-Le [diagnostic du contexte Codex](REVIEW-2026-09-22-codex-context.md) identifie
-ensuite les instructions natives, outils et catalogue de skills ajoutés par le CLI.
-Le [profil allégé ensuite implémenté](REVIEW-2026-09-22-codex-lean.md) retire le
-catalogue automatique de skills, remplace les instructions natives par 475 caractères
-et désactive les outils inutiles disponibles. Deux nouveaux appels comparables :
-**28 988 → 9 476 tokens d’entrée, soit 67,3 % de moins sur ces deux cas**.
-Prompts métier et antériorité conservés. Le cas positif produit deux notes et aucun
-skill : l’objectif qualitatif reste non atteint. Le `AGENTS.md` global demeure
-chargé par le CLI ; aucun changement du home ou des credentials dans le runtime.
-Validation du profil : **1 071 tests Core, un skip, zéro échec**, 60 parcours runtime,
-cinq sabotages détectés, builds Debug/Release, relecture et persistance des usages.
+Dernière comparaison : **28 988 → 8 894 tokens d’entrée (−69,3 % depuis le départ,
+−6,1 % depuis le profil allégé)**. Cas banal vide, préférence en note, export en
+skill complet de 118 mots. Deux autres abstentions et une procédure indépendante
+ont été validées avant l’ultime précision sur les notes. **10 appels dans ce lot :
+44 468 tokens d’entrée, 3 203 de sortie**, diagnostics inclus. Les captures brutes,
+échecs initiaux et revalidations hors ligne sont conservés ; ne pas repayer ces
+appels à chaque reprise. Les mesures ne garantissent pas le rendement de toute session.
+
+Validation finale : **1 078 tests Core, un skip, zéro échec**, 25 scénarios de contexte,
+26 parcours rétrospectives, deux sabotages compilés, builds Debug/Release et contrôle
+documentaire. Vérificateur : 15 bons rapports et 28 contre-épreuves. Trois usages
+finaux rejoués dans le journal sans nouvel appel. Instructions globales et outils
+résiduels Codex subsistent ; le flux JSON n’expose pas tous les appels de wrappers.
+Le runtime conserve le home choisi, les modèles et configurations personnelles.
 
 Les fichiers du Bureau étant partiellement déchargés par iCloud, la validation
 utilise une copie locale : `/private/tmp/atoll-learning-local-20260922`.

@@ -1,0 +1,99 @@
+{
+  "durationSeconds": 4.57991898059845,
+  "hashes": {
+    "catalogSHA256": "6294f848cfb38b029804d6f4810a97aa497d764f22ca7a8d95a023339ee67ba0",
+    "codexAnalysisInstructionsSHA256": "35a6ecd04a112f756cc423578c488a055b999af553479142b6ce2ed824a06f7a",
+    "codexFullPromptSHA256": "8ac0443caeb2274b0bb0b32b731d2f6902f715722814622643b20fd239026ece",
+    "codexSchemaSHA256": "1fed5a3d2f0c064e9111618f625f26ad8b0c7c1430cabe6ce79d398052c1dbff",
+    "digestSHA256": "92e3e79997467016b275e99e52b95d6200c53930b7d0409691834052d7bc5479",
+    "fixtureSHA256": "e7aeaeddd642f087be05e4b8005396aa21fd68e06f309b6b86f1aaf5abb505f1",
+    "sourceSchemaSHA256": "314836589b37f9331bcec0f7ee0a248111647dc7b93e7519ec395f665db1cb91",
+    "systemPromptSHA256": "fb76b4cd48d45ff567b5fb7df797f282f66938f2c038d9ae498309fa3aa8bafc",
+    "userPromptSHA256": "67e0e6ac946f55f0f47ba6279910d598affb47321aa2e4c8bdb8c23309076c0a"
+  },
+  "model": "gpt-5.6-luna",
+  "nativeUsage": {
+    "cache_write_input_tokens": 0,
+    "cached_input_tokens": 0,
+    "input_tokens": 4547,
+    "output_tokens": 95,
+    "reasoning_output_tokens": 40
+  },
+  "notes": [],
+  "nothingLearned": true,
+  "promptCharacters": 2899,
+  "provider": "codex",
+  "rejectedSkills": [],
+  "reportedModels": [],
+  "requestedModel": "gpt-5.6-luna",
+  "skills": [],
+  "stdoutBytes": 539,
+  "summary": "La procédure d’export CibleSim déjà disponible a été appliquée avec succès, sans nouvel écart ni contournement.",
+  "toolAuditAvailable": true,
+  "toolAuditScope": "Actions d’outils exposées par exec --json ; les wrappers non exposés ne sont pas observables.",
+  "toolsActuallyCalled": [],
+  "unknownItemTypes": [],
+  "usage": {
+    "availability": "reported",
+    "cachedInputTokens": 0,
+    "inputTokens": 4547,
+    "outputTokens": 95,
+    "reasoningOutputTokens": 40,
+    "source": "codexTurnCompleted"
+  },
+  "cliVersion": "codex-cli 0.155.1",
+  "rawModelReport": {
+    "notes": [],
+    "nothing_learned": true,
+    "session_summary": "La procédure d’export CibleSim déjà disponible a été appliquée avec succès, sans nouvel écart ni contournement.",
+    "skills": []
+  },
+  "initialBenchmarkResult": {
+    "provider": "codex",
+    "case": "covered",
+    "cliVersion": "codex-cli 0.155.1",
+    "hashes": {
+      "catalogSHA256": "6294f848cfb38b029804d6f4810a97aa497d764f22ca7a8d95a023339ee67ba0",
+      "codexAnalysisInstructionsSHA256": "35a6ecd04a112f756cc423578c488a055b999af553479142b6ce2ed824a06f7a",
+      "codexFullPromptSHA256": "8ac0443caeb2274b0bb0b32b731d2f6902f715722814622643b20fd239026ece",
+      "codexSchemaSHA256": "1fed5a3d2f0c064e9111618f625f26ad8b0c7c1430cabe6ce79d398052c1dbff",
+      "digestSHA256": "92e3e79997467016b275e99e52b95d6200c53930b7d0409691834052d7bc5479",
+      "fixtureSHA256": "e7aeaeddd642f087be05e4b8005396aa21fd68e06f309b6b86f1aaf5abb505f1",
+      "sourceSchemaSHA256": "314836589b37f9331bcec0f7ee0a248111647dc7b93e7519ec395f665db1cb91",
+      "systemPromptSHA256": "fb76b4cd48d45ff567b5fb7df797f282f66938f2c038d9ae498309fa3aa8bafc",
+      "userPromptSHA256": "67e0e6ac946f55f0f47ba6279910d598affb47321aa2e4c8bdb8c23309076c0a"
+    },
+    "status": "passed",
+    "errors": [],
+    "durationSeconds": 4.57991898059845,
+    "exitCode": 0,
+    "model": "gpt-5.6-luna",
+    "nativeUsage": {
+      "cache_write_input_tokens": 0,
+      "cached_input_tokens": 0,
+      "input_tokens": 4547,
+      "output_tokens": 95,
+      "reasoning_output_tokens": 40
+    },
+    "promptCharacters": 2899,
+    "stdoutBytes": 539,
+    "toolAuditAvailable": true,
+    "toolAuditScope": "Actions d’outils exposées par exec --json ; les wrappers non exposés ne sont pas observables.",
+    "toolsActuallyCalled": [],
+    "unknownItemTypes": [],
+    "usage": {
+      "availability": "reported",
+      "cachedInputTokens": 0,
+      "inputTokens": 4547,
+      "outputTokens": 95,
+      "reasoningOutputTokens": 40,
+      "source": "codexTurnCompleted"
+    },
+    "skillCount": 0,
+    "noteCount": 0,
+    "bodyWords": [],
+    "descriptionCharacters": [],
+    "requestedModel": "gpt-5.6-luna",
+    "reportedModels": []
+  }
+}

@@ -686,6 +686,20 @@
         "AtollCore/Sources/AtollCore/SkillCatalog.swift",
         "AtollCore/Sources/AtollCore/TranscriptDigest.swift"
       ]
+    },
+    {
+      "date": "2026-09-22",
+      "document": "docs/REVIEW-2026-09-22-generator-quality.md",
+      "depth": "sweep",
+      "note": "Relecture ciblée des changements du prompt, schema, parseur, contexte de notes et vérificateur, avec captures réelles et contre-épreuves ; pas une lecture intégrale des consommateurs.",
+      "files": [
+        "AtollCore/Sources/AtollCore/RetrospectivePrompt.swift",
+        "AtollCore/Sources/AtollCore/RetrospectiveReport.swift",
+        "AtollCore/Sources/AtollCore/CodexExecPlan.swift",
+        "AtollCore/Sources/AtollCore/LearningNovelty.swift",
+        "App/RetrospectiveRunner.swift",
+        "Scripts/test-skill-generation.py"
+      ]
     }
   ]
 }

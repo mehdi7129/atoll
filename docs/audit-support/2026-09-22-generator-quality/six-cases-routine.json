@@ -1,0 +1,113 @@
+{
+  "durationSeconds": 13.963772058486938,
+  "hashes": {
+    "catalogSHA256": "7bba4178889c174d09c6243dc12f03654cf001471fc3a40410f4383e55f35391",
+    "codexAnalysisInstructionsSHA256": "35a6ecd04a112f756cc423578c488a055b999af553479142b6ce2ed824a06f7a",
+    "codexFullPromptSHA256": "afa7cbc1053d128e2f6697e995ffceca06f4d9b486818b09ccf41d0441760f3b",
+    "codexSchemaSHA256": "1fed5a3d2f0c064e9111618f625f26ad8b0c7c1430cabe6ce79d398052c1dbff",
+    "digestSHA256": "034ad35b3a84e87c2c3d0f0acd261e2e9cfd6cd6efc0d20d16ea5f29c33c152d",
+    "fixtureSHA256": "275b96b186bfd668a551324ad9dcba042ddd004be8e88bbe1dd2c9a1bace73f6",
+    "sourceSchemaSHA256": "314836589b37f9331bcec0f7ee0a248111647dc7b93e7519ec395f665db1cb91",
+    "systemPromptSHA256": "fb76b4cd48d45ff567b5fb7df797f282f66938f2c038d9ae498309fa3aa8bafc",
+    "userPromptSHA256": "eced1a8b27966dbb275114948def530ea90efba9a1628950d064169ea2c53969"
+  },
+  "model": "gpt-5.6-luna",
+  "nativeUsage": {
+    "cache_write_input_tokens": 0,
+    "cached_input_tokens": 0,
+    "input_tokens": 4437,
+    "output_tokens": 275,
+    "reasoning_output_tokens": 180
+  },
+  "notes": [
+    {
+      "content": "Dans la fonction locale concernée, la variable `count` a été renommée en `itemCount`; les 4 tests existants passent après ce changement.",
+      "slug": "renommage-count-itemcount"
+    }
+  ],
+  "nothingLearned": false,
+  "promptCharacters": 2577,
+  "provider": "codex",
+  "rejectedSkills": [],
+  "reportedModels": [],
+  "requestedModel": "gpt-5.6-luna",
+  "skills": [],
+  "stdoutBytes": 719,
+  "summary": "Renommage local validé par les 4 tests existants.",
+  "toolAuditAvailable": true,
+  "toolAuditScope": "Actions d’outils exposées par exec --json ; les wrappers non exposés ne sont pas observables.",
+  "toolsActuallyCalled": [],
+  "unknownItemTypes": [],
+  "usage": {
+    "availability": "reported",
+    "cachedInputTokens": 0,
+    "inputTokens": 4437,
+    "outputTokens": 275,
+    "reasoningOutputTokens": 180,
+    "source": "codexTurnCompleted"
+  },
+  "cliVersion": "codex-cli 0.155.1",
+  "rawModelReport": {
+    "notes": [
+      {
+        "category": "decision",
+        "confidence": "high",
+        "content": "Dans la fonction locale concernée, la variable `count` a été renommée en `itemCount`; les 4 tests existants passent après ce changement.",
+        "slug": "renommage-count-itemcount"
+      }
+    ],
+    "nothing_learned": false,
+    "session_summary": "Renommage local validé par les 4 tests existants.",
+    "skills": []
+  },
+  "initialBenchmarkResult": {
+    "provider": "codex",
+    "case": "routine",
+    "cliVersion": "codex-cli 0.155.1",
+    "hashes": {
+      "catalogSHA256": "7bba4178889c174d09c6243dc12f03654cf001471fc3a40410f4383e55f35391",
+      "codexAnalysisInstructionsSHA256": "35a6ecd04a112f756cc423578c488a055b999af553479142b6ce2ed824a06f7a",
+      "codexFullPromptSHA256": "afa7cbc1053d128e2f6697e995ffceca06f4d9b486818b09ccf41d0441760f3b",
+      "codexSchemaSHA256": "1fed5a3d2f0c064e9111618f625f26ad8b0c7c1430cabe6ce79d398052c1dbff",
+      "digestSHA256": "034ad35b3a84e87c2c3d0f0acd261e2e9cfd6cd6efc0d20d16ea5f29c33c152d",
+      "fixtureSHA256": "275b96b186bfd668a551324ad9dcba042ddd004be8e88bbe1dd2c9a1bace73f6",
+      "sourceSchemaSHA256": "314836589b37f9331bcec0f7ee0a248111647dc7b93e7519ec395f665db1cb91",
+      "systemPromptSHA256": "fb76b4cd48d45ff567b5fb7df797f282f66938f2c038d9ae498309fa3aa8bafc",
+      "userPromptSHA256": "eced1a8b27966dbb275114948def530ea90efba9a1628950d064169ea2c53969"
+    },
+    "status": "failed",
+    "errors": [
+      "Cas sans apprentissage nouveau : notes vides et nothingLearned=true attendus"
+    ],
+    "durationSeconds": 13.963772058486938,
+    "exitCode": 0,
+    "model": "gpt-5.6-luna",
+    "nativeUsage": {
+      "cache_write_input_tokens": 0,
+      "cached_input_tokens": 0,
+      "input_tokens": 4437,
+      "output_tokens": 275,
+      "reasoning_output_tokens": 180
+    },
+    "promptCharacters": 2577,
+    "stdoutBytes": 719,
+    "toolAuditAvailable": true,
+    "toolAuditScope": "Actions d’outils exposées par exec --json ; les wrappers non exposés ne sont pas observables.",
+    "toolsActuallyCalled": [],
+    "unknownItemTypes": [],
+    "usage": {
+      "availability": "reported",
+      "cachedInputTokens": 0,
+      "inputTokens": 4437,
+      "outputTokens": 275,
+      "reasoningOutputTokens": 180,
+      "source": "codexTurnCompleted"
+    },
+    "skillCount": 0,
+    "noteCount": 1,
+    "bodyWords": [],
+    "descriptionCharacters": [],
+    "requestedModel": "gpt-5.6-luna",
+    "reportedModels": []
+  }
+}

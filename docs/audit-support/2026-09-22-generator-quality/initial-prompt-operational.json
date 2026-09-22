@@ -1,0 +1,107 @@
+{
+  "durationSeconds": 15.078795075416565,
+  "hashes": {
+    "catalogSHA256": "7bba4178889c174d09c6243dc12f03654cf001471fc3a40410f4383e55f35391",
+    "codexAnalysisInstructionsSHA256": "35a6ecd04a112f756cc423578c488a055b999af553479142b6ce2ed824a06f7a",
+    "codexFullPromptSHA256": "06da4ba0ccefcb7ed0632e467a699d49c54905e29708cb3983340a4142ef7632",
+    "codexSchemaSHA256": "be210bae6309c4367bcdf0a2c2bc32ba1b8a0d739f9545ae4496120d20b2f79f",
+    "digestSHA256": "99fb7765c397af92d58b66e5cd355009ffb30b85b2f728597813a0e05b8805bb",
+    "fixtureSHA256": "fba408a5e18aeae39eccb1a994e37f4b0062ac3aea2f1929bd67ee5cf7cf2723",
+    "sourceSchemaSHA256": "343464ff57084bd6eb5c2bda06183748e11fb75e7cc27e4b150128bc80d62d7a",
+    "systemPromptSHA256": "fb76b4cd48d45ff567b5fb7df797f282f66938f2c038d9ae498309fa3aa8bafc",
+    "userPromptSHA256": "6aec79d274b468284726e7fe98ca4360f57c6223aefce3d10a3b63f0f5b8bd08"
+  },
+  "model": "gpt-5.6-luna",
+  "nativeUsage": {
+    "cache_write_input_tokens": 0,
+    "cached_input_tokens": 0,
+    "input_tokens": 4366,
+    "output_tokens": 556,
+    "reasoning_output_tokens": 151
+  },
+  "notes": [],
+  "nothingLearned": false,
+  "promptCharacters": 3044,
+  "provider": "codex",
+  "rejectedSkills": [],
+  "reportedModels": [],
+  "requestedModel": "gpt-5.6-luna",
+  "skills": [],
+  "stdoutBytes": 1918,
+  "summary": "Procédure fiable pour corriger l’export des coordonnées SourceSim vers CibleSim v3.",
+  "toolAuditAvailable": true,
+  "toolsActuallyCalled": [],
+  "usage": {
+    "availability": "reported",
+    "cachedInputTokens": 0,
+    "inputTokens": 4366,
+    "outputTokens": 556,
+    "reasoningOutputTokens": 151,
+    "source": "codexTurnCompleted"
+  },
+  "cliVersion": "codex-cli 0.155.1",
+  "rawModelReport": {
+    "notes": [],
+    "nothing_learned": false,
+    "session_summary": "Procédure fiable pour corriger l’export des coordonnées SourceSim vers CibleSim v3.",
+    "skills": [
+      {
+        "confidence": "high",
+        "description": "Convertir les coordonnées SourceSim en centimètres lors de chaque export vers CibleSim v3.",
+        "rationale": "Procédure distincte et vérifiée par un test ponctuel ainsi qu’un aller-retour sur 40 points; aucune capacité existante ne la couvre.",
+        "similar_existing": null,
+        "skill_md": "## Conversion d’export SourceSim → CibleSim v3\n\nÀ chaque nouvel export, appliquer la conversion uniquement à la frontière d’export : pour un point SourceSim `(x, y, z)` exprimé en centimètres, produire dans CibleSim v3 les coordonnées en mètres selon `(-y, z, x) × 0,01`. Ne pas modifier les identifiants ni les timestamps.\n\nLancer la vérification finale avec :\n\n```sh\nexporter --space target --unit m\n```\n\nValider au minimum le point `(100, 200, 300)`, qui doit devenir `(-2, 3, 1)`, puis effectuer un aller-retour sur 40 points. La validation est réussie si l’erreur maximale mesurée est `0,000001 cm` et si les identifiants et timestamps restent inchangés. Un export brut laissant `(100, 200, 300)` sur le mauvais axe ou environ 100 fois trop loin indique que la conversion est absente ou appliquée avec une mauvaise unité.",
+        "slug": "export-ciblesim-v3-coordonnees-sourcesim-en-centimetres-to-metres-avec-permutation-des-axes-et-signe-inverse-y",
+        "title": "Corriger l’export des coordonnées SourceSim vers CibleSim v3"
+      }
+    ]
+  },
+  "initialBenchmarkResult": {
+    "provider": "codex",
+    "case": "operational",
+    "cliVersion": "codex-cli 0.155.1",
+    "hashes": {
+      "catalogSHA256": "7bba4178889c174d09c6243dc12f03654cf001471fc3a40410f4383e55f35391",
+      "codexAnalysisInstructionsSHA256": "35a6ecd04a112f756cc423578c488a055b999af553479142b6ce2ed824a06f7a",
+      "codexFullPromptSHA256": "06da4ba0ccefcb7ed0632e467a699d49c54905e29708cb3983340a4142ef7632",
+      "codexSchemaSHA256": "be210bae6309c4367bcdf0a2c2bc32ba1b8a0d739f9545ae4496120d20b2f79f",
+      "digestSHA256": "99fb7765c397af92d58b66e5cd355009ffb30b85b2f728597813a0e05b8805bb",
+      "fixtureSHA256": "fba408a5e18aeae39eccb1a994e37f4b0062ac3aea2f1929bd67ee5cf7cf2723",
+      "sourceSchemaSHA256": "343464ff57084bd6eb5c2bda06183748e11fb75e7cc27e4b150128bc80d62d7a",
+      "systemPromptSHA256": "fb76b4cd48d45ff567b5fb7df797f282f66938f2c038d9ae498309fa3aa8bafc",
+      "userPromptSHA256": "6aec79d274b468284726e7fe98ca4360f57c6223aefce3d10a3b63f0f5b8bd08"
+    },
+    "status": "failed",
+    "errors": [
+      "Une procédure réutilisable doit être isolée dans un skill"
+    ],
+    "durationSeconds": 15.078795075416565,
+    "exitCode": 0,
+    "model": "gpt-5.6-luna",
+    "nativeUsage": {
+      "cache_write_input_tokens": 0,
+      "cached_input_tokens": 0,
+      "input_tokens": 4366,
+      "output_tokens": 556,
+      "reasoning_output_tokens": 151
+    },
+    "promptCharacters": 3044,
+    "stdoutBytes": 1918,
+    "toolAuditAvailable": true,
+    "toolsActuallyCalled": [],
+    "usage": {
+      "availability": "reported",
+      "cachedInputTokens": 0,
+      "inputTokens": 4366,
+      "outputTokens": 556,
+      "reasoningOutputTokens": 151,
+      "source": "codexTurnCompleted"
+    },
+    "skillCount": 0,
+    "noteCount": 0,
+    "bodyWords": [],
+    "descriptionCharacters": [],
+    "requestedModel": "gpt-5.6-luna",
+    "reportedModels": []
+  }
+}

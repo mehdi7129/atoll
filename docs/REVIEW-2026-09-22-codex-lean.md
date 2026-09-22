@@ -2,6 +2,9 @@
 
 22 septembre 2026 · PR #5, sans fusion ni release.
 
+État historique. La [correction suivante](REVIEW-2026-09-22-generator-quality.md)
+conserve ces mesures et traite les défauts qualitatifs et de parsing.
+
 ## Résultat réel
 
 Deux nouvelles exécutions authentifiées, mêmes fixtures, prompts métier, schémas,
@@ -71,7 +74,9 @@ python3 Scripts/test-runtime.py
 
 Le benchmark positif échoue toujours : les deux notes conservent transformation,
 unités, frontière d’export, identifiants et timestamps, mais omettent la commande,
-le test numérique et la précision mesurée. Aucun skill n’est rejeté par le parseur.
+le test numérique et la précision mesurée. Aucun rejet de skill n’était signalé. La recette suivante a montré que les slugs
+invalides étaient écartés silencieusement ; cette capture sans sortie brute ne
+permet pas de les exclure.
 L’économie est mesurée ; l’amélioration qualitative n’est pas démontrée. Les appels
 synthétiques n’exercent pas toute la chaîne `LearningGate → RetrospectiveRunner`.
 

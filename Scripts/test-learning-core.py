@@ -16,9 +16,15 @@ GROUPS = {
     "catalog": (["SkillCatalog"], "SkillCatalogTests"),
     "novelty": (["LearningNovelty", "LearnedSkillStore"], "LearningNoveltyTests"),
     "delivery": (["RetrospectiveDelivery"], "RetrospectiveDeliveryTests"),
+    "retrospective-report": (["RetrospectiveReport"], "RetrospectiveReportTests"),
+    "retrospective-prompt": (["RetrospectivePrompt", "CodexExecPlan"], "RetrospectivePromptTests"),
 }
 # Chaque mutation doit échouer dans son test témoin, et compiler auparavant.
 MUTATIONS = {
+    "invalid-skill-trace": ("retrospective-report", "RetrospectiveReport", [
+        ('if rejected.count < Limit.skills { rejected.append("invalid-proposal-\\(index + 1)") }',
+         '()')],
+        "testRealCodexLongSlugRejectionIsVisibleWithoutRewritingItsValidProcedure"),
     "project-scope": ("catalog", "SkillCatalog", [
         ("userSkills() + projectSkills() + commands()", "userSkills() + commands()")],
         "testProject"),
@@ -126,7 +132,7 @@ def main():
         print("PASS", name, flush=True)
 
     selected = list(MUTATIONS) if args.all else ([args.sabotage] if args.sabotage else [])
-    groups = list(dict.fromkeys(MUTATIONS[name][0] for name in selected)) if selected else list(GROUPS)
+    groups = list(GROUPS) if args.all or not selected else list(dict.fromkeys(MUTATIONS[name][0] for name in selected))
     for group in groups:
         run("baseline-" + group, group)
     for name in selected:

@@ -1,0 +1,123 @@
+{
+  "durationSeconds": 24.824082016944885,
+  "hashes": {
+    "catalogSHA256": "7bba4178889c174d09c6243dc12f03654cf001471fc3a40410f4383e55f35391",
+    "codexAnalysisInstructionsSHA256": "35a6ecd04a112f756cc423578c488a055b999af553479142b6ce2ed824a06f7a",
+    "codexFullPromptSHA256": "ec307f1a9ca96701d868fb256ebf8e155713a1a859d362b44697325e2b511534",
+    "codexSchemaSHA256": "1fed5a3d2f0c064e9111618f625f26ad8b0c7c1430cabe6ce79d398052c1dbff",
+    "digestSHA256": "75ed924bf23ac1a2f932853ca968fd057315fec2d803b73dbbdb5416fc977e79",
+    "fixtureSHA256": "70ed6a7ab356de1a485f4e1d0b09c4d6ebf86ed834e4f52b10eb32f127348765",
+    "sourceSchemaSHA256": "314836589b37f9331bcec0f7ee0a248111647dc7b93e7519ec395f665db1cb91",
+    "systemPromptSHA256": "fb76b4cd48d45ff567b5fb7df797f282f66938f2c038d9ae498309fa3aa8bafc",
+    "userPromptSHA256": "e2d19ed9e3a2a2ae58bec255360e21d1a4758f3816185fa97fba2c14d2362947"
+  },
+  "model": "gpt-5.6-luna",
+  "nativeUsage": {
+    "cache_write_input_tokens": 0,
+    "cached_input_tokens": 0,
+    "input_tokens": 4593,
+    "output_tokens": 553,
+    "reasoning_output_tokens": 122
+  },
+  "notes": [],
+  "nothingLearned": false,
+  "promptCharacters": 3184,
+  "provider": "codex",
+  "rejectedSkills": [],
+  "reportedModels": [],
+  "requestedModel": "gpt-5.6-luna",
+  "skills": [
+    {
+      "body": "## Reconstruction et validation quotidienne\n\n1. Lancer la reconstruction en sortie JSON afin de récupérer les paramètres de suivi :\n   ```sh\n   lumencache rebuild --output json\n   ```\n   Conserver le `job_id` et la `target_generation` retournés.\n2. Attendre explicitement l’état `committed` du travail, plutôt que d’utiliser uniquement `rebuild --wait` :\n   ```sh\n   lumencache jobs wait <job_id> --state committed\n   ```\n   Poursuivre seulement si la sortie indique `state=committed` et si la génération correspond à `<target_generation>`.\n3. Vérifier la génération validée :\n   ```sh\n   lumencache verify --generation <target_generation>\n   ```\n4. Considérer la reconstruction réussie uniquement lorsque `missing=0` et que le nombre de documents présents correspond au nombre attendu.\n\nDans LumenCache 2.4, `rebuild --wait` peut terminer avec le code 0 alors que l’état reste `queued`; les recherches utilisent alors encore l’ancienne génération. L’état `committed` est donc le point de synchronisation requis avant toute vérification ou utilisation de la nouvelle génération.",
+      "description": "Pour fiabiliser une reconstruction quotidienne de l’index LumenCache 2.4, attendre explicitement la validation du travail avant de vérifier la génération.",
+      "rationale": "Procédure distincte, vérifiée avec succès : l’option --wait peut retourner avec exit 0 alors que le travail reste queued.",
+      "similarExisting": "",
+      "slug": "reconstruire-valider-index-lumencache"
+    }
+  ],
+  "stdoutBytes": 2192,
+  "summary": "Procédure quotidienne fiabilisée pour reconstruire et valider l’index LumenCache 2.4 jusqu’à l’état committed.",
+  "toolAuditAvailable": true,
+  "toolAuditScope": "Actions d’outils exposées par exec --json ; les wrappers non exposés ne sont pas observables.",
+  "toolsActuallyCalled": [],
+  "unknownItemTypes": [],
+  "usage": {
+    "availability": "reported",
+    "cachedInputTokens": 0,
+    "inputTokens": 4593,
+    "outputTokens": 553,
+    "reasoningOutputTokens": 122,
+    "source": "codexTurnCompleted"
+  },
+  "cliVersion": "codex-cli 0.155.1",
+  "rawModelReport": {
+    "notes": [],
+    "nothing_learned": false,
+    "session_summary": "Procédure quotidienne fiabilisée pour reconstruire et valider l’index LumenCache 2.4 jusqu’à l’état committed.",
+    "skills": [
+      {
+        "confidence": "high",
+        "description": "Pour fiabiliser une reconstruction quotidienne de l’index LumenCache 2.4, attendre explicitement la validation du travail avant de vérifier la génération.",
+        "rationale": "Procédure distincte, vérifiée avec succès : l’option --wait peut retourner avec exit 0 alors que le travail reste queued.",
+        "similar_existing": null,
+        "skill_md": "## Reconstruction et validation quotidienne\n\n1. Lancer la reconstruction en sortie JSON afin de récupérer les paramètres de suivi :\n   ```sh\n   lumencache rebuild --output json\n   ```\n   Conserver le `job_id` et la `target_generation` retournés.\n2. Attendre explicitement l’état `committed` du travail, plutôt que d’utiliser uniquement `rebuild --wait` :\n   ```sh\n   lumencache jobs wait <job_id> --state committed\n   ```\n   Poursuivre seulement si la sortie indique `state=committed` et si la génération correspond à `<target_generation>`.\n3. Vérifier la génération validée :\n   ```sh\n   lumencache verify --generation <target_generation>\n   ```\n4. Considérer la reconstruction réussie uniquement lorsque `missing=0` et que le nombre de documents présents correspond au nombre attendu.\n\nDans LumenCache 2.4, `rebuild --wait` peut terminer avec le code 0 alors que l’état reste `queued`; les recherches utilisent alors encore l’ancienne génération. L’état `committed` est donc le point de synchronisation requis avant toute vérification ou utilisation de la nouvelle génération.",
+        "slug": "reconstruire-valider-index-lumencache",
+        "title": "Reconstruire et valider un index LumenCache"
+      }
+    ]
+  },
+  "initialBenchmarkResult": {
+    "provider": "codex",
+    "case": "handoff",
+    "cliVersion": "codex-cli 0.155.1",
+    "hashes": {
+      "catalogSHA256": "7bba4178889c174d09c6243dc12f03654cf001471fc3a40410f4383e55f35391",
+      "codexAnalysisInstructionsSHA256": "35a6ecd04a112f756cc423578c488a055b999af553479142b6ce2ed824a06f7a",
+      "codexFullPromptSHA256": "ec307f1a9ca96701d868fb256ebf8e155713a1a859d362b44697325e2b511534",
+      "codexSchemaSHA256": "1fed5a3d2f0c064e9111618f625f26ad8b0c7c1430cabe6ce79d398052c1dbff",
+      "digestSHA256": "75ed924bf23ac1a2f932853ca968fd057315fec2d803b73dbbdb5416fc977e79",
+      "fixtureSHA256": "70ed6a7ab356de1a485f4e1d0b09c4d6ebf86ed834e4f52b10eb32f127348765",
+      "sourceSchemaSHA256": "314836589b37f9331bcec0f7ee0a248111647dc7b93e7519ec395f665db1cb91",
+      "systemPromptSHA256": "fb76b4cd48d45ff567b5fb7df797f282f66938f2c038d9ae498309fa3aa8bafc",
+      "userPromptSHA256": "e2d19ed9e3a2a2ae58bec255360e21d1a4758f3816185fa97fba2c14d2362947"
+    },
+    "status": "failed",
+    "errors": [
+      "Preuve perdue : acceptation distincte de committed"
+    ],
+    "durationSeconds": 24.824082016944885,
+    "exitCode": 0,
+    "model": "gpt-5.6-luna",
+    "nativeUsage": {
+      "cache_write_input_tokens": 0,
+      "cached_input_tokens": 0,
+      "input_tokens": 4593,
+      "output_tokens": 553,
+      "reasoning_output_tokens": 122
+    },
+    "promptCharacters": 3184,
+    "stdoutBytes": 2192,
+    "toolAuditAvailable": true,
+    "toolAuditScope": "Actions d’outils exposées par exec --json ; les wrappers non exposés ne sont pas observables.",
+    "toolsActuallyCalled": [],
+    "unknownItemTypes": [],
+    "usage": {
+      "availability": "reported",
+      "cachedInputTokens": 0,
+      "inputTokens": 4593,
+      "outputTokens": 553,
+      "reasoningOutputTokens": 122,
+      "source": "codexTurnCompleted"
+    },
+    "skillCount": 1,
+    "noteCount": 0,
+    "bodyWords": [
+      141
+    ],
+    "descriptionCharacters": [
+      154
+    ],
+    "requestedModel": "gpt-5.6-luna",
+    "reportedModels": []
+  }
+}

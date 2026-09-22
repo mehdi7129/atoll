@@ -1,0 +1,99 @@
+{
+  "durationSeconds": 7.699956059455872,
+  "hashes": {
+    "catalogSHA256": "7bba4178889c174d09c6243dc12f03654cf001471fc3a40410f4383e55f35391",
+    "codexAnalysisInstructionsSHA256": "35a6ecd04a112f756cc423578c488a055b999af553479142b6ce2ed824a06f7a",
+    "codexFullPromptSHA256": "ec3577890377c1d832fb1517bd8e6999308a8c29cb1d6bac2586cd4075c9758d",
+    "codexSchemaSHA256": "1fed5a3d2f0c064e9111618f625f26ad8b0c7c1430cabe6ce79d398052c1dbff",
+    "digestSHA256": "034ad35b3a84e87c2c3d0f0acd261e2e9cfd6cd6efc0d20d16ea5f29c33c152d",
+    "fixtureSHA256": "275b96b186bfd668a551324ad9dcba042ddd004be8e88bbe1dd2c9a1bace73f6",
+    "sourceSchemaSHA256": "314836589b37f9331bcec0f7ee0a248111647dc7b93e7519ec395f665db1cb91",
+    "systemPromptSHA256": "fb76b4cd48d45ff567b5fb7df797f282f66938f2c038d9ae498309fa3aa8bafc",
+    "userPromptSHA256": "6addef8da1470fe5e467ae6d1cd3a32deafbc950c1d1bc8cba30a3d54df3f4d0"
+  },
+  "model": "gpt-5.6-luna",
+  "nativeUsage": {
+    "cache_write_input_tokens": 0,
+    "cached_input_tokens": 0,
+    "input_tokens": 4283,
+    "output_tokens": 138,
+    "reasoning_output_tokens": 101
+  },
+  "notes": [],
+  "nothingLearned": true,
+  "promptCharacters": 2724,
+  "provider": "codex",
+  "rejectedSkills": [],
+  "reportedModels": [],
+  "requestedModel": "gpt-5.6-luna",
+  "skills": [],
+  "stdoutBytes": 468,
+  "summary": "Aucun apprentissage durable distinct identifié.",
+  "toolAuditAvailable": true,
+  "toolAuditScope": "Actions d’outils exposées par exec --json ; les wrappers non exposés ne sont pas observables.",
+  "toolsActuallyCalled": [],
+  "unknownItemTypes": [],
+  "usage": {
+    "availability": "reported",
+    "cachedInputTokens": 0,
+    "inputTokens": 4283,
+    "outputTokens": 138,
+    "reasoningOutputTokens": 101,
+    "source": "codexTurnCompleted"
+  },
+  "cliVersion": "codex-cli 0.155.1",
+  "rawModelReport": {
+    "notes": [],
+    "nothing_learned": true,
+    "session_summary": "Aucun apprentissage durable distinct identifié.",
+    "skills": []
+  },
+  "initialBenchmarkResult": {
+    "provider": "codex",
+    "case": "routine",
+    "cliVersion": "codex-cli 0.155.1",
+    "hashes": {
+      "catalogSHA256": "7bba4178889c174d09c6243dc12f03654cf001471fc3a40410f4383e55f35391",
+      "codexAnalysisInstructionsSHA256": "35a6ecd04a112f756cc423578c488a055b999af553479142b6ce2ed824a06f7a",
+      "codexFullPromptSHA256": "ec3577890377c1d832fb1517bd8e6999308a8c29cb1d6bac2586cd4075c9758d",
+      "codexSchemaSHA256": "1fed5a3d2f0c064e9111618f625f26ad8b0c7c1430cabe6ce79d398052c1dbff",
+      "digestSHA256": "034ad35b3a84e87c2c3d0f0acd261e2e9cfd6cd6efc0d20d16ea5f29c33c152d",
+      "fixtureSHA256": "275b96b186bfd668a551324ad9dcba042ddd004be8e88bbe1dd2c9a1bace73f6",
+      "sourceSchemaSHA256": "314836589b37f9331bcec0f7ee0a248111647dc7b93e7519ec395f665db1cb91",
+      "systemPromptSHA256": "fb76b4cd48d45ff567b5fb7df797f282f66938f2c038d9ae498309fa3aa8bafc",
+      "userPromptSHA256": "6addef8da1470fe5e467ae6d1cd3a32deafbc950c1d1bc8cba30a3d54df3f4d0"
+    },
+    "status": "passed",
+    "errors": [],
+    "durationSeconds": 7.699956059455872,
+    "exitCode": 0,
+    "model": "gpt-5.6-luna",
+    "nativeUsage": {
+      "cache_write_input_tokens": 0,
+      "cached_input_tokens": 0,
+      "input_tokens": 4283,
+      "output_tokens": 138,
+      "reasoning_output_tokens": 101
+    },
+    "promptCharacters": 2724,
+    "stdoutBytes": 468,
+    "toolAuditAvailable": true,
+    "toolAuditScope": "Actions d’outils exposées par exec --json ; les wrappers non exposés ne sont pas observables.",
+    "toolsActuallyCalled": [],
+    "unknownItemTypes": [],
+    "usage": {
+      "availability": "reported",
+      "cachedInputTokens": 0,
+      "inputTokens": 4283,
+      "outputTokens": 138,
+      "reasoningOutputTokens": 101,
+      "source": "codexTurnCompleted"
+    },
+    "skillCount": 0,
+    "noteCount": 0,
+    "bodyWords": [],
+    "descriptionCharacters": [],
+    "requestedModel": "gpt-5.6-luna",
+    "reportedModels": []
+  }
+}

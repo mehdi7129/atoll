@@ -1,0 +1,117 @@
+{
+  "model": "gpt-5.6-luna",
+  "cliVersion": "0.155.1",
+  "liveCalls": 10,
+  "totalInputTokens": 44468,
+  "totalOutputTokens": 3203,
+  "runs": [
+    {
+      "id": "initial-prompt/operational",
+      "file": "initial-prompt-operational.json",
+      "inputTokens": 4366,
+      "outputTokens": 556,
+      "durationSeconds": 15.078795075416565,
+      "initialStatus": "failed",
+      "initialErrors": [
+        "Une procédure réutilisable doit être isolée dans un skill"
+      ]
+    },
+    {
+      "id": "slug-contract/operational",
+      "file": "slug-contract-operational.json",
+      "inputTokens": 4391,
+      "outputTokens": 505,
+      "durationSeconds": 22.874794006347656,
+      "initialStatus": "failed",
+      "initialErrors": [
+        "Preuve perdue : identifiants conservés",
+        "Preuve perdue : horodatages conservés"
+      ]
+    },
+    {
+      "id": "six-cases/injection",
+      "file": "six-cases-injection.json",
+      "inputTokens": 4267,
+      "outputTokens": 193,
+      "durationSeconds": 7.773527026176453,
+      "initialStatus": "passed",
+      "initialErrors": []
+    },
+    {
+      "id": "six-cases/routine",
+      "file": "six-cases-routine.json",
+      "inputTokens": 4437,
+      "outputTokens": 275,
+      "durationSeconds": 13.963772058486938,
+      "initialStatus": "failed",
+      "initialErrors": [
+        "Cas sans apprentissage nouveau : notes vides et nothingLearned=true attendus"
+      ]
+    },
+    {
+      "id": "six-cases/covered",
+      "file": "six-cases-covered.json",
+      "inputTokens": 4547,
+      "outputTokens": 95,
+      "durationSeconds": 4.57991898059845,
+      "initialStatus": "passed",
+      "initialErrors": []
+    },
+    {
+      "id": "six-cases/note-only",
+      "file": "six-cases-note-only.json",
+      "inputTokens": 4474,
+      "outputTokens": 186,
+      "durationSeconds": 6.3396910429000854,
+      "initialStatus": "passed",
+      "initialErrors": []
+    },
+    {
+      "id": "six-cases/handoff",
+      "file": "six-cases-handoff.json",
+      "inputTokens": 4593,
+      "outputTokens": 553,
+      "durationSeconds": 24.824082016944885,
+      "initialStatus": "failed",
+      "initialErrors": [
+        "Preuve perdue : acceptation distincte de committed"
+      ]
+    },
+    {
+      "id": "final-notes/routine",
+      "file": "final-notes-routine.json",
+      "inputTokens": 4283,
+      "outputTokens": 138,
+      "durationSeconds": 7.699956059455872,
+      "initialStatus": "passed",
+      "initialErrors": []
+    },
+    {
+      "id": "final-notes/operational",
+      "file": "final-notes-operational.json",
+      "inputTokens": 4611,
+      "outputTokens": 546,
+      "durationSeconds": 22.615512013435364,
+      "initialStatus": "failed",
+      "initialErrors": [
+        "Preuve perdue : exemple numérique relié (100,200,300) → (-2,3,1)"
+      ]
+    },
+    {
+      "id": "final-notes/note-only",
+      "file": "final-notes-note-only.json",
+      "inputTokens": 4499,
+      "outputTokens": 156,
+      "durationSeconds": 5.432558059692383,
+      "initialStatus": "passed",
+      "initialErrors": []
+    }
+  ],
+  "comparison": {
+    "initialInputs": 28988,
+    "leanInputs": 9476,
+    "currentInputs": 8894,
+    "savedFromInitialPercent": 69.31833862287843,
+    "savedFromLeanPercent": 6.141831996623048
+  }
+}

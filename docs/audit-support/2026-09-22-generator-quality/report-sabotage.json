@@ -1,0 +1,12 @@
+[
+  {
+    "name": "baseline-retrospective-report",
+    "passed": true,
+    "exit_code": 0
+  },
+  {
+    "name": "invalid-skill-trace",
+    "passed": true,
+    "exit_code": 1
+  }
+]

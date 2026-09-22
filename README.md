@@ -206,12 +206,15 @@ analyse **en lecture seule** relit la session et en extrait ce qui dure :
 - des **procédures rejouables**, proposées pour une destination Claude Code ou Codex CLI.
 
 Le générateur garde l'essentiel : connaissances non évidentes, commandes vérifiées et
-contrôles utiles. Une tâche banale ou déjà couverte ne produit pas de skill. Le texte
+contrôles utiles. Une procédure reste regroupée dans un skill ; les faits et préférences
+vont dans les notes. Les simples comptes rendus de tâches sont exclus. Une tâche banale
+ou déjà couverte ne produit pas de skill. Le texte
 vise généralement 200–600 tokens ; une procédure trop longue est écartée et signalée,
 jamais coupée au milieu d'une commande.
 
 Pour limiter les appels inutiles, Atoll compare la matière à ce qui a déjà été
-traité et fournit au modèle une antériorité courte des notes et skills. Les copies
+traité et fournit au modèle une antériorité courte des notes et skills, sans répéter
+les identifiants déjà présents dans les résumés. Les copies
 exactes sont filtrées avant enregistrement. Un résultat sauvegardé mais mal enregistré
 reste disponible pour une reprise locale, sans nouvelle génération. Le journal distingue
 les écritures confirmées, l’usage communiqué par le CLI et les mesures inconnues.

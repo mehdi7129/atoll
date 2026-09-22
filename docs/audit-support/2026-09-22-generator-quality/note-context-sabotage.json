@@ -1,0 +1,29 @@
+{
+  "passed": true,
+  "syntheticData": true,
+  "generativeCLICalls": 0,
+  "sabotageDetected": true,
+  "results": [
+    {
+      "passedScenarios": 21,
+      "savings": [
+        {
+          "additionalSlugs": 0,
+          "notes": 0,
+          "savedSlugCharacters": 0
+        },
+        {
+          "additionalSlugs": 0,
+          "notes": 20,
+          "savedSlugCharacters": 1039
+        },
+        {
+          "additionalSlugs": 36,
+          "notes": 60,
+          "savedSlugCharacters": 1248
+        }
+      ],
+      "scope": "core"
+    }
+  ]
+}
