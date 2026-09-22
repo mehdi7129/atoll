@@ -1,0 +1,51 @@
+{
+  "label": "without-skill-instructions",
+  "cliVersion": "codex-cli 0.155.1",
+  "exitCode": 1,
+  "requests": 1,
+  "remoteGenerationCalls": 0,
+  "credentialsCopied": false,
+  "measurement": "characters; not native tokens",
+  "modelMetadataSHA256": "777ec67bd28abfd718a03d329d59b8fefa12b66161e5d68cb23f9a8cc27848b5",
+  "model": "gpt-5.6-luna",
+  "toolsJSONCharacters": 10698,
+  "nativeInstructionsCharacters": 17730,
+  "input": [
+    {
+      "role": "developer",
+      "characters": 17730,
+      "modelInstructions": true,
+      "skillsTag": false,
+      "userPrompt": false,
+      "sha256": "a91357a1cd2727a0be06d461248d6e3a7274746e38108f548a3adf2cc2430415"
+    },
+    {
+      "role": "developer",
+      "characters": 341,
+      "modelInstructions": false,
+      "skillsTag": false,
+      "userPrompt": false,
+      "sha256": "29dad5ed6993c5e717376e0a1c84d54ab60ee593510916ac6cee4295e803315d"
+    },
+    {
+      "role": "user",
+      "characters": 551,
+      "modelInstructions": false,
+      "skillsTag": false,
+      "userPrompt": false,
+      "sha256": "3005e36b4c95532aabbcabfc7be7476290293e8862c1fcc54e411008042c1d57"
+    },
+    {
+      "role": "user",
+      "characters": 234,
+      "modelInstructions": false,
+      "skillsTag": false,
+      "userPrompt": true,
+      "sha256": "3e6786d037776bb90d12f1edd2a25ae71e44d4cf14b3fc1b7a165a7d6c518efe"
+    }
+  ],
+  "skillsInstructionCharacters": 0,
+  "userPromptCharacters": 234,
+  "schemaCharacters": 156,
+  "textFormatCharacters": 260
+}

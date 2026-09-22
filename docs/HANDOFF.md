@@ -36,11 +36,25 @@ benchmark. Cet échec qualitatif reste visible. Aucun gain dans la durée ni
 comparaison de modèles ne peut être déduit de ces trois appels. Apprentissage toujours opt-in,
 choix de modèle et revue humaine des skills conservés.
 
+Le [diagnostic du contexte Codex](REVIEW-2026-09-22-codex-context.md) identifie
+ensuite les instructions natives, outils et catalogue de skills ajoutés par le CLI.
+Une capture locale sans génération vérifie que `skills.include_instructions=false`
+retire 10 916 caractères de catalogue. Le runtime produit n’a pas encore adopté
+cette option ; ces caractères ne sont pas une économie de tokens mesurée.
+
 Les fichiers du Bureau étant partiellement déchargés par iCloud, la validation
 utilise une copie locale : `/private/tmp/atoll-learning-local-20260922`.
 Les changements sont aussi présents dans le dossier d’origine. Xcode 27 nécessite
 le composant Metal ; les harnesses Swift utilisent provisoirement `--build-system native`.
 Ne pas relancer des builds dans le Bureau tant que les fichiers ne sont pas hydratés.
+
+Incident sonore du 22 septembre sur le poste : le son de fin Atoll se superposait
+à la cloche de Codex dans Cursor. Correctif local, aucun changement Swift :
+`accessibility.signals.terminalBell.sound = "off"` dans Cursor, avec sauvegarde.
+État vérifié dans son UI et avec les fonctions installées de sélection du son ;
+accessibilité toujours active, annonce conservée, toutes les cloches de terminaux
+Cursor désormais muettes. Écoute humaine non effectuée. Ne pas désactiver les sons
+Atoll ni modifier `config.toml` pour reproduire ce correctif.
 
 ## v0.18.2 publiée — réglages réorganisés
 

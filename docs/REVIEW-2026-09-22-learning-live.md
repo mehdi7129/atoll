@@ -33,6 +33,10 @@ définitions d’outils, schéma et éventuels éléments globaux. Elle ne prouv
 les skills personnels en sont la cause. `--ignore-user-config` n’exclut pas à lui
 seul toutes les instructions ou skills globaux.
 
+Complément ultérieur : une [capture locale sans génération](REVIEW-2026-09-22-codex-context.md)
+identifie les blocs ajoutés par le CLI et vérifie le retrait du catalogue de skills
+avec une option de processus. Elle ne décompose pas les tokens natifs ci-dessus.
+
 ## Limite qualitative constatée
 
 La fixture positive contient une transformation inhabituelle et vérifiée,
