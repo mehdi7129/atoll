@@ -1,0 +1,30 @@
+[
+  {
+    "sabotage": "skills",
+    "compiled": true,
+    "detected": true,
+    "assertion": "Le catalogue skills reste inject\u00e9",
+    "modelCalls": 0
+  },
+  {
+    "sabotage": "project",
+    "compiled": true,
+    "detected": true,
+    "assertion": "Instructions projet ou skills inject\u00e9es",
+    "modelCalls": 0
+  },
+  {
+    "sabotage": "base",
+    "compiled": true,
+    "detected": true,
+    "assertion": "Instructions Atoll absentes de la requ\u00eate",
+    "modelCalls": 0
+  },
+  {
+    "sabotage": "tools",
+    "compiled": true,
+    "detected": true,
+    "assertion": "Outils inutiles encore expos\u00e9s",
+    "modelCalls": 0
+  }
+]

@@ -151,7 +151,7 @@ final class AnalysisUsageTests: XCTestCase {
     }
 
     func testCodexPlanEnablesJSONLEventsWithoutRemovingStructuredFileOutput() {
-        let arguments = CodexExecPlan.arguments(schemaPath: "/tmp/schema", outputPath: "/tmp/report", workingDirectory: nil)
+        let arguments = CodexExecPlan.arguments(schemaPath: "/tmp/schema", outputPath: "/tmp/report", instructionsPath: "/tmp/instructions", workingDirectory: nil)
         XCTAssertTrue(arguments.contains("--json"))
         XCTAssertTrue(arguments.contains("--output-last-message"))
         XCTAssertTrue(arguments.contains("/tmp/report"))

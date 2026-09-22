@@ -215,6 +215,9 @@ traité et fournit au modèle une antériorité courte des notes et skills. Les 
 exactes sont filtrées avant enregistrement. Un résultat sauvegardé mais mal enregistré
 reste disponible pour une reprise locale, sans nouvelle génération. Le journal distingue
 les écritures confirmées, l’usage communiqué par le CLI et les mesures inconnues.
+Les analyses Codex utilisent des instructions courtes et excluent l’injection
+automatique des skills et les outils inutiles désactivables. Leurs données utiles
+restent fournies par Atoll ; tes sessions interactives gardent leurs réglages.
 
 Les skills proposés arrivent en **quarantaine** : tu lis le `SKILL.md` complet dans une
 fenêtre dédiée, tu approuves (⌘⏎) ou tu rejettes (⌘⌫). Rien n'est actif sans ton accord. Un

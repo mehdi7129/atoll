@@ -38,9 +38,15 @@ choix de modèle et revue humaine des skills conservés.
 
 Le [diagnostic du contexte Codex](REVIEW-2026-09-22-codex-context.md) identifie
 ensuite les instructions natives, outils et catalogue de skills ajoutés par le CLI.
-Une capture locale sans génération vérifie que `skills.include_instructions=false`
-retire 10 916 caractères de catalogue. Le runtime produit n’a pas encore adopté
-cette option ; ces caractères ne sont pas une économie de tokens mesurée.
+Le [profil allégé ensuite implémenté](REVIEW-2026-09-22-codex-lean.md) retire le
+catalogue automatique de skills, remplace les instructions natives par 475 caractères
+et désactive les outils inutiles disponibles. Deux nouveaux appels comparables :
+**28 988 → 9 476 tokens d’entrée, soit 67,3 % de moins sur ces deux cas**.
+Prompts métier et antériorité conservés. Le cas positif produit deux notes et aucun
+skill : l’objectif qualitatif reste non atteint. Le `AGENTS.md` global demeure
+chargé par le CLI ; aucun changement du home ou des credentials dans le runtime.
+Validation du profil : **1 071 tests Core, un skip, zéro échec**, 60 parcours runtime,
+cinq sabotages détectés, builds Debug/Release, relecture et persistance des usages.
 
 Les fichiers du Bureau étant partiellement déchargés par iCloud, la validation
 utilise une copie locale : `/private/tmp/atoll-learning-local-20260922`.

@@ -6,7 +6,7 @@ private let log = Logger(subsystem: "dev.mehdiguiard.atoll", category: "codex-ru
 
 /// Préparation d'une dépense d'Atoll sur l'abonnement Codex.
 ///
-/// Les deux jobs (bilan de fin de session, rangement des notes) partagent
+/// Les trois analyses (bilan, rangement des notes, recherche de plugins) partagent
 /// exactement le même besoin : un schéma sur disque, un fichier de sortie, et
 /// une commande de shell de login. Ce type les fabrique une fois — sans quoi
 /// deux copies auraient divergé, comme les quatre résolutions de `claude` que
@@ -66,6 +66,7 @@ enum CodexRun {
             .appendingPathComponent("atoll-codex-\(label)-\(UUID().uuidString)", isDirectory: true)
         let schemaFile = workspace.appendingPathComponent("schema.json")
         let outputFile = workspace.appendingPathComponent("report.json")
+        let instructionsFile = workspace.appendingPathComponent("analysis-instructions.md")
         do {
             // 0700 : le condensé d'une session de travail n'est pas public, et
             // `/tmp` l'est. Même exigence que le backup de hooks en 0600.
@@ -73,6 +74,8 @@ enum CodexRun {
                 at: workspace, withIntermediateDirectories: true,
                 attributes: [.posixPermissions: 0o700])
             try strictSchema.write(to: schemaFile, atomically: true, encoding: .utf8)
+            try CodexExecPlan.analysisInstructions.write(to: instructionsFile, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: instructionsFile.path)
         } catch {
             log.error("préparation du run Codex impossible : \(error.localizedDescription, privacy: .public)")
             try? FileManager.default.removeItem(at: workspace)
@@ -81,6 +84,7 @@ enum CodexRun {
 
         let arguments = CodexExecPlan.arguments(
             schemaPath: schemaFile.path, outputPath: outputFile.path,
+            instructionsPath: instructionsFile.path,
             workingDirectory: workspace.path, model: model) + [prompt]
 
         // Shell de LOGIN, comme pour Claude : il source le profil, dont dépend

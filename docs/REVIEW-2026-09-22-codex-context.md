@@ -1,5 +1,8 @@
 # Contexte ajouté par Codex aux analyses
 
+> Diagnostic conservé dans son état initial. Le [profil ensuite implémenté et mesuré](REVIEW-2026-09-22-codex-lean.md)
+> adopte les réductions vérifiées ci-dessous et précise les limites restantes.
+
 22 septembre 2026 · suite de la [recette authentifiée](REVIEW-2026-09-22-learning-live.md).
 
 Le prompt minimal d’Atoll n’explique pas les **13 397 tokens d’entrée** du test.

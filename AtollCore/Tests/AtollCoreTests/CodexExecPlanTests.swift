@@ -7,10 +7,12 @@ final class CodexExecPlanTests: XCTestCase {
 
     func testArgumentsCarryTheReadOnlyContract() {
         let arguments = CodexExecPlan.arguments(
-            schemaPath: "/tmp/s.json", outputPath: "/tmp/o.json", workingDirectory: "/tmp/p")
+            schemaPath: "/tmp/s.json", outputPath: "/tmp/o.json", instructionsPath: "/tmp/instructions.md", workingDirectory: "/tmp/p")
         XCTAssertEqual(arguments.first, "exec")
         XCTAssertTrue(arguments.contains("--ephemeral"))
         XCTAssertTrue(arguments.contains("--ignore-user-config"))
+        XCTAssertTrue(arguments.contains("skills.include_instructions=false"))
+        XCTAssertTrue(arguments.contains("project_doc_max_bytes=0"))
         // Le bac à sable read-only remplace `--tools ""` : le modèle n'écrit rien.
         XCTAssertEqual(argument(after: "--sandbox", in: arguments), "read-only")
         // Sans cette politique, une demande d'approbation suspendrait le process
@@ -25,7 +27,7 @@ final class CodexExecPlanTests: XCTestCase {
     /// passe AUCUN `--model`, le défaut du compte est le choix de l'utilisateur.
     func testArgumentsNeverCarryAModel() {
         let arguments = CodexExecPlan.arguments(
-            schemaPath: "/tmp/s", outputPath: "/tmp/o", workingDirectory: nil)
+            schemaPath: "/tmp/s", outputPath: "/tmp/o", instructionsPath: "/tmp/i", workingDirectory: nil)
         XCTAssertFalse(arguments.contains("--model"))
         XCTAssertFalse(arguments.contains("-m"))
     }
@@ -33,7 +35,7 @@ final class CodexExecPlanTests: XCTestCase {
     func testEmptyWorkingDirectoryIsOmittedNotPassedEmpty() {
         for directory in [nil, ""] as [String?] {
             let arguments = CodexExecPlan.arguments(
-                schemaPath: "/tmp/s", outputPath: "/tmp/o", workingDirectory: directory)
+                schemaPath: "/tmp/s", outputPath: "/tmp/o", instructionsPath: "/tmp/i", workingDirectory: directory)
             XCTAssertFalse(arguments.contains("--cd"), "directory=\(String(describing: directory))")
         }
     }
@@ -43,6 +45,18 @@ final class CodexExecPlanTests: XCTestCase {
         XCTAssertTrue(prompt.hasPrefix("RÈGLES"))
         XCTAssertTrue(prompt.hasSuffix("TÂCHE"))
         XCTAssertTrue(prompt.contains("---"))
+    }
+
+    func testInstructionsPathPreservesQuotesBackslashesAndUnicode() throws {
+        let path = "/tmp/l'analyse \"économe\"/back\\slash\n/instructions.md"
+        let arguments = CodexExecPlan.arguments(schemaPath: "/tmp/s", outputPath: "/tmp/o",
+            instructionsPath: path, workingDirectory: nil)
+        let prefix = "model_instructions_file="
+        let override = try XCTUnwrap(arguments.first { $0.hasPrefix(prefix) })
+        let encoded = String(override.dropFirst(prefix.count))
+        XCTAssertFalse(encoded.contains("\\/"), "TOML ne reconnaît pas l'échappement de slash JSON")
+        XCTAssertEqual(try JSONDecoder().decode(String.self, from: Data(encoded.utf8)), path)
+        XCTAssertEqual(arguments[arguments.firstIndex(of: override)! - 1], "-c")
     }
 
     // MARK: - Lecture de la sortie Codex

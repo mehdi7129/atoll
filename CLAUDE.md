@@ -8,6 +8,9 @@
 > La [recette Codex réelle](docs/REVIEW-2026-09-22-learning-live.md) vérifie les
 > compteurs sur trois appels ; le cas positif du générateur reste un échec
 > qualitatif (trois notes, aucun skill). Ne pas le présenter comme validé.
+> Le [profil Codex allégé](docs/REVIEW-2026-09-22-codex-lean.md) économise ensuite
+> 67,3 % des tokens d’entrée sur deux cas comparables. Le cas positif donne deux
+> notes, toujours aucun skill. Instructions globales et outils résiduels documentés.
 
 > **v0.18.2, build 37 — publiée le 2026-09-11, PR #4 fusionnée.**
 > Mehdi a demandé la fusion et la release. La [PR #4](https://github.com/mehdi7129/atoll/pull/4)

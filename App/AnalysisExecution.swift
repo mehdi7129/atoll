@@ -83,6 +83,8 @@ final class AnalysisBudget {
         /// Temps total de réservation à clôture, préparation comprise. Après
         /// crash, l'instant de fin réel est inconnu : ne pas utiliser la reprise.
         var durationSeconds: TimeInterval?
+        /// Prompt métier uniquement : hors instructions fixes du profil Codex
+        /// et contexte natif. L'usage CLI reste l'autorité pour les tokens.
         var promptCharacters: Int?
         var usage: AnalysisUsage?
         var notesWritten: Int?

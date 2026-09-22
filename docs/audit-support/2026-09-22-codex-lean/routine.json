@@ -1,0 +1,30 @@
+{
+  "durationSeconds": 7.682482004165649,
+  "model": "gpt-5.6-luna",
+  "nativeUsage": {
+    "cache_write_input_tokens": 0,
+    "cached_input_tokens": 0,
+    "input_tokens": 4576,
+    "output_tokens": 98,
+    "reasoning_output_tokens": 62
+  },
+  "notes": [],
+  "nothingLearned": true,
+  "promptCharacters": 4095,
+  "provider": "codex",
+  "rejectedSkills": [],
+  "reportedModels": [],
+  "requestedModel": "gpt-5.6-luna",
+  "skills": [],
+  "stdoutBytes": 457,
+  "summary": "Aucun apprentissage durable identifié.",
+  "usage": {
+    "availability": "reported",
+    "cachedInputTokens": 0,
+    "inputTokens": 4576,
+    "outputTokens": 98,
+    "reasoningOutputTokens": 62,
+    "source": "codexTurnCompleted"
+  },
+  "cliVersion": "codex-cli 0.155.1"
+}
