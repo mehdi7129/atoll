@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Atoll — trois pistes pour la suite</title>
+<style>
+:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#e9e9eb;background:#141415;font-size:14px;--muted:#a4a4aa;--line:#38383b;--blue:#64aaff;--cyan:#59d6df;--orange:#ff964f}
+*{box-sizing:border-box}body{margin:0}button,input{font:inherit}button{cursor:pointer}button,input,summary{touch-action:manipulation}button{color:inherit;background:#353538;border:1px solid #515156;border-radius:6px;padding:7px 11px}button:hover{background:#434347}button:focus-visible,input:focus-visible,summary:focus-visible,[tabindex]:focus-visible{outline:3px solid var(--blue);outline-offset:3px}button[aria-pressed=true]{background:#234775;border-color:#548dce;color:#e5efff}button:disabled{cursor:default}p{line-height:1.55;margin:0}h1,h2,h3{margin:0;font-weight:600}h1{font-size:29px;letter-spacing:-.65px;line-height:1.25}h2{font-size:18px;letter-spacing:-.2px}h3{font-size:14px}small,.small{font-size:12px}.muted{color:var(--muted)}.mono{font-family:ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace}.cyan{color:var(--cyan)}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}[hidden]{display:none!important}
+main{max-width:980px;margin:auto;padding:38px 32px 28px}.eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:14px}.exploration{color:#d7b67f;font-size:12px;margin-bottom:12px}header>p:last-child{margin-top:10px;max-width:650px;color:var(--muted)}.pistes{display:flex;gap:8px;border-bottom:1px solid var(--line);padding:24px 0 20px;margin-bottom:25px}.pistes button{background:transparent;border-color:transparent;padding:9px 12px;font-size:13px}.pistes button[aria-pressed=true]{background:#2c2c30;border-color:#55555d;color:#fff}.number{color:var(--muted);font:11px ui-monospace,Menlo,monospace;margin-right:7px}.intro{display:flex;justify-content:space-between;gap:24px;align-items:baseline;margin-bottom:17px}.intro p{font-size:12px;color:var(--muted)}
+.window{background:#202021;border:1px solid #434346;border-radius:12px;box-shadow:0 16px 36px #0004;overflow:hidden;max-width:800px;margin:auto}.titlebar{position:relative;text-align:center;padding:14px 70px 12px;font-size:13px;font-weight:600;color:#b9b9bd}.lights{position:absolute;left:16px;top:16px;display:flex;gap:7px}.lights i{height:10px;width:10px;background:#ff5f57;border-radius:50%}.lights i:nth-child(2){background:#747475}.lights i:nth-child(3){background:#28c840}.settings-tabs{list-style:none;margin:0;padding:7px 16px 12px;display:grid;grid-template-columns:repeat(8,1fr);gap:4px;border-bottom:1px solid #2c2c2f}.settings-tabs li{font-size:10px;text-align:center;color:#b0b0b4;padding:7px 1px;white-space:nowrap;border-radius:7px}.settings-tabs b{display:block;height:24px;font-size:20px;font-weight:400;line-height:20px;margin-bottom:4px}.settings-tabs [aria-current]{background:#2c2c2f;color:var(--blue);box-shadow:inset 0 0 0 1px #44444a}.window-content{padding:24px}.section-label{display:flex;gap:12px;justify-content:space-between;align-items:baseline;margin:0 4px 10px}.section-label span{font-size:12px;color:var(--muted)}.group{background:#282829;border:1px solid #313134;border-radius:10px;padding:0 14px}.analysis{border-bottom:1px solid #404043}.analysis:last-child{border:0}.analysis summary{list-style:none;cursor:pointer;padding:15px 20px 15px 0;position:relative}.analysis summary::-webkit-details-marker{display:none}.analysis summary:after{content:'›';position:absolute;right:1px;top:18px;color:var(--muted);font-size:20px}.analysis[open] summary:after{transform:rotate(90deg)}.row-top{display:flex;justify-content:space-between;align-items:center;gap:16px}.row-top time{color:var(--muted);font-size:11px;white-space:nowrap}.outcome{font-size:12px;margin:6px 0;color:#c4c4ca}.metrics{font:11px/1.5 ui-monospace,Menlo,monospace;color:#b6b6bf}.metrics strong{font-weight:500;color:#e5e5eb}.detail{font-size:12px;border-top:1px solid #414146;padding:14px 0 16px;line-height:1.6}.detail p+p{margin-top:6px}.detail dl,.session-detail dl{display:grid;grid-template-columns:125px 1fr;gap:7px 15px;margin:0 0 12px}.detail dt,.session-detail dt{color:var(--muted)}dd{margin:0}.hint{font-size:11px;color:var(--muted);margin:12px 4px 0;line-height:1.55}.context-strip{margin:22px 4px 0;padding-top:16px;border-top:1px solid var(--line);color:var(--muted);font-size:12px}
+.island-stage{padding:4px 0 0}.compact-caption{text-align:center;color:var(--muted);font-size:11px;margin:0 0 8px}.compact{background:#050505;width:410px;max-width:90%;height:31px;margin:auto;border-radius:0 0 12px 12px;display:flex;justify-content:space-between;align-items:center;padding:0 14px;font-size:10px;color:var(--accent);gap:100px}.compact span{white-space:nowrap}.island{--accent:var(--cyan);width:600px;max-width:100%;margin:24px auto 0;background:#101112;border:1px solid #626267;border-top:0;border-radius:0 0 18px 18px;padding:24px 24px 18px;box-shadow:0 12px 28px #0005;font:11px/1.5 ui-monospace,Menlo,Consolas,monospace;color:#ddd}.island-stage{--accent:var(--cyan)}.island-head{display:flex;justify-content:space-between;margin-bottom:10px;align-items:center}.island-head strong{font-size:12px}.ascii{color:var(--accent);margin-right:8px}.provider-switch{display:flex;gap:7px;margin-bottom:14px}.island button{font:inherit;border-radius:4px;background:transparent;padding:5px 8px}.island button[aria-pressed=true]{color:var(--accent);border-color:var(--accent);background:#252525}.rule{display:flex;align-items:center;gap:8px;font-size:10px;color:#a6a6ac;margin:12px 0 9px;letter-spacing:.15px}.rule:after{content:'';height:1px;background:#444448;flex:1}.session-row{width:100%;display:flex!important;gap:10px;align-items:center;text-align:left;padding:10px 4px!important;border:0!important;border-bottom:1px solid #262629!important;border-radius:0!important}.session-row:hover{background:#202124!important}.session-row .glyph{color:var(--accent);width:12px;flex:none}.session-name{display:block;font-weight:500;line-height:1.5}.session-row small{display:block;color:#ababaf;font-size:10px;line-height:1.65}.session-row .chevron{margin-left:auto;color:#aaa}.more{margin-top:13px;color:var(--accent);border-color:#525257!important}.session-list{max-height:238px;overflow-y:auto;scrollbar-color:#69696f #242428;scrollbar-gutter:stable;padding-right:6px}.list-heading{display:flex;justify-content:space-between;align-items:center;margin:12px 0 4px}.island .back{color:#c3c3c8;border:0;padding-left:0}.session-detail{padding:14px 0 10px;min-height:215px}.session-detail h3{color:var(--accent);font-size:12px;line-height:1.7;margin-bottom:16px}.session-detail p{font-size:11px;color:#aaa;line-height:1.7}.quota{margin-top:24px}.quota-bar{color:var(--accent)}.simulation{font-size:10px;color:#a8a8ae;margin-top:13px}.island-note{max-width:600px;margin:16px auto 0;font-size:12px;color:var(--muted)}
+.search-body{padding:21px 24px 24px}.search-label{display:block;font-size:12px;font-weight:600;margin-bottom:8px}.search-input{width:100%;padding:11px 13px;border:1px solid #62626b;border-radius:7px;background:#181819;color:#eee}.search-summary{font-size:11px;color:var(--muted);margin:11px 0 15px;min-height:18px}.search-results{border-top:1px solid var(--line)}.memory-row{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent;padding:15px 0}.memory-row:hover{background:#2a2a2c}.memory-row strong{display:block;font-size:13px;margin-bottom:6px}.memory-row small{display:block;color:#aaaab3;line-height:1.7;font-size:11px}.excerpt{margin-top:19px;padding-top:18px;border-top:1px solid #53535a}.excerpt h3{margin-bottom:5px}.excerpt pre{font:12px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;white-space:pre-wrap;color:#d5d5dc;user-select:text;margin:12px 0;background:#181819;border:1px solid #36363b;border-radius:6px;padding:14px;overflow-wrap:anywhere}.excerpt-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.primary{background:#1766bd;border-color:#317bcc}.primary:hover{background:#2674cd}.status{font-size:11px;color:#bddac4;line-height:1.5}.empty{padding:28px 0;color:var(--muted);font-size:12px}.footer{max-width:800px;margin:24px auto 0;padding-top:17px;border-top:1px solid var(--line);display:grid;grid-template-columns:1fr 1fr;gap:24px;font-size:12px;color:var(--muted)}.footer strong{display:block;color:#d0d0d6;font-weight:500;margin-bottom:5px}.global-footer{margin:24px auto 0;max-width:800px;font-size:10px;letter-spacing:.2px;color:#929299}
+@media(max-width:680px){main{padding:25px 18px}h1{font-size:25px}.pistes{gap:4px;flex-wrap:wrap;padding-top:20px}.pistes button{padding:8px;font-size:12px}.intro{display:block}.intro p{margin-top:7px}.window-content,.search-body{padding:18px}.settings-tabs{padding-left:6px;padding-right:6px;gap:0}.settings-tabs li{font-size:8px}.settings-tabs b{font-size:17px}.row-top{gap:8px}.metrics{font-size:10px}.island{padding:20px 18px 16px}.footer{gap:18px}.detail dl,.session-detail dl{grid-template-columns:105px 1fr}}
+@media(max-width:440px){main{padding:23px 12px}.settings-tabs{grid-template-columns:repeat(4,1fr)}.settings-tabs li{font-size:9px;padding:6px 0}.settings-tabs b{display:none}.row-top{align-items:flex-start}.row-top strong{max-width:180px}.metrics span{display:block}.compact{gap:45px}.footer{grid-template-columns:1fr;gap:14px}.section-label{align-items:flex-start}.section-label span{max-width:110px;text-align:right}.titlebar{padding-left:62px;padding-right:62px}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <p class="eyebrow">Atoll / exploration du 23 septembre 2026</p>
+    <p class="exploration">Exploration · non implémentée · données fictives</p>
+    <h1>Trois pistes pour la suite.</h1>
+    <p>Rendre les traces plus lisibles, retrouver une session ou un souvenir.<br>Des ajouts ponctuels aux surfaces actuelles d’Atoll.</p>
+  </header>
+  <nav class="pistes" aria-label="Pistes à explorer">
+    <button type="button" data-view="analyses" aria-pressed="true" aria-controls="analyses"><span class="number">01</span>Analyses lisibles</button>
+    <button type="button" data-view="sessions" aria-pressed="false" aria-controls="sessions"><span class="number">02</span>Toutes les sessions</button>
+    <button type="button" data-view="memory" aria-pressed="false" aria-controls="memory"><span class="number">03</span>Retrouver un souvenir</button>
+  </nav>
+
+  <section id="analyses" aria-labelledby="analyses-title">
+    <div class="intro"><h2 id="analyses-title">Lire ce qu’une analyse a produit.</h2><p>Bloc du journal · dans Apprentissage</p></div>
+    <div class="window">
+      <div class="titlebar"><span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>Apprentissage</div>
+      <ul class="settings-tabs" aria-label="Repère : les huit onglets actuels, non interactifs dans cet extrait">
+        <li><b aria-hidden="true">◉</b>Général</li><li><b aria-hidden="true">▣</b>Claude Code</li><li><b aria-hidden="true">›_</b>Codex</li><li><b aria-hidden="true">ϟ</b>Autonomie</li><li><b aria-hidden="true">♧</b>Alertes</li><li aria-current="page"><b aria-hidden="true">◇</b>Apprentissage</li><li><b aria-hidden="true">⟳</b>Mises à jour</li><li><b aria-hidden="true">ⓘ</b>À propos</li>
+      </ul>
+      <div class="window-content">
+        <div class="section-label"><h3>Journal des analyses</h3><span>3 exemples conservés</span></div>
+        <div class="group">
+          <details class="analysis">
+            <summary><span class="row-top"><strong>Bilan de session <span class="cyan small">· Codex</span></strong><time datetime="2026-09-23T10:42">23 sept. · 10:42</time></span><span class="outcome" style="display:block">2 notes écrites · 1 proposition créée</span><span class="metrics"><span>Entrée <strong>4 240</strong> · sortie <strong>326</strong></span> <span>· cache inclus <strong>0</strong></span></span></summary>
+            <div class="detail"><dl><dt>Type</dt><dd>Bilan de fin de session</dd><dt>Résultat</dt><dd>Écriture confirmée pour les 2 notes</dd><dt>Proposition</dt><dd>1 proposition créée ; statut de revue non fourni par le journal</dd><dt>Durée de l’opération</dt><dd>18 s, préparation comprise · exemple fictif</dd><dt>Mesure</dt><dd>Usage déclaré par le CLI · exemple fictif</dd></dl><p class="muted">Le journal compte les propositions créées. Il ne permet pas de déduire qu’elles sont encore à revoir, ni qu’un skill est installé.</p></div>
+          </details>
+          <details class="analysis">
+            <summary><span class="row-top"><strong>Rangement des notes <span class="cyan small">· Codex</span></strong><time datetime="2026-09-22T18:15">22 sept. · 18:15</time></span><span class="outcome" style="display:block">3 notes écrites · écriture confirmée</span><span class="metrics"><span>Entrée <strong>3 100</strong> · sortie <strong>244</strong></span> <span>· cache inclus <strong>1 024</strong></span></span></summary>
+            <div class="detail"><dl><dt>Type</dt><dd>Rangement des notes</dd><dt>Résultat</dt><dd>Corpus réécrit en 3 notes, pas 3 connaissances nouvelles</dd><dt>Entrée</dt><dd>3 100 tokens, dont 1 024 lus depuis le cache</dd><dt>Mesure</dt><dd>Usage déclaré par le CLI · exemple fictif</dd></dl><p class="muted">Le cache est compris dans l’entrée ; ces deux valeurs ne s’additionnent pas.</p></div>
+          </details>
+          <details class="analysis">
+            <summary><span class="row-top"><strong>Recherche de plugins <span class="cyan small">· Codex</span></strong><time datetime="2026-09-21T09:08">21 sept. · 09:08</time></span><span class="outcome" style="display:block">Recherche interrompue · usage non mesuré</span><span class="metrics"><span>Entrée <strong>—</strong> · sortie <strong>—</strong></span> <span>· cache inclus <strong>—</strong></span></span></summary>
+            <div class="detail"><dl><dt>Type</dt><dd>Recherche IA de plugins</dd><dt>Résultat</dt><dd>Recherche interrompue ; aucun résultat confirmé</dd><dt>Mesure</dt><dd>Usage non mesuré pour cet exemple</dd></dl><p class="muted">Une mesure absente ne vaut pas zéro. Ce journal ne permet pas d’estimer le coût de cette recherche.</p></div>
+          </details>
+        </div>
+        <p class="hint">Tokens : mesures CLI, pas quota ni facture. Le cache est inclus dans l’entrée.<br>Extrait de journal, sans promesse de couverture complète d’une période.</p>
+        <p class="context-strip">Ce bloc s’insérerait dans le journal existant. Les autres sections d’Apprentissage restent à leur place.</p>
+      </div>
+    </div>
+    <div class="footer"><p><strong>Déjà présent</strong>Le journal, les résultats et les mesures d’usage des analyses.</p><p><strong>Piste à examiner</strong>Une lecture par résultat, avec les détails repliés sur chaque ligne.</p></div>
+  </section>
+
+  <section id="sessions" aria-labelledby="sessions-title" hidden>
+    <div class="intro"><h2 id="sessions-title">Accéder aux sessions masquées.</h2><p>Un accès depuis le panneau ouvert</p></div>
+    <div class="island-stage" id="island-stage">
+      <p class="compact-caption">Compact existant · activité à gauche, quota à droite</p>
+      <div class="compact mono" aria-label="Compact fictif Codex : Atoll et six autres sessions, quota 27 pour cent" id="compact"><span>⠋ Atoll +6</span><span>5h 27%</span></div>
+      <div class="island" id="island">
+        <div class="island-head"><strong><span class="ascii" aria-hidden="true">░▒▓</span>ATOLL</strong><span class="muted" id="session-count">7 sessions</span></div>
+        <div class="provider-switch" aria-label="CLI affiché"><button type="button" data-provider="Claude" aria-pressed="false">CLAUDE CODE 2</button><button type="button" data-provider="Codex" aria-pressed="true">CODEX 7</button></div>
+        <div id="session-overview"><div class="rule">SESSIONS · PAR PROJET</div><div id="short-sessions"></div><button type="button" class="more" id="show-all">Voir les 7 sessions →</button></div>
+        <div id="session-all" hidden><div class="list-heading"><strong id="list-title">TOUTES LES SESSIONS · 7</strong><button type="button" class="back" id="close-all">Replier ↑</button></div><div class="session-list" id="all-sessions" role="region" aria-label="Liste complète des sessions fictives" tabindex="0"></div></div>
+        <div id="session-detail" hidden><button type="button" class="back" id="session-back">← Toutes les sessions</button><div class="session-detail" id="session-detail-content"></div></div>
+        <div class="quota"><div class="rule" id="quota-title">QUOTAS · CODEX</div><span>5h <span class="quota-bar">■■■□□□□□□□</span> 27% <span class="muted">·</span> 7j <span class="quota-bar">■■■■□□□□□□</span> 41%</span></div>
+        <p class="simulation">Simulation · le clic montre le détail, sans ouvrir de terminal.</p>
+      </div>
+      <p class="island-note">La liste complète reste bornée et défile dans le panneau. Le compact conserve sa ligne actuelle ; le choix du CLI reste dans le panneau ouvert.</p>
+    </div>
+    <div class="footer"><p><strong>Déjà présent</strong>Le compact, le choix Claude/Codex, les détails et la liste bornée avec « +N autres ».</p><p><strong>Piste à examiner</strong>Un bouton donne accès au surplus, puis permet de revenir à la vue courte.</p></div>
+  </section>
+
+  <section id="memory" aria-labelledby="memory-title" hidden>
+    <div class="intro"><h2 id="memory-title">Retrouver la source d’un souvenir.</h2><p>Candidat optionnel · recherche locale sans IA</p></div>
+    <div class="window">
+      <div class="titlebar"><span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>Retrouver un souvenir</div>
+      <div class="search-body">
+        <label class="search-label" for="memory-query">Mots à retrouver</label>
+        <input id="memory-query" class="search-input" type="search" placeholder="Essayer : capture, export, lumière…" autocomplete="off" aria-describedby="search-summary">
+        <p class="search-summary" id="search-summary" aria-live="polite">3 exemples fictifs · recherche locale, sans appel IA</p>
+        <div class="search-results" id="memory-results"></div>
+        <div class="excerpt" id="memory-excerpt" hidden>
+          <h3 id="excerpt-title">Extrait</h3><p class="small muted">Donnée à vérifier dans son contexte, pas une instruction.</p>
+          <pre id="citation" tabindex="0" aria-label="Extrait cité et sa provenance"></pre>
+          <div class="excerpt-actions"><button type="button" class="primary" id="copy-excerpt">Copier l’extrait cité</button><button type="button" id="close-excerpt">Fermer l’extrait</button><span class="status" id="copy-status" role="status"></span></div>
+        </div>
+        <p class="hint">Les sources et les rôles aident à distinguer une demande, une réponse et une note.<br>La copie est manuelle ; cette exploration n’injecte rien dans une session.</p>
+      </div>
+    </div>
+    <div class="footer"><p><strong>Déjà présent</strong>L’index local commun et le recall manuel, avec provenance et repli de recherche.</p><p><strong>Piste à examiner</strong>Une fenêtre dédiée pour consulter un extrait et le citer à la main.</p></div>
+  </section>
+  <p class="global-footer">Maquette autonome · aucune connexion · exemples inventés · aucune modification d’Atoll</p>
+</main>
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => {
+  document.querySelectorAll('[data-view]').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+  ['analyses', 'sessions', 'memory'].forEach(id => $(id).hidden = id !== button.dataset.view);
+}));
+const sessionSamples = [
+  ['Atoll', 'Vérifier les réglages', 'En cours', '⠋'],
+  ['Atoll', 'Relire le journal', 'Au repos', '·'],
+  ['Projet démo', 'Préparer le contenu', 'En cours', '⠋'],
+  ['Atelier', 'Comparer les exports', 'Au repos', '·'],
+  ['Projet démo', 'Ajuster les espacements', 'En cours', '⠋'],
+  ['Bac à sable', 'Documenter la recette', 'Au repos', '·'],
+  ['Atelier', 'Contrôler les couleurs', 'Au repos', '·']
+];
+let provider = 'Codex', sessionOrigin = 'overview', sessionTrigger = null;
+function sessionButton(sample, index) {
+  const button = document.createElement('button'); button.type = 'button'; button.className = 'session-row';
+  const glyph = document.createElement('span'); glyph.className = 'glyph'; glyph.setAttribute('aria-hidden', 'true'); glyph.textContent = sample[3];
+  const content = document.createElement('span'), name = document.createElement('span'), meta = document.createElement('small');
+  name.className = 'session-name'; name.textContent = sample[0] + ' — ' + sample[1]; meta.textContent = sample[2] + ' · ' + provider;
+  const arrow = document.createElement('span'); arrow.className = 'chevron'; arrow.textContent = '›'; arrow.setAttribute('aria-hidden', 'true');
+  content.append(name, meta); button.append(glyph, content, arrow);
+  button.addEventListener('click', () => openSession(index, button)); return button;
+}
+function renderSessions() {
+  const samples = provider === 'Codex' ? sessionSamples : sessionSamples.slice(0, 2);
+  $('island-stage').style.setProperty('--accent', provider === 'Codex' ? 'var(--cyan)' : 'var(--orange)');
+  $('island').style.setProperty('--accent', provider === 'Codex' ? 'var(--cyan)' : 'var(--orange)');
+  $('session-count').textContent = samples.length + ' sessions'; $('list-title').textContent = 'TOUTES LES SESSIONS · ' + samples.length;
+  $('quota-title').textContent = 'QUOTAS · ' + provider.toUpperCase(); $('compact').firstElementChild.textContent = '⠋ Atoll +' + (samples.length - 1);
+  $('compact').setAttribute('aria-label', 'Compact fictif ' + provider + ' : Atoll et ' + (samples.length - 1) + (samples.length === 2 ? ' autre session' : ' autres sessions') + ', quota 27 pour cent');
+  $('short-sessions').replaceChildren(...samples.slice(0, 3).map(sessionButton)); $('all-sessions').replaceChildren(...samples.map(sessionButton));
+  $('show-all').textContent = 'Voir les ' + samples.length + ' sessions →'; $('show-all').hidden = samples.length <= 3; showSessionPanel('overview');
+}
+function showSessionPanel(name) {
+  ['overview','all','detail'].forEach(key => $('session-' + key).hidden = key !== name);
+}
+function openSession(index, trigger) {
+  sessionOrigin = $('session-all').hidden ? 'overview' : 'all'; sessionTrigger = trigger;
+  const sample = sessionSamples[index]; const heading = document.createElement('h3'); heading.textContent = sample[0] + ' — ' + sample[1];
+  const dl = document.createElement('dl');
+  [['CLI', provider], ['État fictif', sample[2]], ['Projet', sample[0]], ['Source', 'Session synthétique ' + (index + 1)], ['Point de retour', 'Cursor · fenêtre du projet']].forEach(([term,value]) => { const dt = document.createElement('dt'), dd = document.createElement('dd'); dt.textContent = term; dd.textContent = value; dl.append(dt,dd); });
+  const note = document.createElement('p'); note.textContent = 'Dans Atoll, le détail sert déjà de point de retour au terminal. Ici, seule la navigation dans la maquette est simulée.';
+  $('session-detail-content').replaceChildren(heading,dl,note); $('session-back').textContent = sessionOrigin === 'all' ? '← Toutes les sessions' : '← Liste courte';
+  showSessionPanel('detail'); $('session-back').focus();
+}
+document.querySelectorAll('[data-provider]').forEach(button => button.addEventListener('click', () => {
+  provider = button.dataset.provider; document.querySelectorAll('[data-provider]').forEach(item => item.setAttribute('aria-pressed', String(item === button))); renderSessions();
+}));
+$('show-all').addEventListener('click', () => { showSessionPanel('all'); $('all-sessions').focus(); });
+$('close-all').addEventListener('click', () => { showSessionPanel('overview'); $('show-all').focus(); });
+$('session-back').addEventListener('click', () => { showSessionPanel(sessionOrigin); sessionTrigger?.focus(); });
+renderSessions();
+const memories = [
+  {title:'Capturer une animation',date:'12 sept. 2026',project:'Atelier',role:'Note',source:'notes/exemple-capture.md · § 2',text:'Pour observer une animation, comparer plusieurs images successives. Une capture isolée peut masquer le moment où un élément disparaît.'},
+  {title:'Préserver les couleurs à l’export',date:'16 sept. 2026',project:'Projet démo',role:'Assistant',source:'conversation-exemple-02 · message 18',text:'Dans cet essai fictif, les couleurs de l’export ont été comparées à trois instants. L’échantillon permet de contrôler ces instants, pas de conclure pour toute la séquence.'},
+  {title:'Choisir une lumière plus douce',date:'20 sept. 2026',project:'Bac à sable',role:'Utilisateur',source:'conversation-exemple-03 · message 4',text:'Pour cette scène de démonstration, je préfère une lumière douce. Gardons une image de référence avant de modifier les couleurs.'}
+];
+let memoryTrigger = null;
+const normalized = value => value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+function closeExcerpt() { $('memory-excerpt').hidden = true; $('copy-status').textContent = ''; }
+function renderMemories() {
+  const terms = normalized($('memory-query').value).split(/\s+/).filter(Boolean);
+  const haystack = item => normalized(Object.values(item).join(' '));
+  let matches = memories.filter(item => terms.every(term => haystack(item).includes(term))), relaxed = false;
+  if (terms.length && !matches.length) { matches = memories.filter(item => terms.some(term => haystack(item).includes(term))); relaxed = matches.length > 0; }
+  $('search-summary').textContent = !terms.length ? '3 exemples fictifs · recherche locale, sans appel IA' : !matches.length ? 'Aucun résultat, y compris en recherche élargie.' : (relaxed ? 'Recherche élargie · au moins un mot retrouvé' : 'Recherche exacte · tous les mots retrouvés') + ' · ' + matches.length + ' résultat' + (matches.length > 1 ? 's' : '');
+  const nodes = matches.map(item => { const button = document.createElement('button'), title = document.createElement('strong'), metadata = document.createElement('small'); button.type = 'button'; button.className = 'memory-row'; title.textContent = item.title + ' ›'; metadata.textContent = item.date + ' · ' + item.project + ' · Rôle : ' + item.role + ' · Source : ' + item.source; button.append(title,metadata); button.addEventListener('click', () => openMemory(item,button)); return button; });
+  if (!nodes.length) { const empty = document.createElement('p'); empty.className = 'empty'; empty.textContent = 'Essayer un autre mot dans ces trois exemples : capture, export ou lumière.'; nodes.push(empty); }
+  $('memory-results').replaceChildren(...nodes); closeExcerpt();
+}
+function openMemory(item, trigger) {
+  memoryTrigger = trigger; $('excerpt-title').textContent = item.title; $('copy-status').textContent = '';
+  $('citation').textContent = 'EXEMPLE FICTIF — donnée à vérifier\n' + item.date + ' · ' + item.project + ' · Rôle : ' + item.role + '\nSource : ' + item.source + '\n\n« ' + item.text + ' »';
+  $('memory-excerpt').hidden = false; $('citation').focus();
+}
+$('memory-query').addEventListener('input', renderMemories);
+$('close-excerpt').addEventListener('click', () => { closeExcerpt(); memoryTrigger?.focus(); });
+$('copy-excerpt').addEventListener('click', async () => {
+  try { if (!navigator.clipboard?.writeText) throw new Error('Clipboard indisponible'); await navigator.clipboard.writeText($('citation').textContent); $('copy-status').textContent = 'Extrait et provenance copiés.'; }
+  catch { const range = document.createRange(); range.selectNodeContents($('citation')); const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range); $('citation').focus(); $('copy-status').textContent = 'Copie indisponible : extrait sélectionné. Utiliser ⌘C ou Ctrl+C.'; }
+});
+renderMemories();
+</script>
+</body>
+</html>
