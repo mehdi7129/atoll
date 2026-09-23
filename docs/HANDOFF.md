@@ -4,12 +4,15 @@
 [CLAUDE.md](../CLAUDE.md). L'[ancien handoff](HANDOFF-2026-09-10-archive.md) conserve
 les mesures et pièges historiques, sans faire autorité sur l'état actuel.
 
-## v0.18.3, build 38 — préparation de release
+## v0.18.3, build 38 — publiée
 
-Publication autorisée par Mehdi le 23 septembre. Version et build incrémentés ;
-code produit identique à `30847d6`, déjà validé avant fusion. Le script de release
-reconstruit et signe la distribution ; les assets précèdent la mise en ligne
-de l’appcast. L’app installée n’est pas remplacée.
+[Release](https://github.com/mehdi7129/atoll/releases/tag/v0.18.3) autorisée par
+Mehdi le 23 septembre, tag sur `d438b8e`. Code produit identique à `30847d6`,
+déjà validé avant fusion. App et DMG universels signés Developer ID, notarisés,
+staplés et acceptés par Gatekeeper ; six signatures Sparkle vérifiées.
+Le différentiel 37 → 38 reproduit fichiers, liens et modes de l’archive complète.
+[Relevé de livraison](releases/0.18.3.json). Les assets sont publiés avant le flux.
+L’app installée n’est pas remplacée ; appliquer la mise à jour depuis Atoll ou le DMG.
 
 ## PR #5 fusionnée — corrections du rendement de l’apprentissage
 
@@ -18,8 +21,8 @@ La [PR #5](https://github.com/mehdi7129/atoll/pull/5) est **fusionnée sur `main
 le 23 septembre à sa demande : merge `8b7e9a9`, depuis la tête testée `30847d6`.
 L’arbre de la fusion est identique à celui testé ; aucun conflit ni changement
 de code pendant la fusion. La mise à jour de cette fiche est documentaire.
-La publication de v0.18.3 est maintenant autorisée et en préparation.
-Les économies ne sont pas encore déployées dans l’app installée.
+Ces corrections sont publiées en v0.18.3. L’app installée reste sur v0.18.2
+tant que sa mise à jour n’a pas été appliquée.
 Le [rapport de correction](REVIEW-2026-09-22-learning-efficiency.md) décrit les preuves,
 les commandes de test et les limites ; l’audit initial reste un constat historique.
 
@@ -124,20 +127,19 @@ cette release ; la publication n'a installé aucune app.
 
 | Élément | État vérifié |
 |---|---|
-| Code intégré après la release | PR #5 fusionnée sur `main` (`8b7e9a9`) ; économies et reprises validées, pas encore publiées |
-| Version publiée | **[v0.18.2, build 37](https://github.com/mehdi7129/atoll/releases/tag/v0.18.2)** |
-| Fusion / source | [PR #4](https://github.com/mehdi7129/atoll/pull/4) fusionnée (`9e93bb3`) ; tag sur `66aaba4` ; fusion et publication demandées par Mehdi |
+| Version publiée | **[v0.18.3, build 38](https://github.com/mehdi7129/atoll/releases/tag/v0.18.3)** |
+| Fusion / source | [PR #5](https://github.com/mehdi7129/atoll/pull/5) fusionnée (`8b7e9a9`) ; tag sur `d438b8e` ; fusion et publication demandées par Mehdi |
 | Distribution | Universelle arm64 / x86_64 ; app et DMG signés Developer ID, notarisés, staplés et acceptés par Gatekeeper |
-| Mise à jour | Appcast poussé après les assets (`0121dec`) et identique au flux servi ; 19 URL disponibles, SHA256 des sept fichiers publiés et six signatures EdDSA vérifiés |
-| Référence précédente | v0.18.1, build 36 ; [preuves de sa livraison](releases/0.18.1.json) |
-| Tests fonctionnels | Code `e50e269` : 1 020 tests Core, 1 skip live opt-in, 0 échec ; builds Debug et Release réussis. Code inchangé pour la release ; nouveau build de distribution signé vérifié |
-| Recettes | PR #4 : 58 parcours UI, six sabotages détectés, captures clair/sombre des huit onglets et parcours clavier natif. Actions externes simulées ; CLI authentifiés et VoiceOver parlé non rejoués pour cette réorganisation |
+| Mise à jour | Sept fichiers publiés ; activation et vérification de l’appcast en cours, après validation des téléchargements |
+| Référence précédente | v0.18.2, build 37 ; [preuves de sa livraison](releases/0.18.2.json) |
+| Tests fonctionnels | Code `30847d6` : 1 083 tests Core, 1 skip opt-in, 0 échec ; dernier lot de 184 parcours runtime et sept sabotages détectés ; Debug/Release réussis. Code inchangé ; distribution signée reconstruite et vérifiée |
+| Recettes | PR #5 : mesures Codex réelles du 22 septembre archivées ; reprises exercées avec CLI factices et états de crash reconstitués. Aucune nouvelle génération pour publier. Interface inchangée ; limites ci-dessous conservées |
 | Installation de travail | `~/Applications/Atoll.app` **v0.18.2, build 37**, observée le 23 septembre avant préparation ; la publication ne l’installe pas automatiquement |
 
 Vérifier l'état réel avant toute action : `git status --short --branch`,
 `git log -5 --oneline`, `git worktree list`, puis `gh release view`.
 Une source publiée et une app installée peuvent avoir des versions différentes.
-Le [relevé de livraison](releases/0.18.2.json) conserve les commits, identifiants
+Le [relevé de livraison](releases/0.18.3.json) conserve les commits, identifiants
 de notarisation, résultats et empreintes des fichiers distribués.
 
 ## Correctifs après le retour sur v0.18.0

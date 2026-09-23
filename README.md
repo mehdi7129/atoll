@@ -99,7 +99,7 @@ jamais pour Codex. C'est une isolation réelle, pas un drapeau dans une fonction
 **La mémoire, elle, est commune — et c'est voulu.** Un index unique, pas deux : c'est tout
 l'intérêt de se souvenir d'un dépôt plutôt que d'un outil, et un souvenir venu d'une session
 Codex peut donc remonter pendant une session Claude. Si tu veux que les deux n'aient rien en
-commun, l'indexation se coupe dans Réglages → Mémoire — elle les coupe alors tous les deux.
+commun, l'indexation se coupe dans Réglages → Apprentissage — elle les coupe alors tous les deux.
 
 L'installation est distincte et facultative — Atoll marche très bien avec un seul des deux.
 Pour Codex, elle gère ses définitions dans `hooks.json`, leur lanceur et le skill manuel
@@ -182,8 +182,7 @@ Si la session n'apparaît pas, ouvre « Vérifier la connexion », choisis le
 Le home Codex (`~/.codex` par défaut) est son dossier de configuration. Son choix,
 la réparation et le chemin de l'exécutable sont regroupés dans « Dépannage ».
 
-**Version en préparation : v0.18.3, build 38.** La version disponible reste
-[v0.18.2](https://github.com/mehdi7129/atoll/releases/tag/v0.18.2) pendant la publication.
+**Version courante : [v0.18.3, build 38](https://github.com/mehdi7129/atoll/releases/tag/v0.18.3).**
 App universelle Apple Silicon / Intel, signée et notarisée ; disponible par la
 mise à jour intégrée ou le DMG de la release.
 

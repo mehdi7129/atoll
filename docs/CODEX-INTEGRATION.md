@@ -7,6 +7,8 @@ sont publiés dans **v0.18.1, build 36** : voir leur
 et le [rapport PR #2](REVIEW-2026-09-10-pr2-corrections.md) sont historiques.
 Les [réglages réorganisés du 11 septembre](PLAN-2026-09-11-settings-organization.md)
 sont publiés dans **v0.18.2, build 37**, après fusion de la PR #4.
+Les analyses allégées, les mesures d’usage et la reprise locale des résultats
+sont publiées dans **v0.18.3, build 38**, après fusion de la PR #5.
 État courant et preuves de livraison dans [HANDOFF](HANDOFF.md).
 
 ## Périmètre et choix de fournisseur

@@ -1,14 +1,16 @@
 # CLAUDE.md — instructions projet Atoll
 
-> **v0.18.3, build 38 — préparation autorisée le 2026-09-23.**
-> La release porte la PR #5 déjà fusionnée ; aucun changement du code testé
-> `30847d6`. Mettre à jour les preuves de livraison et le HANDOFF après publication.
-> Publier les assets avant l’appcast ; préserver l’app installée et les Debug.
+> **v0.18.3, build 38 — publiée le 2026-09-23, PR #5 fusionnée.**
+> Publication autorisée par Mehdi, tag sur `d438b8e` ; code produit identique
+> au code testé `30847d6`. App universelle et DMG signés, notarisés et staplés.
+> Différentiel 37 → 38 comparé à l’archive complète ; signatures Sparkle vérifiées.
+> [Preuves de livraison](docs/releases/0.18.3.json), état du flux dans le HANDOFF.
+> L’app installée v0.18.2 et les deux Debug sont préservés ; aucune réinstallation.
 
 > **PR #5 fusionnée sur `main` le 2026-09-23 (`8b7e9a9`).**
 > Mehdi a autorisé la fusion après validation. Les corrections du rendement de
 > l’apprentissage sont intégrées : sauvegarde/reprise locale, répétitions évitées,
-> antériorité bornée et mesures d’usage. Aucune nouvelle release ni installation.
+> antériorité bornée et mesures d’usage, livrées en v0.18.3 sans réinstallation locale.
 > Lire [HANDOFF](docs/HANDOFF.md) puis le
 > [rapport de validation](docs/REVIEW-2026-09-22-learning-efficiency.md).
 > Les premières recettes ont révélé un coût élevé et zéro skill après parsing.

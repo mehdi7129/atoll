@@ -1,6 +1,6 @@
 # Exécuteur des analyses et passation entre CLI
 
-État du code au **2026-09-23**, PR #5 fusionnée pour v0.18.3.
+État du code au **2026-09-23**, PR #5 fusionnée et publiée en v0.18.3.
 [État de livraison et validations](HANDOFF.md). Les rapports du 10 septembre
 conservent les constats historiques de l’intégration initiale.
 
