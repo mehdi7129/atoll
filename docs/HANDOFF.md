@@ -11,7 +11,8 @@ Mehdi le 23 septembre, tag sur `d438b8e`. Code produit identique à `30847d6`,
 déjà validé avant fusion. App et DMG universels signés Developer ID, notarisés,
 staplés et acceptés par Gatekeeper ; six signatures Sparkle vérifiées.
 Le différentiel 37 → 38 reproduit fichiers, liens et modes de l’archive complète.
-[Relevé de livraison](releases/0.18.3.json). Les assets sont publiés avant le flux.
+[Relevé de livraison](releases/0.18.3.json). Les assets ont précédé le flux ;
+GitHub Pages sert le build 38, vérifié avec `check-docs.py --no-tests --network`.
 L’app installée n’est pas remplacée ; appliquer la mise à jour depuis Atoll ou le DMG.
 
 ## PR #5 fusionnée — corrections du rendement de l’apprentissage
@@ -130,7 +131,7 @@ cette release ; la publication n'a installé aucune app.
 | Version publiée | **[v0.18.3, build 38](https://github.com/mehdi7129/atoll/releases/tag/v0.18.3)** |
 | Fusion / source | [PR #5](https://github.com/mehdi7129/atoll/pull/5) fusionnée (`8b7e9a9`) ; tag sur `d438b8e` ; fusion et publication demandées par Mehdi |
 | Distribution | Universelle arm64 / x86_64 ; app et DMG signés Developer ID, notarisés, staplés et acceptés par Gatekeeper |
-| Mise à jour | Sept fichiers publiés ; activation et vérification de l’appcast en cours, après validation des téléchargements |
+| Mise à jour | Appcast `f12abfe` poussé après les assets et identique au flux servi ; 19 URL disponibles, SHA256 des sept téléchargements et six signatures EdDSA vérifiés |
 | Référence précédente | v0.18.2, build 37 ; [preuves de sa livraison](releases/0.18.2.json) |
 | Tests fonctionnels | Code `30847d6` : 1 083 tests Core, 1 skip opt-in, 0 échec ; dernier lot de 184 parcours runtime et sept sabotages détectés ; Debug/Release réussis. Code inchangé ; distribution signée reconstruite et vérifiée |
 | Recettes | PR #5 : mesures Codex réelles du 22 septembre archivées ; reprises exercées avec CLI factices et états de crash reconstitués. Aucune nouvelle génération pour publier. Interface inchangée ; limites ci-dessous conservées |

@@ -137,7 +137,10 @@
   },
   "appcast": {
     "url": "https://mehdi7129.github.io/atoll/appcast.xml",
+    "commit": "f12abfe7097517650d642b8b907a17d18ebd9e86",
     "sha256": "6d64fd69e180e87eb4ee996bb43985516a9c019bb41d8f6e1f77523934bd48cf",
-    "status": "Assets verified; feed publication pending"
-  }
+    "servedBytesEqualRepository": true,
+    "checkedAt": "2026-09-23T10:30:09.948734+00:00"
+  },
+  "verifiedAt": "2026-09-23T10:30:09.948734+00:00"
 }
