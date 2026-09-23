@@ -1,0 +1,60 @@
+{
+  "date": "2026-09-23",
+  "productReference": "6c1f98774f030edc466d98ee42e469d698a7faac",
+  "scope": "Exploration et HTML autonomes uniquement ; aucun changement produit.",
+  "docsCheck": {
+    "command": "python3 Scripts/check-docs.py --no-tests",
+    "passed": true,
+    "warnings": 24
+  },
+  "javascriptSyntax": {
+    "command": "node --check (script inline transmis sur stdin)",
+    "passed": true
+  },
+  "html": {
+    "path": "docs/mockups/2026-09-23-future/index.html",
+    "sha256": "2a5a56a2acd2454940ecb8e0bf7af111483266ec4fa5ff75acacbacf1fafa579",
+    "uniqueIds": true,
+    "externalResources": 0
+  },
+  "visualReview": {
+    "tool": "cua_repl / Google Chrome natif",
+    "screenshotsReadInSession": true,
+    "committedScreenshots": false,
+    "observedScreenshotPixels": [
+      1224,
+      768
+    ],
+    "verified": [
+      "3 vues rendues",
+      "détails journal",
+      "liste complète 7 sessions",
+      "septième session sélectionnable",
+      "variante orange Claude / cyan Codex",
+      "aucun surplus actionnable pour 2 sessions déjà visibles",
+      "recherche élargie annoncée",
+      "source et rôle de l’extrait",
+      "copie annoncée réussie",
+      "aucun résultat explicite"
+    ],
+    "notExercised": [
+      "VoiceOver parlé",
+      "matrice des tailles et écrans",
+      "fallback du clipboard refusé",
+      "moteur FTS5 réel"
+    ]
+  },
+  "productFilesChanged": false,
+  "atollGenerativeCalls": 0,
+  "appLaunched": false,
+  "buildsOrCoreTestsRepeated": false,
+  "limits": [
+    "Constats statiques, pas incidents reproduits dans Atoll.",
+    "Aucun gain CPU/énergie ou amélioration de pertinence mesuré.",
+    "Maquette sur données fictives uniquement."
+  ],
+  "localDocumentLinks": {
+    "checked": 35,
+    "passed": true
+  }
+}

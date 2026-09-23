@@ -4,6 +4,14 @@
 [CLAUDE.md](../CLAUDE.md). L'[ancien handoff](HANDOFF-2026-09-10-archive.md) conserve
 les mesures et pièges historiques, sans faire autorité sur l'état actuel.
 
+## Exploration du futur — propositions, pas travaux engagés
+
+Mehdi demande d’explorer sans modifier l’app. La [proposition du 23 septembre](EXPLORATION-2026-09-23-atoll-future.md)
+et ses trois maquettes sont un support de discussion : priorités, constats du code,
+hypothèses à mesurer et seconde lecture critique. Aucun lot de développement,
+changement de préférence, fusion ni release n’est autorisé par ce document.
+La v0.18.3 reste inchangée.
+
 ## v0.18.3, build 38 — publiée
 
 [Release](https://github.com/mehdi7129/atoll/releases/tag/v0.18.3) autorisée par
