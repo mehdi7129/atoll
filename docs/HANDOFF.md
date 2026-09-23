@@ -4,11 +4,15 @@
 [CLAUDE.md](../CLAUDE.md). L'[ancien handoff](HANDOFF-2026-09-10-archive.md) conserve
 les mesures et pièges historiques, sans faire autorité sur l'état actuel.
 
-## PR #5 — corrections du rendement de l’apprentissage
+## PR #5 fusionnée — corrections du rendement de l’apprentissage
 
 Mehdi a autorisé les corrections de l’[audit du 11 septembre](AUDIT-2026-09-11-learning-efficiency.md).
-Elles sont sur `codex/audit-learning-efficiency`, dans la
-[PR #5](https://github.com/mehdi7129/atoll/pull/5), **en attente de revue, sans fusion ni release**.
+La [PR #5](https://github.com/mehdi7129/atoll/pull/5) est **fusionnée sur `main`**
+le 23 septembre à sa demande : merge `8b7e9a9`, depuis la tête testée `30847d6`.
+L’arbre de la fusion est identique à celui testé ; aucun conflit ni changement
+de code pendant la fusion. La mise à jour de cette fiche est documentaire.
+**Aucune nouvelle release ni installation** : les économies ne sont pas encore
+déployées dans l’app installée.
 Le [rapport de correction](REVIEW-2026-09-22-learning-efficiency.md) décrit les preuves,
 les commandes de test et les limites ; l’audit initial reste un constat historique.
 
@@ -66,7 +70,7 @@ supprimer un checkpoint ou un staging manuellement.
 
 Les fichiers du Bureau étant partiellement déchargés par iCloud, la validation
 utilise une copie locale : `/private/tmp/atoll-learning-local-20260922`.
-Les changements sont aussi présents dans le dossier d’origine. Xcode 27 nécessite
+Les changements sont aussi présents dans le dossier d’origine, revenu sur `main`. Xcode 27 nécessite
 le composant Metal ; les harnesses Swift utilisent provisoirement `--build-system native`.
 Ne pas relancer des builds dans le Bureau tant que les fichiers ne sont pas hydratés.
 
@@ -113,6 +117,7 @@ cette release ; la publication n'a installé aucune app.
 
 | Élément | État vérifié |
 |---|---|
+| Code intégré après la release | PR #5 fusionnée sur `main` (`8b7e9a9`) ; économies et reprises validées, pas encore publiées |
 | Version publiée | **[v0.18.2, build 37](https://github.com/mehdi7129/atoll/releases/tag/v0.18.2)** |
 | Fusion / source | [PR #4](https://github.com/mehdi7129/atoll/pull/4) fusionnée (`9e93bb3`) ; tag sur `66aaba4` ; fusion et publication demandées par Mehdi |
 | Distribution | Universelle arm64 / x86_64 ; app et DMG signés Developer ID, notarisés, staplés et acceptés par Gatekeeper |

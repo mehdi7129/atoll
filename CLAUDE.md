@@ -1,16 +1,18 @@
 # CLAUDE.md — instructions projet Atoll
 
-> **Travail courant — PR #5, 2026-09-23.** Corrections du rendement de
-> l’apprentissage autorisées : sauvegarde/reprise locale, répétitions évitées,
-> antériorité bornée et mesures d’usage. Branche `codex/audit-learning-efficiency`,
-> sans fusion ni nouvelle release. Lire [HANDOFF](docs/HANDOFF.md) puis le
+> **PR #5 fusionnée sur `main` le 2026-09-23 (`8b7e9a9`).**
+> Mehdi a autorisé la fusion après validation. Les corrections du rendement de
+> l’apprentissage sont intégrées : sauvegarde/reprise locale, répétitions évitées,
+> antériorité bornée et mesures d’usage. Aucune nouvelle release ni installation.
+> Lire [HANDOFF](docs/HANDOFF.md) puis le
 > [rapport de validation](docs/REVIEW-2026-09-22-learning-efficiency.md).
 > Les premières recettes ont révélé un coût élevé et zéro skill après parsing.
 > La [correction du générateur](docs/REVIEW-2026-09-22-generator-quality.md)
 > distingue désormais procédures, notes utiles et comptes rendus à exclure ;
 > elle corrige les slugs trop longs écartés silencieusement. Derniers cas comparés :
 > 28 988 → 8 894 tokens d’entrée (−69,3 %), skill complet de 118 mots.
-> 1 078 tests Core (un skip), builds Debug/Release, captures et échecs conservés.
+> Dernier lot : 1 083 tests Core (un skip), 184 parcours runtime, sept sabotages
+> et builds Debug/Release validés. Captures live et échecs antérieurs conservés.
 > Ne pas relancer la campagne live de dix appels à chaque reprise.
 > Le [rangement reprend aussi son résultat sauvegardé](docs/REVIEW-2026-09-23-curation-recovery.md)
 > après une panne locale, avec vérification du corpus et sans nouvel appel IA.
