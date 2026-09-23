@@ -218,6 +218,8 @@ les identifiants déjà présents dans les résumés. Les copies
 exactes sont filtrées avant enregistrement. Un résultat sauvegardé mais mal enregistré
 reste disponible pour une reprise locale, sans nouvelle génération. Le journal distingue
 les écritures confirmées, l’usage communiqué par le CLI et les mesures inconnues.
+Le rangement des notes conserve aussi son résultat : après un échec d’enregistrement,
+le prochain cycle peut reprendre localement si les notes correspondent toujours.
 Les analyses Codex utilisent des instructions courtes et excluent l’injection
 automatique des skills et les outils inutiles désactivables. Leurs données utiles
 restent fournies par Atoll ; tes sessions interactives gardent leurs réglages.

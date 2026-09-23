@@ -13,6 +13,7 @@ import tempfile
 
 
 GROUPS = {
+    "curation-checkpoint": (["CurationCheckpoint"], "CurationCheckpointTests"),
     "catalog": (["SkillCatalog"], "SkillCatalogTests"),
     "novelty": (["LearningNovelty", "LearnedSkillStore"], "LearningNoveltyTests"),
     "delivery": (["RetrospectiveDelivery"], "RetrospectiveDeliveryTests"),
@@ -21,6 +22,9 @@ GROUPS = {
 }
 # Chaque mutation doit échouer dans son test témoin, et compiler auparavant.
 MUTATIONS = {
+    "curation-checkpoint-match": ("curation-checkpoint", "CurationCheckpoint", [
+        ("return fingerprint == sourceFingerprint ? .source : .changed", "return .source")],
+        "testChangedAddedRemovedOrRenamedNoteCannotUseOldResult"),
     "invalid-skill-trace": ("retrospective-report", "RetrospectiveReport", [
         ('if rejected.count < Limit.skills { rejected.append("invalid-proposal-\\(index + 1)") }',
          '()')],

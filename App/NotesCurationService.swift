@@ -192,11 +192,22 @@ final class NotesCurationService {
     private func run(manual: Bool, generation: UUID) async {
         guard runGeneration == generation, !Task.isCancelled else { return }
         runLaunched = false
-        // AVANT le balayage : le staging est la pièce à conviction d'une
-        // bascule interrompue, et `sweepStagingLeaks` le détruit.
+        // Le checkpoint permet de distinguer une bascule interrompue d'un
+        // changement externe. Un doute conserve toutes les pièces, avant le
+        // réparateur historique et son balayage des stagings.
+        do { try Self.recoverCheckpointSwap() }
+        catch {
+            finish(outcome: "reprise locale impossible : résultat sauvegardé illisible ou bascule interrompue ambiguë — aucune nouvelle analyse",
+                   touched: false, preserveWarnings: true)
+            return
+        }
         Self.repairInterruptedSwap()
         Self.sweepStagingLeaks() // débris d'un run interrompu
         let notes = Self.readNotes()
+        // Le résultat payé passe AVANT toute capture d'auth/modèle ou de quota.
+        // Un cache illisible n'autorise pas à repayer silencieusement l'analyse.
+        if await resumePending(notes: notes, manual: manual, generation: generation) { return }
+        guard runGeneration == generation, !Task.isCancelled else { return }
         guard notes.count >= 2 else {
             finish(outcome: "rien à consolider (\(notes.count) note(s))", touched: false, retry: false)
             return
@@ -292,11 +303,78 @@ final class NotesCurationService {
             return
         }
 
+        await planAndApply(curation, previous: notes, manual: manual, generation: generation,
+                           createdAt: Date(), leaseID: lease)
+    }
+
+    private static var checkpointStore: CurationCheckpointStore {
+        CurationCheckpointStore(directory: BridgePaths.learningDirectory
+            .appendingPathComponent("curation-pending", isDirectory: true))
+    }
+
+    /// `true` signifie qu'un résultat local a pris en charge ce cycle, même
+    /// refusé. Une erreur locale ne doit jamais tomber dans un nouvel appel.
+    private func resumePending(notes: [(name: String, content: String)], manual: Bool,
+                               generation: UUID) async -> Bool {
+        let checkpoint: CurationCheckpoint
+        do {
+            guard let saved = try Self.checkpointStore.load() else { return false }
+            checkpoint = saved
+        } catch {
+            finish(outcome: "reprise locale impossible : résultat sauvegardé illisible — aucune nouvelle analyse",
+                   touched: false, preserveWarnings: true)
+            return true
+        }
+        guard runGeneration == generation, !Task.isCancelled else { return true }
+        switch checkpoint.match(notes: notes) {
+        case .changed:
+            // Un ajout, retrait ou changement suffit à invalider l'ancienne
+            // réponse. Le cycle normal décidera seul d'une nouvelle dépense.
+            do { try Self.checkpointStore.remove(ifID: checkpoint.id) }
+            catch {
+                finish(outcome: "reprise locale impossible : ancien résultat non retiré", touched: false)
+                return true
+            }
+            return false
+        case .target:
+            // Crash après bascule mais avant l'état : les octets attendus
+            // sont déjà posés. Ne pas réarchiver ni réécrire les mêmes notes.
+            warnings = checkpoint.output?.contradictions.map { "⚠ contradiction : \($0.summary)" } ?? []
+            lastSuccessfulCorpus = CurationCorpusFingerprint(notes: notes)
+            AnalysisBudget.shared.updateMetrics(checkpoint.leaseID, notesWritten: notes.count, skillsProposed: 0)
+            onNotesReplaced?(checkpoint.sourceNames.map { BridgePaths.learningNotesDirectory.appendingPathComponent($0).path },
+                             notes.map { BridgePaths.learningNotesDirectory.appendingPathComponent($0.name) })
+            if finish(outcome: "rangement repris localement (\(notes.count) note(s))", touched: true) {
+                clearCheckpoint(checkpoint)
+            }
+            return true
+        case .source:
+            guard let output = checkpoint.output else {
+                finish(outcome: "reprise locale impossible : résultat sauvegardé inexploitable", touched: false)
+                return true
+            }
+            await planAndApply(output, previous: notes, manual: manual, generation: generation,
+                               createdAt: checkpoint.createdAt, leaseID: checkpoint.leaseID)
+            return true
+        }
+    }
+
+    /// Même planificateur et mêmes archives relues pour un retour CLI frais
+    /// et une reprise. L'horodatage conservé rend les fichiers déterministes.
+    private func planAndApply(_ curation: NotesCurationOutput,
+                              previous: [(name: String, content: String)], manual: Bool,
+                              generation: UUID, createdAt: Date, leaseID: UUID) async {
         let archives = await Task.detached(priority: .utility) {
             NoteProvenance.readArchives(at: BridgePaths.learningArchiveDirectory)
         }.value
-        guard generation == runGeneration else { return }
-        switch NotesCurationPlanner.plan(existing: notes, output: curation, now: Date(), archives: archives) {
+        guard generation == runGeneration, !Task.isCancelled else { return }
+        // Le modèle ET la lecture des archives suspendent le MainActor. Une
+        // rétrospective ou l'utilisateur a pu changer le corpus entre-temps.
+        guard CurationCorpusFingerprint(notes: Self.readNotes()) == CurationCorpusFingerprint(notes: previous) else {
+            finish(outcome: "notes modifiées pendant l'analyse — résultat non appliqué", touched: false)
+            return
+        }
+        switch NotesCurationPlanner.plan(existing: previous, output: curation, now: createdAt, archives: archives) {
         case .failure(let refusal):
             let reason: String
             switch refusal {
@@ -310,15 +388,35 @@ final class NotesCurationService {
             log.error("curation refusée : \(reason, privacy: .public)")
             finish(outcome: reason, touched: false)
         case .success(let plan):
-            apply(plan, previous: notes, manual: manual)
+            do {
+                let checkpoint = try CurationCheckpoint(previous: previous, output: curation, plan: plan,
+                                                       createdAt: createdAt, leaseID: leaseID)
+                // Sauver AVANT l'archive/staging : si cette écriture échoue,
+                // les notes restent intactes, sans prétendre avoir une reprise.
+                try Self.checkpointStore.save(checkpoint)
+                apply(plan, previous: previous, manual: manual, generation: generation, checkpoint: checkpoint)
+            } catch {
+                finish(outcome: "non appliquée : sauvegarde du résultat impossible (\(error.localizedDescription))",
+                       touched: false)
+            }
         }
+    }
+
+    private func clearCheckpoint(_ checkpoint: CurationCheckpoint) {
+        do { try Self.checkpointStore.remove(ifID: checkpoint.id) }
+        catch { log.error("résultat appliqué conservé pour reprise : \(error.localizedDescription)") }
     }
 
     /// Remplacement : archive VÉRIFIÉE, puis staging, puis bascule. À la
     /// moindre anomalie, on s'arrête AVANT toute suppression.
     private func apply(_ plan: NotesCurationPlanner.Plan,
                        previous: [(name: String, content: String)],
-                       manual: Bool) {
+                       manual: Bool, generation: UUID, checkpoint: CurationCheckpoint) {
+        guard runGeneration == generation, !Task.isCancelled else { return }
+        guard checkpoint.sourceFingerprint == CurationCorpusFingerprint(notes: Self.readNotes()) else {
+            finish(outcome: "notes modifiées avant remplacement — résultat non appliqué", touched: false)
+            return
+        }
         let fm = FileManager.default
         let notesDirectory = BridgePaths.learningNotesDirectory
         let stamp = Self.timestamp()
@@ -380,6 +478,15 @@ final class NotesCurationService {
             // plus être annoncée comme « rien n'a bougé » (revue), elle
             // déclenche une RESTAURATION depuis l'archive qu'on vient de
             // vérifier. Les fichiers non-.md éventuels sont laissés.
+            guard runGeneration == generation, !Task.isCancelled else { return }
+            guard checkpoint.sourceFingerprint == CurationCorpusFingerprint(notes: Self.readNotes()) else {
+                throw CurationError.corpusChanged
+            }
+            // Distinguer un arrêt AVANT la première suppression d'un swap
+            // commencé : sans ce témoin, une suppression externe ultérieure
+            // serait attribuée à tort au remplacement interrompu.
+            try Data(checkpoint.id.uuidString.utf8).write(
+                to: staging.appendingPathComponent(".swap-started"), options: .atomic)
             swapStarted = true
             // On ne retient que les suppressions RÉUSSIES : c'est cette liste
             // qui part à `forgetFile` en (4). Dérivée de `previous`, elle
@@ -427,10 +534,12 @@ final class NotesCurationService {
             // L'entrée a été remplacée : comparer au corpus AVANT le swap
             // relancerait le modèle sur ses propres sorties au prochain tick.
             lastSuccessfulCorpus = CurationCorpusFingerprint(notes: Self.readNotes())
-            if let lease = activeLease {
-                AnalysisBudget.shared.updateMetrics(lease, notesWritten: written.count, skillsProposed: 0)
+            AnalysisBudget.shared.updateMetrics(checkpoint.leaseID, notesWritten: written.count, skillsProposed: 0)
+            // Le résultat reste récupérable si l'état n'a pas pu être écrit.
+            // Le prochain passage reconnaîtra alors l'empreinte cible.
+            if finish(outcome: summary + (manual ? "" : " (auto)"), touched: true) {
+                clearCheckpoint(checkpoint)
             }
-            finish(outcome: summary + (manual ? "" : " (auto)"), touched: true)
         } catch {
             guard swapStarted else {
                 log.error("curation non appliquée : \(error.localizedDescription) — notes inchangées")
@@ -545,6 +654,135 @@ final class NotesCurationService {
         return nil
     }
 
+    /// Une bascule payée peut laisser des sources ET des sorties dans notes/.
+    /// Le simple comptage historique reconstruisait alors un corpus mixte et
+    /// invalidait le résultat sauvegardé. Ici chaque fichier doit être prouvé.
+    private static func recoverCheckpointSwap() throws {
+        guard let checkpoint = try checkpointStore.load() else { return }
+        let fm = FileManager.default
+        let notesDirectory = BridgePaths.learningNotesDirectory
+        func files(in directory: URL, strict: Bool, swapID: UUID? = nil) throws -> [String: Data] {
+            let kind = try directory.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+            guard kind.isDirectory == true, kind.isSymbolicLink == false else {
+                throw CurationError.interruptedSwapUnproven
+            }
+            var result: [String: Data] = [:]
+            for file in try fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) {
+                let name = file.lastPathComponent
+                let isMarker = name == ".swap-started" && swapID != nil
+                guard isMarker || (!name.hasPrefix(".") && name.lowercased().hasSuffix(".md")) else {
+                    if strict { throw CurationError.interruptedSwapUnproven }
+                    continue
+                }
+                let kind = try file.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+                guard kind.isRegularFile == true, kind.isSymbolicLink == false,
+                      let bytes = BoundedProcessOutput.file(at: file, cap: 2 * 1024 * 1024) else {
+                    throw CurationError.interruptedSwapUnproven
+                }
+                if isMarker {
+                    guard bytes == Data(swapID!.uuidString.utf8) else { throw CurationError.interruptedSwapUnproven }
+                } else {
+                    result[name] = bytes
+                }
+            }
+            return result
+        }
+        func corpus(_ files: [String: Data]) throws -> [(name: String, content: String)] {
+            try files.sorted { $0.key < $1.key }.map {
+                guard let content = String(data: $0.value, encoding: .utf8) else {
+                    throw CurationError.interruptedSwapUnproven
+                }
+                return (name: $0.key, content: content)
+            }
+        }
+        let stagingDirectories = try fm.contentsOfDirectory(at: BridgePaths.learningDirectory,
+                                                             includingPropertiesForKeys: nil)
+            .filter { $0.lastPathComponent.hasPrefix(".notes-staging-") }
+        let staged = try stagingDirectories.map {
+            ($0, try files(in: $0, strict: true, swapID: checkpoint.id),
+             fm.fileExists(atPath: $0.appendingPathComponent(".swap-started").path))
+        }
+            .filter { !$0.1.isEmpty }
+        guard !staged.isEmpty else {
+            // Même vide, un staging ne justifie pas d'écarter un checkpoint
+            // dont ni les sources ni la cible ne correspondent au disque.
+            if !stagingDirectories.isEmpty,
+               checkpoint.match(notes: try corpus(files(in: notesDirectory, strict: false))) == .changed {
+                throw CurationError.interruptedSwapUnproven
+            }
+            return
+        }
+        guard staged.count == 1, let output = checkpoint.output else {
+            throw CurationError.interruptedSwapUnproven
+        }
+        let (staging, pending, swapStarted) = staged[0]
+        let archives = try fm.contentsOfDirectory(at: BridgePaths.learningArchiveDirectory,
+                                                 includingPropertiesForKeys: nil)
+            .filter { $0.lastPathComponent.hasPrefix("notes-") }
+            .sorted { $0.lastPathComponent > $1.lastPathComponent }
+        var source: [String: Data]?
+        for archive in archives.prefix(32) {
+            guard let candidate = try? files(in: archive, strict: true),
+                  Set(candidate.keys) == Set(checkpoint.sourceNames),
+                  let previous = try? corpus(candidate),
+                  CurationCorpusFingerprint(notes: previous) == checkpoint.sourceFingerprint else { continue }
+            source = candidate
+            break
+        }
+        guard let source,
+              case .success(let plan) = NotesCurationPlanner.plan(existing: try corpus(source), output: output,
+                now: checkpoint.createdAt, archives: NoteProvenance.readArchives(at: BridgePaths.learningArchiveDirectory)),
+              CurationCorpusFingerprint(notes: plan.newNotes.map { ($0.fileName, $0.content) }) == checkpoint.targetFingerprint else {
+            throw CurationError.interruptedSwapUnproven
+        }
+        let target = Dictionary(uniqueKeysWithValues: plan.newNotes.map { ($0.fileName, Data($0.content.utf8)) })
+        let present = try files(in: notesDirectory, strict: false)
+        // Aucun fichier ajouté ou modifié n'est attribué au swap par son nom
+        // seul. Même discipline pour le staging, qui est la copie de secours.
+        guard pending.allSatisfy({ target[$0.key] == $0.value }),
+              present.allSatisfy({ source[$0.key] == $0.value || target[$0.key] == $0.value }) else {
+            throw CurationError.interruptedSwapUnproven
+        }
+        let intact = CurationCorpusFingerprint(notes: try corpus(present)) == checkpoint.sourceFingerprint
+        guard intact || (swapStarted && target.allSatisfy({ pending[$0.key] == $0.value || present[$0.key] == $0.value })) else {
+            throw CurationError.interruptedSwapUnproven
+        }
+        if !intact {
+            // Remettre d'abord TOUTES les sorties dans le staging : un second
+            // crash au milieu de la restauration garde les mêmes preuves.
+            for (name, bytes) in target where pending[name] == nil {
+                let path = notesDirectory.appendingPathComponent(name)
+                guard try Data(contentsOf: path) == bytes else { throw CurationError.interruptedSwapUnproven }
+                try fm.copyItem(at: path, to: staging.appendingPathComponent(name))
+            }
+            guard try files(in: staging, strict: true, swapID: checkpoint.id) == target else { throw CurationError.interruptedSwapUnproven }
+            for (name, bytes) in source {
+                let path = notesDirectory.appendingPathComponent(name)
+                if fm.fileExists(atPath: path.path) {
+                    let current = try Data(contentsOf: path)
+                    if current == bytes { continue }
+                    guard current == target[name] else { throw CurationError.interruptedSwapUnproven }
+                    try fm.removeItem(at: path)
+                }
+                // Sans .atomic : création exclusive, jamais écraser une note
+                // réapparue après notre lecture.
+                try bytes.write(to: path, options: .withoutOverwriting)
+            }
+            for (name, bytes) in target where source[name] == nil {
+                let path = notesDirectory.appendingPathComponent(name)
+                guard fm.fileExists(atPath: path.path) else { continue }
+                guard try Data(contentsOf: path) == bytes else { throw CurationError.interruptedSwapUnproven }
+                try fm.removeItem(at: path)
+            }
+        }
+        guard CurationCorpusFingerprint(notes: try corpus(files(in: notesDirectory, strict: false))) == checkpoint.sourceFingerprint,
+              try files(in: staging, strict: true, swapID: checkpoint.id) == (intact ? pending : target) else {
+            throw CurationError.interruptedSwapUnproven
+        }
+        try fm.removeItem(at: staging)
+        log.info("bascule interrompue restaurée depuis les sources vérifiées — reprise locale du résultat")
+    }
+
     /// Rattrapage d'une bascule interrompue par un ARRÊT BRUTAL (SIGKILL,
     /// panne) — l'équivalent de `LearnedSkillStore.finishIncompleteMoves`, qui
     /// manquait ici.
@@ -624,9 +862,15 @@ final class NotesCurationService {
     enum CurationError: LocalizedError {
         case archiveIncomplete(expected: Int, actual: Int)
         case archiveTruncated(String)
+        case corpusChanged
+        case interruptedSwapUnproven
 
         var errorDescription: String? {
             switch self {
+            case .interruptedSwapUnproven:
+                return "bascule interrompue non prouvée — fichiers conservés"
+            case .corpusChanged:
+                return "notes modifiées avant remplacement — résultat non appliqué"
             case .archiveIncomplete(let expected, let actual):
                 return "archive incomplète (\(actual)/\(expected) fichiers) — rien n'a été remplacé"
             case .archiveTruncated(let name):
@@ -642,14 +886,17 @@ final class NotesCurationService {
     ///
     /// `touched` ne sert qu'à savoir si les avertissements affichés
     /// (contradictions) proviennent de ce cycle ou doivent être effacés.
+    @discardableResult
     private func finish(outcome: String, touched: Bool, retry: Bool = true,
-                        preserveWarnings: Bool = false) {
-        recordOutcome(outcome, touched: touched, retry: retry, preserveWarnings: preserveWarnings)
+                        preserveWarnings: Bool = false) -> Bool {
+        let saved = recordOutcome(outcome, touched: touched, retry: retry, preserveWarnings: preserveWarnings)
         phase = .idle
+        return saved
     }
 
+    @discardableResult
     private func recordOutcome(_ outcome: String, touched: Bool, retry: Bool = true,
-                               preserveWarnings: Bool = false) {
+                               preserveWarnings: Bool = false) -> Bool {
         let now = Date()
         if runLaunched || touched || !retry {
             lastRunAt = now
@@ -662,10 +909,11 @@ final class NotesCurationService {
         if !touched, let lease = activeLease {
             AnalysisBudget.shared.updateMetrics(lease, notesWritten: 0, skillsProposed: 0)
         }
-        persistState()
+        return persistState()
     }
 
-    private func persistState() {
+    @discardableResult
+    private func persistState() -> Bool {
         Self.saveState(.init(lastRunAt: lastRunAt, lastOutcome: lastOutcome,
                              warnings: warnings, retryAt: retryAt,
                              lastSuccessfulCorpus: lastSuccessfulCorpus))
@@ -848,11 +1096,15 @@ final class NotesCurationService {
         return state
     }
 
-    private static func saveState(_ state: PersistedState) {
-        try? FileManager.default.createDirectory(at: BridgePaths.learningDirectory,
-                                                 withIntermediateDirectories: true)
-        if let data = try? JSONEncoder().encode(state) {
-            try? data.write(to: stateURL, options: .atomic)
+    private static func saveState(_ state: PersistedState) -> Bool {
+        do {
+            try FileManager.default.createDirectory(at: BridgePaths.learningDirectory,
+                                                    withIntermediateDirectories: true)
+            try JSONEncoder().encode(state).write(to: stateURL, options: .atomic)
+            return true
+        } catch {
+            log.error("état de curation non sauvegardé : \(error.localizedDescription)")
+            return false
         }
     }
 

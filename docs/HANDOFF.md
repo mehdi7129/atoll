@@ -1,6 +1,6 @@
 # HANDOFF — reprendre Atoll
 
-État du **22 septembre 2026**. Fiche courante ; les règles détaillées restent dans
+État du **23 septembre 2026**. Fiche courante ; les règles détaillées restent dans
 [CLAUDE.md](../CLAUDE.md). L'[ancien handoff](HANDOFF-2026-09-10-archive.md) conserve
 les mesures et pièges historiques, sans faire autorité sur l'état actuel.
 
@@ -50,6 +50,19 @@ documentaire. Vérificateur : 15 bons rapports et 28 contre-épreuves. Trois usa
 finaux rejoués dans le journal sans nouvel appel. Instructions globales et outils
 résiduels Codex subsistent ; le flux JSON n’expose pas tous les appels de wrappers.
 Le runtime conserve le home choisi, les modèles et configurations personnelles.
+
+Suite du 23 septembre : le [rangement des notes reprend son résultat sauvegardé](REVIEW-2026-09-23-curation-recovery.md)
+après un échec local, avant toute capture du modèle ou réservation de budget.
+La reprise vérifie les notes, la provenance et les contradictions ; un corpus changé
+ne reçoit jamais une ancienne réponse. Aucun nouvel appel IA dans cette validation.
+La reprise reste liée au bouton ou à l’échéance autorisée, sans nouvel automatisme
+au démarrage. Les mesures de tokens ci-dessus restent celles du 22 septembre.
+Validation du lot : **1 083 tests Core (un skip, aucun échec)**, 98 parcours de
+reprise, 26 de cadence/annulation, 60 runtime, sept sabotages compilés détectés
+et builds Debug/Release. Cas de crash reconstitués, CLI factices ; preuves liées.
+Un début de remplacement est journalisé ; en cas ambigu, fichiers et résultat
+restent conservés, sans nouveau modèle. Lire les limites du rapport avant de
+supprimer un checkpoint ou un staging manuellement.
 
 Les fichiers du Bureau étant partiellement déchargés par iCloud, la validation
 utilise une copie locale : `/private/tmp/atoll-learning-local-20260922`.

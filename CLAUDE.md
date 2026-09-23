@@ -1,6 +1,6 @@
 # CLAUDE.md — instructions projet Atoll
 
-> **Travail courant — PR #5, 2026-09-22.** Corrections du rendement de
+> **Travail courant — PR #5, 2026-09-23.** Corrections du rendement de
 > l’apprentissage autorisées : sauvegarde/reprise locale, répétitions évitées,
 > antériorité bornée et mesures d’usage. Branche `codex/audit-learning-efficiency`,
 > sans fusion ni nouvelle release. Lire [HANDOFF](docs/HANDOFF.md) puis le
@@ -12,6 +12,9 @@
 > 28 988 → 8 894 tokens d’entrée (−69,3 %), skill complet de 118 mots.
 > 1 078 tests Core (un skip), builds Debug/Release, captures et échecs conservés.
 > Ne pas relancer la campagne live de dix appels à chaque reprise.
+> Le [rangement reprend aussi son résultat sauvegardé](docs/REVIEW-2026-09-23-curation-recovery.md)
+> après une panne locale, avec vérification du corpus et sans nouvel appel IA.
+> La reprise suit le bouton ou la cadence existante ; elle ne réactive pas l’opt-in.
 
 > **v0.18.2, build 37 — publiée le 2026-09-11, PR #4 fusionnée.**
 > Mehdi a demandé la fusion et la release. La [PR #4](https://github.com/mehdi7129/atoll/pull/4)
