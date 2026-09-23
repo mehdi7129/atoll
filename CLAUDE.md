@@ -1,5 +1,10 @@
 # CLAUDE.md — instructions projet Atoll
 
+> **v0.18.3, build 38 — préparation autorisée le 2026-09-23.**
+> La release porte la PR #5 déjà fusionnée ; aucun changement du code testé
+> `30847d6`. Mettre à jour les preuves de livraison et le HANDOFF après publication.
+> Publier les assets avant l’appcast ; préserver l’app installée et les Debug.
+
 > **PR #5 fusionnée sur `main` le 2026-09-23 (`8b7e9a9`).**
 > Mehdi a autorisé la fusion après validation. Les corrections du rendement de
 > l’apprentissage sont intégrées : sauvegarde/reprise locale, répétitions évitées,

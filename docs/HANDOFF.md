@@ -4,6 +4,13 @@
 [CLAUDE.md](../CLAUDE.md). L'[ancien handoff](HANDOFF-2026-09-10-archive.md) conserve
 les mesures et pièges historiques, sans faire autorité sur l'état actuel.
 
+## v0.18.3, build 38 — préparation de release
+
+Publication autorisée par Mehdi le 23 septembre. Version et build incrémentés ;
+code produit identique à `30847d6`, déjà validé avant fusion. Le script de release
+reconstruit et signe la distribution ; les assets précèdent la mise en ligne
+de l’appcast. L’app installée n’est pas remplacée.
+
 ## PR #5 fusionnée — corrections du rendement de l’apprentissage
 
 Mehdi a autorisé les corrections de l’[audit du 11 septembre](AUDIT-2026-09-11-learning-efficiency.md).
@@ -11,8 +18,8 @@ La [PR #5](https://github.com/mehdi7129/atoll/pull/5) est **fusionnée sur `main
 le 23 septembre à sa demande : merge `8b7e9a9`, depuis la tête testée `30847d6`.
 L’arbre de la fusion est identique à celui testé ; aucun conflit ni changement
 de code pendant la fusion. La mise à jour de cette fiche est documentaire.
-**Aucune nouvelle release ni installation** : les économies ne sont pas encore
-déployées dans l’app installée.
+La publication de v0.18.3 est maintenant autorisée et en préparation.
+Les économies ne sont pas encore déployées dans l’app installée.
 Le [rapport de correction](REVIEW-2026-09-22-learning-efficiency.md) décrit les preuves,
 les commandes de test et les limites ; l’audit initial reste un constat historique.
 
@@ -109,7 +116,7 @@ préférences privé et simule ses actions externes. Ne jamais tester ces action
 sur la copie stable. Les anciens rapports de [première simplification](REVIEW-2026-09-11-settings-ux.md)
 sont historiques ; la maquette validée reste dans `docs/mockups/2026-09-11-settings/`.
 
-L'app stable reste **v0.18.1, build 36**. Ses fichiers, les deux builds Debug
+Lors de cette release, l’app stable était **v0.18.1, build 36**. Ses fichiers, les deux builds Debug
 et les huit configurations personnelles contrôlées sont identiques avant/après
 cette release ; la publication n'a installé aucune app.
 
@@ -125,7 +132,7 @@ cette release ; la publication n'a installé aucune app.
 | Référence précédente | v0.18.1, build 36 ; [preuves de sa livraison](releases/0.18.1.json) |
 | Tests fonctionnels | Code `e50e269` : 1 020 tests Core, 1 skip live opt-in, 0 échec ; builds Debug et Release réussis. Code inchangé pour la release ; nouveau build de distribution signé vérifié |
 | Recettes | PR #4 : 58 parcours UI, six sabotages détectés, captures clair/sombre des huit onglets et parcours clavier natif. Actions externes simulées ; CLI authentifiés et VoiceOver parlé non rejoués pour cette réorganisation |
-| Installation de travail | `~/Applications/Atoll.app` **v0.18.1, build 36**, vérifiée le 11 septembre ; copie stable, deux builds Debug et huit configurations personnelles préservés pendant la release |
+| Installation de travail | `~/Applications/Atoll.app` **v0.18.2, build 37**, observée le 23 septembre avant préparation ; la publication ne l’installe pas automatiquement |
 
 Vérifier l'état réel avant toute action : `git status --short --branch`,
 `git log -5 --oneline`, `git worktree list`, puis `gh release view`.

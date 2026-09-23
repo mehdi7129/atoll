@@ -1,16 +1,16 @@
 # Exécuteur des analyses et passation entre CLI
 
-État du code au **2026-09-10**, développé sur v0.17.2, **non publié**.
-Le [rapport de correction](REVIEW-2026-09-10-pr2-corrections.md) distingue
-tests exécutés et parcours encore à vérifier.
+État du code au **2026-09-23**, PR #5 fusionnée pour v0.18.3.
+[État de livraison et validations](HANDOFF.md). Les rapports du 10 septembre
+conservent les constats historiques de l’intégration initiale.
 
 ## Trois choix indépendants
 
 | Choix | Où | Effet |
 |---|---|---|
 | Fournisseur affiché | Boutons Claude Code / Codex | Liste, quota, palette |
-| Exécuteur des analyses | Réglages → Apprentissage ; modèle dans Réglages → Codex | Abonnement et modèle des dépenses Atoll |
-| Destination des skills | Réglages → Apprentissage → Abonnement des analyses Atoll | Catalogue, proposition et installation Claude ou Codex |
+| Exécuteur des analyses | Réglages → Apprentissage, moteur et modèles | Abonnement et modèle des dépenses Atoll |
+| Destination des skills | Réglages → Apprentissage, près de la revue des skills | Catalogue, proposition et installation Claude ou Codex |
 
 Changer de vue ne change jamais l'exécuteur. L'origine d'un transcript reste
 sa provenance, quel que soit l'agent qui l'analyse.
@@ -49,7 +49,12 @@ jamais prouver de la disponibilité ni déclencher un failover.
 
 ## Préparation, annulation et comptabilité
 
-Le job en file lit les préférences à son évaluation. Avant le premier await de
+Un résultat sauvegardé est repris localement avant de capturer moteur, modèle
+ou quota. Un condensé déjà traité ou un corpus de notes déjà rangé ne déclenche
+pas une nouvelle analyse automatique. Le rangement manuel reste possible.
+
+Pour une nouvelle génération, le job en file lit les préférences à son évaluation.
+Avant le premier await de
 préparation, il fige origine, destination, exécuteur, modèle, home, configuration
 de résolution et quota. Le binaire absolu est résolu dans cette génération.
 Un changement de réglage ultérieur ne reroute pas le job. Une nouvelle
@@ -65,6 +70,9 @@ Le journal local `analysis-jobs-v2.json` distingue réservation, lancement et
 résultat. Il contient moteur, modèle, type d'analyse, origine, destination et
 snapshot du quota avec fraction, fraîcheur, reset, catégorie et raison lorsque
 disponibles ; pas le contenu des prompts ni les secrets de connexion.
+Usage natif, durée, taille du prompt métier et écritures confirmées y sont
+distingués. Les caractères ne mesurent pas les tokens ; une mesure absente reste
+inconnue. La reprise complète le reçu initial sans nouvelle dépense.
 Un lancement impossible rend son créneau ; un processus lancé puis en échec
 compte comme tentative. Au redémarrage, une simple préparation est libérée.
 L’intention de spawn, persistée immédiatement avant `process.run()`, ou un
@@ -87,6 +95,12 @@ réduit d'une app macOS. Le shell de login est conservé pour l'authentification
 par abonnement, avec stdin fermé. Le home Codex choisi est réimposé **après**
 le profil de login. Les clés API héritées ne doivent pas remplacer l'abonnement
 choisi par Atoll.
+
+Les analyses Codex emploient des instructions dédiées courtes. L’injection
+automatique des skills, les instructions du projet et les outils inutiles
+désactivables sont retirés pour ce processus. Les instructions globales et
+certains wrappers du CLI subsistent ; aucune isolation totale n’est promise.
+Les configurations personnelles, dont `config.toml`, ne sont pas modifiées.
 
 Les jobs travaillent dans un dossier temporaire contrôlé. Leur contexte est
 fourni explicitement ; le projet analysé n'est pas leur cwd. Le marqueur
@@ -141,9 +155,13 @@ de permission d'un agent à l'autre.
 - Les scripts de passation dans les deux sens ont été exécutés avec de faux
   CLI : chemin avec espaces/apostrophe, cwd, home et contexte absolu corrects.
 - Les captures, la navigation native entre cartes, le brouillon et ⌘N ont été
-  vérifiés en aperçu isolé. L'ouverture de Terminal.app avec un CLI authentifié,
-  VoiceOver et la recette des deux TUI réelles restent à valider avant diffusion.
-  Le [rapport de correction](REVIEW-2026-09-10-pr2-corrections.md) précise les preuves.
+  vérifiés en aperçu isolé. La recette ultérieure a validé Codex authentifié,
+  VoiceOver parlé et les sons. Restent différés Claude authentifié (abonnement
+  absent) et le retour à un terminal visible : voir [HANDOFF](HANDOFF.md).
+- Les [mesures du générateur](REVIEW-2026-09-22-generator-quality.md) et les
+  [tests de reprise](REVIEW-2026-09-23-curation-recovery.md) documentent la PR #5.
+  Leurs captures se revalident hors ligne ; ne pas relancer une génération
+  simplement pour reprendre le projet.
 
 Le protocole d'installation, les capacités natives et la recette visuelle sont
 dans [CODEX-INTEGRATION.md](CODEX-INTEGRATION.md).

@@ -1,6 +1,6 @@
 # Atoll avec Codex CLI et Claude Code
 
-État du code au **2026-09-11**. L'intégration a été publiée en v0.18.0.
+État du code au **2026-09-23**. L'intégration a été publiée en v0.18.0.
 Le retour au compact d'origine, le contexte chiffré et le diagnostic simplifié
 sont publiés dans **v0.18.1, build 36** : voir leur
 [validation](REVIEW-2026-09-10-island-context-setup.md). L'[audit initial](AUDIT-2026-09-09-codex-claude.md)
@@ -218,7 +218,9 @@ Codex comme exécuteur ; elle demeure une recherche de plugins Claude.
 
 Versions natives vérifiées : **codex-cli 0.153.4** pour les fixtures initiales
 et le runner réel ; **0.154.0** pour les catalogues et le recall lors de cette
-relecture. Aucun minimum inférieur n'est déclaré compatible sur cette seule preuve.
+relecture ; **0.155.1** pour les analyses et mesures du 22 septembre
+([rapport](REVIEW-2026-09-22-generator-quality.md)). Aucun minimum inférieur
+n’est déclaré compatible sur ces seules preuves.
 
 ```sh
 swift test --package-path AtollCore
@@ -275,10 +277,12 @@ conservation du brouillon et refus au clavier ont été exercés ; un cycle de
 transition avec encoche a été filmé et relu. L'OCR complète cette lecture,
 il ne prouve ni le focus ni la qualité de l'animation.
 
-Restent à vérifier avant fusion : VoiceOver parlé, matrice complète de motion
-réduite/tailles et parcours authentifiés de permissions, sons, fin/reprise et
-retour au terminal avec les deux CLI. Cette recette native nécessite une seule
-instance normale d'Atoll ; le mode aperçu ne la remplace pas.
+Les recettes ultérieures ont validé Codex authentifié, VoiceOver parlé et les
+sons ; leurs périmètres sont liés dans [HANDOFF](HANDOFF.md). Claude authentifié
+(abonnement absent) et le retour à un terminal visible restent différés. Une
+recette native nécessite une seule instance normale d’Atoll ; le mode aperçu
+ne la remplace pas. Les tests de la PR #5 portent sur les analyses et leur
+persistance, sans nouvelle modification de l’interface.
 
 Le contexte de passation et les analyses sont détaillés dans
 [CODEX-FAILOVER.md](CODEX-FAILOVER.md). L'historique de l'ancienne PR reste dans

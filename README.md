@@ -182,15 +182,23 @@ Si la session n'apparaît pas, ouvre « Vérifier la connexion », choisis le
 Le home Codex (`~/.codex` par défaut) est son dossier de configuration. Son choix,
 la réparation et le chemin de l'exécutable sont regroupés dans « Dépannage ».
 
-**Version courante : [v0.18.2, build 37](https://github.com/mehdi7129/atoll/releases/tag/v0.18.2).**
+**Version en préparation : v0.18.3, build 38.** La version disponible reste
+[v0.18.2](https://github.com/mehdi7129/atoll/releases/tag/v0.18.2) pendant la publication.
 App universelle Apple Silicon / Intel, signée et notarisée ; disponible par la
 mise à jour intégrée ou le DMG de la release.
 
-Les huit onglets conservent leur interface native et gagnent en lisibilité.
-Les modèles, limites et mémoire commune sont regroupés dans Apprentissage ;
-les actions nécessaires restent visibles et les détails se déplient à la demande.
-[Plan et maquette validés](docs/PLAN-2026-09-11-settings-organization.md),
-[captures et validation](docs/REVIEW-2026-09-11-settings-organization.md).
+La v0.18.3 réduit la consommation des analyses et fiabilise leurs résultats :
+
+- Contexte Codex allégé et analyses automatiques identiques évitées.
+- Skills concis pour les procédures utiles ; faits durables en notes, tâches banales sans proposition.
+- Résultats conservés après un échec local et repris sans repayer la génération.
+- Usage réel et écritures confirmées distingués dans le journal.
+
+Sur deux cas comparables, les entrées sont passées de **28 988 à 8 894 tokens
+(−69,3 %)**, avec les informations attendues conservées. Ce résultat ne prédit
+pas toutes les sessions. [Mesures et limites](docs/REVIEW-2026-09-22-generator-quality.md),
+[reprise après incident](docs/REVIEW-2026-09-23-curation-recovery.md).
+L’apprentissage reste facultatif, désactivé par défaut ; chaque skill demande ton accord.
 
 ---
 
@@ -313,7 +321,7 @@ pas cette préférence.
 
 <br>
 
-Prérequis : **Xcode 26** (SDK macOS 26 — le fond Liquid Glass utilise `.glassEffect`, gardé
+Prérequis : **Xcode 26 ou ultérieur** (SDK macOS 26 — le fond Liquid Glass utilise `.glassEffect`, gardé
 par `if #available`, mais il faut le SDK pour compiler), la **Metal Toolchain**
 (`xcodebuild -downloadComponent MetalToolchain`, composant téléchargeable à part, requis par
 le shader de l'onde) et [XcodeGen](https://github.com/yonaskolb/XcodeGen)
@@ -334,7 +342,9 @@ les attributs étendus du file provider cassent la signature.
 La copie ci-dessus montre des données fictives et préserve l'installation stable. Pour
 tester les CLI réels, les scripts et précautions sont dans [la fiche de reprise](docs/HANDOFF.md).
 
-Tests du cœur : `cd AtollCore && swift test`
+Tests du cœur : `swift test --package-path AtollCore`. Avec Xcode 27, les
+harnesses de cette release ont utilisé `--build-system native` ; les commandes
+complètes et leurs limites sont dans [la fiche de reprise](docs/HANDOFF.md).
 
 ```
 App/         cible app (fenêtre notch, thème, vues SwiftUI, services)
@@ -346,7 +356,9 @@ docs/        recherche et documents de conception
 Pour reprendre le développement : [fiche de reprise](docs/HANDOFF.md),
 [règles du projet](CLAUDE.md) et [direction produit](docs/VISION-2026-08.md).
 [PLAN.md](PLAN.md) conserve le plan initial historique. Les résultats mesurés et les
-limites de validation sont dans [le rapport de recette](docs/REVIEW-2026-09-10-skills-validation.md).
+limites de validation sont regroupés dans la fiche de reprise, avec les rapports
+de chaque release. Le [contrat des analyses](docs/CODEX-FAILOVER.md) distingue
+affichage des sessions, moteur des analyses et destination des skills.
 
 </details>
 
