@@ -1,0 +1,123 @@
+{
+  "durationSeconds": 22.615512013435364,
+  "hashes": {
+    "catalogSHA256": "7bba4178889c174d09c6243dc12f03654cf001471fc3a40410f4383e55f35391",
+    "codexAnalysisInstructionsSHA256": "35a6ecd04a112f756cc423578c488a055b999af553479142b6ce2ed824a06f7a",
+    "codexFullPromptSHA256": "3b2be01fdfe83d88f31c54c60105a24c19851dd229c0a0a31bf15caa40d6ef1f",
+    "codexSchemaSHA256": "1fed5a3d2f0c064e9111618f625f26ad8b0c7c1430cabe6ce79d398052c1dbff",
+    "digestSHA256": "99fb7765c397af92d58b66e5cd355009ffb30b85b2f728597813a0e05b8805bb",
+    "fixtureSHA256": "fba408a5e18aeae39eccb1a994e37f4b0062ac3aea2f1929bd67ee5cf7cf2723",
+    "sourceSchemaSHA256": "314836589b37f9331bcec0f7ee0a248111647dc7b93e7519ec395f665db1cb91",
+    "systemPromptSHA256": "fb76b4cd48d45ff567b5fb7df797f282f66938f2c038d9ae498309fa3aa8bafc",
+    "userPromptSHA256": "36d75f7e20b25c60e2f2bda5d4d1b55f9caded93c54cce0b6720125eb8b19ce1"
+  },
+  "model": "gpt-5.6-luna",
+  "nativeUsage": {
+    "cache_write_input_tokens": 0,
+    "cached_input_tokens": 0,
+    "input_tokens": 4611,
+    "output_tokens": 546,
+    "reasoning_output_tokens": 170
+  },
+  "notes": [],
+  "nothingLearned": false,
+  "promptCharacters": 3191,
+  "provider": "codex",
+  "rejectedSkills": [],
+  "reportedModels": [],
+  "requestedModel": "gpt-5.6-luna",
+  "skills": [
+    {
+      "body": "## Conversion d’export SourceSim → CibleSim v3\n\nÀ la frontière d’export uniquement, convertir les coordonnées SourceSim exprimées en centimètres vers des mètres CibleSim v3 selon :\n\n```text\n(x, y, z) → (-y, z, x) × 0,01\n```\n\nNe pas modifier les identifiants ni les timestamps. Exécuter la vérification finale avec :\n\n```bash\nexporter --space target --unit m\n```\n\nValider d’abord le point de contrôle `(100, 200, 300)`, qui doit produire `(-2, 3, 1)`. Effectuer ensuite un aller-retour sur 40 points. La conversion est correcte si l’erreur maximale mesurée est `0,000001 cm` et si les identifiants et timestamps restent inchangés.\n\nUn export brut conservant `(100, 200, 300)` signale l’ancienne conversion : axe incorrect et distance 100 fois trop grande.",
+      "description": "Conversion des coordonnées SourceSim vers CibleSim v3 lors de l’export de nouveaux fichiers, avec conservation des métadonnées.",
+      "rationale": "Procédure distincte et vérifiée par un point de contrôle et 40 points aller-retour; aucune capacité existante ne la couvre.",
+      "similarExisting": "",
+      "slug": "conversion-sourcesim-ciblesim-v3"
+    }
+  ],
+  "stdoutBytes": 1812,
+  "summary": "Procédure d’export CibleSim v3 corrigée et validée pour les fichiers SourceSim.",
+  "toolAuditAvailable": true,
+  "toolAuditScope": "Actions d’outils exposées par exec --json ; les wrappers non exposés ne sont pas observables.",
+  "toolsActuallyCalled": [],
+  "unknownItemTypes": [],
+  "usage": {
+    "availability": "reported",
+    "cachedInputTokens": 0,
+    "inputTokens": 4611,
+    "outputTokens": 546,
+    "reasoningOutputTokens": 170,
+    "source": "codexTurnCompleted"
+  },
+  "cliVersion": "codex-cli 0.155.1",
+  "rawModelReport": {
+    "notes": [],
+    "nothing_learned": false,
+    "session_summary": "Procédure d’export CibleSim v3 corrigée et validée pour les fichiers SourceSim.",
+    "skills": [
+      {
+        "confidence": "high",
+        "description": "Conversion des coordonnées SourceSim vers CibleSim v3 lors de l’export de nouveaux fichiers, avec conservation des métadonnées.",
+        "rationale": "Procédure distincte et vérifiée par un point de contrôle et 40 points aller-retour; aucune capacité existante ne la couvre.",
+        "similar_existing": null,
+        "skill_md": "## Conversion d’export SourceSim → CibleSim v3\n\nÀ la frontière d’export uniquement, convertir les coordonnées SourceSim exprimées en centimètres vers des mètres CibleSim v3 selon :\n\n```text\n(x, y, z) → (-y, z, x) × 0,01\n```\n\nNe pas modifier les identifiants ni les timestamps. Exécuter la vérification finale avec :\n\n```bash\nexporter --space target --unit m\n```\n\nValider d’abord le point de contrôle `(100, 200, 300)`, qui doit produire `(-2, 3, 1)`. Effectuer ensuite un aller-retour sur 40 points. La conversion est correcte si l’erreur maximale mesurée est `0,000001 cm` et si les identifiants et timestamps restent inchangés.\n\nUn export brut conservant `(100, 200, 300)` signale l’ancienne conversion : axe incorrect et distance 100 fois trop grande.",
+        "slug": "conversion-sourcesim-ciblesim-v3",
+        "title": "Corriger la conversion de coordonnées SourceSim vers CibleSim v3"
+      }
+    ]
+  },
+  "initialBenchmarkResult": {
+    "provider": "codex",
+    "case": "operational",
+    "cliVersion": "codex-cli 0.155.1",
+    "hashes": {
+      "catalogSHA256": "7bba4178889c174d09c6243dc12f03654cf001471fc3a40410f4383e55f35391",
+      "codexAnalysisInstructionsSHA256": "35a6ecd04a112f756cc423578c488a055b999af553479142b6ce2ed824a06f7a",
+      "codexFullPromptSHA256": "3b2be01fdfe83d88f31c54c60105a24c19851dd229c0a0a31bf15caa40d6ef1f",
+      "codexSchemaSHA256": "1fed5a3d2f0c064e9111618f625f26ad8b0c7c1430cabe6ce79d398052c1dbff",
+      "digestSHA256": "99fb7765c397af92d58b66e5cd355009ffb30b85b2f728597813a0e05b8805bb",
+      "fixtureSHA256": "fba408a5e18aeae39eccb1a994e37f4b0062ac3aea2f1929bd67ee5cf7cf2723",
+      "sourceSchemaSHA256": "314836589b37f9331bcec0f7ee0a248111647dc7b93e7519ec395f665db1cb91",
+      "systemPromptSHA256": "fb76b4cd48d45ff567b5fb7df797f282f66938f2c038d9ae498309fa3aa8bafc",
+      "userPromptSHA256": "36d75f7e20b25c60e2f2bda5d4d1b55f9caded93c54cce0b6720125eb8b19ce1"
+    },
+    "status": "failed",
+    "errors": [
+      "Preuve perdue : exemple numérique relié (100,200,300) → (-2,3,1)"
+    ],
+    "durationSeconds": 22.615512013435364,
+    "exitCode": 0,
+    "model": "gpt-5.6-luna",
+    "nativeUsage": {
+      "cache_write_input_tokens": 0,
+      "cached_input_tokens": 0,
+      "input_tokens": 4611,
+      "output_tokens": 546,
+      "reasoning_output_tokens": 170
+    },
+    "promptCharacters": 3191,
+    "stdoutBytes": 1812,
+    "toolAuditAvailable": true,
+    "toolAuditScope": "Actions d’outils exposées par exec --json ; les wrappers non exposés ne sont pas observables.",
+    "toolsActuallyCalled": [],
+    "unknownItemTypes": [],
+    "usage": {
+      "availability": "reported",
+      "cachedInputTokens": 0,
+      "inputTokens": 4611,
+      "outputTokens": 546,
+      "reasoningOutputTokens": 170,
+      "source": "codexTurnCompleted"
+    },
+    "skillCount": 1,
+    "noteCount": 0,
+    "bodyWords": [
+      118
+    ],
+    "descriptionCharacters": [
+      127
+    ],
+    "requestedModel": "gpt-5.6-luna",
+    "reportedModels": []
+  }
+}

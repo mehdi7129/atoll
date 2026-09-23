@@ -175,6 +175,86 @@ final class RetrospectiveReportTests: XCTestCase {
 
     // MARK: - Revalidation des slugs
 
+    func testRealCodexLongSlugRejectionIsVisibleWithoutRewritingItsValidProcedure() throws {
+        // Sortie du 22 septembre 2026 sur la fixture SourceSim/CibleSim :
+        // le modèle avait produit le bon corps, mais un identifiant de 110 caractères.
+        let payload = #"""
+        {"notes":[],"nothing_learned":false,"session_summary":"Procédure fiable pour corriger l’export des coordonnées SourceSim vers CibleSim v3.","skills":[{"confidence":"high","description":"Convertir les coordonnées SourceSim en centimètres lors de chaque export vers CibleSim v3.","rationale":"Procédure distincte et vérifiée par un test ponctuel ainsi qu’un aller-retour sur 40 points; aucune capacité existante ne la couvre.","similar_existing":null,"skill_md":"## Conversion d’export SourceSim → CibleSim v3\n\nÀ chaque nouvel export, appliquer la conversion uniquement à la frontière d’export : pour un point SourceSim `(x, y, z)` exprimé en centimètres, produire dans CibleSim v3 les coordonnées en mètres selon `(-y, z, x) × 0,01`. Ne pas modifier les identifiants ni les timestamps.\n\nLancer la vérification finale avec :\n\n```sh\nexporter --space target --unit m\n```\n\nValider au minimum le point `(100, 200, 300)`, qui doit devenir `(-2, 3, 1)`, puis effectuer un aller-retour sur 40 points. La validation est réussie si l’erreur maximale mesurée est `0,000001 cm` et si les identifiants et timestamps restent inchangés. Un export brut laissant `(100, 200, 300)` sur le mauvais axe ou environ 100 fois trop loin indique que la conversion est absente ou appliquée avec une mauvaise unité.","slug":"export-ciblesim-v3-coordonnees-sourcesim-en-centimetres-to-metres-avec-permutation-des-axes-et-signe-inverse-y","title":"Corriger l’export des coordonnées SourceSim vers CibleSim v3"}]}
+        """#
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(payload.utf8)) as? [String: Any])
+        var skills = try XCTUnwrap(object["skills"] as? [[String: Any]])
+        let rawSlug = try XCTUnwrap(skills[0]["slug"] as? String)
+        let rawBody = try XCTUnwrap(skills[0]["skill_md"] as? String)
+        XCTAssertEqual(rawSlug.count, 110)
+        XCTAssertEqual(rawBody.count, 826)
+        let report = try RetrospectiveReport.parse(codexOutput: Data(payload.utf8)).get()
+        XCTAssertTrue(report.skills.isEmpty, "le parseur ne doit pas inventer ou tronquer un identifiant approuvable")
+        XCTAssertEqual(report.rejectedSkills, ["invalid-proposal-1"], "le rejet d'une vraie proposition ne doit plus être silencieux")
+        XCTAssertFalse(report.nothingLearned)
+        XCTAssertFalse(report.rejectedSkills.joined().contains(rawSlug))
+
+        // Contre-épreuve dans la fixture seulement : le corps est accepté
+        // intégralement quand son identifiant respecte le contrat.
+        skills[0]["slug"] = "sourcesim-ciblesim-export"
+        object["skills"] = skills
+        let valid = try RetrospectiveReport.parse(codexOutput: JSONSerialization.data(withJSONObject: object)).get()
+        XCTAssertEqual(valid.skills.map(\.skillMD), [rawBody])
+        XCTAssertTrue(valid.rejectedSkills.isEmpty)
+    }
+
+    func testSkillSlugBoundsAreStrictAndValidNotesSurvive() throws {
+        let accepted40 = String(repeating: "a", count: 40)
+        let rejected41 = String(repeating: "b", count: 41)
+        let noteSlug = String(repeating: "n", count: 60)
+        let payload: [String: Any] = ["notes": [["slug": noteSlug, "content": "Fait conservé."]],
+            "skills": [rejected41, "x", "ok", accepted40].map {
+                ["slug": $0, "title": "Procédure", "skill_md": "Commande vérifiée."]
+            }]
+        for codex in [false, true] {
+            let data = try JSONSerialization.data(withJSONObject: payload)
+            let report = codex ? try RetrospectiveReport.parse(codexOutput: data).get()
+                : try parseSuccess(envelope(structured: String(decoding: data, as: UTF8.self), result: nil))
+            XCTAssertEqual(report.skills.map(\.slug), ["ok", accepted40])
+            XCTAssertEqual(report.rejectedSkills, ["invalid-proposal-1", "invalid-proposal-2"])
+            XCTAssertEqual(report.notes.map(\.slug), [noteSlug], "la borne des skills ne doit pas réduire celle des notes")
+            XCTAssertEqual(report.notes.first?.content, "Fait conservé.")
+        }
+    }
+
+    func testUnsafeSkillIdentifiersOnlyProduceGenericRejectionDiagnostics() throws {
+        for slug in ["../../PRIVATE_CREDENTIAL", "PRIVATE\nINSTRUCTION", "recall", "bridge", "bin"] {
+            let payload: [String: Any] = ["skills": [["slug": slug, "title": "Titre", "skill_md": "Corps"]]]
+            let report = try RetrospectiveReport.parse(codexOutput: JSONSerialization.data(withJSONObject: payload)).get()
+            XCTAssertTrue(report.skills.isEmpty)
+            XCTAssertEqual(report.rejectedSkills, ["invalid-proposal-1"])
+            XCTAssertFalse(report.rejectedSkills.joined().contains(slug))
+            XCTAssertTrue(report.flags.isEmpty, "ne pas indexer un identifiant invalide dans les diagnostics")
+        }
+    }
+
+    func testEmptySkillTitleOrBodyIsRejectedWithoutLosingValidNotes() throws {
+        let payload: [String: Any] = ["notes": [["slug": "valid-note", "content": "Fait intact."]], "skills": [
+            ["slug": "empty-title", "title": " \n\t", "skill_md": "Corps"],
+            ["slug": "empty-body", "title": "Titre", "skill_md": " \n\t"],
+            ["slug": "valid-procedure", "title": "Titre", "skill_md": "Commande conservée."]
+        ]]
+        let report = try RetrospectiveReport.parse(codexOutput: JSONSerialization.data(withJSONObject: payload)).get()
+        XCTAssertEqual(report.rejectedSkills, ["empty-title", "empty-body"])
+        XCTAssertEqual(report.notes.map(\.content), ["Fait intact."])
+        XCTAssertEqual(report.skills.map(\.slug), ["valid-procedure"])
+    }
+
+    func testMalformedSkillFieldsRetainTheirOriginalPositionInGenericDiagnostics() throws {
+        let payload: [String: Any] = ["skills": [
+            ["slug": "valid-procedure", "title": "Titre", "skill_md": "Corps"],
+            ["slug": "bad-title", "title": 42, "skill_md": "Corps"],
+            ["slug": "missing-body", "title": "Titre"]
+        ]]
+        let report = try RetrospectiveReport.parse(codexOutput: JSONSerialization.data(withJSONObject: payload)).get()
+        XCTAssertEqual(report.skills.map(\.slug), ["valid-procedure"])
+        XCTAssertEqual(report.rejectedSkills, ["invalid-proposal-2", "invalid-proposal-3"])
+    }
+
     func testRejectsInvalidSlug() throws {
         let tooLong = String(repeating: "a", count: 61)
         let payload = """

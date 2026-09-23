@@ -1,0 +1,12 @@
+[
+  {
+    "name": "baseline-curation-checkpoint",
+    "passed": true,
+    "exit_code": 0
+  },
+  {
+    "name": "curation-checkpoint-match",
+    "passed": true,
+    "exit_code": 1
+  }
+]

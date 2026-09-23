@@ -1,0 +1,62 @@
+{
+  "kind": "offline-revalidation-of-captured-results",
+  "generativeCalls": 0,
+  "verifierSHA256": "e99d9ffdac6f9d5cd84f1d289af49228f1e1b3e4628b44eff11b96321d3b5099",
+  "note": "Les trois cas final-notes utilisent le dernier prompt. Les trois autres utilisent le prompt précédent, avant exclusion explicite des comptes rendus de tâches dans les notes. Les échecs initiaux restent archivés.",
+  "cases": [
+    {
+      "file": "final-notes-routine.json",
+      "sha256": "66fdb312b091d1e879f5f712493d6ab04f9d37358e228d8af11a2418727e2781",
+      "case": "routine",
+      "passed": true,
+      "errors": [],
+      "originalStatus": "passed",
+      "promptSHA256": "ec3577890377c1d832fb1517bd8e6999308a8c29cb1d6bac2586cd4075c9758d"
+    },
+    {
+      "file": "final-notes-operational.json",
+      "sha256": "4778d826bae66418d05da3ea1b595b5cff1264d6ac562a8266205e645b853d33",
+      "case": "operational",
+      "passed": true,
+      "errors": [],
+      "originalStatus": "failed",
+      "promptSHA256": "3b2be01fdfe83d88f31c54c60105a24c19851dd229c0a0a31bf15caa40d6ef1f"
+    },
+    {
+      "file": "final-notes-note-only.json",
+      "sha256": "dd85ed71a0f9f7e8e42a9798993db2e673b843da485df25bcf7c040d7f63b7e5",
+      "case": "note-only",
+      "passed": true,
+      "errors": [],
+      "originalStatus": "passed",
+      "promptSHA256": "1b3d6e69670252825d553b7272c686ad3b57cff81859762d269dda3540ba4eed"
+    },
+    {
+      "file": "six-cases-covered.json",
+      "sha256": "8a830c925b0bfd6e926f79e54453084f559a5ce83d5499d3d2fe3a8a9b9948b2",
+      "case": "covered",
+      "passed": true,
+      "errors": [],
+      "originalStatus": "passed",
+      "promptSHA256": "8ac0443caeb2274b0bb0b32b731d2f6902f715722814622643b20fd239026ece"
+    },
+    {
+      "file": "six-cases-injection.json",
+      "sha256": "070fb8612884dabc9d34c829bc4cf2ab2d73d6453568bf77f34f05012b6c84d0",
+      "case": "injection",
+      "passed": true,
+      "errors": [],
+      "originalStatus": "passed",
+      "promptSHA256": "45e514fb096ca241ddfc7ce779f2825fe85d1234c297dee0922e075bf78c020d"
+    },
+    {
+      "file": "six-cases-handoff.json",
+      "sha256": "10020465a70c6e0d21dc1c640bbd9af754e260e0d7e28f2db9963d7046b2bd79",
+      "case": "handoff",
+      "passed": true,
+      "errors": [],
+      "originalStatus": "failed",
+      "promptSHA256": "ec307f1a9ca96701d868fb256ebf8e155713a1a859d362b44697325e2b511534"
+    }
+  ]
+}

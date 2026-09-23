@@ -134,6 +134,11 @@ public struct LearnedSkillStore {
         learningRoot.appendingPathComponent("installed-v2-\(scope).json")
     }
 
+    /// Antériorité isolée dans le scope de cette destination, lecture seule.
+    public func noveltyHistory() -> LearningSkillHistory {
+        LearningSkillHistory.read(proposed: proposedDirectory, archive: archiveDirectory, installed: skillsRoot, destination: destination)
+    }
+
     // MARK: - Découverte
 
     /// Propositions en quarantaine de statut `proposed`, triées par date de

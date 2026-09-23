@@ -1,0 +1,18 @@
+{
+  "date": "2026-09-23",
+  "core": {
+    "executed": 1083,
+    "skipped": 1,
+    "failures": 0
+  },
+  "runtimeScenarios": 60,
+  "curationScenarios": 26,
+  "recoveryScenarios": 98,
+  "compiledSabotagesDetected": 7,
+  "builds": {
+    "Debug": "succeeded",
+    "Release": "succeeded"
+  },
+  "realGenerativeCLICalls": 0,
+  "scope": "Services réels avec CLI factices ; états de crash reconstitués, nouveaux processus de harness ; pas de lancement GUI ni de nouvelle mesure live des tokens."
+}

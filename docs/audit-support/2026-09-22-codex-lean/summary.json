@@ -1,0 +1,41 @@
+{
+  "model": "gpt-5.6-luna",
+  "cliVersion": "codex-cli 0.155.1",
+  "generatedRuns": 2,
+  "cases": [
+    {
+      "case": "routine",
+      "beforeInput": 14330,
+      "afterInput": 4576,
+      "beforeOutput": 119,
+      "afterOutput": 98,
+      "reductionPercent": 68.06699232379623,
+      "promptCharactersUnchanged": true,
+      "modelUnchanged": true,
+      "cliVersionUnchanged": true,
+      "skillsAfter": 0
+    },
+    {
+      "case": "operational",
+      "beforeInput": 14658,
+      "afterInput": 4900,
+      "beforeOutput": 840,
+      "afterOutput": 771,
+      "reductionPercent": 66.57115568290352,
+      "promptCharactersUnchanged": true,
+      "modelUnchanged": true,
+      "cliVersionUnchanged": true,
+      "skillsAfter": 0
+    }
+  ],
+  "beforeInputTotal": 28988,
+  "afterInputTotal": 9476,
+  "afterOutputTotal": 869,
+  "syntheticData": true,
+  "completeApplicationWorkflowTested": false,
+  "personalConfigurationsUnchanged": true,
+  "operationalSkillBenchmarkPassed": false,
+  "productionInstructionsCharacters": 475,
+  "promptCharactersMeasure": "Job prompt only; excludes the 475-character analysis instruction file and remaining native context.",
+  "inputReductionPercent": 67.31061128742928
+}

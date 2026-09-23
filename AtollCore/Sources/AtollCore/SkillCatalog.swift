@@ -141,6 +141,7 @@ public struct SkillCatalog: Sendable {
     /// portée l'est : celles-ci n'existent que dans ce projet, et le prompt
     /// d'antériorité doit pouvoir le dire.
     public static let projectCommandOrigin = "command (projet)"
+    public static let projectSkillOrigin = "skill (projet)"
     /// Version littérale posée par Claude Code quand il l'ignore (piège n° 3).
     public static let unknownVersion = "unknown"
     /// Plafond DUR du rendu de `summaryForPrompt` : au-delà, on ne rend plus un
@@ -207,11 +208,16 @@ public struct SkillCatalog: Sendable {
     /// plugin) ; entre deux versions d'un même plugin, la plus haute gagne.
     public func entries() -> [CatalogEntry] {
         let enabled = enabledPlugins()
-        let all = userSkills() + commands() + pluginSkills(enabled: enabled)
+        // Priorité du contrat Claude : personnel > projet ; un skill gagne
+        // contre une ancienne command. Dédupliquer AVANT le tri d'affichage.
+        let all = userSkills() + projectSkills() + commands() + pluginSkills(enabled: enabled)
         var seen = Set<String>()
-        return all
-            .sorted(by: Self.isOrderedBefore)
-            .filter { seen.insert($0.id).inserted }
+        var seenSkillPaths = Set<String>()
+        return all.filter { entry in
+            if entry.kind == .userSkill,
+               !seenSkillPaths.insert(entry.path.resolvingSymlinksInPath().path).inserted { return false }
+            return seen.insert(entry.id).inserted
+        }.sorted(by: Self.isOrderedBefore)
     }
 
     /// Nombre d'entrées par nature. Les trois natures sont TOUJOURS présentes
@@ -380,7 +386,12 @@ public struct SkillCatalog: Sendable {
     /// Un sous-dossier sans `SKILL.md` lisible n'est pas un skill : il est
     /// ignoré (c'est aussi ce qui écarte les dossiers de travail parasites).
     private func userSkills() -> [CatalogEntry] {
-        Self.childDirectories(of: skillsRoot).compactMap { directory in
+        skills(in: skillsRoot, origin: Self.userSkillOrigin)
+    }
+
+    private func skills(in root: URL, origin: String) -> [CatalogEntry] {
+        Self.childDirectories(of: root).compactMap { directory in
+            guard directory.lastPathComponent.lowercased() != "synced" else { return nil }
             let file = directory.appendingPathComponent("SKILL.md")
             guard let front = Self.frontMatter(of: file) else { return nil }
             // Le DOSSIER fait autorité (piège n° 1) ; `front.name` est délibérément
@@ -392,10 +403,43 @@ public struct SkillCatalog: Sendable {
                 name: name,
                 description: front.description,
                 kind: .userSkill,
-                origin: Self.userSkillOrigin,
+                origin: origin,
                 isAvailable: true,
                 path: file
             )
+        }
+    }
+
+    /// Scopes de démarrage documentés par Claude : du cwd à la racine du
+    /// dépôt/worktree (fichier OU dossier .git). Aucun scan des descendants :
+    /// leurs skills ne deviennent disponibles qu'après consultation par le CLI.
+    /// Les répertoires --add-dir et les changements /cd ne sont pas devinés.
+    private func projectSkills() -> [CatalogEntry] {
+        guard var directory = projectDirectory?.resolvingSymlinksInPath().standardizedFileURL else { return [] }
+        let home = BridgePaths.homeDirectory.resolvingSymlinksInPath().standardizedFileURL
+        var ancestors: [URL] = []
+        for _ in 0..<Self.maxProjectWalk {
+            if directory == home { break }
+            ancestors.append(directory)
+            if FileManager.default.fileExists(atPath: directory.appendingPathComponent(".git").path) { break }
+            let parent = directory.deletingLastPathComponent()
+            if parent == directory { break }
+            directory = parent
+        }
+        guard let root = ancestors.last else { return [] }
+        var seen = Set<String>()
+        return ancestors.reversed().flatMap { directory in
+            skills(in: directory.appendingPathComponent(".claude/skills"), origin: Self.projectSkillOrigin)
+                .map { entry in
+                    // Un nom déjà porté par la racine conserve son invocation ;
+                    // la variante imbriquée reste visible sous son nom qualifié.
+                    guard !seen.insert(entry.id).inserted else { return entry }
+                    let relative = directory.path.dropFirst(root.path.count).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+                    return CatalogEntry(id: "\(relative):\(entry.id)", name: entry.name,
+                        description: entry.description, kind: entry.kind,
+                        origin: "\(Self.projectSkillOrigin) · \(relative)",
+                        isAvailable: entry.isAvailable, path: entry.path)
+                }
         }
     }
 

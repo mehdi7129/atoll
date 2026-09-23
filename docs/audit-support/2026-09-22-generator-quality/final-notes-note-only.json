@@ -1,0 +1,111 @@
+{
+  "durationSeconds": 5.432558059692383,
+  "hashes": {
+    "catalogSHA256": "7bba4178889c174d09c6243dc12f03654cf001471fc3a40410f4383e55f35391",
+    "codexAnalysisInstructionsSHA256": "35a6ecd04a112f756cc423578c488a055b999af553479142b6ce2ed824a06f7a",
+    "codexFullPromptSHA256": "1b3d6e69670252825d553b7272c686ad3b57cff81859762d269dda3540ba4eed",
+    "codexSchemaSHA256": "1fed5a3d2f0c064e9111618f625f26ad8b0c7c1430cabe6ce79d398052c1dbff",
+    "digestSHA256": "8e50b61dbaef2f987b19c0b4038c308948c2eeaed7dfb2ef2f9003dce17d9674",
+    "fixtureSHA256": "2d38a4b29dba8f2e30077d45efeb69655915d5bf448107a5f2c7c339feb2ca72",
+    "sourceSchemaSHA256": "314836589b37f9331bcec0f7ee0a248111647dc7b93e7519ec395f665db1cb91",
+    "systemPromptSHA256": "fb76b4cd48d45ff567b5fb7df797f282f66938f2c038d9ae498309fa3aa8bafc",
+    "userPromptSHA256": "25f3460b3e974f6cfb05031655f7f96fd188633bda6da31f65fda25c5c520060"
+  },
+  "model": "gpt-5.6-luna",
+  "nativeUsage": {
+    "cache_write_input_tokens": 0,
+    "cached_input_tokens": 0,
+    "input_tokens": 4499,
+    "output_tokens": 156,
+    "reasoning_output_tokens": 42
+  },
+  "notes": [
+    {
+      "content": "Pour le projet Clairière, les comptes rendus destinés à l’équipe doivent être rédigés en français, utiliser les unités SI et indiquer les horaires selon le fuseau Europe/Paris.",
+      "slug": "format-comptes-rendus-clairiere"
+    }
+  ],
+  "nothingLearned": false,
+  "promptCharacters": 2831,
+  "provider": "codex",
+  "rejectedSkills": [],
+  "reportedModels": [],
+  "requestedModel": "gpt-5.6-luna",
+  "skills": [],
+  "stdoutBytes": 835,
+  "summary": "Préférence durable de format et de localisation enregistrée pour les comptes rendus du projet Clairière.",
+  "toolAuditAvailable": true,
+  "toolAuditScope": "Actions d’outils exposées par exec --json ; les wrappers non exposés ne sont pas observables.",
+  "toolsActuallyCalled": [],
+  "unknownItemTypes": [],
+  "usage": {
+    "availability": "reported",
+    "cachedInputTokens": 0,
+    "inputTokens": 4499,
+    "outputTokens": 156,
+    "reasoningOutputTokens": 42,
+    "source": "codexTurnCompleted"
+  },
+  "cliVersion": "codex-cli 0.155.1",
+  "rawModelReport": {
+    "notes": [
+      {
+        "category": "user-preference",
+        "confidence": "high",
+        "content": "Pour le projet Clairière, les comptes rendus destinés à l’équipe doivent être rédigés en français, utiliser les unités SI et indiquer les horaires selon le fuseau Europe/Paris.",
+        "slug": "format-comptes-rendus-clairiere"
+      }
+    ],
+    "nothing_learned": false,
+    "session_summary": "Préférence durable de format et de localisation enregistrée pour les comptes rendus du projet Clairière.",
+    "skills": []
+  },
+  "initialBenchmarkResult": {
+    "provider": "codex",
+    "case": "note-only",
+    "cliVersion": "codex-cli 0.155.1",
+    "hashes": {
+      "catalogSHA256": "7bba4178889c174d09c6243dc12f03654cf001471fc3a40410f4383e55f35391",
+      "codexAnalysisInstructionsSHA256": "35a6ecd04a112f756cc423578c488a055b999af553479142b6ce2ed824a06f7a",
+      "codexFullPromptSHA256": "1b3d6e69670252825d553b7272c686ad3b57cff81859762d269dda3540ba4eed",
+      "codexSchemaSHA256": "1fed5a3d2f0c064e9111618f625f26ad8b0c7c1430cabe6ce79d398052c1dbff",
+      "digestSHA256": "8e50b61dbaef2f987b19c0b4038c308948c2eeaed7dfb2ef2f9003dce17d9674",
+      "fixtureSHA256": "2d38a4b29dba8f2e30077d45efeb69655915d5bf448107a5f2c7c339feb2ca72",
+      "sourceSchemaSHA256": "314836589b37f9331bcec0f7ee0a248111647dc7b93e7519ec395f665db1cb91",
+      "systemPromptSHA256": "fb76b4cd48d45ff567b5fb7df797f282f66938f2c038d9ae498309fa3aa8bafc",
+      "userPromptSHA256": "25f3460b3e974f6cfb05031655f7f96fd188633bda6da31f65fda25c5c520060"
+    },
+    "status": "passed",
+    "errors": [],
+    "durationSeconds": 5.432558059692383,
+    "exitCode": 0,
+    "model": "gpt-5.6-luna",
+    "nativeUsage": {
+      "cache_write_input_tokens": 0,
+      "cached_input_tokens": 0,
+      "input_tokens": 4499,
+      "output_tokens": 156,
+      "reasoning_output_tokens": 42
+    },
+    "promptCharacters": 2831,
+    "stdoutBytes": 835,
+    "toolAuditAvailable": true,
+    "toolAuditScope": "Actions d’outils exposées par exec --json ; les wrappers non exposés ne sont pas observables.",
+    "toolsActuallyCalled": [],
+    "unknownItemTypes": [],
+    "usage": {
+      "availability": "reported",
+      "cachedInputTokens": 0,
+      "inputTokens": 4499,
+      "outputTokens": 156,
+      "reasoningOutputTokens": 42,
+      "source": "codexTurnCompleted"
+    },
+    "skillCount": 0,
+    "noteCount": 1,
+    "bodyWords": [],
+    "descriptionCharacters": [],
+    "requestedModel": "gpt-5.6-luna",
+    "reportedModels": []
+  }
+}

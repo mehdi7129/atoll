@@ -20,6 +20,7 @@ final class RetrospectiveRunner {
     enum Phase: Equatable { case idle, waiting(String), running(String) }
     private(set) var phase: Phase = .idle
     private(set) var lastOutcome: String?
+    private(set) var pendingDeliveryCount = 0
 
     /// Branchement vers l'index mémoire 7a : chaque note écrite est indexée.
     @ObservationIgnored var noteSink: ((URL, RetrospectiveReport.Note) -> Void)?
@@ -33,6 +34,10 @@ final class RetrospectiveRunner {
     @ObservationIgnored private var lastEndedSnapshot: SessionStore.Tracked?
     /// Entrée de journal du run en cours, complétée par `finish`.
     @ObservationIgnored private var pendingAttempt: AttemptRecord?
+    @ObservationIgnored private var stateReadError: String?
+    private var deliveryStore: RetrospectiveDelivery.Store {
+        .init(learningRoot: BridgePaths.learningDirectory)
+    }
 
     /// `forced` = déclenché par un trigger de debug : ce job court-circuite le
     /// gate ET l'interrupteur général (c'est tout son intérêt).
@@ -336,6 +341,9 @@ final class RetrospectiveRunner {
     }
 
     func evaluateAndRun(_ job: Job) async {
+        // Une sortie déjà payée se récupère AVANT les quotas et le choix du
+        // modèle. Même un abonnement devenu indisponible ne doit pas la perdre.
+        guard recoverBeforeAnalysis(job) else { return }
         // ORDRE IMPÉRATIF : choisir le fournisseur, PUIS lui appliquer le gate
         // avec SON quota. L'inverse évaluerait un plafond de fenêtre sur un
         // compte qu'on ne va pas débiter — et refuserait un run que le second
@@ -478,6 +486,9 @@ final class RetrospectiveRunner {
             execution = try supplied ?? AnalysisExecution.capture(kind: .retrospective,
                 forcedProvider: job.forced ? forcedProvider : nil)
             destination = try SkillDestination.capture(origin: job.transcriptProvider)
+            _ = loadState()
+            if let stateReadError { throw AnalysisExecution.Failure(stateReadError) }
+            try deliveryStore.preflight()
             lease = try AnalysisBudget.shared.begin(execution, kind: .retrospective,
                 origin: job.transcriptProvider, destination: destination.provider, force: job.forced)
         } catch {
@@ -574,6 +585,24 @@ final class RetrospectiveRunner {
         pendingAttempt?.digestEntries = digest.entriesKept
         pendingAttempt?.digestCharacters = digest.characterCount
         pendingAttempt?.digestTruncated = digest.truncated
+        pendingAttempt?.digestFragmentsShortened = digest.fragmentsShortened
+        pendingAttempt?.digestEntriesDropped = digest.entriesDropped
+        pendingAttempt?.digestSourceReadStopped = digest.sourceReadStopped
+        AnalysisBudget.shared.updateMetrics(lease, digestFragmentsShortened: digest.fragmentsShortened,
+            digestEntriesDropped: digest.entriesDropped, digestSourceReadStopped: digest.sourceReadStopped)
+        let materialFingerprint = RetrospectiveDelivery.fingerprint(
+            ["retrospective-material-v1", job.transcriptProvider.rawValue,
+             job.snapshot.cwd ?? "", job.snapshot.gitBranch ?? "", digest.text].joined(separator: "\n"))
+        let destinationScope = RetrospectiveDelivery.scope(for: destination.store.proposedDirectory)
+        if !job.forced, loadState().materials.contains(where: {
+            $0.sessionID == job.snapshot.id && $0.origin == job.transcriptProvider
+                && $0.destinationScope == destinationScope && $0.fingerprint == materialFingerprint
+        }) {
+            pendingAttempt?.decision = "skip(unchangedMaterial)"
+            finish(job, outcome: "skip(unchangedMaterial)",
+                   transcriptBytes: pendingAttempt?.transcriptBytes ?? 0)
+            return
+        }
         // Journalisée MAINTENANT (complétée à la fin) : si l'app se termine
         // pendant le run, la tentative apparaît quand même — l'objectif est
         // « 100 % des fins de session laissent une trace ».
@@ -591,14 +620,23 @@ final class RetrospectiveRunner {
             finish(job, outcome: "failed(cancelled)", transcriptBytes: 0)
             return
         }
+        let noteHistory = LearningNoteHistory.read(from: BridgePaths.learningNotesDirectory)
+        let noteContext = noteHistory.promptContext(project: job.snapshot.cwd, query: digest.text)
+        let skillHistory = destination.store.noveltyHistory()
         let userPrompt = RetrospectivePrompt.userPrompt(
             digest: digest.text,
             projectPath: job.snapshot.cwd,
             gitBranch: job.snapshot.gitBranch,
             model: job.snapshot.model,
-            existingNoteSlugs: existingNoteSlugs(),
-            existingCapabilities: SkillDestination.summary(catalog)
-        ) + "\nSkill destination: \(destination.provider.label). Produce instructions for that CLI only; never assume tools or commands from the other agent are available."
+            existingNoteSlugs: noteContext.additionalSlugs,
+            existingCapabilities: SkillDestination.summary(catalog),
+            existingNotesListedInSummary: noteContext.hasSummarizedNotes
+        ) + "\n" + noteContext.summary
+          + "\n" + skillHistory.summary(query: digest.text)
+          + "\nSkill destination: \(destination.provider.label). Produce instructions for that CLI only; never assume tools or commands from the other agent are available."
+        AnalysisBudget.shared.updateMetrics(lease, promptCharacters: provider == .codex
+            ? CodexExecPlan.fullPrompt(system: RetrospectivePrompt.systemPrompt, user: userPrompt).count
+            : RetrospectivePrompt.systemPrompt.count + userPrompt.count)
         // Le SEUL point du fichier où le fournisseur change quelque chose. Tout
         // ce qui précède (condensé, prompt, antériorité) et tout ce qui suit
         // (revalidation, écriture des fichiers) est commun : c'est la propriété
@@ -711,6 +749,7 @@ final class RetrospectiveRunner {
         }.value
         let output = await outputTask
         let errorTail = await errorTask
+        AnalysisBudget.shared.recordUsage(lease, stdout: output)
 
         await Task.detached(priority: .utility) { process.waitUntilExit() }.value
         timeoutTask?.cancel()
@@ -724,8 +763,9 @@ final class RetrospectiveRunner {
             return
         }
 
-        let transcriptBytes = (try? FileManager.default
-            .attributesOfItem(atPath: transcriptPath)[.size] as? Int64).map(Int.init) ?? 0
+        // Un transcript repris pendant l'appel ne doit pas être marqué traité
+        // jusqu'à sa nouvelle taille, que ce modèle n'a pas nécessairement lue.
+        let transcriptBytes = pendingAttempt?.transcriptBytes ?? 0
 
         guard process.terminationStatus == 0 else {
             log.error("rétrospective (pid \(pid)) : exit \(process.terminationStatus) — \(errorTail, privacy: .public)")
@@ -761,69 +801,171 @@ final class RetrospectiveRunner {
             log.error("rétrospective : sortie inexploitable (\(String(describing: error), privacy: .public))")
             finish(job, outcome: "failed(parse)", transcriptBytes: transcriptBytes)
         case .success(let report):
-            apply(report, for: job, destination: destination)
+            pendingAttempt?.costUSD = report.costUSD
+            pendingAttempt?.dominantModel = report.modelCosts.first?.model
+            // Relecture juste avant l'écriture : une autre session a pu créer
+            // ou faire approuver le même savoir pendant la génération.
+            let filtered = novelReport(report, project: job.snapshot.cwd, destination: destination)
+            var delivery = RetrospectiveDelivery(report: filtered, analysisID: lease,
+                sessionID: job.snapshot.id, origin: job.transcriptProvider, destination: destination.provider,
+                proposals: destination.store.proposedDirectory, notesDirectory: BridgePaths.learningNotesDirectory,
+                project: job.snapshot.cwd, transcriptBytes: transcriptBytes,
+                materialFingerprint: materialFingerprint, decidedAt: pendingAttempt?.decidedAt ?? Date())
+            do {
+                try deliveryStore.save(delivery)
+                pendingDeliveryCount = (try? deliveryStore.pending().count) ?? 1
+                try deliveryStore.apply(&delivery, notesDirectory: BridgePaths.learningNotesDirectory,
+                    proposals: destination.store.proposedDirectory) { [weak self] url, note in self?.noteSink?(url, note) }
+                try persistReceipt(delivery)
+                try deliveryStore.acknowledge(delivery)
+                pendingDeliveryCount = (try? deliveryStore.pending().count) ?? 0
+            } catch {
+                pendingAttempt?.notesWritten = delivery.notesWritten
+                pendingAttempt?.skillsProposed = delivery.skillsProposed
+                pendingAttempt?.failureReason = error.localizedDescription
+                AnalysisBudget.shared.updateMetrics(lease, notesWritten: delivery.notesWritten,
+                                                   skillsProposed: delivery.skillsProposed)
+                if delivery.skillsProposed > 0 { onProposalsChanged?() }
+                finish(job, outcome: "failed(delivery) · \(error.localizedDescription)", transcriptBytes: transcriptBytes)
+                return
+            }
             var outcome = report.nothingLearned ? "nothing_learned"
-                : "success(\(report.notes.count)n/\(report.skills.count)s)"
+                : "success(\(delivery.notesWritten)n/\(delivery.skillsProposed)s)"
+            let duplicates = report.notes.count + report.skills.count - filtered.notes.count - filtered.skills.count
+            if duplicates > 0 { outcome += " · \(duplicates) doublon(s) évité(s)" }
             if !report.rejectedSkills.isEmpty {
-                outcome += " · \(report.rejectedSkills.count) skill(s) trop long(s), non proposé(s)"
+                outcome += " · \(report.rejectedSkills.count) proposition(s) invalide(s) ou trop longue(s), écartée(s)"
             }
             if let cost = report.costUSD {
                 log.info("rétrospective terminée : \(outcome, privacy: .public), coût \(cost) $")
             }
-            pendingAttempt?.costUSD = report.costUSD
             // Le modèle qui a réellement coûté le plus : `--safe-mode` en
             // convoque un second (sonnet) quel que soit `--model`, et c'est
             // souvent LUI la facture. L'afficher évite de croire que le
             // réglage de modèle est sans effet.
-            pendingAttempt?.dominantModel = report.modelCosts.first?.model
-            pendingAttempt?.notesWritten = report.notes.count
-            pendingAttempt?.skillsProposed = report.skills.count
+            pendingAttempt?.notesWritten = delivery.notesWritten
+            pendingAttempt?.skillsProposed = delivery.skillsProposed
+            AnalysisBudget.shared.updateMetrics(lease, notesWritten: delivery.notesWritten,
+                                               skillsProposed: delivery.skillsProposed)
+            if delivery.skillsProposed > 0 { onProposalsChanged?() }
             finish(job, outcome: outcome, transcriptBytes: transcriptBytes)
         }
     }
 
-    /// TOUTES les écritures se font ici, côté Atoll, dans des répertoires
-    /// bornés — jamais par le modèle, jamais sous ~/.claude.
-    private func apply(_ report: RetrospectiveReport, for job: Job, destination: SkillDestination) {
-        let fm = FileManager.default
-        let now = Date()
-
-        var existing = (try? fm.contentsOfDirectory(atPath: BridgePaths.learningNotesDirectory.path))
-            .map(Set.init) ?? []
-        for note in report.notes {
-            let rendered = LearningNoteFile.render(note: note, sessionID: job.snapshot.id,
-                                                   project: job.snapshot.cwd, date: now)
-            let filename = LearningNoteFile.deduplicatedFilename(rendered.filename, existing: existing)
-            let url = BridgePaths.learningNotesDirectory.appendingPathComponent(filename)
-            do {
-                try rendered.contents.write(to: url, atomically: true, encoding: .utf8)
-                existing.insert(filename)
-                noteSink?(url, note)
-            } catch {
-                log.error("écriture note \(filename, privacy: .public) : \(error.localizedDescription)")
-            }
+    private func novelReport(_ report: RetrospectiveReport, project: String?,
+                             destination: SkillDestination) -> RetrospectiveReport {
+        var notes = LearningNoteHistory.read(from: BridgePaths.learningNotesDirectory)
+        var skills = destination.store.noveltyHistory()
+        let newNotes = report.notes.filter { note in
+            guard !notes.contains(note, project: project) else { return false }
+            notes.record(note, project: project)
+            return true
         }
-
-        for skill in report.skills {
-            // QUARANTAINE : proposed/<slug>/ — jamais actif sans revue (7c).
-            let proposalRoot = destination.store.proposedDirectory
-            // Une nouvelle proposition ne remplace pas celle qui attend une
-            // revue ; chaque analyse conserve sa provenance et son contenu.
-            let dir = proposalRoot.appendingPathComponent("\(skill.slug)-\(UUID().uuidString)", isDirectory: true)
-            do {
-                try fm.createDirectory(at: dir, withIntermediateDirectories: true)
-                try LearningSkillProposalFile.renderSkillMD(skill)
-                    .write(to: dir.appendingPathComponent("SKILL.md"), atomically: true, encoding: .utf8)
-                try LearningSkillProposalFile.renderMeta(
-                    skill, sessionID: job.snapshot.id, project: job.snapshot.cwd,
-                    date: now, flags: report.flags[skill.slug] ?? [], destination: destination.provider
-                ).write(to: dir.appendingPathComponent("meta.json"), options: .atomic)
-                log.info("skill proposé en quarantaine : \(skill.slug, privacy: .public)")
-            } catch {
-                log.error("écriture skill \(skill.slug, privacy: .public) : \(error.localizedDescription)")
-            }
+        let newSkills = report.skills.filter { skill in
+            guard !skills.contains(skill) else { return false }
+            skills.record(skill, status: .proposed)
+            return true
         }
-        if !report.skills.isEmpty { onProposalsChanged?() }
+        return RetrospectiveReport(sessionSummary: report.sessionSummary,
+            nothingLearned: report.nothingLearned, notes: newNotes, skills: newSkills,
+            costUSD: report.costUSD, modelCosts: report.modelCosts,
+            flags: report.flags, rejectedSkills: report.rejectedSkills)
+    }
+
+    /// Aucun modèle ni quota nécessaire pour reprendre une sortie déjà payée.
+    /// Les destinations qui ont changé restent en attente, sans redirection.
+    func recoverPendingDeliveries() {
+        guard LearningSettings.shared.isEnabled, !isBusy,
+              NotesCurationService.shared.phase == .idle, AnalysisBudget.shared.active == nil else { return }
+        do {
+            let pending = try deliveryStore.pending()
+            pendingDeliveryCount = pending.count
+            var failures: [String] = []
+            var recovered = false
+            for var delivery in pending {
+                do {
+                    let destination = try SkillDestination.capture(origin: delivery.origin)
+                    guard destination.provider == delivery.destination,
+                          RetrospectiveDelivery.scope(for: destination.store.proposedDirectory) == delivery.destinationScope else {
+                        failures.append("La destination a changé : résultat conservé.")
+                        continue
+                    }
+                    try deliveryStore.apply(&delivery, notesDirectory: BridgePaths.learningNotesDirectory,
+                        proposals: destination.store.proposedDirectory) { [weak self] url, note in self?.noteSink?(url, note) }
+                    try persistReceipt(delivery)
+                    try deliveryStore.acknowledge(delivery)
+                    recovered = true
+                } catch {
+                    let reason = error.localizedDescription
+                    failures.append(reason)
+                    // Une reprise partielle peut avoir écrit des artefacts :
+                    // les compter sans accuser réception du résultat entier.
+                    do { try persistReceipt(delivery, failure: reason) }
+                    catch { failures.append(error.localizedDescription) }
+                }
+                AnalysisBudget.shared.updateMetrics(delivery.analysisID, notesWritten: delivery.notesWritten,
+                                                   skillsProposed: delivery.skillsProposed)
+                if delivery.skillsProposed > 0 { onProposalsChanged?() }
+            }
+            pendingDeliveryCount = try deliveryStore.pending().count
+            if let first = failures.first { lastOutcome = "failed(delivery) · \(first)" }
+            else if recovered { lastOutcome = "Résultat enregistré sans nouvelle analyse." }
+        } catch {
+            pendingDeliveryCount = max(1, pendingDeliveryCount)
+            lastOutcome = "failed(delivery) · \(error.localizedDescription)"
+        }
+    }
+
+    private func recoverBeforeAnalysis(_ job: Job) -> Bool {
+        guard LearningSettings.shared.isEnabled else { return true }
+        recoverPendingDeliveries()
+        do {
+            if try deliveryStore.pending().contains(where: {
+                $0.sessionID == job.snapshot.id && $0.origin == job.transcriptProvider
+            }) {
+                lastOutcome = "Résultat sauvegardé en attente : aucune nouvelle analyse pour cette session."
+                phase = .idle
+                scheduleNext()
+                return false
+            }
+            return true
+        } catch {
+            lastOutcome = error.localizedDescription
+            phase = .idle
+            scheduleNext()
+            return false
+        }
+    }
+
+    private func persistReceipt(_ delivery: RetrospectiveDelivery, failure: String? = nil) throws {
+        var state = loadState()
+        if let stateReadError { throw AnalysisExecution.Failure(stateReadError) }
+        if failure == nil {
+            guard delivery.isComplete else { throw AnalysisExecution.Failure("Résultat encore incomplet.") }
+            state.processed.removeAll { $0.sessionID == delivery.sessionID }
+            state.processed.append(.init(sessionID: delivery.sessionID,
+                transcriptBytes: delivery.transcriptBytes, completedAt: Date()))
+            state.materials.removeAll { $0.sessionID == delivery.sessionID && $0.origin == delivery.origin
+                && $0.destinationScope == delivery.destinationScope }
+            state.materials.append(.init(sessionID: delivery.sessionID, origin: delivery.origin,
+                destinationScope: delivery.destinationScope, fingerprint: delivery.materialFingerprint))
+        }
+        let outcome = failure.map { "failed(delivery) · \($0)" }
+            ?? "success(\(delivery.notesWritten)n/\(delivery.skillsProposed)s)"
+        if let index = state.attempts.firstIndex(where: {
+            $0.sessionID == delivery.sessionID && $0.decidedAt == delivery.decidedAt
+        }) {
+            state.attempts[index].outcome = outcome
+            state.attempts[index].notesWritten = delivery.notesWritten
+            state.attempts[index].skillsProposed = delivery.skillsProposed
+            state.attempts[index].failureReason = failure
+        } else {
+            state.attempts.append(AttemptRecord(sessionID: delivery.sessionID, decidedAt: delivery.decidedAt,
+                decision: "recovered", outcome: outcome, transcriptBytes: delivery.transcriptBytes,
+                quotaFraction: nil, quotaAgeSeconds: nil, notesWritten: delivery.notesWritten,
+                skillsProposed: delivery.skillsProposed, failureReason: failure))
+        }
+        guard saveState(state) else { throw AnalysisExecution.Failure("Reçu non enregistré : le résultat reste sauvegardé.") }
     }
 
     private func finish(_ job: Job, outcome: String, transcriptBytes: Int) {
@@ -870,7 +1012,7 @@ final class RetrospectiveRunner {
         let sessionID: String
         let decidedAt: Date
         /// `run` ou `skip(<raison>)` — la rawValue du gate, telle quelle.
-        let decision: String
+        var decision: String
         /// Issue du run : `success(2n/1s)`, `nothing_learned`, `failed(parse)`…
         /// nil pour un skip (il n'y a pas eu de run).
         var outcome: String?
@@ -888,6 +1030,9 @@ final class RetrospectiveRunner {
         var digestEntries: Int?
         var digestCharacters: Int?
         var digestTruncated: Bool?
+        var digestFragmentsShortened: Int?
+        var digestEntriesDropped: Int?
+        var digestSourceReadStopped: Bool?
         /// Abonnement qui a payé ce run (`claude` / `codex`), et pourquoi.
         /// OPTIONNEL À DESSEIN : une entrée écrite avant la bascule n'a pas la
         /// clé, et le `Decodable` synthétisé ne lève pas sur un Optional absent
@@ -904,12 +1049,20 @@ final class RetrospectiveRunner {
         var quotaUnknownReason: String?
     }
 
+    private struct MaterialReceipt: Codable {
+        let sessionID: String
+        let origin: AgentProvider
+        let destinationScope: String
+        let fingerprint: String
+    }
+
     private struct PersistedState: Codable {
         var processed: [LearningGate.History.Processed] = []
         // Lecture des dépenses d’avant analysis-jobs-v2 ; plus aucun nouvel ajout.
         var runTimestamps: [Date] = []
         /// Journal des évaluations (cap 100) — affiché dans les Réglages.
         var attempts: [AttemptRecord] = []
+        var materials: [MaterialReceipt] = []
 
         init() {}
 
@@ -930,6 +1083,7 @@ final class RetrospectiveRunner {
                 [LearningGate.History.Processed].self, forKey: .processed) ?? []
             runTimestamps = try container.decodeIfPresent([Date].self, forKey: .runTimestamps) ?? []
             attempts = try container.decodeIfPresent([AttemptRecord].self, forKey: .attempts) ?? []
+            materials = try container.decodeIfPresent([MaterialReceipt].self, forKey: .materials) ?? []
         }
     }
 
@@ -939,24 +1093,34 @@ final class RetrospectiveRunner {
     }
 
     private func loadState() -> PersistedState {
-        guard let data = try? Data(contentsOf: BridgePaths.learningStateURL),
-              let state = try? JSONDecoder().decode(PersistedState.self, from: data)
-        else { return PersistedState() }
+        stateReadError = nil
+        guard FileManager.default.fileExists(atPath: BridgePaths.learningStateURL.path) else { return PersistedState() }
+        guard let data = BoundedProcessOutput.file(at: BridgePaths.learningStateURL, cap: 2_097_152),
+              let state = try? JSONDecoder().decode(PersistedState.self, from: data) else {
+            stateReadError = "Journal d'apprentissage illisible : aucune nouvelle analyse, fichier préservé."
+            return PersistedState()
+        }
         return state
     }
 
-    private func saveState(_ state: PersistedState) {
+    @discardableResult
+    private func saveState(_ state: PersistedState) -> Bool {
+        guard stateReadError == nil else { return false }
         var capped = state
         capped.processed = Array(capped.processed.suffix(200))
-        capped.runTimestamps = capped.runTimestamps.filter {
-            Date().timeIntervalSince($0) < 24 * 3600
-        }
-        // ~/.atoll/learning supprimé en cours de route → sans cette recréation,
-        // plafond et dédup seraient silencieusement désactivés (revue).
-        try? FileManager.default.createDirectory(at: BridgePaths.learningDirectory,
-                                                 withIntermediateDirectories: true)
-        if let data = try? JSONEncoder().encode(capped) {
-            try? data.write(to: BridgePaths.learningStateURL, options: .atomic)
+        capped.materials = Array(capped.materials.suffix(200))
+        capped.attempts = Array(capped.attempts.suffix(100))
+        capped.runTimestamps = capped.runTimestamps.filter { Date().timeIntervalSince($0) < 24 * 3600 }
+        do {
+            try FileManager.default.createDirectory(at: BridgePaths.learningDirectory,
+                withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+            let data = try JSONEncoder().encode(capped)
+            try data.write(to: BridgePaths.learningStateURL, options: .atomic)
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: BridgePaths.learningStateURL.path)
+            return true
+        } catch {
+            log.error("journal d'apprentissage non enregistré : \(error.localizedDescription)")
+            return false
         }
     }
 
@@ -979,47 +1143,34 @@ final class RetrospectiveRunner {
     ///
     /// `nonisolated` : appelée depuis une tâche détachée — lire et parser 47 Mo
     /// n'a rien à faire sur le MainActor. Bornes : on cesse de lire au-delà de
-    /// `digestByteCap` (au-delà, c'est une session-fleuve dont le début suffit
-    /// à caractériser les procédures) et au-delà de `digestLineCap` lignes.
+    /// `digestByteCap` et `digestLineCap`. Atteindre une borne est signalé :
+    /// le condensé ne prétend alors pas représenter toute la session.
     /// `internal` (et non `private`) : la passation vers Codex a besoin du MÊME
     /// condensé. En écrire un second aurait fait diverger deux lectures d'un
     /// format que la règle n° 3 déclare instable.
     nonisolated static func digest(ofTranscriptAt path: String,
                                    budget: Int = TranscriptDigest.defaultCharacterBudget,
-                                   provider: AgentProvider = .claude) -> TranscriptDigest.Result? {
+                                   provider: AgentProvider = .claude,
+                                   byteCap: Int = 64 * 1024 * 1024,
+                                   lineCap: Int = 200_000) -> TranscriptDigest.Result? {
         guard let handle = FileHandle(forReadingAtPath: path) else { return nil }
         defer { try? handle.close() }
         var splitter = TranscriptLineSplitter(startOffset: 0)
         var lines: [TranscriptLine] = []
         var readBytes = 0
-        while readBytes < digestByteCap, lines.count < digestLineCap,
-              let chunk = try? handle.read(upToCount: 4 << 20), !chunk.isEmpty {
+        while readBytes < byteCap, lines.count < lineCap,
+              let chunk = try? handle.read(upToCount: min(4 << 20, byteCap - readBytes)), !chunk.isEmpty {
             readBytes += chunk.count
             for raw in splitter.consume(chunk) {
                 let parsed = provider == .codex
                     ? CodexTranscriptParser.parse(raw.data)
                     : TranscriptLineParser.parse(raw.data)
                 if let parsed { lines.append(parsed) }
-                if lines.count >= digestLineCap { break }
+                if lines.count >= lineCap { break }
             }
         }
-        return TranscriptDigest.make(lines: lines, budget: budget)
+        return TranscriptDigest.make(lines: lines, budget: budget,
+            sourceReadStopped: readBytes >= byteCap || lines.count >= lineCap)
     }
 
-    nonisolated private static let digestByteCap = 64 * 1024 * 1024
-    nonisolated private static let digestLineCap = 200_000
-
-    private func existingNoteSlugs() -> [String] {
-        let files = (try? FileManager.default
-            .contentsOfDirectory(atPath: BridgePaths.learningNotesDirectory.path)) ?? []
-        // "2026-07-20-mon-slug.md" → "mon-slug". On DÉLÈGUE au calcul déjà
-        // corrigé de l'indexeur : le motif large « 11 caractères de chiffres et
-        // de tirets » amputait les notes produites par la curation
-        // (`01-2026-07-20-bilan.md` → « 20-bilan »), et la liste d'antériorité
-        // envoyée au modèle ne désignait alors plus rien.
-        return files.compactMap { name in
-            guard name.hasSuffix(".md") else { return nil }
-            return MemoryIndexer.noteSlug(for: URL(fileURLWithPath: name))
-        }
-    }
 }

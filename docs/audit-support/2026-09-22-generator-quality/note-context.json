@@ -1,0 +1,57 @@
+{
+  "passed": true,
+  "syntheticData": true,
+  "generativeCLICalls": 0,
+  "sabotageDetected": false,
+  "results": [
+    {
+      "passedScenarios": 21,
+      "savings": [
+        {
+          "additionalSlugs": 0,
+          "notes": 0,
+          "savedSlugCharacters": 0
+        },
+        {
+          "additionalSlugs": 0,
+          "notes": 20,
+          "savedSlugCharacters": 1039
+        },
+        {
+          "additionalSlugs": 36,
+          "notes": 60,
+          "savedSlugCharacters": 1248
+        }
+      ],
+      "scope": "core"
+    },
+    {
+      "notes": 20,
+      "passedScenarios": 1,
+      "promptCharacters": 7158,
+      "provider": "claude",
+      "scope": "runner"
+    },
+    {
+      "notes": 60,
+      "passedScenarios": 1,
+      "promptCharacters": 10004,
+      "provider": "claude",
+      "scope": "runner"
+    },
+    {
+      "notes": 20,
+      "passedScenarios": 1,
+      "promptCharacters": 7644,
+      "provider": "codex",
+      "scope": "runner"
+    },
+    {
+      "notes": 60,
+      "passedScenarios": 1,
+      "promptCharacters": 10490,
+      "provider": "codex",
+      "scope": "runner"
+    }
+  ]
+}

@@ -22,15 +22,17 @@ import Foundation
 /// `structured_output` est la source primaire ; à défaut, `result` (string) est
 /// parsé en JSON après retrait des fences. Invariants garantis après `parse` :
 ///
-/// - slugs conformes à `^[a-z0-9]+(-[a-z0-9]+)*$` et ≤ 60 caractères — Atoll
+/// - slugs conformes à `^[a-z0-9]+(-[a-z0-9]+)*$`, notes ≤ 60 caractères,
+///   skills 2…40 après retrait du préfixe géré — Atoll
 ///   nomme des fichiers d'après eux, aucun path traversal possible ;
 /// - `category` ∈ `Note.allowedCategories` (sinon « project-fact »),
 ///   `confidence` ∈ {low, medium, high} (sinon « low ») ;
 /// - longueurs plafonnées : summary 500, content 1200, title 80,
 ///   description 300, rationale 500 ; un skillMD > 8000 est rejeté et signalé,
 ///   jamais tronqué ; ≤ 8 notes et ≤ 2 skills (premiers items valides) ;
-/// - item invalide (slug KO, champ requis manquant/vide) DROPPÉ silencieusement,
-///   jamais d'échec global pour un item ; slugs de notes dupliqués → le premier
+/// - item invalide (slug KO, champ requis manquant/vide) écarté ; les skills
+///   écartés sont signalés sans recopier leurs champs non validés. Jamais
+///   d'échec global pour un item ; slugs de notes dupliqués → le premier
 ///   gagne ;
 /// - contenu suspect (motif de secret, blob base64 > 200 caractères, pipe vers
 ///   un shell, mention de `~/.claude/settings.json`) : une NOTE suspecte est
@@ -40,7 +42,7 @@ import Foundation
 public struct RetrospectiveReport: Equatable, Sendable {
 
     /// Une note mémoire proposée, destinée aux fichiers `memory/*.md`.
-    public struct Note: Equatable, Sendable {
+    public struct Note: Equatable, Sendable, Codable {
         /// Catégories acceptées — ALIGNÉES sur l'enum du jsonSchema de
         /// RetrospectivePrompt (source unique) ; toute autre valeur retombe
         /// sur « project-fact ».
@@ -63,7 +65,7 @@ public struct RetrospectiveReport: Equatable, Sendable {
 
     /// Une proposition de skill (`.claude/skills/<slug>/SKILL.md`) — jamais
     /// écrite sur disque sans validation humaine explicite (UI 7c).
-    public struct SkillProposal: Equatable, Sendable {
+    public struct SkillProposal: Equatable, Sendable, Codable {
         public let slug: String
         public let title: String
         public let description: String
@@ -133,8 +135,9 @@ public struct RetrospectiveReport: Equatable, Sendable {
     /// slug de skill CONSERVÉ → raisons de suspicion (voir doc du type).
     public let flags: [String: [String]]
 
-    /// Les procédures dépassant la borne technique sont écartées, jamais
-    /// coupées au milieu d'une commande. Les notes du même rapport survivent.
+    /// Slugs validés des procédures trop longues, ou identifiants synthétiques
+    /// des propositions mal formées : aucun champ non validé n'est exposé.
+    /// Les corps ne sont jamais tronqués ; les notes du même rapport survivent.
     public let rejectedSkills: [String]
 
     public init(sessionSummary: String, nothingLearned: Bool, notes: [Note],
@@ -316,12 +319,15 @@ public struct RetrospectiveReport: Equatable, Sendable {
         var flags: [String: [String]] = [:]
         var rejected: [String] = []
         var seenSlugs = Set<String>()
-        for entry in (value as? [Any]) ?? [] {
+        for (index, entry) in ((value as? [Any]) ?? []).enumerated() {
             guard skills.count < Limit.skills else { break }
             guard let dict = entry as? [String: Any],
                   let slug = validSkillSlug(dict["slug"]),
                   let rawTitle = dict["title"] as? String,
-                  let rawSkillMD = dict["skill_md"] as? String else { continue }
+                  let rawSkillMD = dict["skill_md"] as? String else {
+                if rejected.count < Limit.skills { rejected.append("invalid-proposal-\(index + 1)") }
+                continue
+            }
             let title = truncated(rawTitle, to: Limit.title)
             let skillMD = rawSkillMD.trimmingCharacters(in: .whitespacesAndNewlines)
             guard skillMD.count <= Limit.skillMD else {
@@ -329,8 +335,11 @@ public struct RetrospectiveReport: Equatable, Sendable {
                 if rejected.count < Limit.skills { rejected.append(slug) }
                 continue
             }
-            guard !title.isEmpty, !skillMD.isEmpty,
-                  seenSlugs.insert(slug).inserted else { continue }
+            guard !title.isEmpty, !skillMD.isEmpty else {
+                if rejected.count < Limit.skills { rejected.append(slug) }
+                continue
+            }
+            guard seenSlugs.insert(slug).inserted else { continue }
             let rawDescription = dict["description"] as? String ?? ""
             let rawRationale = dict["rationale"] as? String ?? ""
             // Antériorité annoncée par le modèle : un id de l'inventaire qu'on

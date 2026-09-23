@@ -50,16 +50,19 @@ public enum TranscriptDigest {
         /// commande à SON résultat, même quand plusieurs outils partent en
         /// parallèle. nil = absent du transcript, on retombe sur la position.
         public let toolUseID: String?
+        /// Le texte livré est un extrait, jamais une commande complète à rejouer.
+        public let wasShortened: Bool
 
         public init(role: TranscriptLine.Role, text: String, timestamp: Date?,
                     isError: Bool? = nil, toolUseID: String? = nil,
-                    toolOutcome: TranscriptLine.ToolOutcome? = nil) {
+                    toolOutcome: TranscriptLine.ToolOutcome? = nil, wasShortened: Bool = false) {
             self.role = role
             self.text = text
             self.timestamp = timestamp
             self.isError = isError
             self.toolOutcome = toolOutcome
             self.toolUseID = toolUseID
+            self.wasShortened = wasShortened
         }
     }
 
@@ -79,22 +82,33 @@ public enum TranscriptDigest {
         public let truncated: Bool
         /// `text.count` — mesuré sur le rendu final, jamais estimé.
         public let characterCount: Int
+        /// Fragments raccourcis encore PRÉSENTS dans le rendu final. Un fragment
+        /// élagué n'est pas compté deux fois comme raccourci et comme perdu.
+        public let fragmentsShortened: Int
+        /// Entrées sélectionnées puis retirées pour tenir le budget global.
+        public let entriesDropped: Int
+        /// Signal de l'appelant lecteur : nil = lecture non instrumentée.
+        /// Indépendant des coupes par fragment et de l'élagage du condensé.
+        public let sourceReadStopped: Bool?
 
         public init(text: String, linesRead: Int, entriesKept: Int,
-                    truncated: Bool, characterCount: Int) {
+                    truncated: Bool, characterCount: Int, fragmentsShortened: Int = 0,
+                    entriesDropped: Int = 0, sourceReadStopped: Bool? = nil) {
             self.text = text
             self.linesRead = linesRead
             self.entriesKept = entriesKept
             self.truncated = truncated
             self.characterCount = characterCount
+            self.fragmentsShortened = fragmentsShortened
+            self.entriesDropped = entriesDropped
+            self.sourceReadStopped = sourceReadStopped
         }
     }
 
     // MARK: - Constantes
 
-    /// ~150 000 caractères ≈ 40 000 tokens : large pour une analyse complète, petit
-    /// devant la fenêtre de contexte, et sans commune mesure avec les 9 à 47 Mo du
-    /// fichier brut.
+    /// Budget de caractères, pas une estimation de tokens. Les tokens consommés
+    /// se mesurent séparément sur la sortie native de chaque CLI.
     public static let defaultCharacterBudget = 150_000
 
     /// Chaque entrée est bornée INDIVIDUELLEMENT : une sortie d'outil de 400 Ko ne doit
@@ -133,18 +147,20 @@ public enum TranscriptDigest {
     /// tronqué ; un `budget` ≤ 0 rend un texte vide marqué `truncated` (budget
     /// inexploitable = tout a été sacrifié, par convention).
     public static func make(lines: [TranscriptLine],
-                            budget: Int = defaultCharacterBudget) -> Result {
+                            budget: Int = defaultCharacterBudget,
+                            sourceReadStopped: Bool? = nil) -> Result {
         let linesRead = lines.count
+        let selected = entries(from: lines)
 
         guard budget > 0 else {
             return Result(text: "", linesRead: linesRead, entriesKept: 0,
-                          truncated: true, characterCount: 0)
+                          truncated: true, characterCount: 0, entriesDropped: selected.count,
+                          sourceReadStopped: sourceReadStopped)
         }
 
-        let selected = entries(from: lines)
         guard !selected.isEmpty else {
             return Result(text: "", linesRead: linesRead, entriesKept: 0,
-                          truncated: false, characterCount: 0)
+                          truncated: false, characterCount: 0, sourceReadStopped: sourceReadStopped)
         }
 
         let formatter = timeFormatter()
@@ -222,7 +238,9 @@ public enum TranscriptDigest {
             .joined(separator: blockSeparator)
 
         return Result(text: text, linesRead: linesRead, entriesKept: keptCount,
-                      truncated: pruned, characterCount: text.count)
+                      truncated: pruned, characterCount: text.count,
+                      fragmentsShortened: selected.indices.filter { keep[$0] && selected[$0].wasShortened }.count,
+                      entriesDropped: selected.count - keptCount, sourceReadStopped: sourceReadStopped)
     }
 
     /// Étape de SÉLECTION seule : aplatit les lignes en fragments, applique les règles
@@ -268,9 +286,10 @@ public enum TranscriptDigest {
                 isKept = false
             }
             guard isKept else { continue }
-            kept.append(Entry(role: entry.role, text: capped(entry.text),
+            kept.append(Entry(role: entry.role, text: capped(entry.text, role: entry.role),
                               timestamp: entry.timestamp, isError: entry.isError,
-                              toolUseID: entry.toolUseID, toolOutcome: entry.toolOutcome))
+                              toolUseID: entry.toolUseID, toolOutcome: entry.toolOutcome,
+                              wasShortened: entry.text.count > entryCharacterCap))
         }
         return kept
     }
@@ -334,8 +353,17 @@ public enum TranscriptDigest {
     }
 
     /// Borne une entrée à `entryCharacterCap`, marqueur compris.
-    static func capped(_ text: String) -> String {
+    static func capped(_ text: String, role: TranscriptLine.Role? = nil) -> String {
         guard text.count > entryCharacterCap else { return text }
+        if role == .assistant || role == .summary {
+            // Une conclusion ou correction peut vivre en fin de fragment.
+            // La coupure occupe sa propre ligne : aucune commande recomposée.
+            // Les invocations ET résultats d'outils gardent un préfixe contigu.
+            let marker = "\n[…]\n"
+            let available = entryCharacterCap - marker.count
+            let head = available / 2
+            return String(text.prefix(head)) + marker + String(text.suffix(available - head))
+        }
         let keep = entryCharacterCap - entryTruncationMarker.count
         return String(text.prefix(keep)) + entryTruncationMarker
     }
@@ -426,7 +454,8 @@ public enum TranscriptDigest {
     /// Les verdicts inconnus restent explicitement étiquetés ; leur texte ne
     /// permet jamais d'affirmer qu'une procédure a réussi ou échoué.
     static func render(_ entry: Entry, formatter: DateFormatter) -> String {
-        let role = entry.role.rawValue + (entry.toolOutcome.map { " outcome=\($0.rawValue)" } ?? "")
+        let shortened = entry.wasShortened ? (entry.role == .tool ? " command=incomplete" : " content=shortened") : ""
+        let role = entry.role.rawValue + (entry.toolOutcome.map { " outcome=\($0.rawValue)" } ?? "") + shortened
         guard let timestamp = entry.timestamp else {
             return "[\(role)] \(entry.text)"
         }

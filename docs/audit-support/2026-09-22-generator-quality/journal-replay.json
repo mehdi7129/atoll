@@ -1,0 +1,88 @@
+{
+  "validation": "offline-analysis-budget-replay",
+  "passed": true,
+  "sourceKind": "captured-cli-report",
+  "caseCount": 3,
+  "cliInvocations": 0,
+  "durationNote": "capturedCLIDurationSeconds provient de la capture ; replayJournalDurationSeconds mesure uniquement le replay local.",
+  "cases": [
+    {
+      "capturedCLIDurationSeconds": 7.699956059455872,
+      "coldReloadVerified": true,
+      "index": 0,
+      "launchedRecords": 1,
+      "model": "gpt-5.6-luna",
+      "passed": true,
+      "promptCharacters": 2724,
+      "quotaCapVerified": true,
+      "replayJournalDurationSeconds": 0.0027610063552856445,
+      "usage": {
+        "availability": "reported",
+        "cachedInputTokens": 0,
+        "inputTokens": 4283,
+        "outputTokens": 138,
+        "reasoningOutputTokens": 101,
+        "source": "codexTurnCompleted"
+      },
+      "nativeUsage": {
+        "cache_write_input_tokens": 0,
+        "cached_input_tokens": 0,
+        "input_tokens": 4283,
+        "output_tokens": 138,
+        "reasoning_output_tokens": 101
+      }
+    },
+    {
+      "capturedCLIDurationSeconds": 22.615512013435364,
+      "coldReloadVerified": true,
+      "index": 1,
+      "launchedRecords": 1,
+      "model": "gpt-5.6-luna",
+      "passed": true,
+      "promptCharacters": 3191,
+      "quotaCapVerified": true,
+      "replayJournalDurationSeconds": 0.001977086067199707,
+      "usage": {
+        "availability": "reported",
+        "cachedInputTokens": 0,
+        "inputTokens": 4611,
+        "outputTokens": 546,
+        "reasoningOutputTokens": 170,
+        "source": "codexTurnCompleted"
+      },
+      "nativeUsage": {
+        "cache_write_input_tokens": 0,
+        "cached_input_tokens": 0,
+        "input_tokens": 4611,
+        "output_tokens": 546,
+        "reasoning_output_tokens": 170
+      }
+    },
+    {
+      "capturedCLIDurationSeconds": 5.432558059692383,
+      "coldReloadVerified": true,
+      "index": 2,
+      "launchedRecords": 1,
+      "model": "gpt-5.6-luna",
+      "passed": true,
+      "promptCharacters": 2831,
+      "quotaCapVerified": true,
+      "replayJournalDurationSeconds": 0.0018690824508666992,
+      "usage": {
+        "availability": "reported",
+        "cachedInputTokens": 0,
+        "inputTokens": 4499,
+        "outputTokens": 156,
+        "reasoningOutputTokens": 42,
+        "source": "codexTurnCompleted"
+      },
+      "nativeUsage": {
+        "cache_write_input_tokens": 0,
+        "cached_input_tokens": 0,
+        "input_tokens": 4499,
+        "output_tokens": 156,
+        "reasoning_output_tokens": 42
+      }
+    }
+  ]
+}

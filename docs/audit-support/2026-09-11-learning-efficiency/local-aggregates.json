@@ -1,0 +1,72 @@
+{
+  "observedAtUTC": "2026-09-11T13:37:11.793961+00:00",
+  "scope": "Retained local sample; not a billing ledger or current-generator benchmark",
+  "analysisJobsV2Present": false,
+  "attemptCount": 100,
+  "retainedDateRangeUTC": [
+    "2026-08-24T13:14:09.656521+00:00",
+    "2026-09-11T10:51:12.018006+00:00"
+  ],
+  "decisions": {
+    "run": 22,
+    "run(debug)": 2,
+    "skip(configuration)": 1,
+    "skip(quotaAboveThreshold)": 1,
+    "skip(quotaStale)": 1,
+    "skip(sessionResumed)": 1,
+    "skip(sessionTooShort)": 52,
+    "skip(tooFewUserPrompts)": 19,
+    "skip(transcriptMissing)": 1
+  },
+  "runCandidates": 24,
+  "candidateOutcomes": {
+    "failed": 3,
+    "missing": 1,
+    "success": 20
+  },
+  "candidateProviders": {
+    "claude": 2,
+    "unspecified": 22
+  },
+  "reportedCostUSD": {
+    "samples": 19,
+    "sum": 10.349361,
+    "max": 0.7860274,
+    "meaning": "CLI-reported indicator; not invoice, subscription debit or complete spend"
+  },
+  "reportedNotes": 135,
+  "reportedSkills": 16,
+  "candidateDigestCharacters": {
+    "count": 24,
+    "min": 6662,
+    "median": 146039.5,
+    "max": 149989
+  },
+  "candidateTranscriptBytes": {
+    "count": 24,
+    "min": 405903,
+    "median": 8776572.5,
+    "max": 178162274
+  },
+  "candidateTokenUsageFieldsPresent": false,
+  "noteFiles": 160,
+  "skillStocks": {
+    "claude": {
+      "scopes": 1,
+      "pendingMetadataFiles": 0,
+      "archiveStatuses": {
+        "approved": 25
+      }
+    },
+    "codex": {
+      "scopes": 0,
+      "pendingMetadataFiles": 0,
+      "archiveStatuses": {}
+    }
+  },
+  "lastCuration": {
+    "lastRunAtUTC": "2026-09-07T16:33:10.334044+00:00",
+    "outcomeCategory": "oversized-corpus",
+    "reportedCorpusCharacters": 109545
+  }
+}

@@ -1,0 +1,164 @@
+{
+  "realGenerativeCLICalls": 0,
+  "casesPassed": 26,
+  "sabotageDetected": null,
+  "results": [
+    {
+      "scenario": "archive-collision",
+      "newSpawns": 0,
+      "archivesReserved": 12,
+      "passed": true
+    },
+    {
+      "newSpawns": 0,
+      "outcome": "analyse annulée",
+      "passed": true,
+      "scenario": "cancel-shutdown-before"
+    },
+    {
+      "newSpawns": 0,
+      "outcome": "analyse annulée",
+      "passed": true,
+      "scenario": "restart"
+    },
+    {
+      "newSpawns": 1,
+      "outcome": "analyse annulée",
+      "passed": true,
+      "scenario": "cancel-shutdown-after"
+    },
+    {
+      "newSpawns": 0,
+      "outcome": "analyse annulée",
+      "passed": true,
+      "scenario": "restart"
+    },
+    {
+      "newSpawns": 0,
+      "outcome": "analyse annulée",
+      "passed": true,
+      "scenario": "cancel-disable-before"
+    },
+    {
+      "newSpawns": 0,
+      "outcome": "analyse annulée",
+      "passed": true,
+      "scenario": "restart"
+    },
+    {
+      "newSpawns": 1,
+      "outcome": "analyse annulée",
+      "passed": true,
+      "scenario": "cancel-disable-after"
+    },
+    {
+      "newSpawns": 0,
+      "outcome": "analyse annulée",
+      "passed": true,
+      "scenario": "restart"
+    },
+    {
+      "newSpawns": 0,
+      "outcome": "analyse annulée",
+      "passed": true,
+      "scenario": "cancel-home-before"
+    },
+    {
+      "newSpawns": 0,
+      "outcome": "analyse annulée",
+      "passed": true,
+      "scenario": "restart"
+    },
+    {
+      "newSpawns": 1,
+      "outcome": "analyse annulée",
+      "passed": true,
+      "scenario": "cancel-home-after"
+    },
+    {
+      "newSpawns": 0,
+      "outcome": "analyse annulée",
+      "passed": true,
+      "scenario": "restart"
+    },
+    {
+      "newSpawns": 0,
+      "outcome": "ancien cycle",
+      "passed": true,
+      "scenario": "legacy-fresh"
+    },
+    {
+      "newSpawns": 0,
+      "outcome": "ancien cycle",
+      "passed": true,
+      "scenario": "malformed-fingerprint"
+    },
+    {
+      "newSpawns": 0,
+      "outcome": "ancien cycle",
+      "passed": true,
+      "scenario": "opt-out"
+    },
+    {
+      "newSpawns": 1,
+      "outcome": "2 note(s) → 2 · 1 contradiction(s) (auto)",
+      "passed": true,
+      "scenario": "baseline"
+    },
+    {
+      "newSpawns": 0,
+      "outcome": "notes inchangées depuis le dernier rangement — analyse évitée",
+      "passed": true,
+      "scenario": "unchanged"
+    },
+    {
+      "newSpawns": 1,
+      "outcome": "2 note(s) → 2 · 1 contradiction(s) (auto)",
+      "passed": true,
+      "scenario": "baseline"
+    },
+    {
+      "newSpawns": 1,
+      "outcome": "2 note(s) → 2 · 1 contradiction(s)",
+      "passed": true,
+      "scenario": "manual"
+    },
+    {
+      "newSpawns": 1,
+      "outcome": "2 note(s) → 2 · 1 contradiction(s) (auto)",
+      "passed": true,
+      "scenario": "baseline"
+    },
+    {
+      "newSpawns": 1,
+      "outcome": "3 note(s) → 3 · 1 contradiction(s) (auto)",
+      "passed": true,
+      "scenario": "changed"
+    },
+    {
+      "newSpawns": 1,
+      "outcome": "2 note(s) → 2 · 1 contradiction(s) (auto)",
+      "passed": true,
+      "scenario": "baseline"
+    },
+    {
+      "newSpawns": 0,
+      "outcome": "notes inchangées depuis le dernier rangement — analyse évitée",
+      "passed": true,
+      "scenario": "policy-change"
+    },
+    {
+      "newSpawns": 1,
+      "outcome": "non appliquée : The file “archive” couldn’t be saved in the folder “learning” because a file with the same name already exists.",
+      "passed": true,
+      "scenario": "storage-failure"
+    },
+    {
+      "newSpawns": 1,
+      "outcome": "2 note(s) → 2 · 1 contradiction(s) (auto)",
+      "passed": true,
+      "scenario": "repair-staging"
+    }
+  ],
+  "scope": "Service et budget réels. Routes fermeture/changement home extraites des appelants ; pas de lancement GUI. Redémarrage réel du harness, faux quota frais et CLI local."
+}

@@ -761,4 +761,38 @@ final class SkillCatalogTests: XCTestCase {
         XCTAssertEqual(entries.count, 1)
         XCTAssertEqual(entries.first?.description, "command récente")
     }
+    func testProjectSkillsLoadedToGitRootWithPersonalAndSkillPrecedence() throws {
+        let project = root.appendingPathComponent("repo")
+        let nested = project.appendingPathComponent("packages/web")
+        try write("gitdir: fixture", to: project.appendingPathComponent(".git"))
+        try write("---\ndescription: racine\n---\nProcedure", to: project.appendingPathComponent(".claude/skills/deploy/SKILL.md"))
+        try write("---\ndescription: imbrique\n---\nProcedure web", to: nested.appendingPathComponent(".claude/skills/deploy/SKILL.md"))
+        try write("---\ndescription: projet\n---\nProcedure", to: project.appendingPathComponent(".claude/skills/personal-wins/SKILL.md"))
+        try seedUserSkill(directory: "personal-wins", description: "personnel")
+        try seedCommand("deploy.md", description: "ancienne command")
+        let outside = root.appendingPathComponent(".claude/skills/outside/SKILL.md")
+        try write("---\ndescription: hors depot\n---\nProcedure", to: outside)
+        let catalog = SkillCatalog(skillsRoot: skillsRoot, commandsRoot: commandsRoot,
+            pluginsCacheRoot: pluginsCacheRoot, settingsURL: settingsURL, projectDirectory: nested)
+        let entries = catalog.entries()
+        XCTAssertEqual(try entry("deploy", in: entries).description, "racine")
+        XCTAssertEqual(try entry("packages/web:deploy", in: entries).description, "imbrique")
+        XCTAssertEqual(try entry("personal-wins", in: entries).description, "personnel")
+        XCTAssertFalse(entries.contains { $0.id == "outside" })
+        XCTAssertTrue(catalog.summaryForPrompt().contains("packages/web:deploy"))
+    }
+
+    func testProjectDoesNotAdvertiseUnvisitedDescendantOrDuplicateSymlink() throws {
+        let project = root.appendingPathComponent("repo")
+        try write("fixture", to: project.appendingPathComponent(".git"))
+        let personal = try seedUserSkill(directory: "one")
+        let linked = project.appendingPathComponent(".claude/skills/alias")
+        try fm.createDirectory(at: linked.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try fm.createSymbolicLink(at: linked, withDestinationURL: personal.deletingLastPathComponent())
+        try write("---\ndescription: descendant\n---\nProcedure", to: project.appendingPathComponent("child/.claude/skills/hidden/SKILL.md"))
+        let catalog = SkillCatalog(skillsRoot: skillsRoot, commandsRoot: commandsRoot,
+            pluginsCacheRoot: pluginsCacheRoot, settingsURL: settingsURL, projectDirectory: project)
+        XCTAssertEqual(catalog.entries().map(\.id), ["one"])
+    }
+
 }

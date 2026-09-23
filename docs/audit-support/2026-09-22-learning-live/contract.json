@@ -1,0 +1,28 @@
+{
+  "durationSeconds": 4.89239501953125,
+  "exitCode": 0,
+  "model": "gpt-5.6-luna",
+  "nativeUsage": {
+    "cache_write_input_tokens": 0,
+    "cached_input_tokens": 0,
+    "input_tokens": 13397,
+    "output_tokens": 58,
+    "reasoning_output_tokens": 37
+  },
+  "promptCharacters": 234,
+  "reportCapBytes": 65536,
+  "stdoutBytesRetained": 382,
+  "stdoutCapBytes": 4194304,
+  "stdoutExceededCap": false,
+  "usage": {
+    "availability": "reported",
+    "cachedInputTokens": 0,
+    "inputTokens": 13397,
+    "outputTokens": 58,
+    "reasoningOutputTokens": 37,
+    "source": "codexTurnCompleted"
+  },
+  "validReport": true,
+  "cliVersion": "codex-cli 0.155.1",
+  "isolationVerified": true
+}

@@ -1,0 +1,64 @@
+{
+  "realGenerativeCLICalls": 0,
+  "casesPassed": 8,
+  "sabotageDetected": "fingerprint",
+  "results": [
+    {
+      "newSpawns": 1,
+      "outcome": "2 note(s) → 2 · 1 contradiction(s)",
+      "passed": true,
+      "provider": "claude",
+      "scenario": "warm-resume"
+    },
+    {
+      "newSpawns": 1,
+      "outcome": "rétrécissement suspect (0 % de l'existant) — refus",
+      "passed": true,
+      "provider": "claude",
+      "scenario": "resume-shrink"
+    },
+    {
+      "newSpawns": 1,
+      "outcome": "source de note absente ou inconnue — refus (notes conservées)",
+      "passed": true,
+      "provider": "claude",
+      "scenario": "resume-provenance"
+    },
+    {
+      "newSpawns": 1,
+      "outcome": "sortie inexploitable — notes inchangées",
+      "passed": true,
+      "provider": "claude",
+      "scenario": "invalid"
+    },
+    {
+      "newSpawns": 1,
+      "outcome": "rétrécissement suspect (0 % de l'existant) — refus",
+      "passed": true,
+      "provider": "claude",
+      "scenario": "shrink"
+    },
+    {
+      "newSpawns": 1,
+      "outcome": "source de note absente ou inconnue — refus (notes conservées)",
+      "passed": true,
+      "provider": "claude",
+      "scenario": "provenance"
+    },
+    {
+      "newSpawns": 0,
+      "outcome": "reprise locale impossible : résultat sauvegardé illisible ou bascule interrompue ambiguë — aucune nouvelle analyse",
+      "passed": true,
+      "provider": "claude",
+      "scenario": "corrupt-cache"
+    },
+    {
+      "newSpawns": 1,
+      "outcome": "non appliquée : sauvegarde du résultat impossible (The file “result.json” doesn’t exist.)",
+      "passed": true,
+      "provider": "claude",
+      "scenario": "checkpoint-write-failure"
+    }
+  ],
+  "scope": "Service et budget réels, racines privées, redémarrages réels du harness ; aucun lancement GUI ni CLI authentifié."
+}

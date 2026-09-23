@@ -62,6 +62,36 @@ final class RetrospectivePromptTests: XCTestCase {
         }
     }
 
+    func testSkillSlugSchemaMatchesInstallationBoundsAndCodexRetainsItsGuidance() throws {
+        func slug(in schema: [String: Any], collection: String) throws -> [String: Any] {
+            let properties = try XCTUnwrap(schema["properties"] as? [String: Any])
+            let array = try XCTUnwrap(properties[collection] as? [String: Any])
+            let items = try XCTUnwrap(array["items"] as? [String: Any])
+            let fields = try XCTUnwrap(items["properties"] as? [String: Any])
+            return try XCTUnwrap(fields["slug"] as? [String: Any])
+        }
+        let schema = try parsedSchema()
+        let skillSlug = try slug(in: schema, collection: "skills")
+        XCTAssertEqual(skillSlug["minLength"] as? Int, 2)
+        XCTAssertEqual(skillSlug["maxLength"] as? Int, 40)
+        XCTAssertEqual(try slug(in: schema, collection: "notes")["maxLength"] as? Int, 60,
+                       "le contrat des notes reste distinct")
+        let description = try XCTUnwrap(skillSlug["description"] as? String)
+        for constraint in ["2-40", "atoll-", "recall", "bridge", "bin"] {
+            XCTAssertTrue(description.contains(constraint), "contrainte absente de l'explication envoyée à Codex : \(constraint)")
+        }
+        let converted = try XCTUnwrap(CodexExecPlan.openAISchema(from: RetrospectivePrompt.jsonSchema))
+        let adapted = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(converted.utf8)) as? [String: Any])
+        let codexSlug = try slug(in: adapted, collection: "skills")
+        XCTAssertEqual(codexSlug["description"] as? String, description)
+        XCTAssertEqual(converted.components(separatedBy: description).count - 1, 1)
+        // Ces contraintes sont retirées par le schéma strict OpenAI : la
+        // description doit donc survivre, avec la validation Swift en aval.
+        XCTAssertNil(codexSlug["minLength"])
+        XCTAssertNil(codexSlug["maxLength"])
+        XCTAssertNil(codexSlug["pattern"])
+    }
+
     // MARK: - Prompt utilisateur
 
     func testUserPromptEmbedsTranscriptPath() {
@@ -105,6 +135,24 @@ final class RetrospectivePromptTests: XCTestCase {
     }
 
     // MARK: - Prompt système
+
+    func testDigestContextDistinguishesSummarizedNotesFromEmptyHistory() {
+        func prompt(_ slugs: [String], summarized: Bool) -> String {
+            RetrospectivePrompt.userPrompt(
+                digest: "preuve complète, inchangée", projectPath: nil,
+                gitBranch: nil, model: nil, existingNoteSlugs: slugs,
+                existingCapabilities: "capacité vérifiée",
+                existingNotesListedInSummary: summarized)
+        }
+        XCTAssertTrue(prompt([], summarized: false).contains("(none yet)"))
+        let summarized = prompt([], summarized: true)
+        XCTAssertFalse(summarized.contains("(none yet)"))
+        XCTAssertTrue(summarized.contains("see existing notes summary"))
+        let partial = prompt(["omitted-from-summary"], summarized: true)
+        XCTAssertTrue(partial.contains("- omitted-from-summary"))
+        XCTAssertTrue(partial.contains("preuve complète, inchangée"))
+        XCTAssertTrue(partial.contains("capacité vérifiée"))
+    }
 
     func testSystemPromptContainsUntrustedDataWarning() {
         let prompt = RetrospectivePrompt.systemPrompt

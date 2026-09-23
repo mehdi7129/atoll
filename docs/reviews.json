@@ -634,6 +634,82 @@
         "Scripts/test-ui.py",
         "Scripts/test-settings-sabotage.py"
       ]
+    },
+    {
+      "date": "2026-09-11",
+      "document": "docs/AUDIT-2026-09-11-learning-efficiency.md",
+      "depth": "sweep",
+      "note": "Audit ciblé du rendement des analyses et propositions de skills : déclencheurs, budget, digest, catalogues, écriture et revue. Sources intégrales/ciblées distinguées dans le rapport ; reproductions sur types Core et services réels avec CLI fictifs. Aucun changement produit.",
+      "files": [
+        "App/AnalysisExecution.swift",
+        "App/LearningSettings.swift",
+        "App/CodexRun.swift",
+        "App/SkillDestination.swift",
+        "App/RetrospectiveRunner.swift",
+        "App/NotesCurationService.swift",
+        "App/PluginInventory.swift",
+        "App/SkillReviewCenter.swift",
+        "AtollCore/Sources/AtollCore/CodexExecPlan.swift",
+        "AtollCore/Sources/AtollCore/RetrospectivePrompt.swift",
+        "AtollCore/Sources/AtollCore/CodexSkillCatalog.swift",
+        "AtollCore/Sources/AtollCore/TranscriptLine.swift",
+        "AtollCore/Sources/AtollCore/LearningGate.swift",
+        "AtollCore/Sources/AtollCore/CodexTranscriptParser.swift",
+        "AtollCore/Sources/AtollCore/TranscriptDigest.swift",
+        "AtollCore/Sources/AtollCore/RetrospectiveReport.swift",
+        "AtollCore/Sources/AtollCore/SkillCatalog.swift",
+        "AtollCore/Sources/AtollCore/LearningArtifacts.swift",
+        "AtollCore/Sources/AtollCore/LearnedSkillStore.swift",
+        "AtollCore/Sources/AtollCore/NotesCurationPrompt.swift",
+        "AtollCore/Sources/AtollCore/NotesCuration.swift"
+      ]
+    },
+    {
+      "date": "2026-09-22",
+      "document": "docs/REVIEW-2026-09-22-learning-efficiency.md",
+      "depth": "sweep",
+      "note": "Corrections de PR #5 sur 15 fichiers produit : livraison/reprise, cadence, antériorité, mesures et digest. Relecture ciblée des interactions et tests de sabotage ; ne revendique pas une relecture ligne à ligne de toute l’app. Commandes et limites dans le rapport.",
+      "files": [
+        "App/AnalysisExecution.swift",
+        "App/AppDelegate.swift",
+        "App/NotesCurationService.swift",
+        "App/PluginInventory.swift",
+        "App/RetrospectiveRunner.swift",
+        "AtollCore/Sources/AtollCore/AnalysisUsage.swift",
+        "AtollCore/Sources/AtollCore/CodexExecPlan.swift",
+        "AtollCore/Sources/AtollCore/CurationCorpusFingerprint.swift",
+        "AtollCore/Sources/AtollCore/LearnedSkillStore.swift",
+        "AtollCore/Sources/AtollCore/LearningArtifacts.swift",
+        "AtollCore/Sources/AtollCore/LearningNovelty.swift",
+        "AtollCore/Sources/AtollCore/RetrospectiveDelivery.swift",
+        "AtollCore/Sources/AtollCore/RetrospectiveReport.swift",
+        "AtollCore/Sources/AtollCore/SkillCatalog.swift",
+        "AtollCore/Sources/AtollCore/TranscriptDigest.swift"
+      ]
+    },
+    {
+      "date": "2026-09-22",
+      "document": "docs/REVIEW-2026-09-22-generator-quality.md",
+      "depth": "sweep",
+      "note": "Relecture ciblée des changements du prompt, schema, parseur, contexte de notes et vérificateur, avec captures réelles et contre-épreuves ; pas une lecture intégrale des consommateurs.",
+      "files": [
+        "AtollCore/Sources/AtollCore/RetrospectivePrompt.swift",
+        "AtollCore/Sources/AtollCore/RetrospectiveReport.swift",
+        "AtollCore/Sources/AtollCore/CodexExecPlan.swift",
+        "AtollCore/Sources/AtollCore/LearningNovelty.swift",
+        "App/RetrospectiveRunner.swift",
+        "Scripts/test-skill-generation.py"
+      ]
+    },
+    {
+      "date": "2026-09-23",
+      "document": "docs/REVIEW-2026-09-23-curation-recovery.md",
+      "depth": "sweep",
+      "note": "Relecture ciblée de la persistance et reprise du rangement, garde du corpus, cadence et écritures confirmées. Tests du service réel avec CLI factices, interruptions et sabotages compilés. Ne revendique pas une relecture intégrale de tous les consommateurs.",
+      "files": [
+        "App/NotesCurationService.swift",
+        "AtollCore/Sources/AtollCore/CurationCheckpoint.swift"
+      ]
     }
   ]
 }
