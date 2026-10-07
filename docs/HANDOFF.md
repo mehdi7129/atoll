@@ -1,8 +1,30 @@
 # HANDOFF — reprendre Atoll
 
-État du **23 septembre 2026**. Fiche courante ; les règles détaillées restent dans
+État du **7 octobre 2026**. Fiche courante ; les règles détaillées restent dans
 [CLAUDE.md](../CLAUDE.md). L'[ancien handoff](HANDOFF-2026-09-10-archive.md) conserve
 les mesures et pièges historiques, sans faire autorité sur l'état actuel.
+
+## v0.18.4, build 39 — publication en préparation
+
+Mehdi a demandé la release le 7 octobre pour mettre à jour son app lui-même.
+Version et build sont incrémentés ; signature, notarisation, deltas et flux
+servi restent à vérifier avant d'annoncer la publication. La v0.18.3 demeure
+la version distribuée jusqu'à l'activation du nouvel appcast.
+
+Le [rapport du 7 octobre](REVIEW-2026-10-07-codex-storage.md) décrit le correctif
+qui désactive la synchronisation des plugins pour les lectures quota/modèles,
+borne la fermeture des enfants et sérialise les relances du poller. Les
+inventaires conservent leur profil. Aucun `config.toml` personnel n'est écrit.
+
+Validation : **1 089 tests Core**, un skip, zéro échec ; huit scénarios quota,
+15 sabotages compilés détectés, 60 parcours runtime et builds Debug/Release.
+La mesure authentifiée de trente minutes passe : **16 quotas frais, zéro Git
+et zéro staging**, sept modèles disponibles. Elle exerce le transport compilé
+dans un home privé, pas la GUI authentifiée. Le correctif est dans
+une copie locale hors iCloud, branche `fix/codex-quota-storage`. Sur le poste,
+l'app stable observée est désormais
+**v0.18.3, build 38** et son affichage du quota Codex a été désactivé. Les états
+d'installation datés de septembre ci-dessous sont historiques.
 
 ## v0.18.3, build 38 — publiée
 

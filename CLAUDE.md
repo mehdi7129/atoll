@@ -1,5 +1,14 @@
 # CLAUDE.md — instructions projet Atoll
 
+> **v0.18.4, build 39 — préparation autorisée le 2026-10-07.**
+> Mehdi demande la release pour mettre à jour lui-même son app. Correctif quota
+> et modèles Codex `a948e25` : synchronisation des plugins désactivée pour ces
+> lectures, arrêt borné et relances sérialisées. 1 089 tests Core (un skip),
+> 15 sabotages détectés, recette authentifiée de trente minutes sans Git/staging.
+> [Preuves et limites](docs/REVIEW-2026-10-07-codex-storage.md).
+> Conserver le flux v0.18.3 jusqu'à disponibilité vérifiée des nouveaux assets.
+> L'app stable n'est pas remplacée ; le quota désactivé ne se réactive pas seul.
+
 > **v0.18.3, build 38 — publiée le 2026-09-23, PR #5 fusionnée.**
 > Publication autorisée par Mehdi, tag sur `d438b8e` ; code produit identique
 > au code testé `30847d6`. App universelle et DMG signés, notarisés et staplés.

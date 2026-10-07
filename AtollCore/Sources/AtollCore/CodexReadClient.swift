@@ -8,6 +8,14 @@ public enum CodexReadClient {
     public enum Query: Sendable {
         case quota, hooks(cwd: String), models(cursor: String? = nil), skills(cwd: String), plugins(cwd: String)
         var requiresAccount: Bool { if case .quota = self { return true }; return false }
+        /// Le quota et les modèles n'ont pas besoin de synchroniser les plugins.
+        /// Les inventaires gardent la configuration complète du CLI.
+        var disablesPlugins: Bool {
+            switch self {
+            case .quota, .models: return true
+            case .hooks, .skills, .plugins: return false
+            }
+        }
         var method: String {
             switch self {
             case .quota: return "account/rateLimits/read"
@@ -39,9 +47,11 @@ public enum CodexReadClient {
     /// Run on a worker, not the UI thread. All I/O and child lifetime are bounded.
     public static func read(_ query: Query, executable: URL, home: URL = CodexPaths.homeURL, timeout: TimeInterval = 20,
                             cancelled: @Sendable () -> Bool = { false }) -> Outcome {
+        guard !cancelled() else { return .unavailable("lecture annulée") }
         let process = Process()
         process.executableURL = executable
-        process.arguments = ["app-server", "--listen", "stdio://"]
+        process.arguments = (query.disablesPlugins ? ["-c", "features.plugins=false"] : [])
+            + ["app-server", "--listen", "stdio://"]
         var environment = ProcessInfo.processInfo.environment
         environment["CODEX_HOME"] = home.path
         environment["ATOLL_RETROSPECTIVE"] = "1"
@@ -64,32 +74,46 @@ public enum CodexReadClient {
         process.standardInput = input
         process.standardOutput = output
         process.standardError = FileHandle.nullDevice // never log account/auth diagnostics
-        do { try process.run() }
+        // Une demande retirée pendant la préparation ne doit pas lancer de CLI.
+        guard !cancelled() else { return .unavailable("lecture annulée") }
+        let identity: ProcessIdentity?
+        do { identity = try ProcessIdentity.launch(process) }
         catch { return .unavailable("codex ne peut pas démarrer") }
-        let identity = ProcessIdentity.current(of: process.processIdentifier)
         try? input.close()
         try? output.fileHandleForWriting.close()
         defer {
             shutdown(sockets[0], SHUT_WR)
+            // Laisser le serveur traiter l'EOF avant tout signal, sans supposer
+            // qu'une sortie normale suffit à nettoyer ses catalogues temporaires.
+            func waitForExit(for duration: TimeInterval) {
+                let until = ProcessInfo.processInfo.systemUptime + duration
+                while process.isRunning, ProcessInfo.processInfo.systemUptime < until {
+                    Thread.sleep(forTimeInterval: 0.01)
+                }
+            }
+            waitForExit(for: 0.5)
             if process.isRunning, let identity {
                 identity.send(SIGTERM)
-                DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 1) {
+                waitForExit(for: 0.5)
+                if process.isRunning {
                     identity.send(SIGKILL)
+                    waitForExit(for: 0.5)
                 }
             }
             // Sans identité lisible, l'EOF reste le seul geste autorisé ; ne
             // jamais attendre indéfiniment ni signaler un PID par supposition.
-            if identity != nil || !process.isRunning { process.waitUntilExit() }
             try? output.fileHandleForReading.close()
         }
 
         func send(_ message: [String: Any]) -> Bool {
+            guard !cancelled() else { return false }
             guard var data = try? JSONSerialization.data(withJSONObject: message, options: .withoutEscapingSlashes) else { return false }
             data.append(10)
             return data.withUnsafeBytes { bytes in
                 Darwin.write(sockets[0], bytes.baseAddress!, bytes.count) == bytes.count
             }
         }
+        guard !cancelled() else { return .unavailable("lecture annulée") }
         guard send(["id": 1, "method": "initialize", "params": [
             "clientInfo": ["name": "atoll", "title": "Atoll read-only client", "version": "0.1.0"]
         ]]) else { return .unavailable("connexion Codex interrompue") }

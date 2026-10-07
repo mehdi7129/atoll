@@ -182,11 +182,21 @@ Si la session n'apparaît pas, ouvre « Vérifier la connexion », choisis le
 Le home Codex (`~/.codex` par défaut) est son dossier de configuration. Son choix,
 la réparation et le chemin de l'exécutable sont regroupés dans « Dépannage ».
 
-**Version courante : [v0.18.3, build 38](https://github.com/mehdi7129/atoll/releases/tag/v0.18.3).**
+**Version du code : v0.18.4, build 39 — publication en préparation.**
+Dernière version publiée : [v0.18.3, build 38](https://github.com/mehdi7129/atoll/releases/tag/v0.18.3).
 App universelle Apple Silicon / Intel, signée et notarisée ; disponible par la
 mise à jour intégrée ou le DMG de la release.
 
-La v0.18.3 réduit la consommation des analyses et fiabilise leurs résultats :
+La v0.18.4 corrige les synchronisations de plugins déclenchées inutilement par
+les lectures du quota et des modèles Codex. Ces lectures ne téléchargent plus
+les catalogues de plugins ; les changements rapides de réglages attendent la
+fin de la lecture précédente. Les plugins installés et la configuration Codex
+sont conservés. [Validation et limites](docs/REVIEW-2026-10-07-codex-storage.md).
+Si tu avais désactivé l'affichage du quota, tu pourras le réactiver dans
+**Réglages → Codex** après la mise à jour. Cette version ne supprime pas les
+anciens fichiers temporaires déjà accumulés.
+
+Depuis la v0.18.3, Atoll réduit aussi la consommation des analyses et fiabilise leurs résultats :
 
 - Contexte Codex allégé et analyses automatiques identiques évitées.
 - Skills concis pour les procédures utiles ; faits durables en notes, tâches banales sans proposition.
