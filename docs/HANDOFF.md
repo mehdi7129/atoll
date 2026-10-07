@@ -4,7 +4,12 @@
 [CLAUDE.md](../CLAUDE.md). L'[ancien handoff](HANDOFF-2026-09-10-archive.md) conserve
 les mesures et pièges historiques, sans faire autorité sur l'état actuel.
 
-## Correctif local — lectures Codex et stockage
+## v0.18.4, build 39 — publication en préparation
+
+Mehdi a demandé la release le 7 octobre pour mettre à jour son app lui-même.
+Version et build sont incrémentés ; signature, notarisation, deltas et flux
+servi restent à vérifier avant d'annoncer la publication. La v0.18.3 demeure
+la version distribuée jusqu'à l'activation du nouvel appcast.
 
 Le [rapport du 7 octobre](REVIEW-2026-10-07-codex-storage.md) décrit le correctif
 qui désactive la synchronisation des plugins pour les lectures quota/modèles,
@@ -16,8 +21,8 @@ Validation : **1 089 tests Core**, un skip, zéro échec ; huit scénarios quota
 La mesure authentifiée de trente minutes passe : **16 quotas frais, zéro Git
 et zéro staging**, sept modèles disponibles. Elle exerce le transport compilé
 dans un home privé, pas la GUI authentifiée. Le correctif est dans
-une copie locale hors iCloud, branche `fix/codex-quota-storage`, sans fusion,
-publication ni installation. Sur le poste, l'app stable observée est désormais
+une copie locale hors iCloud, branche `fix/codex-quota-storage`. Sur le poste,
+l'app stable observée est désormais
 **v0.18.3, build 38** et son affichage du quota Codex a été désactivé. Les états
 d'installation datés de septembre ci-dessous sont historiques.
 
