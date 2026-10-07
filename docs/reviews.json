@@ -710,6 +710,17 @@
         "App/NotesCurationService.swift",
         "AtollCore/Sources/AtollCore/CurationCheckpoint.swift"
       ]
+    },
+    {
+      "date": "2026-10-07",
+      "document": "docs/REVIEW-2026-10-07-codex-storage.md",
+      "depth": "sweep",
+      "note": "Relectures croisées ciblées des changements du transport et du poller ; ne revendique pas tous leurs consommateurs. Banc stockage final relu intégralement et faux succès corrigés.",
+      "files": [
+        "AtollCore/Sources/AtollCore/CodexReadClient.swift",
+        "App/CodexService.swift",
+        "Scripts/test-codex-read-storage.py"
+      ]
     }
   ]
 }

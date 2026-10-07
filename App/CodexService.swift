@@ -282,6 +282,7 @@ final class CodexService {
     func stop() {
         timer?.invalidate()
         timer = nil
+        // Garder la tâche annulée : la prochaine lecture attend aussi sa sortie.
         pollTask?.cancel()
         generation = UUID()
         scanTask?.cancel()
@@ -295,7 +296,8 @@ final class CodexService {
     }
 
     func syncQuotaSettings() {
-        pollTask?.cancel()
+        let previousPoll = pollTask
+        previousPoll?.cancel()
         generation = UUID()
         let current = generation
         quota = nil // no cross-account/executable cache
@@ -307,6 +309,10 @@ final class CodexService {
         }
         status = "lecture du quota…"
         pollTask = Task { [weak self] in
+            // Annuler ne signifie pas que le worker et son processus sont déjà
+            // sortis. Les changements rapides de réglage restent dans une seule
+            // chaîne, y compris après un arrêt temporaire de la lecture.
+            await previousPoll?.value
             while !Task.isCancelled {
                 await self?.fetch(generation: current)
                 try? await Task.sleep(for: .seconds(120))
@@ -315,6 +321,7 @@ final class CodexService {
     }
 
     private func fetch(generation current: UUID) async {
+        guard !Task.isCancelled, generation == current else { return }
         guard let executable = resolveExecutable() else {
             status = "codex introuvable — indique son chemin dans les réglages"
             return
