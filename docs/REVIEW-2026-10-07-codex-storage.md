@@ -1,6 +1,9 @@
 # Lectures Codex : arrêter les synchronisations de plugins inutiles
 
-7 octobre 2026 · correctif local, sans fusion, release ni remplacement de l'app stable.
+Validation initiale du 7 octobre 2026, réalisée avant publication et sans
+remplacement de l'app stable. Le correctif a ensuite été publié en
+[v0.18.4, build 39](releases/0.18.4.json), via la PR #7, sans modification
+du code produit validé ci-dessous.
 
 ## Problème vérifié
 
@@ -41,7 +44,8 @@ de CPU cumulé pour le harness et ses enfants récoltés, hors compilation.
 Cette mesure ponctuelle ne justifie pas une connexion persistante ; elle
 ne constitue pas un benchmark de batterie ou de mémoire.
 L'option d'affichage du quota a été désactivée sur l'app stable pendant
-l'intervention. Le correctif source n'est pas installé dans cette app.
+l'intervention. L'app stable n'a pas reçu le correctif pendant cette validation ;
+la mise à jour vers 0.18.4 reste une action distincte de l'utilisateur.
 
 ## Validation et relecture
 

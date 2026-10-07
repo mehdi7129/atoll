@@ -4,12 +4,17 @@
 [CLAUDE.md](../CLAUDE.md). L'[ancien handoff](HANDOFF-2026-09-10-archive.md) conserve
 les mesures et pièges historiques, sans faire autorité sur l'état actuel.
 
-## v0.18.4, build 39 — publication en préparation
+## v0.18.4, build 39 — publiée
 
 Mehdi a demandé la release le 7 octobre pour mettre à jour son app lui-même.
-Version et build sont incrémentés ; signature, notarisation, deltas et flux
-servi restent à vérifier avant d'annoncer la publication. La v0.18.3 demeure
-la version distribuée jusqu'à l'activation du nouvel appcast.
+La [PR #7](https://github.com/mehdi7129/atoll/pull/7) est fusionnée, tag sur
+`9790b4e` ; le code du correctif `a948e25` est inchangé. La
+[release](https://github.com/mehdi7129/atoll/releases/tag/v0.18.4) et le flux
+Sparkle sont publiés : app/DMG universels signés, notarisés et staplés, six
+signatures EdDSA et sept téléchargements SHA256 vérifiés. Le différentiel
+38 → 39 et l'app du DMG reproduisent les 134 objets du ZIP complet.
+[Relevé de livraison](releases/0.18.4.json). Flux servi identique aux octets
+locaux, build 39 en tête ; 19 URL vérifiées. L'app stable n'est pas remplacée.
 
 Le [rapport du 7 octobre](REVIEW-2026-10-07-codex-storage.md) décrit le correctif
 qui désactive la synchronisation des plugins pour les lectures quota/modèles,
@@ -20,11 +25,12 @@ Validation : **1 089 tests Core**, un skip, zéro échec ; huit scénarios quota
 15 sabotages compilés détectés, 60 parcours runtime et builds Debug/Release.
 La mesure authentifiée de trente minutes passe : **16 quotas frais, zéro Git
 et zéro staging**, sept modèles disponibles. Elle exerce le transport compilé
-dans un home privé, pas la GUI authentifiée. Le correctif est dans
-une copie locale hors iCloud, branche `fix/codex-quota-storage`. Sur le poste,
-l'app stable observée est désormais
+dans un home privé, pas la GUI authentifiée. La publication utilise une copie
+locale hors iCloud. Sur le poste, l'app stable observée avant publication est
 **v0.18.3, build 38** et son affichage du quota Codex a été désactivé. Les états
 d'installation datés de septembre ci-dessous sont historiques.
+Après la mise à jour, réactiver le quota dans Réglages → Codex si souhaité.
+La release ne modifie pas cet opt-in et ne supprime aucun ancien staging.
 
 ## v0.18.3, build 38 — publiée
 
@@ -150,19 +156,19 @@ cette release ; la publication n'a installé aucune app.
 
 | Élément | État vérifié |
 |---|---|
-| Version publiée | **[v0.18.3, build 38](https://github.com/mehdi7129/atoll/releases/tag/v0.18.3)** |
-| Fusion / source | [PR #5](https://github.com/mehdi7129/atoll/pull/5) fusionnée (`8b7e9a9`) ; tag sur `d438b8e` ; fusion et publication demandées par Mehdi |
+| Version publiée | **[v0.18.4, build 39](https://github.com/mehdi7129/atoll/releases/tag/v0.18.4)** |
+| Fusion / source | [PR #7](https://github.com/mehdi7129/atoll/pull/7) fusionnée ; tag sur `9790b4e` ; publication demandée par Mehdi |
 | Distribution | Universelle arm64 / x86_64 ; app et DMG signés Developer ID, notarisés, staplés et acceptés par Gatekeeper |
-| Mise à jour | Appcast `f12abfe` poussé après les assets et identique au flux servi ; 19 URL disponibles, SHA256 des sept téléchargements et six signatures EdDSA vérifiés |
-| Référence précédente | v0.18.2, build 37 ; [preuves de sa livraison](releases/0.18.2.json) |
-| Tests fonctionnels | Code `30847d6` : 1 083 tests Core, 1 skip opt-in, 0 échec ; dernier lot de 184 parcours runtime et sept sabotages détectés ; Debug/Release réussis. Code inchangé ; distribution signée reconstruite et vérifiée |
-| Recettes | PR #5 : mesures Codex réelles du 22 septembre archivées ; reprises exercées avec CLI factices et états de crash reconstitués. Aucune nouvelle génération pour publier. Interface inchangée ; limites ci-dessous conservées |
-| Installation de travail | `~/Applications/Atoll.app` **v0.18.2, build 37**, observée le 23 septembre avant préparation ; la publication ne l’installe pas automatiquement |
+| Mise à jour | Appcast `0fc82d2` poussé après les assets et identique au flux servi ; 19 URL disponibles, SHA256 des sept téléchargements et six signatures EdDSA vérifiés |
+| Référence précédente | v0.18.3, build 38 ; [preuves de sa livraison](releases/0.18.3.json) |
+| Tests fonctionnels | Code `a948e25` : 1 089 tests Core, 1 skip, 0 échec ; huit scénarios quota, 60 parcours runtime, 15 sabotages détectés ; Debug/Release réussis. Code inchangé pour la distribution |
+| Recettes | Trente minutes de transport Codex authentifié : 16 quotas frais, zéro Git/staging. Aperçu GUI protégé avec fixtures ; distribution non lancée. Aucune génération pour publier |
+| Installation de travail | `~/Applications/Atoll.app` **v0.18.3, build 38**, observée le 7 octobre avant publication ; la mise à jour reste à appliquer par l'utilisateur |
 
 Vérifier l'état réel avant toute action : `git status --short --branch`,
 `git log -5 --oneline`, `git worktree list`, puis `gh release view`.
 Une source publiée et une app installée peuvent avoir des versions différentes.
-Le [relevé de livraison](releases/0.18.3.json) conserve les commits, identifiants
+Le [relevé de livraison](releases/0.18.4.json) conserve les commits, identifiants
 de notarisation, résultats et empreintes des fichiers distribués.
 
 ## Correctifs après le retour sur v0.18.0

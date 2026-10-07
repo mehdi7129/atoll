@@ -182,8 +182,7 @@ Si la session n'apparaît pas, ouvre « Vérifier la connexion », choisis le
 Le home Codex (`~/.codex` par défaut) est son dossier de configuration. Son choix,
 la réparation et le chemin de l'exécutable sont regroupés dans « Dépannage ».
 
-**Version du code : v0.18.4, build 39 — publication en préparation.**
-Dernière version publiée : [v0.18.3, build 38](https://github.com/mehdi7129/atoll/releases/tag/v0.18.3).
+**Version courante : [v0.18.4, build 39](https://github.com/mehdi7129/atoll/releases/tag/v0.18.4).**
 App universelle Apple Silicon / Intel, signée et notarisée ; disponible par la
 mise à jour intégrée ou le DMG de la release.
 

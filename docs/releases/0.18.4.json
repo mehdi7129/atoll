@@ -1,0 +1,156 @@
+{
+  "version": "0.18.4",
+  "build": "39",
+  "sourceCommit": "9790b4e537c2e81eb1a0bf085915d4c65d682d0f",
+  "featureCommit": "a948e25e2696925c8461e4bf0538d2eb6dde263d",
+  "pullRequest": "https://github.com/mehdi7129/atoll/pull/7",
+  "mergeCommit": "9790b4e537c2e81eb1a0bf085915d4c65d682d0f",
+  "releaseURL": "https://github.com/mehdi7129/atoll/releases/tag/v0.18.4",
+  "publishedAt": "2026-10-07T13:19:51Z",
+  "checks": {
+    "app": "Developer ID verified",
+    "helper": "Developer ID verified",
+    "sparkleComponents": "5 Developer ID components verified",
+    "hardenedRuntime": "all 7 executable components verified",
+    "entitlements": "get-task-allow absent; app automation.apple-events only",
+    "appStaple": "valid",
+    "dmgStaple": "valid",
+    "gatekeeper": "app, dmg and patched app accepted",
+    "sparkleEdDSA": "6 enclosures verified with public key from SHA-verified 0.18.3 app; 6 modified copies rejected",
+    "deliveredBytes": "7 public downloads match validated local SHA256 and lengths"
+  },
+  "architectures": [
+    "x86_64",
+    "arm64"
+  ],
+  "assets": [
+    {
+      "name": "Atoll-0.18.4.zip",
+      "bytes": 8565980,
+      "sha256": "9c5a5ca807b5316ba1d0027aa0ef9933bf0691353cb2734e963923f9a74ef5d4",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.18.4/Atoll-0.18.4.zip"
+    },
+    {
+      "name": "Atoll39-38.delta",
+      "bytes": 730570,
+      "sha256": "82668a9827342a6dc15e8d91cfd5862f079b8a9a872eebbdb1b0607f7a415303",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.18.4/Atoll39-38.delta"
+    },
+    {
+      "name": "Atoll39-37.delta",
+      "bytes": 3973590,
+      "sha256": "f63d04d51cd77c3361eb9414e4f7b6e2336d21467a68dfda62d3f946483f2066",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.18.4/Atoll39-37.delta"
+    },
+    {
+      "name": "Atoll39-36.delta",
+      "bytes": 4079338,
+      "sha256": "ec95954d0970f44d745a016ad1f5cf9094d417105f0b8b49974bc865914e814f",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.18.4/Atoll39-36.delta"
+    },
+    {
+      "name": "Atoll39-35.delta",
+      "bytes": 4100498,
+      "sha256": "7d79f2f6fd1aba369063adfb0289a020ddf217ad0ff92c91f5fe58ac039c6221",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.18.4/Atoll39-35.delta"
+    },
+    {
+      "name": "Atoll39-34.delta",
+      "bytes": 4470854,
+      "sha256": "962619fdf85f7de8a0924c7721f4b00fb43e2c624f03bcbfdc2836155586f515",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.18.4/Atoll39-34.delta"
+    },
+    {
+      "name": "Atoll-0.18.4.dmg",
+      "bytes": 9497326,
+      "sha256": "7a44d117e60a18e67e0028819695900e3dd7b833918a966df69a6db037c0a693",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.18.4/Atoll-0.18.4.dmg"
+    }
+  ],
+  "notarization": {
+    "app": {
+      "submissionID": "268b4e25-4fa8-483f-8a5d-5449317b3bb8",
+      "status": "Accepted"
+    },
+    "dmg": {
+      "submissionID": "6ffc86cd-1028-4fee-86fa-0057858927d5",
+      "status": "Accepted"
+    }
+  },
+  "deltaUpgrade": {
+    "fromBuild": "38",
+    "toBuild": "39",
+    "patch": "Atoll39-38.delta",
+    "sourceArchiveMatchesPublishedSHA256": true,
+    "filesLinksModesAndSizesEqualFullArchive": true,
+    "comparedObjects": 134,
+    "codesign": "verified",
+    "staple": "valid",
+    "gatekeeper": "accepted",
+    "appLaunched": false
+  },
+  "dmgBundle": {
+    "readOnlyMountComparedToFullZIP": true,
+    "filesLinksModesAndSizesEqualFullArchive": true,
+    "comparedObjects": 134,
+    "detached": true
+  },
+  "publicDownloads": {
+    "checkedAt": "2026-10-07T13:20:45.066450+00:00",
+    "enclosuresHTTP200": 18,
+    "dmgHTTP200": true,
+    "downloadedSHA256Matches": 7
+  },
+  "validation": {
+    "featureCodeUnchangedAtRelease": true,
+    "core": {
+      "executed": 1089,
+      "skipped": 1,
+      "failures": 0
+    },
+    "runtimeScenarios": 60,
+    "pollerScenarios": 8,
+    "sabotagesDetected": 15,
+    "builds": {
+      "Debug": "passed",
+      "Release": "passed",
+      "distribution": "universal signed Release passed"
+    },
+    "liveTransport": {
+      "codexVersion": "0.160.1",
+      "seconds": 1802.309,
+      "freshQuotaReads": 16,
+      "models": 7,
+      "gitCommands": 0,
+      "stagingDirectories": 0,
+      "privateAuthCopyRemoved": true
+    },
+    "featureEvidence": [
+      "../REVIEW-2026-10-07-codex-storage.md"
+    ],
+    "limits": [
+      "Mesure authentifiée sur transport compilé dans HOME/CODEX_HOME privés, pas trente minutes de GUI de production.",
+      "L’origine de chaque copie historique n’est pas attribuée ; aucun nettoyage automatique des fichiers accumulés."
+    ],
+    "generationCallsForPublication": 0
+  },
+  "localVerification": {
+    "personalConfigurationsUnchanged": true,
+    "personalConfigurationsCompared": 3,
+    "stableAppUnchanged": true,
+    "debugBuildPreserved": true,
+    "debugBundlesCompared": 2,
+    "stableVersionObserved": "0.18.3",
+    "stableBuildObserved": "38",
+    "scope": "Comparaison après packaging, avant activation du nouvel appcast ; aucune installation par cette publication."
+  },
+  "appcast": {
+    "url": "https://mehdi7129.github.io/atoll/appcast.xml",
+    "commit": "0fc82d2f07ff0c56812d682ef5143379cb956643",
+    "sha256": "37d7a6ec3982bf38eb5fd7bae91eb1d8072bcc8ba10928541518b4de55124e3e",
+    "servedBytesEqualLocal": true,
+    "servedVersion": "0.18.4",
+    "servedBuild": "39",
+    "checkedAt": "2026-10-07T13:22:33.999419+00:00"
+  }
+}
