@@ -1,5 +1,17 @@
 # CLAUDE.md — instructions projet Atoll
 
+> **v0.18.5, build 40 — en préparation le 2026-10-08.**
+> Les PR #9 → #10 → #11 sont fusionnées et leur ordre a été validé.
+> [A19](docs/REVIEW-2026-10-08-a19-skill-archive.md) conserve les fichiers du
+> skill et son manifeste quand l'archivage échoue.
+> [A01](docs/REVIEW-2026-10-08-a01-curation-collision.md) préserve les notes
+> en collision et leur reprise locale sans nouvel appel au modèle.
+> [A22](docs/REVIEW-2026-10-08-a22-codex-harness.md) fiabilise le harness Codex
+> et ses sabotages. Les usages et l'interface restent inchangés.
+> La version distribuée reste **v0.18.4, build 39** ; l'appcast est conservé
+> jusqu'à vérification des nouveaux assets. L'app installée n'est pas remplacée.
+> Lire [HANDOFF](docs/HANDOFF.md) pour la validation et les étapes de publication.
+
 > **v0.18.4, build 39 — publiée le 2026-10-07, PR #7 fusionnée.**
 > Publication demandée par Mehdi pour mettre à jour lui-même son app. Tag sur
 > `9790b4e`, correctif quota/modèles Codex `a948e25` inchangé depuis les tests.
