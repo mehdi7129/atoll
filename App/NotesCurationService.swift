@@ -482,6 +482,15 @@ final class NotesCurationService {
             guard checkpoint.sourceFingerprint == CurationCorpusFingerprint(notes: Self.readNotes()) else {
                 throw CurationError.corpusChanged
             }
+            // Une note illisible n'appartient ni au corpus ni à l'archive.
+            // Refuser son nom AVANT toute suppression, sans la déplacer :
+            // le résultat sauvegardé pourra reprendre une fois le conflit résolu.
+            let sourceNames = Set(previous.map(\.name))
+            for note in plan.newNotes where !sourceNames.contains(note.fileName) {
+                if fm.fileExists(atPath: notesDirectory.appendingPathComponent(note.fileName).path) {
+                    throw CurationError.destinationCollision(note.fileName)
+                }
+            }
             // Distinguer un arrêt AVANT la première suppression d'un swap
             // commencé : sans ce témoin, une suppression externe ultérieure
             // serait attribuée à tort au remplacement interrompu.
@@ -505,19 +514,9 @@ final class NotesCurationService {
             }
             for note in plan.newNotes {
                 let destination = notesDirectory.appendingPathComponent(note.fileName)
-                // Une collision ne peut venir QUE d'un fichier que `readNotes`
-                // n'a pas su lire (donc jamais archivé) : on l'écarte au lieu
-                // de le détruire — la curation ne détruit rien qu'elle n'ait
-                // pu archiver (revue).
-                if fm.fileExists(atPath: destination.path) {
-                    let orphan = notesDirectory.appendingPathComponent(
-                        "\(note.fileName).orphan-\(stamp)")
-                    if (try? fm.moveItem(at: destination, to: orphan)) == nil {
-                        try? fm.removeItem(at: destination) // dernier recours
-                    } else {
-                        log.error("fichier illisible écarté : \(note.fileName, privacy: .public).orphan-\(stamp, privacy: .public)")
-                    }
-                }
+                // moveItem refuse une destination encore présente : collision
+                // tardive ou suppression ratée déclenchent la restauration,
+                // jamais le déplacement ni la suppression du fichier bloquant.
                 try fm.moveItem(at: staging.appendingPathComponent(note.fileName), to: destination)
                 written.append(destination)
             }
@@ -862,11 +861,14 @@ final class NotesCurationService {
     enum CurationError: LocalizedError {
         case archiveIncomplete(expected: Int, actual: Int)
         case archiveTruncated(String)
+        case destinationCollision(String)
         case corpusChanged
         case interruptedSwapUnproven
 
         var errorDescription: String? {
             switch self {
+            case .destinationCollision(let name):
+                return "collision avec « \(name) » — note conservée, résultat sauvegardé pour reprise"
             case .interruptedSwapUnproven:
                 return "bascule interrompue non prouvée — fichiers conservés"
             case .corpusChanged:

@@ -1,5 +1,6 @@
 import Foundation
 import AtollCore
+import Darwin
 
 /// Service et journal réels, CLI Python local ; aucune app ni authentification.
 @main struct CurationRecoveryTests {
@@ -199,12 +200,91 @@ import AtollCore
             && after[0].durationSeconds == before.durationSeconds && after[0].usage == before.usage,
                   "reprise a recompté une dépense ou altéré l'usage")
     }
-    @MainActor static func main() async throws {
+    static let collisionName = "01-fait-verifie-0.md"
+    static let collisionBytes = Data([0xff, 0xfe, 0xfd, 0x80])
+    static let previousSuccess = CurationCorpusFingerprint(notes: [("earlier.md", "Dernier corpus consolidé.")])
+    struct CollisionEvidence: Codable {
+        let sources: [String: Data]
+        let lastSuccessfulCorpus: CurationCorpusFingerprint
+        let checkpoint: CurationCheckpoint
+        let receipt: AnalysisBudget.Record
+    }
+    @MainActor static func verifyCollision(sources: [String: Data],
+                                           lastSuccessfulCorpus: CurationCorpusFingerprint,
+                                           previousCheckpoint: CurationCheckpoint? = nil) throws -> CurationCheckpoint {
+        let fm = FileManager.default
+        let directory = BridgePaths.learningNotesDirectory
+        try check((try? Data(contentsOf: directory.appendingPathComponent(collisionName))) == collisionBytes,
+                  "collision a déplacé ou détruit la note non archivée")
+        try check(Set(NotesCurationService.readNotes().map(\.name)) == Set(sources.keys),
+                  "collision a changé les notes sources")
+        for (name, bytes) in sources {
+            try check(try Data(contentsOf: directory.appendingPathComponent(name)) == bytes,
+                      "collision a altéré les octets sources")
+        }
+        try check(try fm.contentsOfDirectory(atPath: directory.path).allSatisfy { !$0.contains(".orphan-") },
+                  "collision a créé une mise à l'écart non demandée")
+        let archives = try fm.contentsOfDirectory(at: BridgePaths.learningArchiveDirectory, includingPropertiesForKeys: nil)
+            .filter { $0.lastPathComponent.hasPrefix("notes-") }
+        try check(!archives.isEmpty, "collision a perdu l'archive vérifiée")
+        for archive in archives {
+            try check(try Set(fm.contentsOfDirectory(atPath: archive.path)) == Set(sources.keys),
+                      "archive de collision incomplète")
+            for (name, bytes) in sources {
+                try check(try Data(contentsOf: archive.appendingPathComponent(name)) == bytes,
+                          "archive de collision altérée")
+            }
+        }
+        guard let checkpoint = try store.load(), checkpoint.output != nil else {
+            throw Failure(description: "collision a perdu le résultat sauvegardé")
+        }
+        try check(checkpoint.match(notes: NotesCurationService.readNotes()) == .source,
+                  "checkpoint de collision ne correspond plus aux sources")
+        if let before = previousCheckpoint {
+            try check(checkpoint.createdAt == before.createdAt && checkpoint.leaseID == before.leaseID
+                      && checkpoint.sourceNames == before.sourceNames
+                      && checkpoint.output == before.output
+                      && checkpoint.sourceFingerprint == before.sourceFingerprint
+                      && checkpoint.targetFingerprint == before.targetFingerprint,
+                      "collision a altéré le résultat à reprendre")
+        }
+        struct State: Decodable { let lastSuccessfulCorpus: CurationCorpusFingerprint? }
+        let state = try JSONDecoder().decode(State.self, from: Data(contentsOf: stateURL))
+        try check(state.lastSuccessfulCorpus == lastSuccessfulCorpus,
+                  "collision a remplacé l'empreinte du dernier succès")
+        try check(try records().count == 1 && records()[0].notesWritten == 0,
+                  "collision a comptabilisé des notes écrites")
+        try check(NotesCurationService.shared.lastOutcome?.hasPrefix("non appliquée") == true,
+                  "collision n'a pas été refusée avant la bascule")
+        let staging = try fm.contentsOfDirectory(atPath: BridgePaths.learningDirectory.path)
+            .filter { $0.hasPrefix(".notes-staging-") }
+        try check(staging.isEmpty, "staging abandonné malgré sources et checkpoint conservés")
+        return checkpoint
+    }
+    @MainActor static func main() async {
+        do { try await run() }
+        catch let error as Failure {
+            FileHandle.standardError.write(Data("FAIL: \(error.description)\n".utf8))
+            exit(1)
+        } catch {
+            FileHandle.standardError.write(Data("ERROR: \(error)\n".utf8))
+            exit(2)
+        }
+    }
+    @MainActor static func run() async throws {
         let scenario = CommandLine.arguments[1]
         let provider = AgentProvider(rawValue: CommandLine.arguments[2])!
         let fm = FileManager.default
-        let cold = ["cold-resume", "cold-target", "cold-opt-out", "cold-added", "cold-modified", "cold-deleted", "crash-resume", "crash-refusal"].contains(scenario)
+        let cold = ["cold-resume", "cold-target", "cold-opt-out", "cold-added", "cold-modified", "cold-deleted", "crash-resume", "crash-refusal", "collision-retry", "collision-resume"].contains(scenario)
         if !cold { try seed() }
+        if scenario == "collision-seed" {
+            try collisionBytes.write(to: BridgePaths.learningNotesDirectory.appendingPathComponent(collisionName))
+            // Le clic manuel doit préserver une empreinte réussie antérieure
+            // même si sa nouvelle tentative rencontre un fichier inconnu.
+            var state = try JSONSerialization.jsonObject(with: Data(contentsOf: stateURL)) as! [String: Any]
+            state["lastSuccessfulCorpus"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(previousSuccess))
+            try JSONSerialization.data(withJSONObject: state).write(to: stateURL)
+        }
         if scenario == "crash-seed-same-names" {
             for (index, name) in ["one.md", "two.md"].enumerated() {
                 try fm.moveItem(at: BridgePaths.learningNotesDirectory.appendingPathComponent(name),
@@ -229,7 +309,55 @@ import AtollCore
                 }
             }
         }
-        if scenario == "archive-seed" || scenario == "warm-resume" || scenario.hasPrefix("crash-seed-") {
+        if scenario.hasPrefix("collision-") {
+            let evidenceURL = root.appendingPathComponent("collision-evidence.json")
+            var callbacks = 0
+            var forgotten: [String] = []
+            var indexed: [URL] = []
+            service.onNotesReplaced = { callbacks += 1; forgotten = $0; indexed = $1 }
+            if scenario == "collision-seed" {
+                let sources = try Dictionary(uniqueKeysWithValues: NotesCurationService.readNotes().map {
+                    ($0.name, try Data(contentsOf: BridgePaths.learningNotesDirectory.appendingPathComponent($0.name)))
+                })
+                service.curateNow()
+                try await finished()
+                let checkpoint = try verifyCollision(sources: sources, lastSuccessfulCorpus: previousSuccess)
+                try check(callbacks == 0, "collision a modifié l'index")
+                try check(launches() == beforeSpawns + 1, "fixture collision n'a pas exécuté son analyse initiale")
+                let evidence = CollisionEvidence(sources: sources, lastSuccessfulCorpus: previousSuccess,
+                                                 checkpoint: checkpoint, receipt: try records()[0])
+                try JSONEncoder().encode(evidence).write(to: evidenceURL)
+            } else {
+                let evidence = try JSONDecoder().decode(CollisionEvidence.self, from: Data(contentsOf: evidenceURL))
+                configure(provider == .claude ? .codex : .claude, blocked: true)
+                Resolver.entered = false
+                let preserved = root.appendingPathComponent("note-inconnue-conservee")
+                if scenario == "collision-resume" {
+                    // Résolution explicite de la collision par la fixture,
+                    // jamais une suppression ou un renommage par le service.
+                    try fm.moveItem(at: BridgePaths.learningNotesDirectory.appendingPathComponent(collisionName), to: preserved)
+                }
+                service.curateNow()
+                try await finished()
+                try check(launches() == beforeSpawns && !Resolver.entered, "collision a relancé un CLI en reprise locale")
+                if scenario == "collision-retry" {
+                    _ = try verifyCollision(sources: evidence.sources, lastSuccessfulCorpus: evidence.lastSuccessfulCorpus,
+                                            previousCheckpoint: evidence.checkpoint)
+                    try check(callbacks == 0, "collision persistante a modifié l'index")
+                    let encoder = JSONEncoder()
+                    encoder.outputFormatting = .sortedKeys
+                    try check(try encoder.encode(records()[0]) == encoder.encode(evidence.receipt),
+                              "collision persistante a altéré le reçu de dépense")
+                } else {
+                    try verifyCompleted(evidence.checkpoint, before: evidence.receipt)
+                    try check(try Data(contentsOf: preserved) == collisionBytes, "reprise a altéré la note écartée explicitement")
+                    try check(callbacks == 1 && Set(forgotten) == Set(evidence.sources.keys.map {
+                        BridgePaths.learningNotesDirectory.appendingPathComponent($0).path
+                    }) && Set(indexed.map(\.lastPathComponent)) == Set(NotesCurationService.readNotes().map(\.name)),
+                              "reprise de collision a perdu la mise à jour de l'index")
+                }
+            }
+        } else if scenario == "archive-seed" || scenario == "warm-resume" || scenario.hasPrefix("crash-seed-") {
             let checkpoint = try await archiveFailure()
             if scenario.hasPrefix("crash-seed-") {
                 try stageCrash(String(scenario.dropFirst("crash-seed-".count)), checkpoint: checkpoint)

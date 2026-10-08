@@ -5,11 +5,12 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 
 REPO = Path(__file__).resolve().parent.parent
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument("--sabotage", choices=["checkpoint", "fingerprint", "swap-recovery", "swap-proof", "swap-marker", "swap-marker-write"])
+parser.add_argument("--sabotage", choices=["checkpoint", "fingerprint", "swap-recovery", "swap-proof", "swap-marker", "swap-marker-write", "collision-preflight", "collision-preservation"])
 parser.add_argument("--output", type=Path)
 parser.add_argument("--build-dir", type=Path, help="Réutiliser une compilation Core existante, sans lancer SwiftPM.")
 parser.add_argument("--build-system", choices=["native", "swiftbuild"], default="native")
@@ -32,8 +33,36 @@ if not objects or not modules.is_dir():
 service = REPO / "App/NotesCurationService.swift"
 expected_failure = None
 if args.sabotage:
+    # Un échec préexistant ne prouve jamais que la mutation est détectée.
+    subprocess.run([sys.executable, str(Path(__file__).resolve()), "--build-dir", str(build),
+                    "--output", str(work / "baseline.json")], check=True)
     text = service.read_text()
-    if args.sabotage == "checkpoint":
+    if args.sabotage in ["collision-preflight", "collision-preservation"]:
+        needle = r'''            let sourceNames = Set(previous.map(\.name))
+            for note in plan.newNotes where !sourceNames.contains(note.fileName) {
+                if fm.fileExists(atPath: notesDirectory.appendingPathComponent(note.fileName).path) {
+                    throw CurationError.destinationCollision(note.fileName)
+                }
+            }
+'''
+        if text.count(needle) != 1:
+            raise SystemExit("Couture de collision ambiguë ou absente")
+        text = text.replace(needle, "")
+        expected_failure = "collision n'a pas été refusée avant la bascule"
+        if args.sabotage == "collision-preservation":
+            needle = "                try fm.moveItem(at: staging.appendingPathComponent(note.fileName), to: destination)"
+            legacy = r'''                if fm.fileExists(atPath: destination.path) {
+                    let orphan = notesDirectory.appendingPathComponent("\(note.fileName).orphan-\(stamp)")
+                    if (try? fm.moveItem(at: destination, to: orphan)) == nil {
+                        try? fm.removeItem(at: destination)
+                    }
+                }
+'''
+            if text.count(needle) != 1:
+                raise SystemExit("Couture de déplacement ambiguë ou absente")
+            text = text.replace(needle, legacy + needle)
+            expected_failure = "collision a déplacé ou détruit la note non archivée"
+    elif args.sabotage == "checkpoint":
         needle = "try Self.checkpointStore.save(checkpoint)"
         if text.count(needle) != 1:
             raise SystemExit("Couture checkpoint ambiguë ou absente")
@@ -95,6 +124,8 @@ for provider in ["claude", "codex"]:
                                                "before-delete-external-deleted", "before-delete-empty-staging", "marker-absent", "marker-invalid"] else "crash-resume"
         cases.extend([(provider, "crash-seed-" + boundary, "crash-" + boundary),
                       (provider, follow, "crash-" + boundary)])
+    cases.extend((provider, scenario, "collision")
+                 for scenario in ["collision-seed", "collision-retry", "collision-resume"])
 results = []
 for provider, scenario, folder in cases:
     fixture = work / f"{provider}-{folder}"
@@ -102,7 +133,7 @@ for provider, scenario, folder in cases:
     env = dict(os.environ, ATOLL_RUNTIME_TEST_ROOT=str(fixture), ZDOTDIR=str(fixture))
     run = subprocess.run([str(binary), scenario, provider], env=env, text=True, capture_output=True, timeout=30)
     if run.returncode:
-        if expected_failure and expected_failure in run.stderr:
+        if expected_failure and run.returncode == 1 and run.stderr.strip() == "FAIL: " + expected_failure:
             print("PASS sabotage compilé détecté : " + expected_failure, flush=True)
             break
         raise SystemExit(run.stdout + run.stderr)
