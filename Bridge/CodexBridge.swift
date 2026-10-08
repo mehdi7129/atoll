@@ -79,7 +79,7 @@ enum CodexBridge {
         if isPermissionRequest,
            let decision = CodexPermissionDecision.decode(outcome.reply),
            let json = decision.hookOutput() {
-            FileHandle.standardOutput.write(json)
+            _ = replyToStdout(json)
         }
 
         // FILET SONORE — même discipline que le helper Claude, et pour la même
