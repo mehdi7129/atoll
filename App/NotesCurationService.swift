@@ -203,6 +203,31 @@ final class NotesCurationService {
         if process == nil { phase = .idle }
     }
 
+    /// Une collecte bornée peut rendre la main sans pouvoir tuer un enfant
+    /// dont l’identité est devenue illisible. Il reste propriétaire du budget
+    /// et du PID jusqu’à sa sortie réelle, sans bloquer le MainActor.
+    private func finishExecution(_ lease: UUID) {
+        let outcome = lastOutcome ?? "cancelled"
+        let release = {
+            if let process = self.process {
+                SessionStore.shared.unregisterInternalPid(process.processIdentifier)
+            }
+            self.process = nil
+            self.processIdentity = nil
+            AnalysisBudget.shared.finish(lease, outcome: outcome)
+            self.activeExecution = nil
+            self.activeLease = nil
+        }
+        if let process, process.isRunning {
+            Task { @MainActor in
+                while process.isRunning { try? await Task.sleep(for: .milliseconds(100)) }
+                release()
+            }
+        } else {
+            release()
+        }
+    }
+
     private func terminateWithEscalation() {
         outputTask?.cancel()
         guard let identity = processIdentity else { return }
@@ -264,11 +289,7 @@ final class NotesCurationService {
         }
         activeExecution = execution
         activeLease = lease
-        defer {
-            AnalysisBudget.shared.finish(lease, outcome: lastOutcome ?? "cancelled")
-            activeExecution = nil
-            activeLease = nil
-        }
+        defer { finishExecution(lease) }
         let provider = execution.provider
         let userPrompt = NotesCurationPrompt.userPrompt(notes: notes)
         AnalysisBudget.shared.updateMetrics(lease, promptCharacters: provider == .codex
@@ -1028,9 +1049,7 @@ final class NotesCurationService {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         AnalysisBudget.shared.recordUsage(lease, stdout: output)
         outputTask = nil
-        SessionStore.shared.unregisterInternalPid(pid)
-        self.process = nil
-        processIdentity = nil
+
         guard runGeneration == generation, !Task.isCancelled else { return nil }
 
         let status = result.status ?? -1

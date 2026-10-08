@@ -174,6 +174,33 @@ final class RetrospectiveRunner {
         if activeExecution?.provider == .codex || activeOrigin == .codex || activeDestination == .codex { terminateActive() }
     }
 
+    /// Une collecte bornée peut rendre la main sans pouvoir tuer un enfant
+    /// dont l’identité est devenue illisible. Il reste propriétaire du budget
+    /// et du PID jusqu’à sa sortie réelle, sans bloquer le MainActor.
+    private func finishExecution(_ lease: UUID) {
+        let outcome = lastOutcome ?? "cancelled"
+        let release = {
+            if let process = self.process {
+                SessionStore.shared.unregisterInternalPid(process.processIdentifier)
+            }
+            self.process = nil
+            self.processIdentity = nil
+            AnalysisBudget.shared.finish(lease, outcome: outcome)
+            self.activeExecution = nil
+            self.activeOrigin = nil
+            self.activeDestination = nil
+            self.scheduleNext()
+        }
+        if let process, process.isRunning {
+            Task { @MainActor in
+                while process.isRunning { try? await Task.sleep(for: .milliseconds(100)) }
+                release()
+            }
+        } else {
+            release()
+        }
+    }
+
     private func terminateWithEscalation() {
         outputTask?.cancel()
         guard let identity = processIdentity else { return }
@@ -519,12 +546,7 @@ final class RetrospectiveRunner {
         activeExecution = execution
         activeOrigin = job.transcriptProvider
         activeDestination = destination.provider
-        defer {
-            AnalysisBudget.shared.finish(lease, outcome: lastOutcome ?? "cancelled")
-            activeExecution = nil
-            activeOrigin = nil
-            activeDestination = nil
-        }
+        defer { finishExecution(lease) }
         // Le budget commun persiste la préparation puis l’intention de spawn.
         phase = .running(job.snapshot.id)
         lastOutcome = nil
@@ -734,9 +756,7 @@ final class RetrospectiveRunner {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         AnalysisBudget.shared.recordUsage(lease, stdout: output)
         outputTask = nil
-        SessionStore.shared.unregisterInternalPid(pid)
-        self.process = nil
-        processIdentity = nil
+
 
         guard runGeneration == generation, !Task.isCancelled else {
             finish(job, outcome: "failed(cancelled)", transcriptBytes: 0)
