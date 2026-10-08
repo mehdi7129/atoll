@@ -17,11 +17,15 @@ Une réécriture générale serait disproportionnée. La dette est surtout conce
 dans l'orchestration des processus, les transactions disque et les services qui
 combinent état observable, planification, persistance et exécution.
 
-**17 sujets de correction sont retenus**, avec preuve et portée explicites ci-dessous.
+**22 sujets de correction sont retenus**, avec preuve et portée explicites ci-dessous.
+La [contre-relecture de la PR](REVIEW-2026-10-08-counteraudit.md) a ajouté A18–A22
+et corrigé la portée d'A04. Le premier passage en comptait 17.
 Les plus urgents concernent la conservation de fichiers et de leur suivi. Plusieurs
 tests actuels passent parce qu'ils ne croisent pas les conditions qui déclenchent
 ces défauts : restauration *partielle* de hooks, accès temporairement refusé,
 descendant qui conserve un pipe, deux permissions du même outil.
+Un script supplémentaire de préparation Codex échoue et peut annoncer un faux
+succès de sabotage (A22) : le bilan de toutes les validations n'est donc pas vert.
 
 Les simplifications proposées découlent de ces frontières défaillantes. La longueur
 d'un fichier, un singleton ou un `try?` ne constituent pas, seuls, un défaut.
@@ -45,8 +49,11 @@ temporaires ; aucun appel génératif réel, son joué ou lancement de l'app de 
 | Build Xcode Debug, DerivedData isolé | Réussi ; aucun warning Swift, avertissement AppIntents sans dépendance |
 | `Scripts/check-docs.py --no-tests`, avant audit | Réussi ; avertissements de couverture/relecture et rappel des tests sautés |
 | Recherche limitée de secrets dans les textes suivis ≤ 2 Mo | Aucun motif de clé privée/OpenAI/GitHub détecté ; pas de scan historique ou d'entropie |
+| Contre-audit : `Scripts/test-codex-exec.py --prepare-only` | **Échec** du catalogue factice ; faux succès du sabotage confirmé, même sans mutation — A22 |
+| Contre-audit : `Scripts/test-claude-uninstall.py <helper Debug>` | Quatre modes réussis, homes synthétiques |
+| Contre-audit : `Scripts/test-release-trash.py` | Réussite et sabotage détecté, artefacts synthétiques récupérables |
 
-Cela représente **218 scénarios hors suite Core**. Ces succès établissent la
+Les cinq harnesses du premier passage représentent **218 scénarios hors suite Core**. Ces succès établissent la
 baseline, pas l'absence de défaut. Les probes de cet audit exposent précisément
 des cas non couverts. Leurs sources portables et résultats synthétiques sont dans
 [le dossier de preuves](audits/2026-10-08/README.md).
@@ -96,6 +103,11 @@ une fixture, jamais un incident supposé sur les données de l'utilisateur.
 | [A15](#a15) | P2 | Deux événements partageant un même son système | Identité/volume AppKit reproduits |
 | [A16](#a16) | P3 | Journal et notes périmés dans le panneau ouvert | Source ; GUI non exercée |
 | [A17](#a17) | P2 | Retour IDE annoncé réussi malgré deux échecs | Méthode extraite, collaborateurs factices |
+| [A18](#a18) | P2 | Transcript ignoré après un refus temporaire de lecture | Indexeur réel reproduit, contrôles mtime/suppression |
+| [A19](#a19) | P1 | « Archiver » supprimant le skill après échec de sauvegarde | Store réel, perte d'une ressource synthétique reproduite |
+| [A20](#a20) | P2 | Ancien catalogue réaffiché après changement de projet/binaire | Méthodes extraites, état/CLI contrôlés ; GUI non exercée |
+| [A21](#a21) | P2 | Helper Codex abortant lorsque stdout est fermé | Bridge réel, contrôle avec writer existant |
+| [A22](#a22) | P2 | Test de préparation Codex périmé et faux succès de sabotage | Harness réel et contre-épreuves en copies temporaires |
 
 ### A01
 
@@ -155,9 +167,17 @@ Probe : l'ancien marqueur reste cherchable dans les deux documents ; les nouveau
       avec détection adaptée ; garder le chemin append-only des JSONL séparé.
 - [ ] Tester taille égale, croissance, réduction, remplacement atomique, échec de
       transaction et répétition inchangée. Aucun doublon ni ancien texte réinjecté.
+- [ ] Traiter une lecture réussie vide/whitespace comme un document désormais vide,
+      distinct d'une lecture échouée : effacer transactionnellement les anciens
+      fragments dans le premier cas, les préserver dans le second.
 
-Les remplacements atomiques changeant l'inode et les réductions de taille fonctionnent
-déjà : le défaut est borné aux éditions sur place de taille égale ou croissante.
+**Portée corrigée par le contre-audit :** les remplacements atomiques et réductions
+fonctionnent pour une mémoire de projet finale **non vide après trim**. Si elle est
+vidée ou réduite à du whitespace, le guard de `indexProjectMemory` à la ligne 472
+retourne avant `openFile` : l'ancien texte reste cherchable, même avec un inode neuf
+et après reset du worker. La fixture conserve un hit périmé dans chacun de ces cas ;
+la réduction non vide témoin remplace correctement le texte. Cette seconde branche
+concerne la mémoire de projet, pas le guard du chemin des notes d'apprentissage.
 
 ### A05
 
@@ -344,6 +364,103 @@ C'est une preuve de faux succès possible, pas une mesure du focus Cursor réel.
 - [ ] Tester spawn échoué, exit non nul, activation refusée et fallback réussi ;
       garder le même bouton et la résolution de workspace existante.
 
+### A18
+
+**Retenter une ouverture refusée à la prochaine passe existante.**
+[MemoryIndexer.swift:550](https://github.com/mehdi7129/atoll/blob/a1c7d6999d6921906f26c405fc4f48e7bde30e91/App/MemoryIndexer.swift#L550)
+pose le même `lastSeen` lorsque le fichier est déjà lu ou lorsque `FileHandle`
+ne peut pas s'ouvrir. Une lecture refusée puis rétablie, sans changement du triplet
+inode/taille/mtime, reste ignorée par le scan et le nudge. Fixture réelle : zéro hit
+après rétablissement ; changer seulement le mtime donne un hit. Le fichier survit.
+
+- [ ] Séparer fin de fichier et échec d'ouverture ; ne mémoriser la lecture réussie
+      qu'après succès. Examiner aussi les erreurs de seek/read actuellement masquées,
+      sans les confondre avec EOF ; elles n'ont pas été injectées dans ce probe.
+- [ ] Tester accès refusé/rétabli à métadonnées égales, scan et nudge, offsets conservés
+      et absence de réingestion après succès. Préserver cadence et déduplication.
+
+Une vraie suppression après indexation conserve bien la mémoire historique avec
+`missing=1` : ce contrôle nominal doit rester distinct d'un accès temporairement refusé.
+
+### A19
+
+**Ne finaliser « Archiver » qu'après conservation du dossier installé.**
+[LearnedSkillStore.swift:358](https://github.com/mehdi7129/atoll/blob/a1c7d6999d6921906f26c405fc4f48e7bde30e91/AtollCore/Sources/AtollCore/LearnedSkillStore.swift#L358)
+ignore l'échec d'`archiveDirectory` puis supprime le dossier et son entrée du manifeste.
+Le bouton « Archiver » appelle ce chemin. Une ressource ajoutée après approbation
+est perdue si le parent d'archive est un fichier : zéro copie restante, aucun throw.
+Le témoin avec archive accessible conserve une copie de cette ressource.
+
+- [ ] Propager l'échec d'archive avant tout retrait de source ou de manifeste ;
+      garder le dossier entier, y compris les ressources ajoutées depuis l'installation.
+- [ ] Tester archive impossible, archive partielle et réussite, état du manifeste,
+      ressource unique et retour UI fidèle. Le `try?` suivi de suppression doit
+      réintroduire la perte et faire échouer le futur test.
+
+Le cas reproduit est une faute de fichier synthétique ; aucune perte utilisateur
+supposée. La désinstallation globale `uninstallAll`, dont la politique best-effort
+est explicite, reste un contrat séparé et n'est pas modifiée par ce correctif.
+
+### A20
+
+**Rejeter une réponse de catalogue appartenant à un ancien contexte.**
+[CodexCatalogSection.swift:80](https://github.com/mehdi7129/atoll/blob/a1c7d6999d6921906f26c405fc4f48e7bde30e91/App/CodexCatalogSection.swift#L80)
+capture le `self` de la vue au démarrage ; les comparaisons finales de `projectPath`
+et d'`executableOverride` relisent les mêmes anciennes valeurs. `invalidate()` vide
+l'état partagé mais n'invalide pas la tâche. La vue parente conserve l'identité de
+la section lorsque le projet ou le binaire change.
+
+Les méthodes extraites sans changement de corps, avec état/CLI contrôlés, montrent
+un panneau de projet B recevant le skill du projet A, et le même défaut pour le
+binaire. C'est une preuve de la logique d'état, pas une recette SwiftUI réelle.
+
+- [ ] Identifier chaque chargement par une révision du contexte courant et rejeter
+      toute réponse antérieure, même après annulation ; inclure projet, binaire et home.
+- [ ] Tester A→B pendant lecture, erreur tardive, succès normal et changement de home
+      après chargement. Aucun appel automatique supplémentaire ni nouveau contrôle UI.
+
+Le garde du home **en vol** fonctionne dans le témoin. Le catalogue déjà chargé
+ne possède pas d'invalidation au changement de home : sous-cas constaté dans la
+source, à vérifier en GUI lors du correctif, sans l'assimiler au témoin en vol.
+
+### A21
+
+**Écrire la réponse du helper Codex sans exception si le lecteur a disparu.**
+[CodexBridge.swift:80](https://github.com/mehdi7129/atoll/blob/a1c7d6999d6921906f26c405fc4f48e7bde30e91/Bridge/CodexBridge.swift#L80)
+utilise `FileHandle.standardOutput.write`. Ignorer SIGPIPE ne suffit pas : pipe aval
+fermé, le bridge réel abort avec `NSFileHandleOperationException`/Broken pipe et
+exit signal 6 ; pipe ouvert, il rend bien le JSON attendu et exit 0.
+
+- [ ] Réutiliser le writer POSIX fail-open déjà employé côté Claude, sans changer
+      validation des décisions ni format du JSON. Sa contre-épreuve temporaire
+      rend le même JSON avec lecteur ouvert et exit 0 avec lecteur fermé.
+- [ ] Tester lecteur absent, écritures partielles/interrompues et décision valide ;
+      aucun diagnostic ni exception sur stdout du hook.
+
+Le transport vers l'app est simulé. Cette reproduction d'une disparition du lecteur
+ne démontre pas qu'une session CLI encore active a été interrompue en production.
+
+### A22
+
+**Réparer le faux CLI et rendre le verdict de sabotage causal.**
+[test-codex-exec.py:62](https://github.com/mehdi7129/atoll/blob/a1c7d6999d6921906f26c405fc4f48e7bde30e91/Scripts/test-codex-exec.py#L62)
+attend `app-server --listen stdio://` exactement, et rejette le préfixe
+`-c features.plugins=false` ajouté pour la lecture des modèles. `--prepare-only`
+échoue avant la préparation. Le mode sabotage accepte pourtant cette erreur
+générique et annonce une détection du fichier d'instructions manquant.
+
+Contre-épreuve : le mode sabotage affiche encore PASS quand la copie du produit
+reste **strictement non sabotée**. Actualiser seulement les arguments attendus de
+la fixture, dans une copie temporaire, fait passer la préparation nominale. Le
+correctif de stockage produit reste intact ; le défaut démontré est dans son harness.
+
+- [ ] Actualiser le contrat d'arguments factices, exiger un nominal vert avant le
+      sabotage et vérifier la cause précise de l'échec après la mutation.
+- [ ] Exiger qu'un sabotage neutralisé soit rejeté. Inclure ce harness hors ligne
+      dans la commande commune/CI proposée ; séparer les recettes authentifiées.
+
+Ces probes ne corrigent pas `Scripts/test-codex-exec.py` dans cette PR documentaire.
+
 ## Simplifier après avoir caractérisé les contrats
 
 | Lot structurel | Extraction minimale | Justification et garde |
@@ -353,7 +470,7 @@ C'est une preuve de faux succès possible, pas une mesure du focus Cursor réel.
 | Rétrospectives | Isoler le lifecycle des processus sans changer les API de la façade | A09 et exécution dupliquée ; conserver les séparations préparation/livraison existantes, sauf invariant concret à mieux tester |
 | Sessions | Petites transitions de corrélation et snapshot diagnostic immutable | A06 ; éviter des décisions contradictoires entre carte et phase, conserver les autorités Claude/Codex distinctes |
 | Plugins | Ownership des commandes, file des détails, cache versionné, recherche | A12/A13/A14 ; quatre responsabilités aujourd'hui réunies dans PluginInventory |
-| Mémoire | Deux politiques d'ingestion explicites : flux JSONL et document Markdown | A04/A05 ; garder transaction/dédup du flux, rendre le vrai indexeur testable |
+| Mémoire | Deux politiques d'ingestion explicites : flux JSONL et document Markdown | A04/A05/A18 ; garder transaction/dédup du flux, distinguer absence, erreur et contenu vide |
 
 **Pas de framework de services, de conteneur DI global, de nouvelle base de données
 ou de refonte SwiftUI.** Extraire seulement lorsqu'une dépendance ou un invariant
@@ -392,12 +509,14 @@ snapshot que si la mesure justifie sa politique d'invalidation.
 
 ## Ordre de correction proposé
 
-1. **Intégrité** — A01/A02/A03, puis A07/A08 : sources, états et configurations
+0. **Garde de validation** — A22 : nominal et sabotage causal fiables avant de
+   s'appuyer sur ce harness pour les prochains changements Codex.
+1. **Intégrité** — A01/A19, A02/A03, puis A07/A08 : sources, états et configurations
    conservés avant toute simplification. Petits commits séparés par scénario.
 2. **Lifecycle et décisions** — A06, A09/A10/A11, A12 : une décision correctement
-   corrélée, une opération annulée ciblée, une attente bornée.
-3. **Mémoire exacte** — A04/A05 : documents réellement à jour et bon périmètre projet.
-4. **Efficacité et feedback** — A13/A14, A15/A16/A17 : concurrence bornée, données
+   corrélée, une opération annulée ciblée, une attente bornée ; A21 pour le fail-open.
+3. **Mémoire exacte** — A04/A05/A18 : documents à jour, bon périmètre et reprise de lecture.
+4. **Efficacité et feedback** — A13/A14/A20, A15/A16/A17 : concurrence bornée, données
    fraîches et retours conformes aux preuves.
 5. **Entretien** — extractions locales liées aux lots précédents, code mort vérifié,
    commande de validation et documentation raccourcie. Aucune réécriture globale.

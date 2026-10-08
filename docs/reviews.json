@@ -744,6 +744,27 @@
         "App/SoundCenter.swift",
         "App/TerminalJumpService.swift"
       ]
+    },
+    {
+      "date": "2026-10-08",
+      "document": "docs/REVIEW-2026-10-08-counteraudit.md",
+      "depth": "sweep",
+      "note": "Contre-audit de PR8, perimetres permutes : A04 elargi et cinq oublis A18–A22, dont harness hors ligne en echec et faux succes de sabotage. Couverture exacte et limites dans le rapport ; aucun correctif produit.",
+      "files": [
+        "App/MemoryIndexer.swift",
+        "AtollCore/Sources/AtollCore/MemoryIndex.swift",
+        "AtollCore/Sources/AtollCore/LearnedSkillStore.swift",
+        "App/SkillReviewCenter.swift",
+        "App/CodexCatalogSection.swift",
+        "App/CodexSettingsPane.swift",
+        "Bridge/CodexBridge.swift",
+        "Bridge/main.swift",
+        "AtollCore/Sources/AtollCore/CodexReadClient.swift",
+        "Scripts/test-codex-exec.py",
+        "Scripts/release.sh",
+        "Scripts/test-release-trash.py",
+        "Scripts/test-claude-uninstall.py"
+      ]
     }
   ]
 }

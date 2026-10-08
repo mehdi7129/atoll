@@ -169,5 +169,20 @@
     "exit_code": 0,
     "warnings": 25,
     "interpretation": "Aucune derive verifiable ; warnings de couverture, fonctions test-only et dist/updates absent dans le worktree. Tests executes separement."
+  },
+  "counteraudit": {
+    "details": "counteraudit/validation.json",
+    "new_findings": [
+      "A18",
+      "A19",
+      "A20",
+      "A21",
+      "A22"
+    ],
+    "amended_scope": [
+      "A04"
+    ],
+    "additional_offline_harness_failed": "Scripts/test-codex-exec.py --prepare-only",
+    "note": "Baseline ci-dessus conservee ; ne pas presenter toutes les validations comme vertes."
   }
 }
