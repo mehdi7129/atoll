@@ -1,8 +1,35 @@
 # HANDOFF — reprendre Atoll
 
-État du **7 octobre 2026**. Fiche courante ; les règles détaillées restent dans
+État du **8 octobre 2026**. Fiche courante ; les règles détaillées restent dans
 [CLAUDE.md](../CLAUDE.md). L'[ancien handoff](HANDOFF-2026-09-10-archive.md) conserve
 les mesures et pièges historiques, sans faire autorité sur l'état actuel.
+
+## Premier jalon de robustesse — fusionné, pas encore publié
+
+Les PR [#9](https://github.com/mehdi7129/atoll/pull/9),
+[#10](https://github.com/mehdi7129/atoll/pull/10) et
+[#11](https://github.com/mehdi7129/atoll/pull/11) sont fusionnées dans cet ordre
+le 8 octobre : `6d259ed`, `923d5db`, puis `65b7d52`.
+
+- [A22](REVIEW-2026-10-08-a22-codex-harness.md) : faux CLI Codex aligné sur les
+  arguments courants, nominal obligatoire et verdict de sabotage précis.
+- [A19](REVIEW-2026-10-08-a19-skill-archive.md) : un échec d'archive conserve
+  le skill installé et son entrée du manifeste pour une nouvelle tentative.
+- [A01](REVIEW-2026-10-08-a01-curation-collision.md) : conflit avec une note
+  non archivée refusé avant bascule, résultat conservé pour reprise locale.
+
+Les fusions locales successives ont passé les tests Codex et leurs cinq
+contre-épreuves, **1 092 tests Core (un skip, zéro échec)**, 104 scénarios de
+récupération et 26 de curation, les sabotages ciblés et un build Debug.
+L'arbre Git final `7cd1fac5474161c0b421b0f8e655e74ad0a89034` est identique
+au témoin testé. Les deux conflits dans `docs/reviews.json` ont été résolus en
+conservant l'historique et les trois entrées ; aucun conflit de code.
+[Relevé d'intégration](audit-support/2026-10-08-milestone1/validation.json).
+
+Cette validation utilise des fixtures privées et les services compilés, sans
+génération authentifiée ni lancement GUI. **La release reste v0.18.4, build 39** :
+ces trois correctifs ne sont pas encore distribués et l'app installée n'a pas
+été remplacée. Les autres constats de l'audit #8 restent à traiter séparément.
 
 ## v0.18.4, build 39 — publiée
 
