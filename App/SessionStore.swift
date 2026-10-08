@@ -267,11 +267,15 @@ final class SessionStore {
         sessions.first { $0.id == id }?.terminalAnchor
     }
 
-    /// Une permission a été auto-approuvée (auto-accept / rockstar) : la session
-    /// n'attend plus, l'outil va s'exécuter → repasser en « busy » (sinon elle
-    /// resterait affichée « en attente d'approbation »).
+    /// Une décision ou la fin du helper a résolu une demande. Une autre carte
+    /// de la même session garde toutefois l'attente, même pour le même outil.
     func markAutoApproved(_ sessionID: String) {
         guard let index = sessions.firstIndex(where: { $0.id == sessionID }) else { return }
+        if let request = InteractionCenter.shared.pending.first(where: { $0.sessionID == sessionID }) {
+            sessions[index].phase = .waitingPermission(tool: request.toolSummary ?? request.toolName)
+            scheduleSnapshot()
+            return
+        }
         if case .waitingPermission = sessions[index].phase {
             sessions[index].phase = .busy
             scheduleSnapshot()
@@ -293,21 +297,14 @@ final class SessionStore {
         eventCount += 1
         let now = Date()
 
-        // Course terminal ↔ îlot : un événement de résolution signifie que la
-        // demande a été tranchée ailleurs → annuler nos cartes en attente pour
-        // cette session (fermeture silencieuse, le terminal garde la main).
+        // Seule une progression de la session entière clôt toutes ses cartes.
+        // Une décision d'outil peut concerner une autre demande simultanée.
         switch event.kind {
-        case .permissionDenied, .stop, .sessionEnd, .userPromptSubmit:
-            // Ces quatre-là prouvent que la session a AVANCÉ : plus aucun
-            // dialogue de permission ne peut être en attente.
+        case .stop, .sessionEnd, .userPromptSubmit:
+            // La session a avancé : les demandes du tour précédent sont closes.
             // userPromptSubmit inclus : un nouveau prompt prouve qu'aucun dialogue
             // de permission n'est plus en attente pour cette session.
             InteractionCenter.shared.cancelForSession(event.sessionID)
-        case .postToolUse, .postToolUseFailure:
-            // Un hook d'OUTIL ne prouve rien tout seul : ceux d'un sous-agent
-            // portent le session_id du parent. On ne referme que la carte du
-            // même outil — voir `cancelForSession(_:tool:)`.
-            InteractionCenter.shared.cancelForSession(event.sessionID, tool: event.toolName)
         default:
             break
         }
@@ -380,6 +377,14 @@ final class SessionStore {
             sessions.append(session)
         }
 
+        // Une fin d'outil, même homonyme, ne résout aucune autre demande. Le
+        // reducer pur ne connaît pas les connexions vivantes ; la carte réelle
+        // reste donc l'autorité pour l'attente de cette session.
+        if let index = sessions.firstIndex(where: { $0.id == event.sessionID }),
+           sessions[index].phase.isAlive,
+           let request = InteractionCenter.shared.pending.first(where: { $0.sessionID == event.sessionID }) {
+            sessions[index].phase = .waitingPermission(tool: request.toolSummary ?? request.toolName)
+        }
         scheduleSnapshot()
     }
 

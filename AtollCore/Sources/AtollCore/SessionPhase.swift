@@ -35,39 +35,10 @@ public enum SessionPhase: Equatable, Sendable {
 /// Machine à états pure : (phase, événement) → phase.
 /// Mapping validé sur vibe-notch (docs/research/research-followup-session-liveness.md).
 public enum SessionReducer {
-    /// Cet événement autorise-t-il à QUITTER une attente de décision ?
-    ///
-    /// Hors attente de décision, toujours oui — cette garde ne change rien au
-    /// reste de la machine.
-    ///
-    /// LE DISCRIMINANT EST LE NOM D'OUTIL, pas le résumé. `toolSummary` inclut
-    /// les ARGUMENTS (`Bash(git push)`) : comparer des résumés faisait échouer
-    /// TOUTE sortie légitime — deux appels du même outil n'ont jamais le même
-    /// résumé — et la session serait restée en alerte pour toujours. C'est le
-    /// même discriminant que `InteractionCenter.cancelForSession(_:tool:)`,
-    /// cette fois pour de bon : la carte et la phase se ferment ensemble.
-    ///
-    /// Pourquoi cette garde existe : les hooks d'outil d'un SOUS-AGENT portent
-    /// le `session_id` du PARENT. Sans elle, un sous-agent faisait passer
-    /// `.waitingPermission` à `.busy` — et comme `needsAttention` ne regarde que
-    /// la permission, l'îlot cessait d'alerter pendant qu'un helper restait
-    /// bloqué. `permissionDenied` fait exception : il PROUVE la décision.
-    ///
-    /// ON NE BLOQUE QUE SUR PREUVE POSITIVE — deux noms d'outil présents et
-    /// DIFFÉRENTS. Un événement sans nom exploitable laisse passer.
-    ///
-    /// C'est l'inverse du défaut de la carte (`cancelForSession(_:tool:)`, qui
-    /// n'annule rien sans nom), et l'asymétrie est VOULUE parce que les deux
-    /// erreurs ne coûtent pas la même chose : refermer une carte à tort perd une
-    /// décision que l'utilisateur n'a jamais prise, alors que retenir une alerte
-    /// à tort ne fait que du bruit. La documentation de terrain
-    /// (`docs/research/research-claude-integration.md` l. 15) range `tool_name`
-    /// parmi les champs de `PreToolUse`/`PermissionRequest` et n'attribue à
-    /// `PostToolUse` que `tool_response` : si un `PostToolUse` réel arrivait sans
-    /// nom d'outil, bloquer par défaut aurait retenu l'alerte jusqu'au `Stop`
-    /// suivant — une régression visible, sur une hypothèse non mesurée. La
-    /// défense contre le SOUS-AGENT, elle, ne dépend pas de ce choix : ses
-    /// événements portent bien un nom d'outil, et il est différent.
+    /// Repli de la phase lorsqu'aucune carte vivante ne fournit de preuve.
+    /// Les hooks des sous-agents ne doivent pas masquer une attente du parent.
+    /// Le nom d'outil ne corrèle pas deux demandes identiques : SessionStore
+    /// conserve donc toujours l'attente tant qu'une carte réelle existe.
     private static func mayLeavePermissionWait(_ phase: SessionPhase, _ event: ParsedHookEvent) -> Bool {
         guard case .waitingPermission(let pending) = phase else { return true }
         switch event.kind {
@@ -107,21 +78,8 @@ public enum SessionReducer {
         case .permissionRequest:
             return .waitingPermission(tool: event.toolSummary ?? event.toolName)
         case .postToolUse, .postToolUseFailure, .permissionDenied, .subagentStart, .subagentStop:
-            // UNE ATTENTE DE DÉCISION NE SE QUITTE PAS SUR N'IMPORTE QUOI.
-            //
-            // La v0.16.1 a protégé la CARTE d'être effacée par un sous-agent —
-            // les hooks d'outil d'un sous-agent portent le `session_id` du
-            // PARENT — mais le correctif n'a pas été appliqué à la PHASE. La
-            // carte restait donc affichée pendant que la phase repassait en
-            // `.busy`, et comme `needsAttention` ne regarde QUE la permission,
-            // l'îlot cessait d'alerter alors qu'un helper était toujours bloqué.
-            // Le motif « appliqué à une partie seulement de ses points ».
-            //
-            // Même discriminant que `InteractionCenter.cancelForSession(_:tool:)` :
-            // on ne quitte l'attente que pour le MÊME outil, et l'ambiguïté (un
-            // nom manquant d'un côté ou de l'autre) ne quitte rien.
-            // `permissionDenied` fait exception — il PROUVE que la demande a été
-            // tranchée, quel que soit l'outil rapporté.
+            // Repli sans carte ; SessionStore conserve une demande vivante
+            // indépendamment du nom d'outil et de ces événements anonymes.
             guard mayLeavePermissionWait(phase, event) else { return phase }
             // Un événement de complétion tardif (outil asynchrone terminé après
             // Stop) ne doit pas ré-afficher un spinner sans porte de sortie.

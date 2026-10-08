@@ -84,7 +84,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let store = SessionStore.shared
         let server = BridgeServer(
             onEvent: { event, requestID in
-                Task { @MainActor in
+                MainActor.assumeIsolated {
                     // apply() AVANT register() : la machine à états pose d'abord
                     // waitingPermission ; si register auto-approuve (rockstar/auto),
                     // il ré-avance la phase — sinon la carte reste en attente.
@@ -103,6 +103,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 Task { @MainActor in
                     SessionStore.shared.serverRunning = running
                 }
+            },
+            onPendingExpired: { requestID in
+                MainActor.assumeIsolated { InteractionCenter.shared.pendingExpired(requestID) }
             }
         )
         bridgeServer = server
