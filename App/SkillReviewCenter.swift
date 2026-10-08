@@ -41,6 +41,7 @@ final class SkillReviewCenter {
     private(set) var installed: [InstalledSkillRow] = []
     private(set) var reconcileNotes: [String] = []
     private(set) var lastError: String?
+    @ObservationIgnored private var lastRefreshError: String?
     private(set) var catalogLoading: SkillProposal.ID?
     @ObservationIgnored private var catalogTicket = UUID()
 
@@ -69,10 +70,9 @@ final class SkillReviewCenter {
     /// Recharge propositions + skills installés + stats d'usage.
     func refresh() {
         if CodexPreview.enabled { return }
-        let problems = AgentProvider.allCases.compactMap { provider in
+        var problems = AgentProvider.allCases.compactMap { provider in
             store(for: provider).manifestProblem().map { "\(provider.label) : \($0)" }
         }
-        if !problems.isEmpty { lastError = problems.joined(separator: "\n") }
         proposals = AgentProvider.allCases.flatMap { store(for: $0).discoverProposals() }
             .sorted { ($0.createdAt, $0.id) < ($1.createdAt, $1.id) }
         similarByProposal = similarByProposal.filter { id, _ in proposals.contains { $0.id == id } }
@@ -80,7 +80,9 @@ final class SkillReviewCenter {
         let usage = loadUsage()
         installed = AgentProvider.allCases.flatMap { provider in
             let store = store(for: provider)
-            let userModified = Set(store.reconcile().userModified)
+            let report = store.reconcile()
+            problems += report.accessProblems.map { "\(provider.label) : \($0)" }
+            let userModified = Set(report.userModified)
             return store.installedSkills().map { skill in
             let stat = provider == .claude ? (usage[skill.dirName] ?? usage[skill.slug]) : nil
             return InstalledSkillRow(
@@ -91,6 +93,14 @@ final class SkillReviewCenter {
             )
             }
         }
+        let refreshError = problems.isEmpty ? nil : problems.joined(separator: "\n")
+        if let refreshError {
+            lastError = refreshError
+        } else if lastError == lastRefreshError {
+            // L'accès rétabli ne doit pas effacer une erreur d'action survenue depuis.
+            lastError = nil
+        }
+        lastRefreshError = refreshError
     }
 
     func approve(_ proposal: SkillProposal, force: Bool = false) {

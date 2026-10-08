@@ -66,11 +66,16 @@ public struct LearnedSkillStore {
         public let unmanaged: [String]
         /// Slugs dont le `SKILL.md` sur disque diffère du hash du manifeste.
         public let userModified: [String]
+        /// Erreurs d'accès : le manifeste reste intact, la vérification pourra
+        /// reprendre quand les fichiers seront à nouveau accessibles.
+        public let accessProblems: [String]
 
-        public init(removedFromManifest: [String], unmanaged: [String], userModified: [String]) {
+        public init(removedFromManifest: [String], unmanaged: [String], userModified: [String],
+                    accessProblems: [String] = []) {
             self.removedFromManifest = removedFromManifest
             self.unmanaged = unmanaged
             self.userModified = userModified
+            self.accessProblems = accessProblems
         }
     }
 
@@ -388,52 +393,74 @@ public struct LearnedSkillStore {
         var removedFromManifest: [String] = []
         var userModified: [String] = []
         var unmanaged: [String] = []
+        var accessProblems: [String] = []
+
+        // fileExists confond absence et accès refusé. La racine doit pouvoir
+        // être inventoriée avant de vérifier ses enfants. Son absence reste
+        // tolérée (volume temporairement non monté), sans retirer d'entrée.
+        let children: [URL]?
+        do {
+            children = try fm.contentsOfDirectory(at: skillsRoot,
+                includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])
+        } catch {
+            children = nil
+            if (error as NSError).code != NSFileReadNoSuchFileError || (error as NSError).domain != NSCocoaErrorDomain {
+                accessProblems.append("Dossier des skills inaccessible — manifeste conservé : \(error.localizedDescription)")
+            }
+        }
 
         let manifest = try? readManifestOrThrow()
 
-        if var manifest {
-            // `skillsRoot` absent le temps d'un lancement (volume non monté,
-            // ménage en cours) ferait conclure « aucun dossier » pour TOUTES
-            // les entrées, donc vider le manifeste. Rien ne serait détruit,
-            // mais les skills deviendraient `unmanaged` pour toujours :
-            // `uninstallAll` n'énumère que le manifeste, et une mise à jour
-            // lèverait `collisionWithUnmanagedDirectory`. L'autorité unique
-            // mentirait définitivement, sans réparation possible autrement
-            // qu'à la main. On ne purge donc que si le parent est prouvé là.
-            let rootPresent = fm.fileExists(atPath: skillsRoot.path)
+        if var manifest, children != nil {
             var kept: [InstalledSkill] = []
             for entry in manifest.skills {
                 guard let dir = managedDirectory(for: entry) else {
                     kept.append(entry)   // entrée non validable : on n'y touche pas
                     continue
                 }
-                guard fm.fileExists(atPath: dir.path) else {
-                    if rootPresent { removedFromManifest.append(entry.slug) } else { kept.append(entry) }
+                do {
+                    // Le système de fichiers décide de l'existence du chemin,
+                    // y compris après un renommage de casse sur APFS.
+                    _ = try fm.attributesOfItem(atPath: dir.path)
+                } catch {
+                    let failure = error as NSError
+                    if failure.domain == NSCocoaErrorDomain, failure.code == NSFileReadNoSuchFileError {
+                        removedFromManifest.append(entry.slug)
+                    } else {
+                        kept.append(entry)
+                        accessProblems.append("Dossier « \(entry.dirName) » inaccessible — manifeste conservé : \(error.localizedDescription)")
+                    }
                     continue
                 }
                 kept.append(entry)
-                let diskMD = try? String(
-                    contentsOf: dir.appendingPathComponent("SKILL.md"),
-                    encoding: .utf8
-                )
-                if diskMD.map(InstalledSkillsManifest.sha256) != entry.skillSHA256 {
-                    userModified.append(entry.slug)
+                do {
+                    let data = try Data(contentsOf: dir.appendingPathComponent("SKILL.md"))
+                    let diskMD = String(data: data, encoding: .utf8)
+                    if diskMD.map(InstalledSkillsManifest.sha256) != entry.skillSHA256 {
+                        userModified.append(entry.slug)
+                    }
+                } catch {
+                    let failure = error as NSError
+                    if failure.domain == NSCocoaErrorDomain, failure.code == NSFileReadNoSuchFileError {
+                        userModified.append(entry.slug)
+                    } else {
+                        accessProblems.append("Skill « \(entry.slug) » inaccessible — manifeste conservé : \(error.localizedDescription)")
+                    }
                 }
             }
-            if !removedFromManifest.isEmpty {
+            if accessProblems.isEmpty, !removedFromManifest.isEmpty {
                 manifest.skills = kept
-                try? writeManifest(manifest)
+                do { try writeManifest(manifest) }
+                catch { accessProblems.append("Manifeste des skills non enregistré : \(error.localizedDescription)") }
             }
+            // Une passe incertaine ne valide aucun retrait, même si une autre
+            // entrée était réellement absente. Le rapport décrit le disque écrit.
+            if !accessProblems.isEmpty { removedFromManifest = [] }
         }
 
         // Dossiers atoll-* hors manifeste : signalés, jamais touchés.
         let managedDirNames = Set(installedSkills().map(\.dirName))
-        let children = (try? fm.contentsOfDirectory(
-            at: skillsRoot,
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles]
-        )) ?? []
-        for child in children {
+        for child in children ?? [] {
             let name = child.lastPathComponent
             guard name.hasPrefix(SkillSlug.managedPrefix),
                   // `atoll-recall` est le skill d'INFRASTRUCTURE d'Atoll (posé par
@@ -453,7 +480,8 @@ public struct LearnedSkillStore {
         return ReconcileReport(
             removedFromManifest: removedFromManifest,
             unmanaged: unmanaged,
-            userModified: userModified
+            userModified: userModified,
+            accessProblems: accessProblems
         )
     }
 
