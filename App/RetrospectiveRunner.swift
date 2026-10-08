@@ -21,6 +21,9 @@ final class RetrospectiveRunner {
     private(set) var phase: Phase = .idle
     private(set) var lastOutcome: String?
     private(set) var pendingDeliveryCount = 0
+    /// Invalidation locale des vues, uniquement après une écriture effective.
+    private(set) var journalRevision = 0
+    private(set) var notesRevision = 0
 
     /// Branchement vers l'index mémoire 7a : chaque note écrite est indexée.
     @ObservationIgnored var noteSink: ((URL, RetrospectiveReport.Note) -> Void)?
@@ -815,7 +818,10 @@ final class RetrospectiveRunner {
                 try deliveryStore.save(delivery)
                 pendingDeliveryCount = (try? deliveryStore.pending().count) ?? 1
                 try deliveryStore.apply(&delivery, notesDirectory: BridgePaths.learningNotesDirectory,
-                    proposals: destination.store.proposedDirectory) { [weak self] url, note in self?.noteSink?(url, note) }
+                    proposals: destination.store.proposedDirectory) { [weak self] url, note in
+                        self?.notesRevision &+= 1
+                        self?.noteSink?(url, note)
+                    }
                 try persistReceipt(delivery)
                 try deliveryStore.acknowledge(delivery)
                 pendingDeliveryCount = (try? deliveryStore.pending().count) ?? 0
@@ -891,7 +897,10 @@ final class RetrospectiveRunner {
                         continue
                     }
                     try deliveryStore.apply(&delivery, notesDirectory: BridgePaths.learningNotesDirectory,
-                        proposals: destination.store.proposedDirectory) { [weak self] url, note in self?.noteSink?(url, note) }
+                        proposals: destination.store.proposedDirectory) { [weak self] url, note in
+                        self?.notesRevision &+= 1
+                        self?.noteSink?(url, note)
+                    }
                     try persistReceipt(delivery)
                     try deliveryStore.acknowledge(delivery)
                     recovered = true
@@ -1116,6 +1125,7 @@ final class RetrospectiveRunner {
                 withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
             let data = try JSONEncoder().encode(capped)
             try data.write(to: BridgePaths.learningStateURL, options: .atomic)
+            journalRevision &+= 1
             try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: BridgePaths.learningStateURL.path)
             return true
         } catch {

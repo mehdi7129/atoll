@@ -273,8 +273,10 @@ final class SoundCenter {
             loaded = nil
         case .system(let name):
             // `NSSound(named:)` résout les sons de /System/Library/Sounds et
-            // ~/Library/Sounds. Le nom a été validé « composant nu » au décodage.
-            loaded = NSSound(named: name)
+            // ~/Library/Sounds. Son registre renvoie un singleton : en faire
+            // une copie pour isoler lecture et volume de chaque événement.
+            // Le nom a été validé « composant nu » au décodage.
+            loaded = NSSound(named: name)?.copy() as? NSSound
         case .custom(let file):
             // `file` est validé nu par SoundChoice.decode : pas de remontée de
             // dossier possible ici.

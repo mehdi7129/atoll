@@ -8,9 +8,11 @@ import tempfile
 
 repo = Path(__file__).resolve().parent.parent
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument("--sabotage", choices=["checkpoint", "counts", "material", "dedup", "recovery-progress", "recovery-independent", "reader", "usage", "digest-metrics"])
+parser.add_argument("--sabotage", choices=["checkpoint", "counts", "material", "dedup", "recovery-progress", "recovery-independent", "reader", "usage", "digest-metrics", "journal-revision", "notes-revision"])
 args = parser.parse_args()
 mutations = {
+    "journal-revision": ("journalRevision &+= 1", "journalRevision &+= 0", "A16 journal non notifié", 1),
+    "notes-revision": ("self?.notesRevision &+= 1", "self?.notesRevision &+= 0", "A16 notes non notifiées", 2),
     "usage": ("AnalysisBudget.shared.recordUsage(lease, stdout: output)", "()",
               "usage du runner absent du journal", 1),
     "digest-metrics": ("AnalysisBudget.shared.updateMetrics(lease, digestFragmentsShortened: digest.fragmentsShortened,\n            digestEntriesDropped: digest.entriesDropped, digestSourceReadStopped: digest.sourceReadStopped)",

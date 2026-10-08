@@ -1,5 +1,13 @@
 import Foundation
 import AtollCore
+import Observation
+
+private final class RevisionProbe: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = false
+    var changed: Bool { lock.withLock { value } }
+    func signal() { lock.withLock { value = true } }
+}
 
 @main struct RetrospectiveTests {
     struct Failure: Error { let message: String }
@@ -19,6 +27,13 @@ import AtollCore
         let root = BridgePaths.root
         let fm = FileManager.default
         let runner = RetrospectiveRunner.shared
+        let journalProbe = RevisionProbe(), notesProbe = RevisionProbe()
+        withObservationTracking { _ = runner.journalRevision } onChange: { journalProbe.signal() }
+        withObservationTracking { _ = runner.notesRevision } onChange: { notesProbe.signal() }
+        func checkRevisions(notes: Bool) throws {
+            try check(runner.journalRevision > 0 && journalProbe.changed, "A16 journal non notifié")
+            try check((runner.notesRevision > 0) == notes && notesProbe.changed == notes, "A16 notes non notifiées")
+        }
         let store = RetrospectiveDelivery.Store(learningRoot: BridgePaths.learningDirectory)
         LearningSettings.shared.failoverConfig = .init(enabled: false, preferred: provider)
         LearningSettings.shared.maxPerWindow = 2
@@ -49,6 +64,7 @@ import AtollCore
             try check(try store.pending().count == 1, "reprise partielle acquittée")
             try check((try state()["processed"] as! [Any]).isEmpty && launches() == 1,
                       "reprise partielle traitée ou repayée")
+            try checkRevisions(notes: true)
             print("PASS \(provider.rawValue)/recover-partial")
             return
         }
@@ -73,10 +89,12 @@ import AtollCore
                       "reçu indépendant absent ou échec marqué traité")
             try check(launches() == 1 && runner.lastOutcome?.hasPrefix("failed(delivery)") == true,
                       "erreur partielle masquée ou nouvelle génération")
+            try checkRevisions(notes: true)
             print("PASS \(provider.rawValue)/recover-independent")
             return
         }
         if scenario == "recover" {
+            let notesBefore = (try? fm.contentsOfDirectory(atPath: BridgePaths.learningNotesDirectory.path).count) ?? 0
             // Le modèle et le quota empêcheraient un nouveau run, mais la
             // livraison du résultat déjà sauvegardé doit fonctionner.
             LearningSettings.shared.codexModel = ""
@@ -93,6 +111,7 @@ import AtollCore
             try check(result == (1, 1), "compteurs après reprise incorrects")
             try check(launches() == 1, "nouvelle génération pendant la reprise")
             try check((try state()["processed"] as! [Any]).count == 1, "reçu de reprise absent")
+            try checkRevisions(notes: notesBefore == 0)
             print("PASS \(provider.rawValue)/recover : reprise au redémarrage sans modèle")
             return
         }
@@ -160,6 +179,7 @@ import AtollCore
             await runner.evaluateAndRun(job)
             try check(launches() == 0, "journal corrompu autorise une dépense")
             try check(try Data(contentsOf: BridgePaths.learningStateURL) == Data("{".utf8), "journal corrompu écrasé")
+            try check(!journalProbe.changed && !notesProbe.changed && runner.journalRevision == 0 && runner.notesRevision == 0, "A16 échec de persistance notifié")
             print("PASS \(provider.rawValue)/corrupt-state")
             return
         }
@@ -189,9 +209,11 @@ import AtollCore
                 await runner.evaluateAndRun(job)
                 try check(launches() == 1, "nouvelle analyse malgré une sortie récupérable")
             }
+            try checkRevisions(notes: false)
             print("PASS \(provider.rawValue)/\(scenario)")
             return
         }
+        try checkRevisions(notes: true)
         try check(try counts() == (1, 1), "nominal sans artefacts confirmés")
         struct Journal: Decodable { let records: [AnalysisBudget.Record] }
         let metrics = try JSONDecoder().decode(Journal.self, from: Data(contentsOf:
@@ -206,7 +228,9 @@ import AtollCore
             if scenario == "changed" { appended.append(try record("Nouveau fait validé : utiliser le mode --new-policy.")) }
             try appended.write(to: transcript)
             Resolver.entered = false
+            let previousJournalRevision = runner.journalRevision
             await runner.evaluateAndRun(job)
+            try check(runner.journalRevision > previousJournalRevision, "A16 abstention non notifiée")
             if scenario == "unchanged" {
                 try check(launches() == 1 && !Resolver.entered, "matière identique réanalysée")
                 try check(runner.recentAttempts().first?.decision == "skip(unchangedMaterial)", "skip non expliqué")
