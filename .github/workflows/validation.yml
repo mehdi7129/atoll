@@ -1,0 +1,42 @@
+name: Validation offline
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validation-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  offline:
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+          python3 --version
+      - name: Core, services et documentation
+        run: python3 Scripts/validate-offline.py --profile standard --output "$RUNNER_TEMP/atoll-validation"
+      - name: Rapports et logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-offline
+          path: |
+            ${{ runner.temp }}/atoll-validation/**/*.json
+            ${{ runner.temp }}/atoll-validation/**/*.log
+            !${{ runner.temp }}/atoll-validation/core/**
+            !${{ runner.temp }}/atoll-validation/tmp/**
+          if-no-files-found: warn
+          retention-days: 14

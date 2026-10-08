@@ -13,11 +13,16 @@ import tempfile
 
 parser = argparse.ArgumentParser()
 parser.add_argument("helper", type=Path)
+parser.add_argument("--build-dir", type=Path, help="Réutiliser un produit Core Debug existant.")
 args = parser.parse_args()
 helper = args.helper.resolve(strict=True)
 repo = Path(__file__).resolve().parent.parent
-subprocess.run(["swift", "build", "--package-path", str(repo / "AtollCore")], check=True)
-build = Path(subprocess.check_output(["swift", "build", "--package-path", str(repo / "AtollCore"), "--show-bin-path"], text=True).strip())
+if args.build_dir:
+    build = args.build_dir.resolve()
+else:
+    base = ["swift", "build", "--package-path", str(repo / "AtollCore"), "--build-system", "native"]
+    subprocess.run(base, check=True)
+    build = Path(subprocess.check_output(base + ["--show-bin-path"], text=True).strip())
 with tempfile.TemporaryDirectory(prefix="atoll-install-recall-") as directory:
     root = Path(directory)
     home, codex_home = root / "home", root / "codex home"

@@ -2,17 +2,26 @@
 """Compile les runners réels avec des collaborateurs contrôlés, sans app ni compte."""
 from pathlib import Path
 import os
+import argparse
 import sys
 import subprocess
 import tempfile
 
 repo = Path(__file__).resolve().parent.parent
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--build-dir", type=Path, help="Réutiliser un produit Core Debug existant.")
+args, remaining = parser.parse_known_args()
+if any(not value.startswith("--sabotage-") for value in remaining):
+    parser.error("Argument inconnu")
 if sum(argument.startswith("--sabotage-") for argument in sys.argv) > 1:
     raise SystemExit("Tester un sabotage à la fois.")
-subprocess.run(["swift", "build", "--build-system", "native", "--package-path", str(repo / "AtollCore")], check=True)
-build = Path(subprocess.check_output(
-    ["swift", "build", "--build-system", "native", "--package-path", str(repo / "AtollCore"), "--show-bin-path"],
-    text=True).strip())
+if args.build_dir:
+    build = args.build_dir.resolve()
+else:
+    subprocess.run(["swift", "build", "--build-system", "native", "--package-path", str(repo / "AtollCore")], check=True)
+    build = Path(subprocess.check_output(
+        ["swift", "build", "--build-system", "native", "--package-path", str(repo / "AtollCore"), "--show-bin-path"],
+        text=True).strip())
 with tempfile.TemporaryDirectory(prefix="atoll-runtime-") as directory:
     root = Path(directory)
     binary = root / "runtime-tests"

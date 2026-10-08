@@ -24,6 +24,7 @@ parser.add_argument("--output", type=Path)
 parser.add_argument("--model", help="Identifiant exact, vérifié dans le catalogue natif")
 parser.add_argument("--sabotage-instructions-file", action="store_true",
                     help="Contre-épreuve hors ligne : après un nominal vert, omettre le fichier dans une copie compilée")
+parser.add_argument("--build-dir", type=Path, help="Réutiliser un produit Core Debug existant.")
 args = parser.parse_args()
 if args.sabotage_instructions_file and not args.prepare_only:
     parser.error("Le sabotage exige --prepare-only : aucun appel modèle.")
@@ -34,9 +35,13 @@ if args.live and (not codex or not (args.home / "auth.json").is_file()):
 version = subprocess.check_output([codex, "--version"], text=True).strip() if args.live else None
 if version:
     print(version, flush=True)
-build_command = ["swift", "build", "--package-path", str(repo / "AtollCore"), "--build-system", "native", "--jobs", "4"]
-subprocess.run(build_command, check=True, timeout=180)
-build = Path(subprocess.check_output(build_command + ["--show-bin-path"], text=True, timeout=30).strip())
+if args.build_dir:
+    build = args.build_dir.resolve()
+else:
+    build_command = ["swift", "build", "--package-path", str(repo / "AtollCore"), "--build-system", "native", "--jobs", "4"]
+    subprocess.run(build_command, check=True, timeout=180)
+    build = Path(subprocess.check_output(build_command + ["--show-bin-path"], text=True, timeout=30).strip())
+
 with tempfile.TemporaryDirectory(prefix="atoll-live-exec-") as directory:
     root = Path(directory)
     home, project, profile = (root / name for name in ["codex home", "project", "profile"])

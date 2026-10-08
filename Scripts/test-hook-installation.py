@@ -47,6 +47,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--sabotage", action="store_true")
+    parser.add_argument("--build-dir", type=Path, help="Réutiliser un produit Core Debug existant.")
+    parser.add_argument("--lifecycle", action="store_true", help="Exercer aussi installation/recall/retrait Codex privés.")
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
     inputs = ["AtollCore/Sources/AtollCore/HookSettingsEditor.swift",
@@ -70,8 +72,11 @@ def main():
         root = Path(temporary)
         build_args = ["swift", "build", "--package-path", REPO / "AtollCore",
                       "--build-system", "native", "--scratch-path", root / "core", "--jobs", "4"]
-        command(build_args, "core-build")
-        build = Path(command(build_args + ["--show-bin-path"], "core-path").strip())
+        if args.build_dir:
+            build = args.build_dir.resolve()
+        else:
+            command(build_args, "core-build")
+            build = Path(command(build_args + ["--show-bin-path"], "core-path").strip())
         link = ["swiftc", "-swift-version", "5", "-I", build / "Modules", "-lsqlite3",
                 "-import-objc-header", REPO / "Shared/BridgingHeader.h"]
         objects = sorted((build / "AtollCore.build").glob("*.o"))
@@ -210,6 +215,9 @@ def main():
 
         command(["python3", REPO / "Scripts/test-claude-uninstall.py", helper], "existing-uninstall")
         summary["existing_uninstall_scenarios"] = 4
+        if args.lifecycle:
+            command(["python3", REPO / "Scripts/test-codex-install-recall.py", helper, "--build-dir", build], "codex-lifecycle")
+            summary["codex_lifecycle"] = "passed"
         if args.sabotage:
             source = (REPO / "Bridge/main.swift").read_text()
             guard = "                || HookSettingsEditor.hasDuplicateManagedHooks(in: current)\n"
