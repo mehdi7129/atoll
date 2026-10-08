@@ -3,6 +3,7 @@
 import argparse
 import os
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -10,10 +11,21 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--sabotage-stale-catalog", action="store_true")
 parser.add_argument("--sabotage-stale-error", action="store_true")
 parser.add_argument("--sabotage-loading", action="store_true")
+parser.add_argument("--sabotage-access-error", action="store_true")
+parser.add_argument("--sabotage-access-recovery", action="store_true")
+parser.add_argument("--sabotage-access-clear", action="store_true")
+parser.add_argument("--build-dir", type=Path, help="Réutiliser une compilation Core existante.")
 args = parser.parse_args()
 repo = Path(__file__).resolve().parent.parent
-subprocess.run(["swift", "build", "--package-path", str(repo / "AtollCore")], check=True)
-build = Path(subprocess.check_output(["swift", "build", "--package-path", str(repo / "AtollCore"), "--show-bin-path"], text=True).strip())
+if args.build_dir:
+    build = args.build_dir.resolve()
+else:
+    command = ["swift", "build", "--package-path", str(repo / "AtollCore"), "--build-system", "native"]
+    subprocess.run(command, check=True)
+    build = Path(subprocess.check_output(command + ["--show-bin-path"], text=True).strip())
+if args.sabotage_access_error or args.sabotage_access_recovery or args.sabotage_access_clear:
+    # Une panne préexistante ne doit pas passer pour un sabotage détecté.
+    subprocess.run([sys.executable, str(Path(__file__).resolve()), "--build-dir", str(build)], check=True)
 with tempfile.TemporaryDirectory(prefix="atoll-review-runtime-") as directory:
     root = Path(directory)
     home = root / "home"
@@ -118,6 +130,59 @@ struct SkillDestination: Equatable {
         await next.value
         precondition(center.catalogLoading == nil)
         print("PASS fin d'une ancienne lecture ne masque pas la suivante")
+
+        let fm = FileManager.default
+        for provider in AgentProvider.allCases {
+            let store = LearnedSkillStore(destination: provider)
+            let directory = store.proposedDirectory.appendingPathComponent("access-fixture")
+            try fm.createDirectory(at: directory, withIntermediateDirectories: true)
+            let metadata = """
+            {"v":1,"slug":"access-fixture","title":"Fixture","description":"Fixture privée","source_session":"fixture","created_at":"2026-10-08T00:00:00Z","status":"proposed","flags":[],"destination":"\(provider.rawValue)"}
+            """
+            try Data(metadata.utf8).write(to: directory.appendingPathComponent("meta.json"))
+            try Data("# Fixture privée".utf8).write(to: directory.appendingPathComponent("SKILL.md"))
+            let entry = try store.approve(store.discoverProposals().first!)
+            _ = store.reconcile()
+            let manifest = try Data(contentsOf: store.manifestURL)
+            let rowID = "\(provider.rawValue):\(entry.slug)"
+            // Une proposition de mise à jour reste disponible pour tester une
+            // erreur de catalogue indépendante de l'accès au skill installé.
+            try fm.createDirectory(at: directory, withIntermediateDirectories: true)
+            try Data(metadata.utf8).write(to: directory.appendingPathComponent("meta.json"))
+            try Data("# Fixture privée".utf8).write(to: directory.appendingPathComponent("SKILL.md"))
+            let pendingProposal = store.discoverProposals().first!
+            center.refresh()
+            precondition(center.installed.contains { $0.id == rowID })
+            defer { try? fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: store.skillsRoot.path) }
+            try fm.setAttributes([.posixPermissions: 0o000], ofItemAtPath: store.skillsRoot.path)
+            center.refresh()
+            precondition(center.installed.contains { $0.id == rowID && !$0.userModified }, "skill indisponible perdu ou annoncé modifié")
+            precondition(center.lastError?.contains(provider.label) == true, "erreur accès skills non exposée")
+            let preservedManifest = try Data(contentsOf: store.manifestURL)
+            precondition(preservedManifest == manifest)
+            print("PASS \(provider.rawValue) : accès refusé signalé, skill conservé dans le centre réel")
+            try fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: store.skillsRoot.path)
+            center.refresh()
+            precondition(center.lastError == nil, "erreur accès skills persiste après réparation")
+            print("PASS \(provider.rawValue) : diagnostic effacé après réparation")
+
+            try fm.setAttributes([.posixPermissions: 0o000], ofItemAtPath: store.skillsRoot.path)
+            center.refresh()
+            task = Task { await center.preloadCatalog(for: pendingProposal) }
+            try await waitForCatalog()
+            CatalogProbe.fail()
+            await task.value
+            let actionError = center.lastError
+            precondition(actionError == "Erreur de l'ancien catalogue")
+            try fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: store.skillsRoot.path)
+            center.refresh()
+            precondition(center.lastError == actionError, "réparation accès a effacé une erreur d'action")
+            print("PASS \(provider.rawValue) : réparation conserve une erreur d'action ultérieure")
+            task = Task { await center.preloadCatalog(for: pendingProposal) }
+            try await waitForCatalog()
+            CatalogProbe.finish([])
+            await task.value
+        }
     }
 }
 ''')
@@ -143,6 +208,27 @@ struct SkillDestination: Equatable {
         assert text.count(needle) == 1
         altered.write_text(text.replace(needle, "if catalogLoading == proposal.id { catalogLoading = nil }"))
         center = altered
+    if args.sabotage_access_error:
+        altered = root / center.name
+        text = center.read_text()
+        needle = 'problems += report.accessProblems.map { "\\(provider.label) : \\($0)" }'
+        assert text.count(needle) == 1
+        altered.write_text(text.replace(needle, "// sabotage : erreur d'accès ignorée"))
+        center = altered
+    if args.sabotage_access_recovery:
+        altered = root / center.name
+        text = center.read_text()
+        needle = "} else if lastError == lastRefreshError {"
+        assert text.count(needle) == 1
+        altered.write_text(text.replace(needle, "} else if refreshError == nil {"))
+        center = altered
+    if args.sabotage_access_clear:
+        altered = root / center.name
+        text = center.read_text()
+        needle = "} else if lastError == lastRefreshError {"
+        assert text.count(needle) == 1
+        altered.write_text(text.replace(needle, "} else if false {"))
+        center = altered
     binary = root / "review-test"
     command = ["swiftc", "-D", "DEBUG", "-parse-as-library", "-I", str(build / "Modules"), "-lsqlite3", str(source), str(center)]
     command += [str(path) for path in sorted((build / "AtollCore.build").glob("*.o"))]
@@ -158,5 +244,14 @@ struct SkillDestination: Equatable {
     elif args.sabotage_loading:
         assert result.returncode != 0 and "ancienne tâche a effacé le chargement courant" in result.stderr, result.stderr
         print("PASS sabotage : chargement concurrent masqué détecté")
+    elif args.sabotage_access_error:
+        assert result.returncode != 0 and "erreur accès skills non exposée" in result.stderr, result.stderr
+        print("PASS sabotage : diagnostic d'accès absent détecté")
+    elif args.sabotage_access_recovery:
+        assert result.returncode != 0 and "réparation accès a effacé une erreur d'action" in result.stderr, result.stderr
+        print("PASS sabotage : erreur d'action effacée à tort détectée")
+    elif args.sabotage_access_clear:
+        assert result.returncode != 0 and "erreur accès skills persiste après réparation" in result.stderr, result.stderr
+        print("PASS sabotage : diagnostic résolu mais conservé détecté")
     elif result.returncode:
         raise SystemExit(result.stderr)
