@@ -721,6 +721,17 @@
         "App/CodexService.swift",
         "Scripts/test-codex-read-storage.py"
       ]
+    },
+    {
+      "date": "2026-10-08",
+      "document": "docs/REVIEW-2026-10-08-a01-curation-collision.md",
+      "depth": "sweep",
+      "note": "Relecture ciblée A01 du refus de collision avant bascule, restauration et reprise locale ; tests déterministes et sabotages compilés, sans relecture intégrale du service.",
+      "files": [
+        "App/NotesCurationService.swift",
+        "Scripts/learning-tests/CurationRecoveryMain.swift",
+        "Scripts/test-curation-recovery.py"
+      ]
     }
   ]
 }

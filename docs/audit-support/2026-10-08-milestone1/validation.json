@@ -1,0 +1,44 @@
+{
+  "base": "a1c7d6999d6921906f26c405fc4f48e7bde30e91",
+  "scope": "Combined A22/A19/A01 product and harness changes in an isolated integration worktree; no merge, release or GUI launch.",
+  "commits": {
+    "A22": "90d71d9ff0d027458a94790f40fa5b4bc1e5b462",
+    "A19": "abf4d00237ccae88a2f00e2c727032ae68e0d9e3",
+    "A01": "File SHA256 values below; recorded before commit."
+  },
+  "sourceSHA256": {
+    "Scripts/test-codex-exec.py": "18d3b9ef28511b56ed3c2f1f36ba7adec58dbcbc8ecfc34435c41faa71f14123",
+    "Scripts/test-codex-exec-verdict.py": "3146636083843d93c9deaa8d0592b7a791c396873486572ede71fd541217acf3",
+    "AtollCore/Sources/AtollCore/LearnedSkillStore.swift": "01a748045a30a9e6da7a3b26e2cff0f3f38f43194be6db603563396c6623ec41",
+    "AtollCore/Tests/AtollCoreTests/LearnedSkillArchivingTests.swift": "a03995ac3a4c21e967b4e7b9d63bb2b653af7788838756ea466e865441da2c3f",
+    "Scripts/test-skill-archive-sabotage.py": "91c5a7f93206608aa9730ff0ca8991049a5fdc7c450bca602591e8bfea99db3a",
+    "App/NotesCurationService.swift": "d35c40089da4882f9e63ae672a7e82aea9d9f9271bea5fa648f7bf7e9706eca0",
+    "Scripts/learning-tests/CurationRecoveryMain.swift": "8146552aa6c1caea2ad732d3d565a3a3c73c8bbb421b824a6b2613cd766d30bd",
+    "Scripts/test-curation-recovery.py": "ae3788fa147bc0d59e3a6a88c0ba81209fa9a765bf9ba891d149cc386a2c5227"
+  },
+  "coreSuite": {
+    "executed": 1092,
+    "skipped": 1,
+    "failures": 0,
+    "runOn": "A19 worktree, identical Core sources to integration"
+  },
+  "integration": {
+    "debugBuild": "passed",
+    "curationRecoveryCases": 104,
+    "swiftCompilerWarnings": 0,
+    "buildToolWarning": "AppIntents metadata extraction skipped: no framework dependency"
+  },
+  "targetedValidation": {
+    "codexVerdictCounterexamples": 5,
+    "skillArchiveCompiledSabotage": true,
+    "curationCases": 26,
+    "curationCollisionCompiledSabotages": 2,
+    "existingCurationCompiledSabotages": 6
+  },
+  "realGenerativeCLICalls": 0,
+  "limitations": [
+    "Private deterministic fixtures; no authenticated generation or GUI qualification.",
+    "Archive failure injected via non-directory parent; no disk-full simulation.",
+    "No cross-process filesystem lock introduced."
+  ]
+}
