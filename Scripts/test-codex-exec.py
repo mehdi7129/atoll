@@ -23,7 +23,7 @@ parser.add_argument("--home", type=Path, default=Path.home() / ".codex")
 parser.add_argument("--output", type=Path)
 parser.add_argument("--model", help="Identifiant exact, vérifié dans le catalogue natif")
 parser.add_argument("--sabotage-instructions-file", action="store_true",
-                    help="Contre-épreuve hors ligne : supprimer l’écriture du fichier dans une copie compilée")
+                    help="Contre-épreuve hors ligne : après un nominal vert, omettre le fichier dans une copie compilée")
 args = parser.parse_args()
 if args.sabotage_instructions_file and not args.prepare_only:
     parser.error("Le sabotage exige --prepare-only : aucun appel modèle.")
@@ -59,7 +59,7 @@ with tempfile.TemporaryDirectory(prefix="atoll-live-exec-") as directory:
     fixture.write_text("#!" + os.sys.executable + "\n" + r'''
 import json, os, pathlib, sys
 
-if sys.argv[1:] == ['app-server', '--listen', 'stdio://']:
+if sys.argv[1:] == ['-c', 'features.plugins=false', 'app-server', '--listen', 'stdio://']:
     for line in sys.stdin:
         request = json.loads(line)
         method = request.get('method')
@@ -226,9 +226,14 @@ import AtollCore
     @MainActor static func main() async throws {
         let args = CommandLine.arguments
         if args[1] == "--prepare-only" {
-            try offlineCheck()
-            try await preparedLaunchCheck(executable: args[2], home: URL(fileURLWithPath: args[3]),
-                                          capture: URL(fileURLWithPath: args[4]))
+            do {
+                try offlineCheck()
+                try await preparedLaunchCheck(executable: args[2], home: URL(fileURLWithPath: args[3]),
+                                              capture: URL(fileURLWithPath: args[4]))
+            } catch let failure as Failure {
+                FileHandle.standardError.write(Data(("FAIL " + failure.message + "\n").utf8))
+                exit(1)
+            }
             return
         }
         let home = URL(fileURLWithPath: args[2])
@@ -286,31 +291,46 @@ import AtollCore
     binary = root / "exec-test"
     command = ["swiftc", "-parse-as-library", "-I", str(build / "Modules"), "-lsqlite3", str(source)]
     command += [str(repo / path) for path in ["App/CodexRun.swift", "App/CodexExecutable.swift", "App/ClaudeExecutable.swift", "Shared/ProcessInspector.swift"]]
+    command += [str(path) for path in sorted((build / "AtollCore.build").glob("*.o"))]
+    subprocess.run(command + ["-o", str(binary)], check=True, timeout=120)
+
+    def check_preparation(executable, capture):
+        return subprocess.run([str(executable), "--prepare-only", str(fixture), str(home), str(capture)],
+            env=dict(os.environ, ATOLL_RETROSPECTIVE="1", ZDOTDIR=str(profile)),
+            capture_output=True, text=True, timeout=30)
+
+    # Une panne du catalogue ou de compilation n'est jamais un sabotage détecté.
+    # Le nominal doit passer avec le même faux CLI avant de modifier le code testé.
+    offline = check_preparation(binary, fixture_capture)
+    print(offline.stdout, end="", flush=True)
+    if offline.returncode:
+        raise SystemExit("Préparation nominale en échec ; aucun sabotage validé : " + offline.stderr)
     if args.sabotage_instructions_file:
         original = repo / "App/CodexRun.swift"
         content = original.read_text()
-        pattern = r"(?m)^\s*try CodexExecPlan\.analysisInstructions\.write\([^\n]+\)\s*$"
-        sabotaged, count = re.subn(pattern, "\n            // Contre-épreuve : fichier non écrit.\n", content)
+        # Omettre le bloc complet : garder le chmod d'un fichier absent ferait
+        # échouer prepare() avant le garde ciblé, sans preuve sur les instructions.
+        pattern = (r"(?m)^[ \t]*try CodexExecPlan\.analysisInstructions\.write\([^\n]+\)\n"
+                   r"[ \t]*try FileManager\.default\.setAttributes\([^\n]+instructionsFile\.path\)\n")
+        sabotaged, count = re.subn(pattern, "            // Contre-épreuve : fichier et permissions non créés.\n", content)
         if count != 1:
             raise SystemExit("Couture de sabotage instructions introuvable ou ambiguë.")
         copy = root / "CodexRun.swift"
         copy.write_text(sabotaged)
-        command[command.index(str(original))] = str(copy)
-    command += [str(path) for path in sorted((build / "AtollCore.build").glob("*.o"))]
-    subprocess.run(command + ["-o", str(binary)], check=True, timeout=120)
-    offline = subprocess.run([str(binary), "--prepare-only", str(fixture), str(home), str(fixture_capture)],
-        env=dict(os.environ, ATOLL_RETROSPECTIVE="1", ZDOTDIR=str(profile)),
-        capture_output=True, text=True, timeout=30)
-    if args.sabotage_instructions_file:
-        expected = ["fichier d’instructions absent ou différent avant lancement",
-                    "préparation réelle impossible avec le catalogue factice"]
-        if offline.returncode == 0 or not any(message in offline.stderr for message in expected) or fixture_capture.exists():
-            raise SystemExit("Sabotage non détecté par la préparation réelle : " + offline.stderr)
+        mutated_command = command.copy()
+        mutated_command[mutated_command.index(str(original))] = str(copy)
+        mutated_binary = root / "exec-test-sabotaged"
+        subprocess.run(mutated_command + ["-o", str(mutated_binary)], check=True, timeout=120)
+        # Le chemin capturé est inscrit dans le faux CLI ; retirer la seule
+        # capture synthétique du nominal permet de constater un éventuel exec.
+        fixture_capture.unlink()
+        sabotaged_run = check_preparation(mutated_binary, fixture_capture)
+        expected = "FAIL fichier d’instructions absent ou différent avant lancement\n"
+        if (sabotaged_run.returncode != 1 or sabotaged_run.stderr != expected
+                or fixture_capture.exists()):
+            raise SystemExit("Sabotage non détecté par le garde des instructions : " + sabotaged_run.stderr)
         print("PASS sabotage compilé : fichier d’instructions manquant détecté avant lancement ; copie temporaire uniquement.")
         raise SystemExit(0)
-    print(offline.stdout, end="")
-    if offline.returncode:
-        raise SystemExit(offline.stderr)
     if args.prepare_only:
         raise SystemExit(0)
     measures_path = root / "measures.json"
