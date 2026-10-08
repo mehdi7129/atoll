@@ -13,6 +13,7 @@ struct CodexSettingsPane: View {
     @State private var installed = false
     @State private var message: String?
     @State private var homePath = CodexPreview.enabled ? "" : CodexPaths.configuredHome ?? ""
+    @State private var catalogHome = CodexPreview.enabled ? URL(fileURLWithPath: "/compte-codex") : CodexPaths.homeURL
     @State private var diagnostic: String?
     @State private var checking = false
     @State private var diagnosticExpanded = false
@@ -91,6 +92,7 @@ struct CodexSettingsPane: View {
             }
             quotaSection
             CodexCatalogSection(projectPath: projectPath, executableOverride: executablePath,
+                                home: catalogHome,
                                 chooseProject: chooseProject)
             advancedSettings
         }
@@ -98,6 +100,7 @@ struct CodexSettingsPane: View {
         .disclosureGroupStyle(SettingsDisclosureStyle())
         .onAppear {
             refreshInstalled()
+            if !CodexPreview.enabled { catalogHome = CodexPaths.homeURL }
             if CodexPreview.enabled {
                 projectPath = "/projets/projet-exemple"
                 diagnosticExpanded = CommandLine.arguments.contains("--preview-diagnostic")
@@ -196,6 +199,7 @@ struct CodexSettingsPane: View {
                             do {
                                 let path = homePath.trimmingCharacters(in: .whitespacesAndNewlines)
                                 try CodexService.shared.changeHome(to: path.isEmpty ? nil : (path as NSString).expandingTildeInPath)
+                                catalogHome = CodexPaths.homeURL
                                 refreshInstalled()
                                 diagnostic = nil
                                 message = nil

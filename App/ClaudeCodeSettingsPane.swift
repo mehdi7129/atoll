@@ -168,7 +168,7 @@ struct ClaudeCodePane: View {
                 HStack {
                     ProgressView().controlSize(.small)
                     Text("Recherche…")
-                    Button("Annuler") { if !CodexPreview.enabled { plugins.cancel() } }
+                    Button("Annuler") { if !CodexPreview.enabled { plugins.cancelSearch() } }
                 }
             }
             ForEach(plugins.searchMatches, id: \.pluginID) { match in

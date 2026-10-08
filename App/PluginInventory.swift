@@ -47,8 +47,8 @@ final class PluginInventory {
     /// l'utilisateur bricole en parallèle dans son terminal.
     private(set) var lastRefreshedAt: Date?
     /// id de plugin → tokens « always-on » (ajoutés à CHAQUE session). Rempli À
-    /// LA DEMANDE, un `claude plugin details` par plugin : c'est le chiffre qui
-    /// justifie tout le panneau, mais il coûte un spawn, donc jamais en masse.
+    /// LA DEMANDE, un `claude plugin details` par plugin, avec au plus deux
+    /// lectures simultanées, y compris depuis le bouton collectif.
     private(set) var tokenCosts: [String: Int] = [:]
     /// Une action (enable/disable/install) est en cours sur CE plugin. La vue
     /// désactive ses boutons tant que ce n'est pas nil.
@@ -62,16 +62,38 @@ final class PluginInventory {
     /// La résolution COÛTEUSE (login shell, source le profil) a-t-elle déjà été
     /// tentée ? Sur échec, on ne la rejoue PAS à chaque clic.
     @ObservationIgnored private var triedLoginResolve = false
-    /// Coûts en tokens dont le `details` est en vol : empêche un `onAppear`
-    /// répété (une liste qui se re-rend) de spawner dix fois la même commande.
-    @ObservationIgnored private var tokenCostInFlight: Set<String> = []
+    private struct CostVersion: Equatable {
+        let version: String?
+        let marketplace: String?
+        let scope: String?
+        let path: String?
+        init(_ plugin: InstalledPlugin) {
+            version = plugin.version; marketplace = plugin.marketplace
+            scope = plugin.scope; path = plugin.installPath
+        }
+    }
+    private struct CostRequest {
+        let id: String
+        let version: CostVersion
+        let token = UUID()
+        let generation: UUID
+    }
+    @ObservationIgnored private var costQueue: [CostRequest] = []
+    @ObservationIgnored private var activeCosts: [String: CostRequest] = [:]
+    @ObservationIgnored private let detailConcurrencyLimit: Int
+    @ObservationIgnored private var operationGeneration = UUID()
+
+    /// Injection réservée aux recettes hors ligne ; aucun réglage produit ajouté.
+    init(claudePath: String? = nil, detailConcurrencyLimit: Int = 2) {
+        self.claudePath = claudePath
+        self.detailConcurrencyLimit = max(1, min(2, detailConcurrencyLimit))
+    }
 
     // MARK: - Délais (contrainte n°2 : TOUT spawn est borné)
     //
-    // Piège vécu en Phase 8 : un `claude` figé (daemon bloqué) gelait la boucle
-    // de poll ET neutralisait le repli, parce que `readToEnd` ignore
-    // l'annulation d'une Task. La seule parade est de TUER le process —
-    // SIGTERM, puis SIGKILL une seconde plus tard s'il s'accroche.
+    // La deadline couvre résolution, processus et collecte. Les drains sont
+    // non bloquants ; un descendant ne peut garder la lecture ouverte après
+    // la sortie du parent. Les signaux passent par l'identité de l'enfant.
 
     /// `plugin list --json` : lecture 100 % locale (le cache sur disque).
     private static let listTimeout: TimeInterval = 8
@@ -104,23 +126,31 @@ final class PluginInventory {
         Task { [weak self] in await self?.refreshNow(includeAvailable: includeAvailable) }
     }
 
-    private func refreshNow(includeAvailable: Bool) async {
+    private func refreshNow(includeAvailable: Bool, searchScope: UUID? = nil) async {
         guard !isRefreshing else { return }
+        let generation = operationGeneration
         isRefreshing = true // AVANT le premier await (sinon la garde ne garde rien)
         defer { isRefreshing = false }
+        let timeout = includeAvailable ? Self.availableTimeout : Self.listTimeout
+        let deadline = ContinuousClock.now.advanced(by: .seconds(timeout))
 
-        guard let claude = await resolveClaudePath() else {
+        guard let claude = await resolveClaudePath(deadline: deadline) else {
             lastError = "Binaire claude introuvable."
             return
         }
+        guard generation == operationGeneration,
+              searchScope == nil || searchScope == searchGeneration else { return }
         var arguments = ["plugin", "list", "--json"]
         if includeAvailable { arguments.insert("--available", at: 2) }
 
         let outcome = await Self.run(
             arguments: arguments,
             claude: claude,
-            timeout: includeAvailable ? Self.availableTimeout : Self.listTimeout
+            timeout: BoundedProcessRunner.remaining(until: deadline),
+            scope: searchScope
         )
+        guard generation == operationGeneration,
+              searchScope == nil || searchScope == searchGeneration else { return }
         guard outcome.status == 0 else {
             lastError = Self.failureMessage(outcome, verb: "Lecture des plugins")
             log.error("plugin list a échoué : \(outcome.diagnostic, privacy: .public)")
@@ -140,6 +170,12 @@ final class PluginInventory {
             installed: fresh.installed,
             available: includeAvailable ? fresh.available : (snapshot?.available ?? [])
         )
+        tokenCosts = tokenCosts.filter {
+            let previous = costVersion(for: $0.key, in: snapshot)
+            let current = costVersion(for: $0.key, in: merged)
+            return current != nil && current == previous
+        }
+        costQueue.removeAll { costVersion(for: $0.id, in: merged) != $0.version }
         lastError = nil
         // Horodaté seulement sur SUCCÈS : `lastRefreshedAt` qualifie la
         // fraîcheur de `snapshot`, pas celle de la dernière tentative. Le poser
@@ -161,16 +197,45 @@ final class PluginInventory {
     /// renseigne pas `lastError` : un chiffre d'enrichissement manquant n'est
     /// pas une panne, il ne mérite pas un bandeau rouge.
     func loadTokenCost(for pluginID: String) {
-        // Déjà connu, ou déjà en vol : la vue peut appeler ceci à chaque rendu
-        // de ligne sans déclencher une pluie de spawns.
-        guard tokenCosts[pluginID] == nil, !tokenCostInFlight.contains(pluginID) else { return }
-        tokenCostInFlight.insert(pluginID)
-        Task { [weak self] in await self?.loadTokenCostNow(pluginID) }
+        guard tokenCosts[pluginID] == nil, let version = costVersion(for: pluginID, in: snapshot),
+              activeCosts[pluginID]?.version != version,
+              !costQueue.contains(where: { $0.id == pluginID && $0.version == version }) else { return }
+        costQueue.removeAll { $0.id == pluginID }
+        costQueue.append(CostRequest(id: pluginID, version: version, generation: operationGeneration))
+        startQueuedCosts()
     }
 
-    private func loadTokenCostNow(_ pluginID: String) async {
-        defer { tokenCostInFlight.remove(pluginID) }
-        guard let claude = await resolveClaudePath() else { return }
+    private func costVersion(for id: String, in snapshot: PluginSnapshot?) -> CostVersion? {
+        snapshot?.installed.first(where: { $0.id == id }).map(CostVersion.init)
+    }
+
+    private func isCurrent(_ request: CostRequest) -> Bool {
+        request.generation == operationGeneration && costVersion(for: request.id, in: snapshot) == request.version
+    }
+
+    /// FIFO bornée ; un ancien résultat peut finir pendant qu'une nouvelle
+    /// version attend, mais jamais deux lectures simultanées du même identifiant.
+    private func startQueuedCosts() {
+        while activeCosts.count < detailConcurrencyLimit,
+              let index = costQueue.firstIndex(where: { activeCosts[$0.id] == nil }) {
+            let request = costQueue.remove(at: index)
+            guard isCurrent(request) else { continue }
+            activeCosts[request.id] = request
+            Task { [weak self] in await self?.loadTokenCostNow(request) }
+        }
+    }
+
+    private func loadTokenCostNow(_ request: CostRequest) async {
+        let pluginID = request.id
+        // Deux essais au plus (id complet puis nom), avec une seule enveloppe
+        // de temps incluant la résolution du binaire et la collecte des pipes.
+        let deadline = ContinuousClock.now.advanced(by: .seconds(Self.detailsTimeout * 2))
+        defer {
+            if activeCosts[pluginID]?.token == request.token { activeCosts[pluginID] = nil }
+            startQueuedCosts()
+        }
+        guard let claude = await resolveClaudePath(deadline: deadline) else { return }
+        guard isCurrent(request), !Task.isCancelled else { return }
 
         // VÉRIFIÉ (CLI 2.1.220) : `details` accepte l'id COMPLET
         // (`security-pro@claude-code-templates`) COMME le nom court. On envoie
@@ -186,8 +251,10 @@ final class PluginInventory {
             let outcome = await Self.run(
                 arguments: ["plugin", "details", candidate],
                 claude: claude,
-                timeout: Self.detailsTimeout
+                timeout: min(Self.detailsTimeout, BoundedProcessRunner.remaining(until: deadline)),
+                scope: request.token
             )
+            guard isCurrent(request), !Task.isCancelled else { return }
             guard outcome.status == 0 else { continue }
             let text = String(decoding: outcome.output, as: UTF8.self)
             guard let tokens = PluginDetails.alwaysOnTokens(from: text) else { continue }
@@ -253,13 +320,18 @@ final class PluginInventory {
         }
         busyPluginID = pluginID
         defer { busyPluginID = nil }
+        let generation = operationGeneration
+        let deadline = ContinuousClock.now.advanced(by: .seconds(timeout))
 
-        guard let claude = await resolveClaudePath() else {
+        guard let claude = await resolveClaudePath(deadline: deadline) else {
             let message = "Binaire claude introuvable — \(verb.lowercased()) impossible."
             lastError = message
             return message
         }
-        let outcome = await Self.run(arguments: arguments, claude: claude, timeout: timeout)
+        guard generation == operationGeneration, !Task.isCancelled else { return "Action annulée." }
+        let outcome = await Self.run(arguments: arguments, claude: claude,
+                                     timeout: BoundedProcessRunner.remaining(until: deadline))
+        guard generation == operationGeneration, !Task.isCancelled else { return "Action annulée." }
         guard outcome.status == 0 else {
             let message = Self.failureMessage(outcome, verb: verb)
             lastError = message
@@ -283,6 +355,7 @@ final class PluginInventory {
         // et pour la même raison.
         while isRefreshing {
             try? await Task.sleep(for: .milliseconds(300))
+            guard generation == operationGeneration, !Task.isCancelled else { return "Action annulée." }
         }
         await refreshNow(includeAvailable: false)
         return nil
@@ -290,7 +363,7 @@ final class PluginInventory {
 
     // MARK: - Résolution du chemin de claude (identique au FleetPoller)
 
-    private func resolveClaudePath() async -> String? {
+    private func resolveClaudePath(deadline: ContinuousClock.Instant) async -> String? {
         if let claudePath { return claudePath }
         // Chemin usuel de l'installeur natif : vérif CHEAP (pas de shell),
         // retentée à chaque fois (claude peut apparaître après coup).
@@ -299,22 +372,18 @@ final class PluginInventory {
         // Login shell : COÛTEUX (source le profil) → EXACTEMENT une fois.
         guard !triedLoginResolve else { return nil }
         triedLoginResolve = true
-        let resolved = await Task.detached(priority: .utility) { () -> String? in
+        let resolved = await { () async -> String? in
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/bin/zsh")
             process.arguments = ["-l", "-c", "command -v claude"]
-            let pipe = Pipe()
-            process.standardOutput = pipe
-            process.standardError = FileHandle.nullDevice
-            guard (try? process.run()) != nil else { return nil }
-            Self.armWatchdog(process, seconds: 10)
-            let data = (try? pipe.fileHandleForReading.readToEnd()) ?? Data()
-            process.waitUntilExit()
-            let path = String(decoding: data, as: UTF8.self)
+            process.standardInput = FileHandle.nullDevice
+            guard let result = try? await BoundedProcessRunner.run(process,
+                timeout: min(10, BoundedProcessRunner.remaining(until: deadline)),
+                stdoutCap: 16_384, stderrCap: 0), result.succeeded else { return nil }
+            let path = String(decoding: result.stdout, as: UTF8.self)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            return (process.terminationStatus == 0 && !path.isEmpty
-                    && FileManager.default.isExecutableFile(atPath: path)) ? path : nil
-        }.value
+            return (!path.isEmpty && FileManager.default.isExecutableFile(atPath: path)) ? path : nil
+        }()
         claudePath = resolved
         return resolved
     }
@@ -327,7 +396,6 @@ final class PluginInventory {
     private(set) var isSearching = false
     @ObservationIgnored private var searchGeneration = UUID()
     @ObservationIgnored private var activeSearchProvider: AgentProvider?
-    @ObservationIgnored private var searchProcessIdentity: ProcessIdentity?
 
     /// Les commandes `claude plugin` en vol — pour les arrêter à la fermeture.
     ///
@@ -336,24 +404,26 @@ final class PluginInventory {
     /// autre appel (une recherche pendant un « Actualiser »).
     final class InFlight: @unchecked Sendable {
         private let lock = NSLock()
-        private var processes: [(Process, ProcessIdentity?)] = []
+        private var processes: [(process: Process, identity: ProcessIdentity?, scope: UUID?)] = []
 
-        func adopt(_ process: Process) {
+        func adopt(_ process: Process, identity: ProcessIdentity?, scope: UUID?) {
             lock.lock(); defer { lock.unlock() }
-            processes.append((process, ProcessInspector.identity(of: process.processIdentifier)))
+            processes.append((process, identity, scope))
         }
 
         func release(_ process: Process) {
             lock.lock(); defer { lock.unlock() }
-            processes.removeAll { $0.0 === process }
+            processes.removeAll { $0.process === process }
         }
 
         /// SIGTERM à tout ce qui tourne, puis SIGKILL une seconde plus tard aux
         /// survivants — et seulement si le pid vit ENCORE (ne jamais tirer sur
         /// un pid recyclé, même garde que les deux autres escalades du projet).
-        func terminateAll() {
+        func terminate(scope: UUID? = nil) {
             lock.lock()
-            let identities = processes.filter { $0.0.isRunning }.compactMap { $0.1 }
+            let identities = processes.filter {
+                $0.process.isRunning && (scope == nil || $0.scope == scope)
+            }.compactMap { $0.identity }
             lock.unlock()
             identities.forEach { ProcessInspector.signal(SIGTERM, to: $0) }
             DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 1) {
@@ -368,20 +438,23 @@ final class PluginInventory {
     /// recherche de plugins est un `claude -p` FACTURÉ, il ne doit pas survivre
     /// à l'app qui l'a lancé.
     func cancel() {
+        operationGeneration = UUID()
+        costQueue.removeAll()
         searchGeneration = UUID()
-        Self.inFlight.terminateAll()
+        Self.inFlight.terminate()
+    }
+
+    /// Le bouton Annuler ne concerne que la recherche et sa lecture éventuelle
+    /// du catalogue. Une installation ou estimation indépendante continue.
+    func cancelSearch() {
+        let scope = searchGeneration
+        searchGeneration = UUID()
+        Self.inFlight.terminate(scope: scope)
     }
 
     func cancelIfCodex() {
         guard activeSearchProvider == .codex else { return }
-        searchGeneration = UUID()
-        if let identity = searchProcessIdentity {
-            ProcessInspector.signal(SIGTERM, to: identity)
-            Task {
-                try? await Task.sleep(for: .seconds(1))
-                ProcessInspector.signal(SIGKILL, to: identity)
-            }
-        }
+        cancelSearch()
     }
 
     /// Compare un besoin exprimé en français au catalogue PUBLIC des plugins.
@@ -405,7 +478,6 @@ final class PluginInventory {
         defer {
             if let lease { AnalysisBudget.shared.finish(lease, outcome: resultLabel) }
             activeSearchProvider = nil
-            searchProcessIdentity = nil
             isSearching = false
         }
         // L'exécuteur, son modèle et son home sont figés AVANT le catalogue async.
@@ -422,7 +494,9 @@ final class PluginInventory {
                 try? await Task.sleep(for: .milliseconds(100))
                 guard generation == searchGeneration, !Task.isCancelled else { return "Recherche annulée." }
             }
-            if snapshot?.available.isEmpty ?? true { await refreshNow(includeAvailable: true) }
+            if snapshot?.available.isEmpty ?? true {
+                await refreshNow(includeAvailable: true, searchScope: generation)
+            }
         }
         guard generation == searchGeneration, !Task.isCancelled else { return "Recherche annulée." }
         guard let snapshot, !snapshot.available.isEmpty else {
@@ -465,6 +539,7 @@ final class PluginInventory {
         defer { launch.cleanUp() }
         guard generation == searchGeneration, !Task.isCancelled else { return "Recherche annulée." }
         let outcome = await Self.run(arguments: [], claude: "", timeout: 120, launch: launch,
+            scope: generation,
             beforeSpawn: {
                 guard generation == self.searchGeneration && !Task.isCancelled,
                       AnalysisBudget.shared.mayLaunch(lease, context: execution) else { return false }
@@ -472,7 +547,6 @@ final class PluginInventory {
                 catch { return false }
             }, onSpawn: { process in
                 AnalysisBudget.shared.launched(lease)
-                self.searchProcessIdentity = ProcessInspector.identity(of: process.processIdentifier)
             })
         AnalysisBudget.shared.recordUsage(lease, stdout: outcome.output)
         guard generation == searchGeneration, !Task.isCancelled else { return "Recherche annulée." }
@@ -515,6 +589,7 @@ final class PluginInventory {
         claude: String,
         timeout: TimeInterval,
         launch: CodexRun.Launch? = nil,
+        scope: UUID? = nil,
         beforeSpawn: (() -> Bool)? = nil,
         onSpawn: ((Process) -> Void)? = nil
     ) async -> CommandOutcome {
@@ -549,64 +624,29 @@ final class PluginInventory {
         process.standardOutput = stdout
         process.standardError = stderr
 
-        guard beforeSpawn?() ?? true, (try? process.run()) != nil else {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(max(0, timeout)))
+        guard timeout > 0, !Task.isCancelled, beforeSpawn?() ?? true else {
+            return CommandOutcome(status: -1, output: Data(), errorTail: "", killedByWatchdog: timeout <= 0)
+        }
+        let identity: ProcessIdentity?
+        do { identity = try ProcessInspector.launchOwned(process) }
+        catch {
             log.error("spawn impossible : claude plugin \(arguments.joined(separator: " "), privacy: .public)")
             return CommandOutcome(status: -1, output: Data(), errorTail: "", killedByWatchdog: false)
         }
         onSpawn?(process)
         let pid = process.processIdentifier
         SessionStore.shared.registerInternalPid(pid)
-        armWatchdog(process, seconds: timeout)
-        // Retenu pour pouvoir l'arrêter à la fermeture d'Atoll : la RECHERCHE
-        // de plugins est un `claude -p` FACTURÉ, au même titre que la
-        // rétrospective et la curation — que `applicationWillTerminate` arrête
-        // toutes deux, avec le commentaire « ne pas le laisser orphelin quand
-        // Atoll s'en va ». Ce troisième émetteur avait été oublié : le motif
-        // « appliqué à une partie seulement de ses points », encore une fois.
-        // Le watchdog bornait la dépense, il ne l'annulait pas.
-        Self.inFlight.adopt(process)
-        defer { Self.inFlight.release(process) }
-
-        // Les DEUX pipes drainés EN PARALLÈLE (contrainte n°3). En série, un
-        // stderr saturé (~64 Ko de tampon noyau) bloque l'écrivain pour
-        // toujours : la commande ne se termine jamais, stdout ne se ferme
-        // jamais, et on attend le watchdog pour rien. Lectures BLOQUANTES sur
-        // des tâches détachées : `readabilityHandler` est inopérant en
-        // LSUIElement (piège vécu).
-        async let outData: Data = Task.detached(priority: .utility) {
-            BoundedProcessOutput.drain(stdout.fileHandleForReading, cap: 4_194_304)
-        }.value
-        async let errData: Data = Task.detached(priority: .utility) {
-            BoundedProcessOutput.drain(stderr.fileHandleForReading, cap: 4000, tail: true)
-        }.value
-        let output = await outData
-        let errorData = await errData
-        await Task.detached(priority: .utility) { process.waitUntilExit() }.value
-        SessionStore.shared.unregisterInternalPid(pid)
-
-        // Mort sur signal = le watchdog a frappé (SIGTERM/SIGKILL). Heuristique
-        // assumée : aucune autre source ne signale ces process.
-        let killed = process.terminationReason == .uncaughtSignal
-        return CommandOutcome(
-            status: process.terminationStatus,
-            output: output,
-            errorTail: lastMeaningfulLine(errorData),
-            killedByWatchdog: killed
-        )
-    }
-
-    /// Tue un process qui dépasse `seconds` : SIGTERM, puis SIGKILL une seconde
-    /// plus tard s'il s'accroche. Le terminate ferme les pipes → `readToEnd`
-    /// retourne et l'appelant reprend la main.
-    nonisolated private static func armWatchdog(_ process: Process, seconds: TimeInterval) {
-        guard let identity = ProcessInspector.identity(of: process.processIdentifier) else { return }
-        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + seconds) {
-            guard process.isRunning else { return }
-            ProcessInspector.signal(SIGTERM, to: identity)
-            DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 1) {
-                ProcessInspector.signal(SIGKILL, to: identity)
-            }
+        Self.inFlight.adopt(process, identity: identity, scope: scope)
+        defer {
+            Self.inFlight.release(process)
+            SessionStore.shared.unregisterInternalPid(pid)
         }
+        let result = await BoundedProcessRunner.collect(process: process, stdout: stdout, stderr: stderr,
+            identity: identity, deadline: deadline, stdoutCap: 4_194_304, stderrCap: 4000)
+        return CommandOutcome(status: result.succeeded ? 0 : (result.status == 0 ? 1 : result.status ?? -1),
+                              output: result.stdout, errorTail: lastMeaningfulLine(result.stderr),
+                              killedByWatchdog: result.timedOut)
     }
 
     // MARK: - Lecture défensive de la sortie
