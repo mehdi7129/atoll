@@ -459,9 +459,11 @@ enum BridgeCLI {
             // Hooks : écriture seulement si pas déjà installés (évite de réécrire
             // à chaque lancement de l'app, fenêtre de course minimale avec le CLI)
             // OU si le mode de recall proactif du fichier installé ne correspond
-            // plus au réglage (UserPromptSubmit bloquant ⟷ async).
+            // plus au réglage (UserPromptSubmit bloquant ⟷ async), ou si une
+            // ancienne installation a laissé plusieurs hooks Atoll par événement.
             let wantsProactiveRecall = ProactiveRecallHook.loadConfig()?.enabled ?? false
             if !HookSettingsEditor.isInstalled(in: current)
+                || HookSettingsEditor.hasDuplicateManagedHooks(in: current)
                 || HookSettingsEditor.installedProactiveRecall(in: current) != wantsProactiveRecall {
                 try refreshBackup(currentData: current)
                 let updated = try HookSettingsEditor.install(
