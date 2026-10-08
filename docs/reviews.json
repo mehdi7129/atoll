@@ -754,6 +754,24 @@
         "Scripts/learning-tests/CurationRecoveryMain.swift",
         "Scripts/test-curation-recovery.py"
       ]
+    },
+    {
+      "date": "2026-10-08",
+      "document": "docs/REVIEW-2026-10-08-a02-a03-integrity.md",
+      "depth": "sweep",
+      "note": "Contre-revue ciblée des corrections A02/A03, de leurs consommateurs et des harnesses. Trois régressions intermédiaires corrigées et vérifiées ; ne revendique pas une relecture intégrale du projet.",
+      "files": [
+        "App/NotesCurationService.swift",
+        "Scripts/test-curation.py",
+        "Scripts/test-curation-state.py",
+        "Scripts/curation-tests/StateMain.swift",
+        "Scripts/learning-tests/CurationRecoveryMain.swift",
+        "AtollCore/Sources/AtollCore/LearnedSkillStore.swift",
+        "AtollCore/Tests/AtollCoreTests/LearnedSkillReconciliationTests.swift",
+        "Scripts/test-skill-reconciliation-sabotage.py",
+        "App/SkillReviewCenter.swift",
+        "Scripts/test-skill-review.py"
+      ]
     }
   ]
 }
