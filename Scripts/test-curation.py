@@ -12,6 +12,7 @@ REPO = Path(__file__).resolve().parent.parent
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--sabotage", choices=["cancellation", "unchanged", "post-write", "archive-uniqueness"])
 parser.add_argument("--output", type=Path)
+parser.add_argument("--build-dir", type=Path, help="Réutiliser une compilation Core existante, sans lancer SwiftPM.")
 parser.add_argument("--build-system", choices=["native", "swiftbuild"],
                     help="Réutiliser le moteur de la recette Core, si déjà compilée.")
 args = parser.parse_args()
@@ -20,8 +21,11 @@ print(f"Fixtures et compilation : {work}", flush=True)
 build_command = ["swift", "build", "--package-path", str(REPO / "AtollCore")]
 if args.build_system:
     build_command += ["--build-system", args.build_system]
-subprocess.run(build_command, check=True)
-build = Path(subprocess.check_output(build_command + ["--show-bin-path"], text=True).strip())
+if args.build_dir:
+    build = args.build_dir
+else:
+    subprocess.run(build_command, check=True)
+    build = Path(subprocess.check_output(build_command + ["--show-bin-path"], text=True).strip())
 objects = sorted((build / "AtollCore.build").glob("*.o"))
 module_path = build / "Modules"
 if not objects or not module_path.is_dir():

@@ -1,0 +1,86 @@
+{
+  "baseCommit": "aed6546362e10d601820fea365aeb541c574acf6",
+  "findings": [
+    "A02",
+    "A03"
+  ],
+  "status": "passed",
+  "scope": "Branche de correction validée ; aucune fusion, publication ou installation.",
+  "sourceSHA256": {
+    "App/NotesCurationService.swift": "cdd60100349ead831da6c5733094132ea47974d817618a8616d843c5d6c26a1a",
+    "Scripts/test-curation.py": "c9ba457a5379d44af1c0d28da58187e67ad38cd055ff43a8659b24f8f98ff8ab",
+    "Scripts/test-curation-state.py": "76cb1a70b8fc60536a84716b80a3ca58c6453c9b9876057570bff69a3e59cac3",
+    "Scripts/curation-tests/StateMain.swift": "c7cf732f5f11751136c2a63eab2e41d405b95c17323ce1171338a8a9aab75d41",
+    "Scripts/learning-tests/CurationRecoveryMain.swift": "4c3ba812eb08f00ced99ceead687a2560a501565a7a41e5170e8c12037370721",
+    "AtollCore/Sources/AtollCore/LearnedSkillStore.swift": "37d952c8c05c5ba53a881300d714a57227485f9232bf889e5fc226c5c5797938",
+    "AtollCore/Tests/AtollCoreTests/LearnedSkillReconciliationTests.swift": "61516ea0f3d2394960fdbf58aea13c5366f579ffdf0262f65c830d92c15cfa64",
+    "Scripts/test-skill-reconciliation-sabotage.py": "54af1a061ed97cbd5050cfa69e88e4fba8680aceb12aba69d3a7664da5d5d1fd",
+    "App/SkillReviewCenter.swift": "a4e9149522fca5e0c2498ef97818bfd453ba5e51106c49c3750e0c63f2ad53fe",
+    "Scripts/test-skill-review.py": "419e891dcce7fb6175dc802839d233b1e64dd09f42c2a6bd9d328216c44544d5"
+  },
+  "core": {
+    "executed": 1102,
+    "skipped": 1,
+    "failures": 0
+  },
+  "targetedSkillTests": 39,
+  "serviceScenarios": {
+    "curationState": 48,
+    "curation": 26,
+    "curationRecovery": 104,
+    "skillReviewCenter": 12,
+    "total": 190
+  },
+  "newCompiledSabotages": {
+    "curationState": 6,
+    "skillReconciliation": 5,
+    "skillReviewDiagnostics": 3,
+    "total": 14,
+    "baselineRequired": true
+  },
+  "existingCompiledSabotage": {
+    "name": "swap-marker-write",
+    "baselineCases": 104,
+    "detected": true
+  },
+  "builds": {
+    "Debug": {
+      "exitCode": 0,
+      "signed": false,
+      "appLaunched": false
+    },
+    "Release": {
+      "exitCode": 0,
+      "signed": false,
+      "appLaunched": false
+    }
+  },
+  "adversarialReview": {
+    "remainingBlockers": 0,
+    "intermediateRegressionsCorrected": [
+      "Cadence en mémoire perdue après un échec de sauvegarde",
+      "Renommage de casse APFS confondu avec absence",
+      "Départ automatique après retrait de l’état illisible"
+    ]
+  },
+  "localVerification": {
+    "personalConfigurationsUnchanged": true,
+    "configurationsCompared": 3,
+    "stableAppUnchanged": true,
+    "stableVersionObserved": "0.18.5",
+    "stableBuildObserved": "40",
+    "dailyDebugBundlesUnchanged": 4
+  },
+  "realGenerativeCLICalls": 0,
+  "guiLaunches": 0,
+  "limitations": [
+    "Fixtures privées, permissions POSIX réelles et CLI factices ; aucune recette GUI ni génération authentifiée.",
+    "Aucun verrou contre un écrivain externe entre la vérification et l’écriture atomique.",
+    "Les pannes I/O du writer de manifeste hors A03 ne sont pas injectées ; aucune simulation de disque plein.",
+    "Les corrections A02/A03 ne sont pas encore distribuées ; la release publique reste 0.18.5/build 40."
+  ],
+  "codeCommits": {
+    "A02": "70342ece7f11750a3098ff515f0e2ff63ef06a80",
+    "A03": "dfc9225c8a71ac030d138000b7204362fdc90d6f"
+  }
+}

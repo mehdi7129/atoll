@@ -4,6 +4,21 @@
 [CLAUDE.md](../CLAUDE.md). L'[ancien handoff](HANDOFF-2026-09-10-archive.md) conserve
 les mesures et pièges historiques, sans faire autorité sur l'état actuel.
 
+## A02 / A03 — correctifs préparés, non distribués
+
+Le [lot suivant](REVIEW-2026-10-08-a02-a03-integrity.md) protège l’état illisible
+du rangement et conserve le manifeste des skills quand leur accès échoue.
+Réparation et diagnostics utilisent les chemins existants ; cadences, modèles,
+destinations et interface sont conservés. La branche part de `aed6546` ;
+**la release publique reste 0.18.5 / build 40**.
+
+Validation : **1 102 tests Core (un skip, zéro échec)**, 190 parcours de services,
+14 nouveaux sabotages compilés et un sabotage existant de reprise détectés,
+builds Debug et Release réussis. Contre-revue favorable après correction de
+trois régressions intermédiaires. Aucune recette GUI ni génération authentifiée.
+[Synthèse et limites](audit-support/2026-10-08-a02-a03/validation.json).
+Ces deux points restent distincts des trois déjà livrés ; A07/A08 viennent ensuite.
+
 ## v0.18.5, build 40 — publiée
 
 La [release de maintenance](https://github.com/mehdi7129/atoll/releases/tag/v0.18.5)
@@ -214,7 +229,7 @@ cette release ; la publication n'a installé aucune app.
 | Référence précédente | v0.18.4, build 39 ; [preuves de sa livraison](releases/0.18.4.json) |
 | Tests fonctionnels | Ordre #9 → #10 → #11 validé : 1 092 tests Core, un skip, zéro échec ; 104 scénarios de récupération, 26 de curation, Codex nominal et cinq contre-épreuves, sabotages ciblés et Debug réussis. Core Release : 1 092 tests, un skip, zéro échec |
 | Recettes de distribution | Différentiel 39 → 40 et app du DMG comparés aux 134 objets du ZIP complet ; six copies altérées rejetées par les signatures Sparkle ; produit Release non lancé, aucune génération authentifiée |
-| Installation de travail | `~/Applications/Atoll.app` **v0.18.4, build 39**, quatre produits Debug et trois configurations personnelles contrôlés inchangés ; la mise à jour reste à appliquer par l'utilisateur |
+| Installation de travail | `~/Applications/Atoll.app` **v0.18.5, build 40**, observée le 8 octobre pendant le lot A02/A03 ; app, quatre produits Debug quotidiens et trois configurations personnelles inchangés pendant ces tests |
 
 Vérifier l'état réel avant toute action : `git status --short --branch`,
 `git log -5 --oneline`, `git worktree list`, puis `gh release view`.
