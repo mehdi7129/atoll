@@ -27,7 +27,8 @@ with tempfile.TemporaryDirectory(prefix='atoll-feedback-') as tmp:
     if a.sabotage:
         mutations += [('sound','loaded = NSSound(named: name)?.copy() as? NSSound','loaded = NSSound(named: name)','A15 instances partagées'),
                       ('jump','if result?.succeeded == true, activate(anchor.bundleID) {','if result?.succeeded != nil {','A17 succès ou granularité inventé'),
-                      ('await','let result = try? await BoundedProcessRunner.run(process, timeout: timeout)','try? process.run()\n            let result: BoundedProcessRunner.Result? = nil','A17 fin CLI non attendue')]
+                      ('await','let result = try? await BoundedProcessRunner.run(process, timeout: timeout)','try? process.run()\n            let result: BoundedProcessRunner.Result? = nil','A17 fin CLI non attendue'),
+                      ('order','await previous?.value','_ = previous','A17 ordre des jumps perdu')]
     for name, needle, replacement, expected in mutations:
         case = name or 'nominal'; folder = root/case; folder.mkdir()
         sound = (REPO/'App/SoundCenter.swift').read_text()
@@ -38,6 +39,13 @@ with tempfile.TemporaryDirectory(prefix='atoll-feedback-') as tmp:
             text = text.replace(needle,replacement)
             if name == 'sound': sound = text
             else: jump = text
+        # Le vrai point d'entrée jump, son ordonnancement et perform sont conservés.
+        # Seuls la résolution du CLI et le focus système sont des collaborateurs privés.
+        focus = 'return await focusIDE(cli: cli, kind: kind, anchor: anchor)'
+        assert jump.count(focus) == 1, 'Couture de fixture ambiguë'
+        jump = jump.replace(focus, '''return await focusIDE(cli: cli, kind: kind, anchor: anchor,
+                resolveCLI: { _, _ in FeedbackJumpFixture.shared.cli },
+                activate: { FeedbackJumpFixture.shared.activate($0) }, timeout: 3)''')
         sound += '\nextension SoundCenter { func fixtureSound(_ choice: SoundChoice, _ event: SoundEvent) -> NSSound? { sound(for: choice, event: event) } }\n'
         (folder/'SoundCenter.swift').write_text(sound)
         (folder/'TerminalJumpService.swift').write_text(jump)

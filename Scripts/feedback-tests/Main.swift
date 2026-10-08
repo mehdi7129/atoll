@@ -2,6 +2,23 @@ import AppKit
 import Foundation
 import AtollCore
 
+/// Collaborateurs injectés dans une copie privée de `perform` : aucun IDE réel.
+final class FeedbackJumpFixture: @unchecked Sendable {
+    static let shared = FeedbackJumpFixture()
+    let cli = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("jump-cli").path
+    private let lock = NSLock()
+    private var activations: [String] = []
+    func activate(_ bundleID: String?) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        activations.append(bundleID ?? "absent")
+        return true
+    }
+    var activated: [String] {
+        lock.lock(); defer { lock.unlock() }
+        return activations
+    }
+}
+
 @main struct FeedbackTests {
     struct Failure: Error { let message: String }
     static func check(_ condition: Bool, _ message: String) throws {
@@ -60,5 +77,48 @@ import AtollCore
             try check(start.duration(to: .now) < .seconds(2), "A17 deadline dépassée")
             print("PASS A17 \(name)")
         }
+
+        let jumpCLI = URL(fileURLWithPath: FeedbackJumpFixture.shared.cli)
+        try """
+        #!/bin/sh
+        name=${2##*/}
+        printf 'start-%s\\n' "$name" >> "$CFFIXED_USER_HOME/jump-events"
+        if [ "$name" = slow ]; then
+            while [ ! -f "$CFFIXED_USER_HOME/jump-release" ]; do /bin/sleep 0.01; done
+        fi
+        printf 'end-%s\\n' "$name" >> "$CFFIXED_USER_HOME/jump-events"
+        """.write(to: jumpCLI, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: jumpCLI.path)
+        var callbacks: [String] = []
+        var callbacksOnMain = true
+        let targets = [("slow", "com.todesktop.230313mzl4w4u92"), ("fast", "com.microsoft.VSCode")]
+        for (name, bundleID) in targets {
+            let folder = root.appendingPathComponent(name)
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            let target = TerminalAnchor(cwd: folder.path, tty: nil, bundleID: bundleID, termProgram: nil, entrypoint: nil, env: [:])
+            TerminalJumpService.jump(to: target) { _ in
+                callbacksOnMain = callbacksOnMain && Thread.isMainThread
+                callbacks.append(name)
+            }
+        }
+        // Le CLI attend une écriture effectuée ici sur MainActor : s'il était
+        // bloqué, le watchdog couperait le CLI sans son marqueur de fin.
+        let releaseDeadline = ContinuousClock.now.advanced(by: .seconds(2))
+        while (try? String(contentsOf: root.appendingPathComponent("jump-events"), encoding: .utf8))?
+            .contains("start-slow") != true && ContinuousClock.now < releaseDeadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        try await Task.sleep(for: .milliseconds(100))
+        try Data().write(to: root.appendingPathComponent("jump-release"))
+        let deadline = ContinuousClock.now.advanced(by: .seconds(3))
+        while callbacks.count < targets.count && ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        try check(callbacks == ["slow", "fast"] && callbacksOnMain, "A17 ordre des jumps perdu")
+        let events = try String(contentsOf: root.appendingPathComponent("jump-events"), encoding: .utf8)
+        try check(events.split(separator: "\n") == ["start-slow", "end-slow", "start-fast", "end-fast"],
+                  "A17 ordre des jumps perdu : CLI concurrents")
+        try check(FeedbackJumpFixture.shared.activated == targets.map(\.1), "A17 ordre des activations perdu")
+        print("PASS A17 jumps successifs : CLI, activations et callbacks ordonnés ; MainActor disponible")
     }
 }

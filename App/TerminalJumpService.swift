@@ -22,13 +22,25 @@ enum TerminalJumpService {
         case failed(String)
     }
 
+    @MainActor private static var pendingJump: Task<Void, Never>?
+    @MainActor private static var jumpGeneration = UUID()
+
     /// Lance le jump hors du thread principal et rappelle `completion` sur le main.
     @MainActor
     static func jump(to anchor: TerminalAnchor, completion: @escaping @MainActor (Result) -> Void) {
         let kind = TerminalResolver.resolve(anchor)
-        Task.detached(priority: .userInitiated) {
-            let result = await perform(kind: kind, anchor: anchor)
-            await completion(result)
+        let previous = pendingJump
+        let generation = UUID()
+        jumpGeneration = generation
+        pendingJump = Task {
+            // Conserver l'ordre de l'ancienne queue série : un premier jump
+            // plus lent ne doit pas reprendre le focus après le suivant.
+            await previous?.value
+            let result = await Task.detached(priority: .userInitiated) {
+                await perform(kind: kind, anchor: anchor)
+            }.value
+            completion(result)
+            if jumpGeneration == generation { pendingJump = nil }
         }
     }
 
