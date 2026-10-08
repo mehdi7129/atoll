@@ -731,6 +731,18 @@
         "Scripts/test-codex-exec.py",
         "Scripts/test-codex-exec-verdict.py"
       ]
+    },
+    {
+      "date": "2026-10-08",
+      "document": "docs/REVIEW-2026-10-08-a19-skill-archive.md",
+      "depth": "sweep",
+      "note": "Relecture ciblée A19 du retrait unitaire, de la copie et du flux existant d’erreur ; conservation et reprise vérifiées, sabotage compilé. Pas de lecture intégrale des consommateurs.",
+      "files": [
+        "AtollCore/Sources/AtollCore/LearnedSkillStore.swift",
+        "AtollCore/Tests/AtollCoreTests/LearnedSkillArchivingTests.swift",
+        "Scripts/test-skill-archive-sabotage.py",
+        "App/SkillReviewCenter.swift"
+      ]
     }
   ]
 }
