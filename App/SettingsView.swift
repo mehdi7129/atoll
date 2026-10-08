@@ -272,7 +272,7 @@ private struct AutonomyPane: View {
                         } else {
                             autonomyRaw = newLevel.rawValue
                             // Quitter Rockstar restaure les règles deny parquées.
-                            denyParkingError = syncParking(level: newLevel)
+                            Task { denyParkingError = await syncParking(level: newLevel) }
                         }
                     }
                 )) {
@@ -326,7 +326,7 @@ private struct AutonomyPane: View {
         .onAppear {
             // Auto-réparation : si un état incohérent subsiste (règles parquées
             // hors Rockstar après un échec), on retente en ouvrant les Réglages.
-            if !CodexPreview.enabled { denyParkingError = syncParking(level: currentLevel) }
+            if !CodexPreview.enabled { Task { denyParkingError = await syncParking(level: currentLevel) } }
         }
         .alert("Activer le mode Rockstar ?", isPresented: $confirmingRockstar) {
             Button("Annuler", role: .cancel) { }
@@ -334,8 +334,12 @@ private struct AutonomyPane: View {
                 autonomyRaw = AutonomyLevel.rockstar.rawValue
                 // Entrer en Rockstar suspend (parque) les règles deny et
                 // résout les cartes déjà en attente.
-                denyParkingError = syncParking(level: .rockstar)
-                if !CodexPreview.enabled { InteractionCenter.shared.resolvePendingAsRockstar() }
+                Task {
+                    denyParkingError = await syncParking(level: .rockstar)
+                    if !CodexPreview.enabled, currentLevel == .rockstar {
+                        InteractionCenter.shared.resolvePendingAsRockstar()
+                    }
+                }
             }
         } message: {
             Text("""
@@ -347,9 +351,9 @@ private struct AutonomyPane: View {
             """)
         }
     }
-    private func syncParking(level: AutonomyLevel) -> String? {
+    private func syncParking(level: AutonomyLevel) async -> String? {
         if CodexPreview.enabled { previewParked = level == .rockstar; return nil }
-        return HookInstaller.syncDenyParking(level: level)
+        return await HookInstaller.syncDenyParking(level: level)
     }
 
 }

@@ -80,6 +80,6 @@ struct MemorySettingsSection: View {
 
     private func syncRecall() {
         guard !CodexPreview.enabled else { return }
-        recallError = LearningSettings.shared.syncProactiveRecall()
+        Task { recallError = await LearningSettings.shared.syncProactiveRecall() }
     }
 }

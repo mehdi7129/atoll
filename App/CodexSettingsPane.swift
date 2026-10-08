@@ -172,18 +172,24 @@ struct CodexSettingsPane: View {
     }
 
     private func configure(install: Bool) {
-        guard !CodexPreview.enabled else {
-            installed = install
-            message = install ? "Approuve les hooks Atoll dans /hooks." : "Intégration retirée pour cet aperçu."
-            return
+        Task { @MainActor in
+            guard !CodexPreview.enabled else {
+                installed = install
+                message = install ? "Approuve les hooks Atoll dans /hooks." : "Intégration retirée pour cet aperçu."
+                return
+            }
+            let requestedHome = CodexPaths.homeURL
+            defer { refreshInstalled() }
+            do {
+                try await HookInstaller.configureCodex(install: install)
+                guard CodexPaths.homeURL == requestedHome else { return }
+                diagnostic = nil
+                message = install ? "Définitions à jour. Approuve les hooks Atoll dans /hooks."
+                    : "Intégration retirée. Tes autres hooks et la mémoire commune sont conservés."
+            } catch {
+                if CodexPaths.homeURL == requestedHome { message = error.localizedDescription }
+            }
         }
-        do {
-            try HookInstaller.configureCodex(install: install)
-            refreshInstalled()
-            diagnostic = nil
-            message = install ? "Définitions à jour. Approuve les hooks Atoll dans /hooks."
-                : "Intégration retirée. Tes autres hooks et la mémoire commune sont conservés."
-        } catch { message = error.localizedDescription }
     }
 
     private var advancedSettings: some View {

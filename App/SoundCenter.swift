@@ -409,6 +409,7 @@ final class SoundCenter {
     /// écrit AVANT la modification de settings.json : si Atoll meurt entre les
     /// deux, la restitution reste possible.
     func parkUserSoundHooks() throws {
+        try HookInstaller.requireNoActiveHelper()
         // Un parking illisible : ÉCHOUER plutôt qu'écraser — l'écraser
         // détruirait définitivement les hooks déjà mis de côté (même règle que
         // le parking Rockstar).
@@ -442,6 +443,7 @@ final class SoundCenter {
 
     /// Rend ses hooks sonores à l'utilisateur, puis efface le parking.
     func restoreUserSoundHooks() throws {
+        try HookInstaller.requireNoActiveHelper()
         switch parkingState() {
         case .none:
             return
