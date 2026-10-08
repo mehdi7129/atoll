@@ -71,11 +71,16 @@ public enum HookSettingsEditor {
     public static func install(into data: Data?, command: String,
                                proactiveRecall: Bool = false) throws -> Data {
         var settings = try parse(data)
-        var hooks = settings["hooks"] as? [String: Any] ?? [:]
+        var hooks: [String: Any] = [:]
+        if let value = settings["hooks"] {
+            guard let existing = value as? [String: Any] else {
+                throw EditorError.unparseableSettings
+            }
+            hooks = existing
+        }
 
         for event in managedEvents(proactiveRecall: proactiveRecall) {
-            var entries = try strictEntries(hooks[event.name])
-            entries.removeAll { isManagedEntry($0) }
+            var entries = try strictEntries(hooks[event.name]).compactMap(removingManagedHooks)
             var hook: [String: Any] = [
                 "type": "command",
                 "command": command,
@@ -106,17 +111,7 @@ public enum HookSettingsEditor {
             guard let entries = value as? [[String: Any]],
                   entries.contains(where: { containsManagedHook($0) }) else { continue }
 
-            let remaining = entries.compactMap { entry -> [String: Any]? in
-                if isManagedEntry(entry) { return nil }
-                // Entrée mixte : on retire seulement nos hooks, on garde le reste.
-                var entry = entry
-                if var inner = entry["hooks"] as? [[String: Any]] {
-                    inner.removeAll { isManagedHook($0) }
-                    if inner.isEmpty { return nil }
-                    entry["hooks"] = inner
-                }
-                return entry
-            }
+            let remaining = entries.compactMap(removingManagedHooks)
             hooks[event] = remaining.isEmpty ? nil : remaining
         }
 
@@ -136,6 +131,21 @@ public enum HookSettingsEditor {
               let hooks = settings["hooks"] as? [String: Any] else { return false }
         return managedEvents.allSatisfy { event in
             (hooks[event.name] as? [[String: Any]] ?? []).contains { isManagedEntry($0) }
+        }
+    }
+
+    /// Une ancienne installation peut être complète tout en gardant un hook
+    /// Atoll dans un groupe mixte, en plus de son entrée dédiée. Détecter ces
+    /// doublons séparément conserve le contrat d'installation et de sauvegarde.
+    public static func hasDuplicateManagedHooks(in data: Data?) -> Bool {
+        guard let settings = try? parse(data),
+              let hooks = settings["hooks"] as? [String: Any] else { return false }
+        return managedEvents.contains { event in
+            let entries = hooks[event.name] as? [[String: Any]] ?? []
+            let count = entries.reduce(0) { count, entry in
+                count + ((entry["hooks"] as? [[String: Any]]) ?? []).filter(isManagedHook).count
+            }
+            return count > 1
         }
     }
 
@@ -209,6 +219,18 @@ public enum HookSettingsEditor {
 
     private static func containsManagedHook(_ entry: [String: Any]) -> Bool {
         (entry["hooks"] as? [[String: Any]])?.contains { isManagedHook($0) } == true
+    }
+
+    /// Retire nos seuls sous-hooks, sans déplacer les groupes tiers ni perdre
+    /// leur matcher ou leurs métadonnées. Une structure inconnue reste intacte.
+    private static func removingManagedHooks(_ entry: [String: Any]) -> [String: Any]? {
+        guard let inner = entry["hooks"] as? [[String: Any]],
+              inner.contains(where: isManagedHook) else { return entry }
+        let remaining = inner.filter { !isManagedHook($0) }
+        guard !remaining.isEmpty else { return nil }
+        var result = entry
+        result["hooks"] = remaining
+        return result
     }
 
     private static func isManagedEntry(_ entry: [String: Any]) -> Bool {

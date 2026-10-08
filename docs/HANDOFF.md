@@ -4,6 +4,28 @@
 [CLAUDE.md](../CLAUDE.md). L'[ancien handoff](HANDOFF-2026-09-10-archive.md) conserve
 les mesures et pièges historiques, sans faire autorité sur l'état actuel.
 
+## Lot A07/A08 — préparation en revue, sans distribution
+
+La branche `fix/a07-a08-preserve-hook-groups`, basée sur `aed6546`, corrige
+la restitution des sons dans leur groupe d’origine et les doublons Atoll
+dans les groupes mixtes. Le helper normalise aussi les anciennes installations
+complètes concernées. Les hooks tiers, les métadonnées et les modes de recall
+sont préservés ; les fichiers illisibles sont conservés pour reprise.
+
+Validation : **1 119 tests Core**, un skip, zéro échec ; **12 parcours du
+vrai helper**, **25 sabotages compilés détectés**, builds Debug/Release réussis
+sans signature ni lancement. Les configurations personnelles, l’app installée
+et les produits Debug habituels sont contrôlés identiques.
+[Rapport et commandes](REVIEW-2026-10-08-a07-a08-hooks.md),
+[relevé de validation](audit-support/2026-10-08-a07-a08/validation.json).
+
+Ce lot est indépendant de la [PR #14](https://github.com/mehdi7129/atoll/pull/14)
+(A02/A03, intégrité des états et manifestes), également en revue. Aucune de
+ces quatre corrections n’est encore distribuée. La release reste **0.18.5,
+build 40**. L’app installée observée lors de cette recette est désormais cette
+version ; les observations plus anciennes
+ci-dessous décrivent le moment de leur propre validation.
+
 ## A02 / A03 — correctifs préparés, non distribués
 
 Le [lot suivant](REVIEW-2026-10-08-a02-a03-integrity.md) protège l’état illisible

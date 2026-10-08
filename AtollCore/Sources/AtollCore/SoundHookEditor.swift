@@ -16,6 +16,8 @@ public enum SoundHookEditor {
     public enum EditorError: Error, Equatable {
         /// settings.json existe mais n'est pas un objet JSON valide.
         case unparseableSettings
+        /// Un fragment du parking est illisible : conserver le parking pour reprise.
+        case unparseableParking
     }
 
     /// Un hook sonore mis de côté, avec de quoi le remettre EXACTEMENT où il
@@ -31,11 +33,10 @@ public enum SoundHookEditor {
         public let index: Int
         /// Position du hook DANS son groupe (groupe mixte).
         public let hookIndex: Int
-        /// Le GROUPE d'origine, re-sérialisé — renseigné SEULEMENT quand tous
-        /// ses hooks étaient sonores, donc que le groupe entier disparaît. On le
-        /// remet alors tel quel, avec les clés éventuelles que `ParkedHook` ne
-        /// connaît pas (`description`, extensions futures du CLI) : sans lui,
-        /// elles étaient perdues définitivement.
+        /// Le groupe d'origine, re-sérialisé : ses métadonnées et ses hooks
+        /// tiers permettent de retrouver le bon groupe, même si plusieurs ont
+        /// le même matcher. Les anciens parkings ne renseignaient ce champ que
+        /// lorsque le groupe entier disparaissait.
         public let groupJSON: String?
         /// Commande, extraite pour pouvoir la MONTRER à l'utilisateur avant
         /// qu'il décide.
@@ -218,10 +219,9 @@ public enum SoundHookEditor {
                     return isSoundCommand(command)
                 }
                 guard !soundIndices.isEmpty else { continue }
-                // Le groupe entier disparaît-il ? Si oui, on le conserve TEL
-                // QUEL pour pouvoir le remettre avec ses clés inconnues.
-                let wholeGroupGoes = soundIndices.count == entries.count
-                let groupJSON = wholeGroupGoes ? serializeFragment(group) : nil
+                // Garder aussi le contexte des groupes mixtes : matcher seul
+                // ne distingue pas deux groupes portant des métadonnées tierces.
+                let groupJSON = serializeFragment(group)
                 for position in soundIndices {
                     guard let command = entries[position]["command"] as? String,
                           let json = serializeFragment(entries[position]) else { continue }
@@ -290,84 +290,178 @@ public enum SoundHookEditor {
         var settings = try parse(data)
         var hooks = try strictHooks(settings) ?? [:]
 
-        // Tri STABLE par index (le tri de Swift ne l'est pas) : deux hooks
-        // parqués au même index doivent revenir dans leur ordre d'origine.
-        let ordered = parked.enumerated()
-            .sorted { ($0.element.index, $0.offset) < ($1.element.index, $1.offset) }
-            .map(\.element)
-
-        // Combien d'exemplaires de chaque hook parqué on a déjà traité : c'est
-        // ce compteur qui permet de restituer DEUX entrées identiques (même
-        // commande dans deux groupes) au lieu d'une seule.
-        var handled: [String: Int] = [:]
-
+        // Une origine ne peut consommer qu'un groupe courant. À l'échelle de
+        // l'événement, le son identique remis sous Edit « absorbait » celui de
+        // Bash. À l'échelle du matcher, deux groupes légitimes se confondaient.
+        struct Origin: Hashable {
+            let event: String
+            let index: Int
+            let matcher: String?
+            let context: String?
+        }
+        var origins: [Origin] = []
+        var batches: [Origin: [ParkedHook]] = [:]
+        let ordered = parked.enumerated().sorted {
+            ($0.element.event, $0.element.index, $0.element.hookIndex, $0.offset)
+                < ($1.element.event, $1.element.index, $1.element.hookIndex, $1.offset)
+        }.map(\.element)
         for hook in ordered {
-            guard let entry = parseFragment(hook.hookJSON) else { continue }
-            let key = "\(hook.event)\u{1}\(hook.hookJSON)"
-            let alreadyHandled = handled[key] ?? 0
-            handled[key] = alreadyHandled + 1
-
-            // STRICT : l'événement existe mais n'a pas la forme attendue → on
-            // REFUSE d'écrire. Le remplacer par nos seuls groupes effacerait
-            // définitivement les hooks que l'utilisateur y a mis. (Le modèle
-            // Rockstar échoue de la même façon plutôt que d'écraser.)
-            if let existing = hooks[hook.event], !(existing is [[String: Any]]) {
+            let origin = Origin(event: hook.event, index: hook.index,
+                                matcher: hook.matcher, context: groupContext(hook.groupJSON))
+            if batches[origin] == nil { origins.append(origin) }
+            batches[origin, default: []].append(hook)
+        }
+        // Réserver d'abord les groupes remis intégralement : un groupe partiel
+        // voisin peut contenir les mêmes sons sans être leur origine.
+        var reserved: [Origin: Int] = [:]
+        for origin in origins {
+            guard let original = batches[origin]?.first?.groupJSON.flatMap(parseFragment),
+                  let groups = hooks[origin.event] as? [[String: Any]] else { continue }
+            if let index = groups.indices.first(where: { candidate in
+                !reserved.contains { $0.key.event == origin.event && $0.value == candidate }
+                    && NSDictionary(dictionary: groups[candidate]) == NSDictionary(dictionary: original)
+            }) {
+                reserved[origin] = index
+            }
+        }
+        var claimed: [String: Set<Int>] = [:]
+        for origin in origins {
+            let batch = batches[origin]!
+            let entries = try batch.map { hook -> [String: Any] in
+                guard let entry = parseFragment(hook.hookJSON) else {
+                    throw EditorError.unparseableParking
+                }
+                return entry
+            }
+            let original: [String: Any]?
+            if let json = batch.first?.groupJSON {
+                guard let group = parseFragment(json), group["hooks"] is [[String: Any]] else {
+                    throw EditorError.unparseableParking
+                }
+                original = group
+            } else {
+                original = nil
+            }
+            // Une forme inconnue n'est jamais remplacée par nos seuls sons.
+            if let existing = hooks[origin.event], !(existing is [[String: Any]]) {
                 throw EditorError.unparseableSettings
             }
-            var groups = (hooks[hook.event] as? [[String: Any]]) ?? []
-
-            // Déjà présent ? Comparaison sur le hook COMPLET, pas sur la seule
-            // commande : deux groupes peuvent porter la même commande avec des
-            // matchers différents, et n'en restituer qu'un en perdait un.
-            let occurrences = groups.reduce(0) { total, group in
-                let entries = (group["hooks"] as? [[String: Any]]) ?? []
-                return total + entries.filter { serializeFragment($0) == hook.hookJSON }.count
+            var groups = (hooks[origin.event] as? [[String: Any]]) ?? []
+            var used = claimed[origin.event] ?? []
+            let anchors = ((original?["hooks"] as? [[String: Any]]) ?? []).filter {
+                !isSoundCommand($0["command"] as? String ?? "")
+            }.compactMap(serializeFragment)
+            let soundKeys = Set(entries.compactMap(serializeFragment))
+            // Les clés inconnues font partie du contexte, pas seulement matcher.
+            let context = original.map { group -> NSDictionary in
+                var metadata = group
+                metadata["hooks"] = nil
+                return NSDictionary(dictionary: metadata)
             }
-            // Cet exemplaire-là est-il déjà en place ? (restitution rejouée, ou
-            // hook remis à la main par l'utilisateur pendant le parking)
-            if occurrences > alreadyHandled { continue }
-
-            if let groupJSON = hook.groupJSON, let original = parseFragment(groupJSON) {
-                // Le groupe entier avait disparu : on le remet TEL QUEL, avec
-                // ses éventuelles clés qu'on ne connaît pas.
-                let position = min(max(hook.index, 0), groups.count)
-                groups.insert(original, at: position)
-            } else if let target = groups.indices.first(where: {
-                ($0 == hook.index) && (groups[$0]["matcher"] as? String) == hook.matcher
-            }) ?? groups.indices.first(where: {
-                (groups[$0]["matcher"] as? String) == hook.matcher
-            }) {
-                // Groupe MIXTE toujours là : le hook retourne DEDANS, à sa
-                // place — et non dans un groupe jumeau créé à côté.
-                var entries = (groups[target]["hooks"] as? [[String: Any]]) ?? []
-                entries.insert(entry, at: min(max(hook.hookIndex, 0), entries.count))
-                groups[target]["hooks"] = entries
+            let candidates = groups.indices.filter { index in
+                guard !used.contains(index),
+                      !reserved.contains(where: { $0.key.event == origin.event && $0.value == index && $0.key != origin }),
+                      (groups[index]["matcher"] as? String) == origin.matcher else { return false }
+                if let context {
+                    var metadata = groups[index]
+                    metadata["hooks"] = nil
+                    guard context == NSDictionary(dictionary: metadata),
+                          let current = groups[index]["hooks"] as? [[String: Any]] else { return false }
+                    let keys = current.compactMap(serializeFragment)
+                    let currentSounds = current.filter {
+                        isSoundCommand($0["command"] as? String ?? "")
+                    }.compactMap(serializeFragment)
+                    guard currentSounds.allSatisfy(soundKeys.contains) else { return false }
+                    let currentAnchors = current.filter {
+                        !isSoundCommand($0["command"] as? String ?? "")
+                    }.compactMap(serializeFragment)
+                    if !currentAnchors.isEmpty {
+                        return anchors == currentAnchors
+                    }
+                    // Un son propre à un autre groupe interdit de le consommer.
+                    return keys.allSatisfy(soundKeys.contains)
+                }
+                // Parking historique de groupe mixte : seul matcher est connu.
+                return true
+            }
+            let target: Int
+            if let existing = reserved[origin]
+                ?? candidates.first(where: { $0 == origin.index }) ?? candidates.first {
+                target = existing
             } else {
-                var group: [String: Any] = ["hooks": [entry]]
-                if let matcher = hook.matcher { group["matcher"] = matcher }
-                groups.insert(group, at: min(max(hook.index, 0), groups.count))
+                // Ne recréer que les sons retirés, jamais un hook tiers/Atoll
+                // supprimé pendant le parking. Ses métadonnées restent intactes.
+                var group = original ?? [:]
+                group["hooks"] = [[String: Any]]()
+                if let matcher = origin.matcher { group["matcher"] = matcher }
+                target = min(max(origin.index, 0), groups.count)
+                groups.insert(group, at: target)
+                used = Set(used.map { $0 >= target ? $0 + 1 : $0 })
+                for key in Array(reserved.keys) where key.event == origin.event {
+                    if let index = reserved[key], index >= target { reserved[key] = index + 1 }
+                }
             }
-            hooks[hook.event] = groups
+            guard var current = groups[target]["hooks"] as? [[String: Any]] else {
+                throw EditorError.unparseableSettings
+            }
+            var consumed: [String: Int] = [:]
+            var positions: [Int: Int] = [:]
+            for (hook, entry) in zip(batch, entries) {
+                // Deux parkings successifs peuvent donner le même hookIndex à
+                // deux sons différents : leur ordre de parking départage l'égalité.
+                let position = hook.hookIndex + positions[hook.hookIndex, default: 0]
+                positions[hook.hookIndex, default: 0] += 1
+                let key = serializeFragment(entry)!
+                let handled = consumed[key, default: 0]
+                consumed[key] = handled + 1
+                let occurrences = current.filter { serializeFragment($0) == key }.count
+                if occurrences > handled { continue }
+                current.insert(entry, at: min(max(position, 0), current.count))
+            }
+            groups[target]["hooks"] = current
+            used.insert(target)
+            claimed[origin.event] = used
+            hooks[origin.event] = groups
         }
         settings["hooks"] = hooks.isEmpty ? nil : hooks
         return try serialize(settings)
     }
 
     /// Fusionne un parking précédent avec un nouveau (parking rejoué après un
-    /// crash) : les anciens d'abord, sans doublon.
-    ///
-    /// La clé porte sur l'ENTRÉE, pas sur la seule commande : deux hooks de même
-    /// commande peuvent différer par leur matcher ou leurs options (`timeout`,
-    /// `async`). Dédoublonner sur la commande jetait le second — retiré de
-    /// settings.json, absent du parking, donc perdu définitivement (audit du
-    /// 2026-07-27). L'index est exclu à dessein : un parking rejoué après un
-    /// crash produit des entrées identiques, qui restent bien dédoublonnées.
+    /// crash). Pour chaque contexte et hook, garder la multiplicité maximale
+    /// observée : dédoublonner une clé seule supprimait des exemplaires légitimes.
+    /// L'index n'est pas une identité : les groupes restants changent de place
+    /// après parking. Les métadonnées inconnues distinguent leurs contextes.
     public static func mergeParked(previous: [ParkedHook], new: [ParkedHook]) -> [ParkedHook] {
-        func key(_ hook: ParkedHook) -> String {
-            "\(hook.event)\u{1}\(hook.matcher ?? "")\u{1}\(hook.hookJSON)"
+        struct Identity: Equatable {
+            let event: String
+            let matcher: String?
+            let context: String?
+            let hookJSON: String
+
+            func matchesLegacy(_ other: Identity) -> Bool {
+                event == other.event && matcher == other.matcher && hookJSON == other.hookJSON
+                    && (context == nil || other.context == nil)
+            }
         }
-        let known = Set(previous.map(key))
-        return previous + new.filter { !known.contains(key($0)) }
+        func key(_ hook: ParkedHook) -> Identity {
+            let context = groupContext(hook.groupJSON)
+            let entry = parseFragment(hook.hookJSON).flatMap(serializeFragment) ?? hook.hookJSON
+            return Identity(event: hook.event, matcher: hook.matcher, context: context, hookJSON: entry)
+        }
+        var remaining = previous.map(key)
+        return previous + new.filter { hook in
+            let identity = key(hook)
+            // Préférer le contexte exact ; l'ancien format ne connaît que le
+            // matcher, mais chaque exemplaire n'est consommé qu'une seule fois.
+            if let index = remaining.firstIndex(of: identity)
+                ?? remaining.firstIndex(where: { $0.matchesLegacy(identity) }) {
+                remaining.remove(at: index)
+                return false
+            }
+            return true
+        }
+
     }
 
     // MARK: - Encodage du fichier de parking
@@ -386,6 +480,18 @@ public enum SoundHookEditor {
     }
 
     // MARK: - Interne
+
+    /// Identité de groupe indépendante des sons retirés ou remis entre deux
+    /// parkings. Les ancres tierces et les métadonnées restent discriminantes.
+    /// Un fragment illisible garde son identité brute jusqu'au refus de restore.
+    private static func groupContext(_ json: String?) -> String? {
+        json.map { value in
+            guard var group = parseFragment(value),
+                  let entries = group["hooks"] as? [[String: Any]] else { return value }
+            group["hooks"] = entries.filter { !isSoundCommand($0["command"] as? String ?? "") }
+            return serializeFragment(group)!
+        }
+    }
 
     /// nil = clé absente ; présente mais pas un objet → erreur, refus d'écrire.
     private static func strictHooks(_ settings: [String: Any]) throws -> [String: Any]? {
