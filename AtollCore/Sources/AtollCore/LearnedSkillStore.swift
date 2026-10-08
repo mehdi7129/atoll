@@ -331,9 +331,10 @@ public struct LearnedSkillStore {
 
     // MARK: - Désinstallation unitaire
 
-    /// Retire un skill installé : copie du `SKILL.md` vers
+    /// Retire un skill installé : copie du dossier complet vers
     /// `archive/uninstalled/<slug>-<ts>/` AVANT de retirer le dossier, puis
-    /// entrée retirée du manifeste. Slug hors manifeste → no-op (le dossier
+    /// entrée retirée du manifeste. Une archive impossible laisse le skill
+    /// installé et son entrée intacts. Slug hors manifeste → no-op (le dossier
     /// éventuel n'est pas géré par Atoll, on n'y touche pas).
     public func archiveInstalled(slug rawSlug: String) throws {
         guard let slug = SkillSlug.validate(rawSlug) else {
@@ -353,7 +354,9 @@ public struct LearnedSkillStore {
             return
         }
         if fm.fileExists(atPath: target.path) {
-            _ = try? archiveDirectory(target, category: "uninstalled", slug: slug, stamp: timestamp())
+            // « Archiver » exige une copie réussie avant tout retrait. L'erreur
+            // remonte à la revue, qui conserve le skill pour une autre tentative.
+            try archiveDirectory(target, category: "uninstalled", slug: slug, stamp: timestamp())
             try fm.removeItem(at: target)
         }
         manifest.skills.remove(at: index)
