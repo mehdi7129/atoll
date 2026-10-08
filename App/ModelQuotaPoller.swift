@@ -90,47 +90,18 @@ final class ModelQuotaPoller {
     /// `/usr/bin/security` (identité STABLE — un accès SecItemCopyMatching
     /// depuis l'app redemanderait l'autorisation à CHAQUE build Debug redéployé,
     /// le trousseau voyant chaque binaire adhoc comme une app différente).
-    private static func readAccessToken() async -> String? {
-        await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .utility).async {
-                let process = Process()
-                process.executableURL = URL(fileURLWithPath: "/usr/bin/security")
-                process.arguments = ["find-generic-password", "-s", "Claude Code-credentials", "-w"]
-                let output = Pipe()
-                process.standardOutput = output
-                process.standardError = Pipe()
-                do {
-                    try process.run()
-                } catch {
-                    continuation.resume(returning: nil)
-                    return
-                }
-                // WATCHDOG — même discipline que partout ailleurs sur ce projet.
-                // `/usr/bin/security` peut ouvrir un dialogue du Trousseau et
-                // attendre INDÉFINIMENT une réponse. La continuation n'est pas
-                // annulable : sans borne, le poller restait figé pour toute la
-                // durée de vie de l'app, sans un mot dans le journal. Le
-                // `terminate` ferme les pipes, donc `readDataToEndOfFile`
-                // retourne et l'appelant reprend la main.
-                let pid = process.processIdentifier
-                DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + Self.keychainTimeout) {
-                    guard process.isRunning else { return }
-                    log.error("lecture du trousseau : délai dépassé, abandon")
-                    process.terminate()
-                    DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 1) {
-                        if kill(pid, 0) == 0 { kill(pid, SIGKILL) }
-                    }
-                }
-                let data = output.fileHandleForReading.readDataToEndOfFile()
-                process.waitUntilExit()
-                guard process.terminationStatus == 0,
-                      let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
-                      let oauth = root["claudeAiOauth"] as? [String: Any] else {
-                    continuation.resume(returning: nil)
-                    return
-                }
-                continuation.resume(returning: oauth["accessToken"] as? String)
-            }
-        }
+    static func readAccessToken(executable: URL = URL(fileURLWithPath: "/usr/bin/security"),
+                                timeout: TimeInterval = keychainTimeout) async -> String? {
+        let process = Process()
+        process.executableURL = executable
+        process.arguments = ["find-generic-password", "-s", "Claude Code-credentials", "-w"]
+        process.standardInput = FileHandle.nullDevice
+        guard let result = try? await BoundedProcessRunner.run(process, timeout: timeout,
+                                                               stdoutCap: 1024 * 1024),
+              result.succeeded,
+              let root = (try? JSONSerialization.jsonObject(with: result.stdout)) as? [String: Any],
+              let oauth = root["claudeAiOauth"] as? [String: Any],
+              let token = oauth["accessToken"] as? String, !token.isEmpty else { return nil }
+        return token
     }
 }

@@ -53,38 +53,17 @@ enum ClaudeExecutable {
         // fois. Ne pas répéter un échec à chaque fin de session.
         guard !triedLoginResolve else { return nil }
         triedLoginResolve = true
-        let resolved = await Task.detached(priority: .utility) { () -> String? in
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/bin/zsh")
-            process.arguments = ["-l", "-c", "command -v claude"]
-            let pipe = Pipe()
-            process.standardOutput = pipe
-            process.standardError = FileHandle.nullDevice
-            process.standardInput = FileHandle.nullDevice
-            let identity: ProcessIdentity?
-            do { identity = try ProcessInspector.launchOwned(process) } catch { return nil }
-            armWatchdog(process, identity: identity)
-            let data = BoundedProcessOutput.drain(pipe.fileHandleForReading, cap: 16_384)
-            process.waitUntilExit()
-            let path = String(decoding: data, as: UTF8.self)
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            return (process.terminationStatus == 0 && !path.isEmpty
-                    && FileManager.default.isExecutableFile(atPath: path)) ? path : nil
-        }.value
-        cached = resolved
-        return resolved
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        process.arguments = ["-l", "-c", "command -v claude"]
+        process.standardInput = FileHandle.nullDevice
+        guard let result = try? await BoundedProcessRunner.run(process, timeout: loginResolveTimeout,
+                                                               stdoutCap: 16_384), result.succeeded else { return nil }
+        let path = String(decoding: result.stdout, as: UTF8.self)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !path.isEmpty, FileManager.default.isExecutableFile(atPath: path) else { return nil }
+        cached = path
+        return path
     }
 
-    /// Tue un process qui dépasse `loginResolveTimeout` (SIGTERM puis SIGKILL) :
-    /// un profil qui pend ne doit pas geler le lanceur.
-    nonisolated private static func armWatchdog(_ process: Process, identity: ProcessIdentity?) {
-        guard let identity else { return }
-        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + loginResolveTimeout) {
-            guard process.isRunning else { return }
-            ProcessInspector.signal(SIGTERM, to: identity)
-            DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 1) {
-                ProcessInspector.signal(SIGKILL, to: identity)
-            }
-        }
-    }
 }

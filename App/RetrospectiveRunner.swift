@@ -33,7 +33,7 @@ final class RetrospectiveRunner {
     @ObservationIgnored private var queue: [Job] = []
     @ObservationIgnored private var pendingDelay: Task<Void, Never>?
     @ObservationIgnored private var process: Process?
-    @ObservationIgnored private var timeoutTask: Task<Void, Never>?
+    @ObservationIgnored private var outputTask: Task<BoundedProcessRunner.Result, Never>?
     @ObservationIgnored private var lastEndedSnapshot: SessionStore.Tracked?
     /// Entrée de journal du run en cours, complétée par `finish`.
     @ObservationIgnored private var pendingAttempt: AttemptRecord?
@@ -158,8 +158,8 @@ final class RetrospectiveRunner {
         queue.removeAll()
         pendingDelay?.cancel()
         pendingDelay = nil
-        timeoutTask?.cancel()
-        timeoutTask = nil
+        outputTask?.cancel()
+        outputTask = nil
         terminateWithEscalation()
         phase = .idle
     }
@@ -175,6 +175,7 @@ final class RetrospectiveRunner {
     }
 
     private func terminateWithEscalation() {
+        outputTask?.cancel()
         guard let identity = processIdentity else { return }
         ProcessInspector.signal(SIGTERM, to: identity)
         Task.detached(priority: .utility) {
@@ -645,6 +646,7 @@ final class RetrospectiveRunner {
         // (revalidation, écriture des fichiers) est commun : c'est la propriété
         // qui rend la bascule sûre — Atoll écrit toujours lui-même, après ses
         // propres contrôles, quel que soit le modèle qui a répondu.
+        let deadline = ContinuousClock.now.advanced(by: .seconds(Self.timeoutSeconds))
         let launch: CodexRun.Launch?
         switch provider {
         case .claude:
@@ -701,6 +703,10 @@ final class RetrospectiveRunner {
         process.standardOutput = stdout
         process.standardError = stderr
 
+        guard BoundedProcessRunner.remaining(until: deadline) > 0 else {
+            finish(job, outcome: "failed(spawn)", transcriptBytes: 0)
+            return
+        }
         do {
             try AnalysisBudget.shared.prepareToLaunch(lease)
             processIdentity = try ProcessInspector.launchOwned(process)
@@ -717,46 +723,17 @@ final class RetrospectiveRunner {
         SessionStore.shared.registerInternalPid(pid)
         log.info("rétrospective lancée (pid \(pid)) pour \(job.snapshot.id, privacy: .public)")
 
-        timeoutTask?.cancel()   // jamais réaffecter sans annuler (même hygiène qu'à la fin d'un run)
-        timeoutTask = Task {
-            try? await Task.sleep(for: .seconds(Self.timeoutSeconds))
-            guard !Task.isCancelled else { return }
-            log.error("rétrospective (pid \(pid)) : timeout \(Int(Self.timeoutSeconds)) s — SIGTERM")
-            if let identity { ProcessInspector.signal(SIGTERM, to: identity) }
-            try? await Task.sleep(for: .seconds(5))
-            guard !Task.isCancelled else { return }
-            if let identity { ProcessInspector.signal(SIGKILL, to: identity) }
+        outputTask = Task {
+            await BoundedProcessRunner.collect(process: process, stdout: stdout, stderr: stderr,
+                identity: identity, deadline: deadline, stdoutCap: Self.stdoutCapBytes,
+                stderrCap: 2000, terminationGrace: 5)
         }
-
-        // Lectures BLOQUANTES sur des tâches détachées (readabilityHandler est
-        // inopérant en LSUIElement — piège vécu) ; livraison au MainActor.
-        // Les DEUX pipes sont drainés EN PARALLÈLE (revue) : en série, un
-        // stderr saturé (~64 Ko) bloque `claude` dans son `write`, stdout ne
-        // se ferme jamais et il faut attendre le timeout. Au-delà du cap on
-        // continue de lire en jetant : on ne cesse jamais de vider le tuyau.
-        async let outputTask: Data = Task.detached(priority: .utility) {
-            var collected = Data()
-            var overflowed = false
-            let handle = stdout.fileHandleForReading
-            while let chunk = try? handle.read(upToCount: 1 << 16), !chunk.isEmpty {
-                if overflowed { continue }
-                collected.append(chunk)
-                if collected.count > Self.stdoutCapBytes { overflowed = true } // borné
-            }
-            return collected
-        }.value
-        async let errorTask: String = Task.detached(priority: .utility) {
-            let data = BoundedProcessOutput.drain(stderr.fileHandleForReading, cap: 2000, tail: true)
-            let text = String(decoding: data.suffix(2000), as: UTF8.self)
-            return text.trimmingCharacters(in: .whitespacesAndNewlines)
-        }.value
-        let output = await outputTask
-        let errorTail = await errorTask
+        let result = await outputTask!.value
+        let output = result.stdout
+        let errorTail = String(decoding: result.stderr, as: UTF8.self)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         AnalysisBudget.shared.recordUsage(lease, stdout: output)
-
-        await Task.detached(priority: .utility) { process.waitUntilExit() }.value
-        timeoutTask?.cancel()
-        timeoutTask = nil
+        outputTask = nil
         SessionStore.shared.unregisterInternalPid(pid)
         self.process = nil
         processIdentity = nil
@@ -770,13 +747,14 @@ final class RetrospectiveRunner {
         // jusqu'à sa nouvelle taille, que ce modèle n'a pas nécessairement lue.
         let transcriptBytes = pendingAttempt?.transcriptBytes ?? 0
 
-        guard process.terminationStatus == 0 else {
-            log.error("rétrospective (pid \(pid)) : exit \(process.terminationStatus) — \(errorTail, privacy: .public)")
+        let status = result.status ?? -1
+        guard result.succeeded else {
+            log.error("rétrospective (pid \(pid)) : exit \(status) — \(errorTail, privacy: .public)")
             // Le code de sortie va AU JOURNAL : c'est lui qui distingue un
             // arrêt d'Atoll (143 = SIGTERM, ex. session reprise) d'un refus du
             // modèle. Sans lui, le journal — dont c'est la raison d'être —
             // n'affichait qu'« failed(exit) », muet sur la cause (vu en vrai).
-            finish(job, outcome: "failed(exit \(process.terminationStatus))",
+            finish(job, outcome: result.timedOut ? "failed(timeout)" : "failed(exit \(status))",
                    transcriptBytes: transcriptBytes)
             return
         }

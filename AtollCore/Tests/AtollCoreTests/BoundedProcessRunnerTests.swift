@@ -41,12 +41,14 @@ final class BoundedProcessRunnerTests: XCTestCase {
     }
 
     func testTermIgnoredEscalatesAndReturnsWithinDeadline() async throws {
-        let process = python("import signal,time; signal.signal(signal.SIGTERM,signal.SIG_IGN); time.sleep(20)")
+        let process = python("import signal,time; signal.signal(signal.SIGTERM,signal.SIG_IGN); print('ready',flush=True); time.sleep(20)")
         let start = ContinuousClock.now
-        let result = try await BoundedProcessRunner.run(process, timeout: 0.3, terminationGrace: 0.1)
+        let result = try await BoundedProcessRunner.run(process, timeout: 1, terminationGrace: 0.1)
         XCTAssertTrue(result.timedOut)
+        XCTAssertEqual(String(decoding: result.stdout, as: UTF8.self), "ready\n", "Fixture TERM ignoré non armée")
+        XCTAssertEqual(result.status, SIGKILL)
         XCTAssertFalse(process.isRunning, "A09 unbounded process after escalation")
-        XCTAssertLessThan(start.duration(to: .now), .seconds(1.5))
+        XCTAssertLessThan(start.duration(to: .now), .seconds(2))
     }
 
     func testCancellationReachesDetachedCollector() async throws {
