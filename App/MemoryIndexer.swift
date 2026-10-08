@@ -439,16 +439,14 @@ private actor MemoryIndexWorker {
               let text = try? String(contentsOf: url, encoding: .utf8) else { return }
         let inode = (attrs[.systemFileNumber] as? UInt64) ?? 0
         let size = (attrs[.size] as? Int64) ?? 0
-        guard let state = try? index.openFile(path: url.path, inode: inode, size: size),
-              state.offset < size else { return }
         let line = TranscriptLine(
             uuid: "note", sessionID: nil, timestamp: Date(), cwd: nil, gitBranch: nil,
             fragments: [.init(role: .title, text: "Note Atoll : \(slug)"),
                         .init(role: .note, text: text)]
         )
-        try? index.ingest(lines: [(line, "note-0")], fileState: state,
-                          sessionID: "atoll-note-\(slug)", projectDir: "atoll-notes",
-                          newOffset: size)
+        try? index.replaceDocument(path: url.path, inode: inode, size: size,
+                                   line: text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : line,
+                                   sessionID: "atoll-note-\(slug)", projectDir: "atoll-notes")
     }
 
     /// Une mémoire de projet de Claude Code (`<projet>/memory/<nom>.md`).
@@ -468,12 +466,9 @@ private actor MemoryIndexWorker {
     /// la retiendra que hors de ce mode — dégradé, jamais faux.
     private func indexProjectMemory(url: URL, projectDir: String, index: MemoryIndex) {
         guard let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
-              let text = try? String(contentsOf: url, encoding: .utf8),
-              !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+              let text = try? String(contentsOf: url, encoding: .utf8) else { return }
         let inode = (attrs[.systemFileNumber] as? UInt64) ?? 0
         let size = (attrs[.size] as? Int64) ?? 0
-        guard let state = try? index.openFile(path: url.path, inode: inode, size: size),
-              state.offset < size else { return }
         let name = url.deletingPathExtension().lastPathComponent
         let modified = (attrs[.modificationDate] as? Date) ?? Date()
         let line = TranscriptLine(
@@ -484,9 +479,9 @@ private actor MemoryIndexWorker {
             fragments: [.init(role: .title, text: "Mémoire de projet : \(name)"),
                         .init(role: .memory, text: text)]
         )
-        try? index.ingest(lines: [(line, "memory-0")], fileState: state,
-                          sessionID: "claude-memory-\(projectDir)-\(name)",
-                          projectDir: projectDir, newOffset: size)
+        try? index.replaceDocument(path: url.path, inode: inode, size: size,
+                                   line: text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : line,
+                                   sessionID: "claude-memory-\(projectDir)-\(name)", projectDir: projectDir)
     }
 
     /// `cwd` du projet, lu dans un transcript de son dossier.
@@ -510,9 +505,9 @@ private actor MemoryIndexWorker {
             guard let handle = FileHandle(forReadingAtPath: file.path) else { continue }
             defer { try? handle.close() }
             guard let head = try? handle.read(upToCount: 256 * 1024), !head.isEmpty else { continue }
-            // La DERNIÈRE ligne du bloc est probablement tronquée : on ne garde
-            // que celles qui sont complètes.
-            let lines = head.split(separator: 0x0A, omittingEmptySubsequences: true).dropLast()
+            // Avec les champs vides conservés, dropLast retire soit le fragment
+            // incomplet, soit le champ vide APRÈS un dernier newline complet.
+            let lines = head.split(separator: 0x0A, omittingEmptySubsequences: false).dropLast()
             for raw in lines {
                 guard let object = try? JSONSerialization.jsonObject(with: Data(raw)),
                       let line = object as? [String: Any],
@@ -544,15 +539,19 @@ private actor MemoryIndexWorker {
         let mtime = (attrs[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
         if let cached = lastSeen[path], cached == (inode, size, mtime) { return false }
 
-        // openFile purge et remet l'offset à 0 si le fichier a été remplacé
-        // (inode) ou tronqué (size < offset stocké).
-        guard let state = try? index.openFile(path: path, inode: inode, size: size) else { return false }
-        guard state.offset < size, let handle = FileHandle(forReadingAtPath: path) else {
-            lastSeen[path] = (inode, size, mtime)
-            return true
-        }
+        // Un refus d'ouverture n'acquitte jamais les métadonnées et précède
+        // toute purge : le prochain scan ou nudge retentera le même fichier.
+        guard let handle = FileHandle(forReadingAtPath: path) else { return true }
         defer { try? handle.close() }
-        try? handle.seek(toOffset: UInt64(state.offset))
+        guard let offset = try? index.resumeOffset(path: path, inode: inode, size: size) else { return true }
+        do {
+            try handle.seek(toOffset: UInt64(offset))
+        } catch {
+            return true // Offset et lastSeen non avancés ; réessai à la passe suivante.
+        }
+        // openFile purge les rotations/troncatures : attendre une première
+        // lecture réussie pour ne pas effacer l'ancienne version sur erreur IO.
+        var state: MemoryIndex.FileState?
 
         // Identifiant de session. Côté Codex le fichier s'appelle
         // `rollout-<horodatage>-<uuid>.jsonl` : on en extrait l'uuid et on le
@@ -562,7 +561,8 @@ private actor MemoryIndexWorker {
         let sessionID = provider == .codex
             ? "codex:" + CodexRollout.sessionID(fromFileName: url.lastPathComponent)
             : url.deletingPathExtension().lastPathComponent
-        var splitter = TranscriptLineSplitter(startOffset: state.offset)
+        var splitter = TranscriptLineSplitter(startOffset: offset)
+        var processedOffset = offset
         var batch: [(line: TranscriptLine, syntheticUUID: String)] = []
         var skillUses: [SkillInvocation] = [] // invocations de skills pour les stats (7c)
 
@@ -571,10 +571,10 @@ private actor MemoryIndexWorker {
         // lastSeen : l'offset en base n'a pas avancé (transaction), le scan de
         // 30 s retentera — aucune ligne ne peut être perdue en silence.
         func flush() -> Bool {
-            guard splitter.consumedOffset > state.offset || !batch.isEmpty else { return true }
+            guard let state, processedOffset > offset || !batch.isEmpty else { return true }
             do {
                 try index.ingest(lines: batch, fileState: state, sessionID: sessionID,
-                                 projectDir: projectDir, newOffset: splitter.consumedOffset)
+                                 projectDir: projectDir, newOffset: processedOffset)
                 batch.removeAll(keepingCapacity: true)
             } catch {
                 log.error("ingest \(url.lastPathComponent, privacy: .public) : \(error.localizedDescription) — lot abandonné, retente au prochain scan")
@@ -593,8 +593,21 @@ private actor MemoryIndexWorker {
 
         while true {
             if Task.isCancelled { return true } // sans lastSeen : sera repris
-            guard let chunk = try? handle.read(upToCount: Self.chunkSize), !chunk.isEmpty else { break }
+            let chunk: Data?
+            do {
+                chunk = try handle.read(upToCount: Self.chunkSize)
+            } catch {
+                return true // Une erreur de lecture n'est pas un EOF : ne pas acquitter.
+            }
+            if state == nil {
+                guard let opened = try? index.openFile(path: path, inode: inode, size: size) else { return true }
+                state = opened
+            }
+            guard let chunk, !chunk.isEmpty else { break }
             for line in splitter.consume(chunk) {
+                // consume a déjà découpé TOUT le bloc. Un flush intermédiaire
+                // ne doit acquitter que les lignes effectivement traitées.
+                processedOffset = line.startOffset + Int64(line.data.count) + 1
                 let parsed = provider == .codex
                     ? CodexTranscriptParser.parse(line.data)
                     : TranscriptLineParser.parse(line.data)
@@ -609,6 +622,9 @@ private actor MemoryIndexWorker {
                 }
                 if batch.count >= Self.batchSize, !flush() { return true }
             }
+            // Inclut les lignes vides et la borne des lignes pathologiques
+            // abandonnées par le splitter, une fois tout le bloc traité.
+            processedOffset = splitter.consumedOffset
             await Task.yield() // backfill de centaines de Mo sans monopoliser un cœur
         }
         // La queue partielle (ligne incomplète en cours d'écriture) n'est JAMAIS

@@ -200,6 +200,15 @@ public final class MemoryIndex {
         }
     }
 
+    /// Prépare la reprise SANS modifier l'index : l'appelant ouvre, cherche
+    /// et lit d'abord le fichier. Une erreur IO ne doit pas purger l'ancienne
+    /// version ni réinitialiser son offset avant la première lecture réussie.
+    public func resumeOffset(path: String, inode: UInt64, size: Int64) throws -> Int64 {
+        guard let existing = try selectFile(path: path),
+              existing.inode == inode, size >= existing.offset else { return 0 }
+        return existing.offset
+    }
+
     /// Marque un fichier disparu du disque. Ses messages restent cherchables
     /// (la mémoire survit au ménage dans `~/.claude/projects/`) ; le flag sert
     /// au diagnostic et à un éventuel ménage explicite futur.
@@ -422,56 +431,126 @@ public final class MemoryIndex {
                        projectDir: String,
                        newOffset: Int64) throws {
         try withTransaction {
-            let digest = SessionDigest(lines: lines.map(\.line))
-            try run(Self.sessionUpsertSQL, binds: [
-                .text(sessionID),
-                .text(projectDir),
-                .optionalText(digest.projectPath),
-                .optionalText(digest.title),
-                .optionalText(digest.gitBranch),
-                .optionalInt(digest.firstTS),
-                .optionalInt(digest.lastTS),
-            ])
-            guard let sessionRowID = try scalarRow(
-                "SELECT id FROM sessions WHERE session_id = ?1",
-                binds: [.text(sessionID)]
-            ) else {
-                throw MemoryIndexError.sqlite(code: SQLITE_INTERNAL,
-                                              message: "session absente après upsert")
-            }
-
-            let insert = try prepare(
-                """
-                INSERT OR IGNORE INTO messages(session_id, file_id, uuid, block_idx, role, ts, text)
-                VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7)
-                """
-            )
-            defer { sqlite3_finalize(insert) }
-            for entry in lines {
-                let uuid = entry.line.uuid ?? entry.syntheticUUID
-                let ts = entry.line.timestamp.map { Int64($0.timeIntervalSince1970) }
-                for (blockIdx, fragment) in entry.line.fragments.enumerated() {
-                    sqlite3_reset(insert)
-                    sqlite3_clear_bindings(insert)
-                    try apply([
-                        .int(sessionRowID),
-                        .int(fileState.fileID),
-                        .text(uuid),
-                        .int(Int64(blockIdx)),
-                        .text(fragment.role.rawValue),
-                        .optionalInt(ts),
-                        .text(fragment.text),
-                    ], to: insert)
-                    _ = try step(insert)
-                }
-            }
-
-            try run("UPDATE files SET offset = ?1, mtime = ?2 WHERE id = ?3", binds: [
-                .int(newOffset),
-                .real(Date().timeIntervalSince1970),
-                .int(fileState.fileID),
-            ])
+            try ingestInTransaction(lines: lines, fileState: fileState, sessionID: sessionID,
+                                    projectDir: projectDir, newOffset: newOffset)
         }
+    }
+
+    /// Remplace un Markdown complet, y compris vide, sans exposer de purge
+    /// intermédiaire. Contrairement au JSONL, inode et taille ne disent pas si
+    /// son contenu a changé. La comparaison persistée évite de réécrire les
+    /// fragments inchangés, même après un redémarrage du worker.
+    public func replaceDocument(path: String, inode: UInt64, size: Int64,
+                                line: TranscriptLine?, sessionID: String,
+                                projectDir: String) throws {
+        try withTransaction {
+            let existing = try selectFile(path: path)
+            if let existing, existing.inode == inode, existing.offset == size,
+               try documentMatches(fileID: existing.id, line: line,
+                                   sessionID: sessionID, projectDir: projectDir) {
+                try run("UPDATE files SET missing = 0 WHERE id = ?1 AND missing != 0",
+                        binds: [.int(existing.id)])
+                return
+            }
+            let fileID: Int64
+            if let existing {
+                fileID = existing.id
+                try run("DELETE FROM messages WHERE file_id = ?1", binds: [.int(fileID)])
+                try run("UPDATE files SET inode = ?1, offset = 0, missing = 0 WHERE id = ?2",
+                        binds: [.int(Int64(bitPattern: inode)), .int(fileID)])
+            } else {
+                try run("INSERT INTO files(path, inode) VALUES(?1, ?2)",
+                        binds: [.text(path), .int(Int64(bitPattern: inode))])
+                fileID = sqlite3_last_insert_rowid(try handle())
+            }
+            if let line {
+                try ingestInTransaction(lines: [(line, "document")],
+                                        fileState: FileState(fileID: fileID, offset: 0),
+                                        sessionID: sessionID, projectDir: projectDir, newOffset: size)
+            } else {
+                try run("UPDATE files SET offset = ?1, mtime = ?2 WHERE id = ?3",
+                        binds: [.int(size), .real(Date().timeIntervalSince1970), .int(fileID)])
+            }
+            try run("DELETE FROM sessions WHERE id NOT IN (SELECT DISTINCT session_id FROM messages)")
+        }
+    }
+
+    private func documentMatches(fileID: Int64, line: TranscriptLine?,
+                                 sessionID: String, projectDir: String) throws -> Bool {
+        let stmt = try prepare("""
+            SELECT m.role, m.text, s.session_id, s.project_dir, s.project_path
+            FROM messages m JOIN sessions s ON s.id = m.session_id
+            WHERE m.file_id = ?1 ORDER BY m.block_idx
+            """)
+        defer { sqlite3_finalize(stmt) }
+        try apply([.int(fileID)], to: stmt)
+        let fragments = line?.fragments ?? []
+        var position = 0
+        while try step(stmt) {
+            guard position < fragments.count,
+                  columnText(stmt, 0) == fragments[position].role.rawValue,
+                  columnText(stmt, 1) == fragments[position].text,
+                  columnText(stmt, 2) == sessionID,
+                  columnText(stmt, 3) == projectDir,
+                  line?.cwd == nil || columnText(stmt, 4) == line?.cwd else { return false }
+            position += 1
+        }
+        return position == fragments.count
+    }
+
+    /// Corps partagé, appelé seulement sous la transaction de son propriétaire.
+    private func ingestInTransaction(lines: [(line: TranscriptLine, syntheticUUID: String)],
+                                     fileState: FileState, sessionID: String,
+                                     projectDir: String, newOffset: Int64) throws {
+        let digest = SessionDigest(lines: lines.map(\.line))
+        try run(Self.sessionUpsertSQL, binds: [
+            .text(sessionID),
+            .text(projectDir),
+            .optionalText(digest.projectPath),
+            .optionalText(digest.title),
+            .optionalText(digest.gitBranch),
+            .optionalInt(digest.firstTS),
+            .optionalInt(digest.lastTS),
+        ])
+        guard let sessionRowID = try scalarRow(
+            "SELECT id FROM sessions WHERE session_id = ?1",
+            binds: [.text(sessionID)]
+        ) else {
+            throw MemoryIndexError.sqlite(code: SQLITE_INTERNAL,
+                                          message: "session absente après upsert")
+        }
+
+        let insert = try prepare(
+            """
+            INSERT OR IGNORE INTO messages(session_id, file_id, uuid, block_idx, role, ts, text)
+            VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7)
+            """
+        )
+        defer { sqlite3_finalize(insert) }
+        for entry in lines {
+            let uuid = entry.line.uuid ?? entry.syntheticUUID
+            let ts = entry.line.timestamp.map { Int64($0.timeIntervalSince1970) }
+            for (blockIdx, fragment) in entry.line.fragments.enumerated() {
+                sqlite3_reset(insert)
+                sqlite3_clear_bindings(insert)
+                try apply([
+                    .int(sessionRowID),
+                    .int(fileState.fileID),
+                    .text(uuid),
+                    .int(Int64(blockIdx)),
+                    .text(fragment.role.rawValue),
+                    .optionalInt(ts),
+                    .text(fragment.text),
+                ], to: insert)
+                _ = try step(insert)
+            }
+        }
+
+        try run("UPDATE files SET offset = ?1, mtime = ?2 WHERE id = ?3", binds: [
+            .int(newOffset),
+            .real(Date().timeIntervalSince1970),
+            .int(fileState.fileID),
+        ])
     }
 
     // MARK: - Recherche
