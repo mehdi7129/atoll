@@ -1,0 +1,278 @@
+{
+  "baseCommit": "aed6546362e10d601820fea365aeb541c574acf6",
+  "findings": [
+    "A07",
+    "A08"
+  ],
+  "status": "passed",
+  "scope": "Branche indépendante de la PR #14 ; aucune fusion, publication ou installation.",
+  "sourceSHA256": {
+    "AtollCore/Sources/AtollCore/SoundHookEditor.swift": "c02abeace2bb52c60131bce381bfbeca8e31341590f1694976c85dca87bfaebc",
+    "AtollCore/Sources/AtollCore/HookSettingsEditor.swift": "23169b1641dafa6ba52892664ef18b2e7113c87cb6d6abf011b7c949acbdbda8",
+    "AtollCore/Tests/AtollCoreTests/SoundHookEditorTests.swift": "e1add1b4934537efc2e932ce764949a104805546eec8f73f67d66c0651fdc69b",
+    "AtollCore/Tests/AtollCoreTests/HookSettingsEditorMixedGroupsTests.swift": "01bdfe9c1345321d208b129dc844d2e1621d8b6929cfdfca0e23d4b66675cae8",
+    "Bridge/main.swift": "2a66fcd205d0b0e26e2cd78ff746ee9fac752ef117cc4da1b1cadb1984f2d795",
+    "Scripts/test-hook-installation.py": "c1a00acb508401a5702866147a9342b3fd6da2641d3fc76cb9a4f086c89b115f",
+    "Scripts/test-hook-settings-sabotage.py": "57bc0e9af86cad24447d6722a48888d07c8bd0f4e920f524c89c4449da844fd6",
+    "Scripts/test-sound-hook-sabotage.py": "3bf3165bfb4a9e811d11bc292299b3a13bfd44c30b876660505bf26aefb52726"
+  },
+  "core": {
+    "executed": 1119,
+    "skipped": 1,
+    "failures": 0,
+    "newTests": 27
+  },
+  "targetedTests": {
+    "soundHooks": 48,
+    "hookSettings": 22
+  },
+  "helperIntegration": {
+    "newScenarios": [
+      "réparation existante, tiers, recall ON/OFF, backup et absence de réécriture",
+      "restitution sonore : regular",
+      "restitution sonore : symlink",
+      "restitution sonore : invalid-root",
+      "restitution sonore : invalid-fragment",
+      "installation refusée sans écriture : racine hooks 0",
+      "installation refusée sans écriture : racine hooks 1",
+      "installation refusée sans écriture : racine hooks 2"
+    ],
+    "existingUninstallScenarios": 4,
+    "total": 12,
+    "foundationHomeCheckedBeforeFixtureWrites": true
+  },
+  "compiledSabotages": {
+    "soundHooks": [
+      {
+        "name": "event-wide-matching",
+        "test": "SoundHookEditorTests/testA07PartialManualRestorationKeepsOriginalMatchers",
+        "compiled_and_detected": true,
+        "expected_assertion": "A07 matcher",
+        "mutated_source_sha256": "f4ec331002a120189d62e3f13bdb694a97d67ed6b04fdde78a3b5be0827936ab"
+      },
+      {
+        "name": "ignore-group-context",
+        "test": "SoundHookEditorTests/testA07SameMatcherKeepsUnknownGroupMetadata",
+        "compiled_and_detected": true,
+        "expected_assertion": "A07 metadata",
+        "mutated_source_sha256": "bbf6407ce44dbf499b850372d76481eff748d7aa75e0824eed3df3d360fdf3ca"
+      },
+      {
+        "name": "skip-exact-group-reservation",
+        "test": "SoundHookEditorTests/testA07ExactMixedGroupIsReservedBeforeSoundSubset",
+        "compiled_and_detected": true,
+        "expected_assertion": "A07 reserve exact mixed group",
+        "mutated_source_sha256": "70fb717cca3f02111223925a1f0233da17caa9f843c262516eadfe0923f160bf"
+      },
+      {
+        "name": "reuse-already-consumed-group",
+        "test": "SoundHookEditorTests/testA07KeepsIdenticalGroupsAndDuplicateEntriesWithinGroup",
+        "compiled_and_detected": true,
+        "expected_assertion": "A07 legitimate duplicates",
+        "mutated_source_sha256": "a790ec47abc9f22408ba6ed9185347f0c42fd5434fc4bbb4ff575d1ed145e961"
+      },
+      {
+        "name": "collapse-identical-entries",
+        "test": "SoundHookEditorTests/testA07KeepsIdenticalGroupsAndDuplicateEntriesWithinGroup",
+        "compiled_and_detected": true,
+        "expected_assertion": "A07 legitimate duplicates",
+        "mutated_source_sha256": "371d734d6c91bf5933553d68330707ac0367c10eb681c801144982bd58c5bc62"
+      },
+      {
+        "name": "forget-mixed-group-context",
+        "test": "SoundHookEditorTests/testA07RemovedMixedGroupDoesNotResurrectThirdPartyHooks",
+        "compiled_and_detected": true,
+        "expected_assertion": "A07 missing mixed context",
+        "mutated_source_sha256": "eb6bb200733b45c7c25eccac677d3ac144e61e1817dc668223e55158b8ce75a2"
+      },
+      {
+        "name": "silently-skip-corrupt-hook",
+        "test": "SoundHookEditorTests/testA07InvalidParkingFragmentRefusesSuccessfulRestoration",
+        "compiled_and_detected": true,
+        "expected_assertion": "XCTAssertThrowsError failed: did not throw an error",
+        "mutated_source_sha256": "2737853deefe89afbb1c6b1d5d11881dc8be4c53bae08478c85c645d9a840a38"
+      },
+      {
+        "name": "merge-ignores-multiplicity",
+        "test": "SoundHookEditorTests/testA07MergeParkingKeepsNewGroupContextAndMultiplicity",
+        "compiled_and_detected": true,
+        "expected_assertion": "A07 merge multiplicity/context",
+        "mutated_source_sha256": "2bf32c23cd8cf02f550e2f0fb59b4d7f6570ce7e1dba53cebb5882b0cadbf94a"
+      },
+      {
+        "name": "merge-ignores-group-context",
+        "test": "SoundHookEditorTests/testA07MergeParkingKeepsNewGroupContextAndMultiplicity",
+        "compiled_and_detected": true,
+        "expected_assertion": "A07 merge context without old group",
+        "mutated_source_sha256": "0934f300bc24009fe03cbfa415b7ab3a71e15ff54491bafb4228ab0a4cb24e9f"
+      },
+      {
+        "name": "foreign-sound-is-ignored",
+        "test": "SoundHookEditorTests/testA07PartialMixedGroupWithForeignSoundIsNotConsumed",
+        "compiled_and_detected": true,
+        "expected_assertion": "A07 foreign sound in mixed group",
+        "mutated_source_sha256": "9ac47001aeb8bb220cbd6128d0ef6d4421eaf966763c1d1f04a0d357408e223a"
+      },
+      {
+        "name": "shared-anchor-is-enough",
+        "test": "SoundHookEditorTests/testA07SharedAnchorDoesNotAbsorbDifferentMixedGroup",
+        "compiled_and_detected": true,
+        "expected_assertion": "A07 shared anchor",
+        "mutated_source_sha256": "7045dadee2e6423c7ddcc525559c51ab81f4b684e1060cf0c494443437c438fe"
+      },
+      {
+        "name": "split-successive-parking-snapshots",
+        "test": "SoundHookEditorTests/testA07MergeNewSoundWithinSameGroupKeepsOneGroup",
+        "compiled_and_detected": true,
+        "expected_assertion": "A07 merge within one group",
+        "mutated_source_sha256": "a0681fab37b1e9c6e1b415c4e155bced4ed3a5447bc52cff44aaf6d16cec0c59"
+      }
+    ],
+    "hookSettings": [
+      {
+        "name": "mixed-duplicate",
+        "test": "testInstallReplacesMixedManagedHooksForEveryManagedEvent",
+        "assertion": "A08-single-managed",
+        "compiled_and_detected": true
+      },
+      {
+        "name": "drop-foreign-group",
+        "test": "testInstallPreservesForeignGroupsOrderMatchersAndMetadata",
+        "assertion": "A08-foreign-groups",
+        "compiled_and_detected": true
+      },
+      {
+        "name": "drop-group-metadata",
+        "test": "testInstallPreservesForeignGroupsOrderMatchersAndMetadata",
+        "assertion": "A08-foreign-groups",
+        "compiled_and_detected": true
+      },
+      {
+        "name": "reverse-foreign-hooks",
+        "test": "testInstallPreservesForeignGroupsOrderMatchersAndMetadata",
+        "assertion": "A08-foreign-groups",
+        "compiled_and_detected": true
+      },
+      {
+        "name": "keep-stale-recall",
+        "test": "testMixedGroupRecallToggleLeavesExactlyOneHookInRequestedMode",
+        "assertion": "A08-recall-single",
+        "compiled_and_detected": true
+      },
+      {
+        "name": "recall-always-async",
+        "test": "testMixedGroupRecallToggleLeavesExactlyOneHookInRequestedMode",
+        "assertion": "A08-recall-async",
+        "compiled_and_detected": true
+      },
+      {
+        "name": "malformed-root-as-missing",
+        "test": "testInstallRefusesPresentMalformedHooksRootAndUninstallPreservesIt",
+        "assertion": "A08-malformed-root",
+        "compiled_and_detected": true
+      },
+      {
+        "name": "drop-unknown-groups",
+        "test": "testUnknownOrEmptyGroupsRemainUntouchedBesideManagedHooks",
+        "assertion": "A08-unknown-groups",
+        "compiled_and_detected": true
+      },
+      {
+        "name": "append-on-every-install",
+        "test": "testMixedGroupReinstallIsByteIdempotent",
+        "assertion": "A08-idempotence",
+        "compiled_and_detected": true
+      },
+      {
+        "name": "uninstall-keeps-mixed-managed",
+        "test": "testMixedGroupUninstallPreservesExactlyTheForeignConfiguration",
+        "assertion": "A08-direct-uninstall",
+        "compiled_and_detected": true
+      },
+      {
+        "name": "miss-existing-duplicates",
+        "test": "testDuplicateDetectionFindsMixedAndPureInstalledDuplicates",
+        "assertion": "A08-detect-pure",
+        "compiled_and_detected": true
+      },
+      {
+        "name": "single-hook-is-duplicate",
+        "test": "testDuplicateDetectionIgnoresForeignUnknownAndSingleManagedHooks",
+        "assertion": "A08-no-false-duplicate",
+        "compiled_and_detected": true
+      }
+    ],
+    "helperInstallationGuard": {
+      "compiled_and_detected": true,
+      "assertion": "A08-caller-duplicate"
+    },
+    "total": 25,
+    "baselineRequired": true,
+    "soundBaselineTests": 48,
+    "settingsBaselineTests": 9
+  },
+  "builds": {
+    "Debug": {
+      "exitCode": 0,
+      "signed": false,
+      "appLaunched": false,
+      "sourceHashesUnchanged": true,
+      "architectures": {
+        "app": [
+          "arm64"
+        ],
+        "helper": [
+          "arm64"
+        ]
+      }
+    },
+    "Release": {
+      "exitCode": 0,
+      "signed": false,
+      "appLaunched": false,
+      "sourceHashesUnchanged": true,
+      "architectures": {
+        "app": [
+          "x86_64",
+          "arm64"
+        ],
+        "helper": [
+          "x86_64",
+          "arm64"
+        ]
+      }
+    }
+  },
+  "adversarialReview": {
+    "remainingBlockers": 0,
+    "depth": "sweep",
+    "intermediateGapsCorrected": [
+      "Une installation complète pouvait contourner la normalisation des doublons.",
+      "Des groupes aux sons partiellement communs pouvaient consommer la mauvaise origine.",
+      "Les parkings successifs pouvaient scinder un groupe ou perdre un nouveau contexte.",
+      "Deux mutants survivants ont entraîné le renforcement de leurs fixtures."
+    ]
+  },
+  "localVerification": {
+    "personalConfigurationsUnchanged": true,
+    "configurationsCompared": 3,
+    "stableAppUnchanged": true,
+    "stableVersionObserved": "0.18.5",
+    "stableBuildObserved": "40",
+    "dailyDebugBundlesUnchanged": 4
+  },
+  "realGenerativeCLICalls": 0,
+  "guiLaunches": 0,
+  "audioPlayback": 0,
+  "limitations": [
+    "Ancien parking sans contexte de groupe : métadonnées non enregistrées non récupérables.",
+    "Éditions externes rendant les groupes indiscernables ou modifiant leur contexte : restitution exacte de leur organisation non garantie.",
+    "Aucun verrou contre un écrivain externe entre lecture et écriture atomique.",
+    "Fixtures privées, sans recette GUI/audio ni génération authentifiée ; builds non signés, pas de release.",
+    "Corrections A07/A08 non distribuées ; la version publique reste 0.18.5/build 40."
+  ],
+  "codeCommits": {
+    "A07": "9b4c42673532117365cbc696123a208af56d65d7",
+    "A08": "7aaf0f577b3acdfa5ff86dd05edd567fbc7c1745"
+  }
+}
