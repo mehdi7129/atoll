@@ -299,6 +299,7 @@ import Darwin
         let initial = corpus()
         let service = NotesCurationService.shared
         var observedSwapMarker = false
+        var stateFailureInjectionError: Error?
         if scenario == "target-seed" {
             service.onNotesReplaced = { _, _ in
                 guard let checkpoint = try? store.load(),
@@ -307,6 +308,12 @@ import Darwin
                 observedSwapMarker = directories.filter { $0.lastPathComponent.hasPrefix(".notes-staging-") }.contains {
                     (try? Data(contentsOf: $0.appendingPathComponent(".swap-started"))) == Data(checkpoint.id.uuidString.utf8)
                 }
+                // L'état ne devient illisible qu'APRÈS la bascule, juste avant
+                // finish. Une panne antérieure interdit désormais d'appliquer.
+                do {
+                    try fm.removeItem(at: stateURL)
+                    try fm.createDirectory(at: stateURL, withIntermediateDirectories: true)
+                } catch { stateFailureInjectionError = error }
             }
         }
         if scenario.hasPrefix("collision-") {
@@ -462,10 +469,6 @@ import Darwin
             service.curateNow()
             try await waitFor { launches() == beforeSpawns + 1 }
             if scenario.hasPrefix("during-") { try mutate(String(scenario.dropFirst(7))) }
-            if scenario == "target-seed" {
-                try fm.removeItem(at: stateURL)
-                try fm.createDirectory(at: stateURL, withIntermediateDirectories: true)
-            }
             if scenario == "checkpoint-write-failure" {
                 try fm.createDirectory(at: store.directory.appendingPathComponent("result.json"), withIntermediateDirectories: true)
             }
@@ -474,6 +477,7 @@ import Darwin
             try await finished()
             if scenario == "target-seed" {
                 try check(observedSwapMarker, "bascule appliquée sans marqueur de démarrage")
+                try check(stateFailureInjectionError == nil, "échec d'état après bascule non injecté")
                 guard let checkpoint = try store.load() else { throw Failure(description: "checkpoint retiré malgré état non sauvegardé") }
                 try check(checkpoint.match(notes: NotesCurationService.readNotes()) == .target, "bascule non reconnue après échec état")
                 try check(try records()[0].notesWritten == 2, "écritures avant échec état non mesurées")

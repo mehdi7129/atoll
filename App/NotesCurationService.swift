@@ -70,6 +70,7 @@ final class NotesCurationService {
     @ObservationIgnored private var activeManual = true
     @ObservationIgnored private var runLaunched = false
     @ObservationIgnored private var lastSuccessfulCorpus: CurationCorpusFingerprint?
+    @ObservationIgnored private var stateNeedsReload = true
     private(set) var retryAt: Date?
 
     private static let timeoutSeconds: TimeInterval = 600
@@ -78,12 +79,24 @@ final class NotesCurationService {
     private static let schedulerTickSeconds: TimeInterval = 15 * 60
 
     private init() {
-        let state = Self.loadState()
+        reloadState()
+    }
+
+    /// Une réparation externe est relue au prochain geste ou passage du
+    /// scheduler ; l'erreur ne transforme jamais le fichier en état neuf.
+    @discardableResult
+    private func reloadState() -> Bool {
+        guard let state = readState() else { return false }
+        // Une écriture échouée peut laisser une cadence plus récente en RAM.
+        // Seule une réparation après erreur de lecture réimporte le disque.
+        guard stateNeedsReload else { return true }
+        stateNeedsReload = false
         lastRunAt = state.lastRunAt
         lastOutcome = state.lastOutcome
         warnings = state.warnings
         retryAt = state.retryAt
         lastSuccessfulCorpus = state.lastSuccessfulCorpus
+        return true
     }
 
     // MARK: - Planification
@@ -102,7 +115,7 @@ final class NotesCurationService {
         // case aurait déclenché sur-le-champ un `claude -p` qui réécrit toutes
         // les notes. La première échéance part de maintenant ; pour curer
         // tout de suite, il y a le bouton juste à côté.
-        if lastRunAt == nil {
+        if reloadState(), lastRunAt == nil {
             lastRunAt = Date()
             persistState()
         }
@@ -119,6 +132,14 @@ final class NotesCurationService {
     /// Lance un cycle si l'échéance est passée (et si le réglage est actif).
     func runIfDue() {
         guard LearningSettings.shared.isCurationScheduled else { return }
+        guard phase == .idle, cycleTask == nil, reloadState() else { return }
+        // Un état retiré pendant la réparation rejoint le premier armement :
+        // le scheduler reste vivant, mais cette absence n'autorise pas à payer.
+        if lastRunAt == nil {
+            lastRunAt = Date()
+            persistState()
+            return
+        }
         if let retryAt, retryAt > Date() { return }
         let interval = LearningSettings.curationIntervalDays * 86_400
         if let lastRunAt, Date().timeIntervalSince(lastRunAt) < interval { return }
@@ -132,6 +153,7 @@ final class NotesCurationService {
             log.info("curation déjà en cours — demande ignorée")
             return
         }
+        guard reloadState() else { return }
         // Jamais DEUX `claude -p` d'Atoll en même temps (revue) : la
         // rétrospective est déclenchée par un événement (fin de session), la
         // curation est périodique — c'est elle qui cède le pas.
@@ -153,7 +175,10 @@ final class NotesCurationService {
         cycleTask = Task {
             defer { cycleTask = nil }
             await run(manual: manual, generation: generation)
-            if runGeneration != generation { phase = .idle; lastOutcome = "analyse annulée" }
+            if runGeneration != generation {
+                phase = .idle
+                if readState() != nil { lastOutcome = "analyse annulée" }
+            }
         }
     }
 
@@ -191,6 +216,7 @@ final class NotesCurationService {
 
     private func run(manual: Bool, generation: UUID) async {
         guard runGeneration == generation, !Task.isCancelled else { return }
+        guard readState() != nil else { phase = .idle; return }
         runLaunched = false
         // Le checkpoint permet de distinguer une bascule interrompue d'un
         // changement externe. Un doute conserve toutes les pièces, avant le
@@ -413,6 +439,9 @@ final class NotesCurationService {
                        previous: [(name: String, content: String)],
                        manual: Bool, generation: UUID, checkpoint: CurationCheckpoint) {
         guard runGeneration == generation, !Task.isCancelled else { return }
+        // Le résultat payé est déjà sauvegardé. Une panne de l'état survenue
+        // pendant les await conserve ce checkpoint et toutes les notes.
+        guard readState() != nil else { phase = .idle; return }
         guard checkpoint.sourceFingerprint == CurationCorpusFingerprint(notes: Self.readNotes()) else {
             finish(outcome: "notes modifiées avant remplacement — résultat non appliqué", touched: false)
             return
@@ -899,6 +928,7 @@ final class NotesCurationService {
     @discardableResult
     private func recordOutcome(_ outcome: String, touched: Bool, retry: Bool = true,
                                preserveWarnings: Bool = false) -> Bool {
+        guard readState() != nil else { return false }
         let now = Date()
         if runLaunched || touched || !retry {
             lastRunAt = now
@@ -916,7 +946,10 @@ final class NotesCurationService {
 
     @discardableResult
     private func persistState() -> Bool {
-        Self.saveState(.init(lastRunAt: lastRunAt, lastOutcome: lastOutcome,
+        // Revalider aussi à l'écriture : l'état pouvait être lisible au début
+        // du cycle puis être tronqué pendant la préparation ou le modèle.
+        guard readState() != nil else { return false }
+        return Self.saveState(.init(lastRunAt: lastRunAt, lastOutcome: lastOutcome,
                              warnings: warnings, retryAt: retryAt,
                              lastSuccessfulCorpus: lastSuccessfulCorpus))
     }
@@ -934,6 +967,7 @@ final class NotesCurationService {
     /// « le process est allé au bout avec exit 0 ».
     private func spawnShell(command shellCommand: String, generation: UUID, workingDirectory: URL?) async -> Data? {
         guard runGeneration == generation, !Task.isCancelled else { return nil }
+        guard readState() != nil else { spawnFailure = lastOutcome; return nil }
         guard let lease = activeLease, let execution = activeExecution,
               AnalysisBudget.shared.mayLaunch(lease, context: execution) else {
             spawnFailure = "Quota périmé ou plafond interne atteint."
@@ -1091,11 +1125,29 @@ final class NotesCurationService {
         BridgePaths.learningDirectory.appendingPathComponent("curation.json")
     }
 
-    private static func loadState() -> PersistedState {
-        guard let data = try? Data(contentsOf: stateURL),
-              let state = try? JSONDecoder().decode(PersistedState.self, from: data)
-        else { return PersistedState() }
-        return state
+    private func readState() -> PersistedState? {
+        do { return try Self.loadState() }
+        catch {
+            log.error("état de curation illisible : \(error.localizedDescription)")
+            stateNeedsReload = true
+            lastOutcome = "État du rangement illisible : fichier préservé — aucune nouvelle analyse."
+            return nil
+        }
+    }
+
+    private static func loadState() throws -> PersistedState {
+        let data: Data
+        do { data = try Data(contentsOf: stateURL) }
+        catch {
+            // fileExists confond absence et accès refusé. lstat distingue les
+            // deux et voit aussi un lien cassé, qui reste une donnée existante.
+            var info = stat()
+            if lstat(stateURL.path, &info) != 0, errno == ENOENT {
+                return PersistedState()
+            }
+            throw error
+        }
+        return try JSONDecoder().decode(PersistedState.self, from: data)
     }
 
     private static func saveState(_ state: PersistedState) -> Bool {
