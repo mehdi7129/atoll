@@ -182,9 +182,15 @@ Si la session n'apparaît pas, ouvre « Vérifier la connexion », choisis le
 Le home Codex (`~/.codex` par défaut) est son dossier de configuration. Son choix,
 la réparation et le chemin de l'exécutable sont regroupés dans « Dépannage ».
 
-**Version courante : [v0.18.4, build 39](https://github.com/mehdi7129/atoll/releases/tag/v0.18.4).**
+**Version publiée : [v0.18.4, build 39](https://github.com/mehdi7129/atoll/releases/tag/v0.18.4).**
 App universelle Apple Silicon / Intel, signée et notarisée ; disponible par la
 mise à jour intégrée ou le DMG de la release.
+
+**v0.18.5, build 40 en préparation.** Cette maintenance conserve les fichiers
+d'un skill si son archivage échoue et protège les notes en cas de collision,
+avec reprise du rangement sans nouvel appel au modèle. Elle fiabilise aussi
+les tests Codex. Les correctifs sont fusionnés ; la mise à jour n'est pas
+encore publiée. [Validation des trois correctifs](docs/HANDOFF.md).
 
 La v0.18.4 corrige les synchronisations de plugins déclenchées inutilement par
 les lectures du quota et des modèles Codex. Ces lectures ne téléchargent plus

@@ -4,6 +4,17 @@
 [CLAUDE.md](../CLAUDE.md). L'[ancien handoff](HANDOFF-2026-09-10-archive.md) conserve
 les mesures et pièges historiques, sans faire autorité sur l'état actuel.
 
+## v0.18.5, build 40 — en préparation
+
+La release de maintenance prépare les trois correctifs fusionnés ci-dessous,
+sans ajout de fonction ni changement d'interface : échec d'archivage sans perte
+du skill installé, collision de notes sans perte de l'original et reprise
+locale sans nouvel appel au modèle, harness Codex et sabotages fiabilisés.
+`project.yml` porte **0.18.5 / 40**. La version publiée reste **0.18.4 / 39**,
+avec son appcast conservé jusqu'à publication et vérification des nouveaux
+assets. Les validations de signature, notarisation, archives et distribution
+de 0.18.5 restent à effectuer ; aucune app installée n'est remplacée.
+
 ## Premier jalon de robustesse — fusionné, pas encore publié
 
 Les PR [#9](https://github.com/mehdi7129/atoll/pull/9),
@@ -183,6 +194,7 @@ cette release ; la publication n'a installé aucune app.
 
 | Élément | État vérifié |
 |---|---|
+| Version préparée | **v0.18.5, build 40** ; correctifs #9 → #10 → #11 fusionnés, distribution à valider |
 | Version publiée | **[v0.18.4, build 39](https://github.com/mehdi7129/atoll/releases/tag/v0.18.4)** |
 | Fusion / source | [PR #7](https://github.com/mehdi7129/atoll/pull/7) fusionnée ; tag sur `9790b4e` ; publication demandée par Mehdi |
 | Distribution | Universelle arm64 / x86_64 ; app et DMG signés Developer ID, notarisés, staplés et acceptés par Gatekeeper |
