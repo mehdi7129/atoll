@@ -721,6 +721,16 @@
         "App/CodexService.swift",
         "Scripts/test-codex-read-storage.py"
       ]
+    },
+    {
+      "date": "2026-10-08",
+      "document": "docs/REVIEW-2026-10-08-a22-codex-harness.md",
+      "depth": "sweep",
+      "note": "Relecture ciblée A22 du faux CLI, du nominal préalable et des verdicts de sabotage ; cinq contre-épreuves compilées. Aucun code produit modifié.",
+      "files": [
+        "Scripts/test-codex-exec.py",
+        "Scripts/test-codex-exec-verdict.py"
+      ]
     }
   ]
 }
