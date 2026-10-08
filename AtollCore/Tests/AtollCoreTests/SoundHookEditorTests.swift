@@ -369,4 +369,319 @@ final class SoundHookEditorTests: XCTestCase {
         let ancien = Data(#"{"hooks":[],"parkedAt":"2026-07-27T12:09:27Z"}"#.utf8)
         XCTAssertNotNil(SoundHookEditor.decodeParked(ancien)?.committedAt)
     }
+    // MARK: - A07 : le groupe est l'unité de restitution
+
+    private let sameSound: [String: Any] = [
+        "type": "command", "command": "afplay /fixture/finish.wav", "timeout": 4,
+        "future": ["volume": 0.3]
+    ]
+
+    private func settingsWithGroups(_ groups: [[String: Any]]) throws -> Data {
+        try JSONSerialization.data(withJSONObject: [
+            "hooks": ["PreToolUse": groups], "futureRoot": ["preserve": true]
+        ], options: [.sortedKeys])
+    }
+
+    private func group(matcher: String? = "Bash", description: String? = nil,
+                       entries: [[String: Any]]) -> [String: Any] {
+        var result: [String: Any] = ["hooks": entries]
+        if let matcher { result["matcher"] = matcher }
+        if let description { result["description"] = description }
+        return result
+    }
+
+    private func assertSameSettings(_ actual: Data, _ expected: Data,
+                                    _ message: String = "", file: StaticString = #filePath,
+                                    line: UInt = #line) throws {
+        XCTAssertEqual(try JSONSerialization.jsonObject(with: actual) as? NSDictionary,
+                       try JSONSerialization.jsonObject(with: expected) as? NSDictionary,
+                       message, file: file, line: line)
+    }
+
+    /// Sans restitution manuelle, partielle (dans les deux sens) ou complète,
+    /// chaque matcher récupère son exemplaire ; l'ordre du parking est sans effet.
+    func testA07PartialManualRestorationKeepsOriginalMatchers() throws {
+        for matchers in [["Bash", "Edit"], ["Edit", "Bash"]] {
+            let groups = matchers.map { group(matcher: $0, entries: [sameSound]) }
+            let original = try settingsWithGroups(groups)
+            let parking = try XCTUnwrap(try SoundHookEditor.park(in: original))
+            for mask in 0..<4 {
+                let current = try settingsWithGroups(groups.enumerated().compactMap {
+                    mask & (1 << $0.offset) == 0 ? nil : $0.element
+                })
+                for reverse in [false, true] {
+                    let records = reverse ? Array(parking.parked.reversed()) : parking.parked
+                    let restored = try SoundHookEditor.restore(into: current, parked: records)
+                    try assertSameSettings(restored, original, "A07 matcher mask=\(mask), reverse=\(reverse)")
+                    try assertSameSettings(try SoundHookEditor.restore(into: restored, parked: records), original)
+                }
+            }
+        }
+    }
+
+    func testA07SameMatcherKeepsUnknownGroupMetadata() throws {
+        let groups = ["first", "second"].map { (name: String) in
+            group(description: name, entries: [sameSound])
+        }
+        let original = try settingsWithGroups(groups)
+        let parking = try XCTUnwrap(try SoundHookEditor.park(in: original))
+        for mask in 0..<4 {
+            let current = try settingsWithGroups(groups.enumerated().compactMap {
+                mask & (1 << $0.offset) == 0 ? nil : $0.element
+            })
+            let restored = try SoundHookEditor.restore(into: current, parked: parking.parked)
+            try assertSameSettings(restored, original, "A07 metadata mask=\(mask)")
+            try assertSameSettings(try SoundHookEditor.restore(into: restored, parked: parking.parked), original)
+        }
+    }
+
+    func testA07PartialWholeGroupRestorationDoesNotDuplicatePresentSound() throws {
+        let other: [String: Any] = ["type": "command", "command": "afplay /fixture/other.wav"]
+        let original = try settingsWithGroups([group(description: "two sounds", entries: [sameSound, other])])
+        let parking = try XCTUnwrap(try SoundHookEditor.park(in: original))
+        for remaining in [[sameSound], [other], [sameSound, other], []] {
+            let current = try settingsWithGroups([group(description: "two sounds", entries: remaining)])
+            let restored = try SoundHookEditor.restore(into: current, parked: Array(parking.parked.reversed()))
+            try assertSameSettings(restored, original, "A07 partial whole group")
+            try assertSameSettings(try SoundHookEditor.restore(into: restored, parked: parking.parked), original)
+        }
+    }
+
+    func testA07KeepsIdenticalGroupsAndDuplicateEntriesWithinGroup() throws {
+        let duplicate = group(entries: [sameSound, sameSound])
+        let original = try settingsWithGroups([duplicate, duplicate])
+        let parking = try XCTUnwrap(try SoundHookEditor.park(in: original))
+        for currentGroups in [[], [duplicate], [duplicate, duplicate], [group(entries: [sameSound])]] {
+            let current = try settingsWithGroups(currentGroups)
+            let restored = try SoundHookEditor.restore(into: current, parked: parking.parked)
+            try assertSameSettings(restored, original, "A07 legitimate duplicates")
+            try assertSameSettings(try SoundHookEditor.restore(into: restored, parked: parking.parked), original)
+        }
+    }
+
+    func testA07MixedGroupsKeepMetadataAndThirdPartyOrder() throws {
+        let groups = ["first", "second"].map { (name: String) in
+            group(description: name, entries: [
+                ["type": "command", "command": "node before-\(name).js"], sameSound,
+                ["type": "command", "command": "node after-\(name).js"]
+            ])
+        }
+        let original = try settingsWithGroups(groups)
+        let parking = try XCTUnwrap(try SoundHookEditor.park(in: original))
+        for mask in 0..<4 {
+            let current = try settingsWithGroups(groups.enumerated().map { index, original in
+                var value = original
+                if mask & (1 << index) == 0 {
+                    value["hooks"] = (original["hooks"] as! [[String: Any]]).filter {
+                        $0["command"] as? String != sameSound["command"] as? String
+                    }
+                }
+                return value
+            })
+            let restored = try SoundHookEditor.restore(into: current, parked: Array(parking.parked.reversed()))
+            try assertSameSettings(restored, original, "A07 mixed mask=\(mask)")
+            try assertSameSettings(try SoundHookEditor.restore(into: restored, parked: parking.parked), original)
+        }
+    }
+
+    func testA07MixedGroupsWithSameMetadataUseSurvivingThirdPartyHooks() throws {
+        let third: [String: Any] = ["type": "command", "command": "node keep.js"]
+        let groups = [group(entries: [sameSound]), group(entries: [sameSound, third])]
+        let original = try settingsWithGroups(groups)
+        let parking = try XCTUnwrap(try SoundHookEditor.park(in: original))
+        for current in [parking.updated, try settingsWithGroups([groups[1]])] {
+            let restored = try SoundHookEditor.restore(into: current, parked: parking.parked)
+            try assertSameSettings(restored, original, "A07 shifted mixed group")
+            try assertSameSettings(try SoundHookEditor.restore(into: restored, parked: parking.parked), original)
+        }
+    }
+
+    func testA07RemovedMixedGroupDoesNotResurrectThirdPartyHooks() throws {
+        let original = try settingsWithGroups([group(description: "retained context", entries: [
+            sameSound, ["type": "command", "command": "node manually-removed.js"]
+        ])])
+        let parking = try XCTUnwrap(try SoundHookEditor.park(in: original))
+        let restored = try SoundHookEditor.restore(into: try settingsWithGroups([]), parked: parking.parked)
+        try assertSameSettings(restored, try settingsWithGroups([
+            group(description: "retained context", entries: [sameSound])
+        ]), "A07 missing mixed context")
+    }
+
+    func testA07RestoreAfterAtollReinstallKeepsOnlyCurrentManagedHook() throws {
+        let original = try settingsWithGroups([group(description: "my sound", entries: [
+            sameSound, ["type": "command", "command": "/old/.atoll/bin/atoll-bridge"]
+        ])])
+        let parking = try XCTUnwrap(try SoundHookEditor.park(in: original))
+        let installed = try HookSettingsEditor.install(into: parking.updated, command: "/new/.atoll/bin/atoll-bridge")
+        let restored = try SoundHookEditor.restore(into: installed, parked: parking.parked)
+        let object = try XCTUnwrap(try JSONSerialization.jsonObject(with: restored) as? [String: Any])
+        let hooks = try XCTUnwrap(object["hooks"] as? [String: Any])
+        let groups = try XCTUnwrap(hooks["PreToolUse"] as? [[String: Any]])
+        let commands = groups.flatMap { ($0["hooks"] as? [[String: Any]]) ?? [] }.compactMap { $0["command"] as? String }
+        XCTAssertEqual(commands, ["afplay /fixture/finish.wav", "/new/.atoll/bin/atoll-bridge"])
+        XCTAssertEqual(groups.first?["description"] as? String, "my sound")
+        try assertSameSettings(try SoundHookEditor.restore(into: restored, parked: parking.parked), restored)
+    }
+
+    func testA07LegacyParkingWithoutGroupContextStillRestores() throws {
+        let data = Data(#"{"hooks":[{"event":"PreToolUse","matcher":"Bash","index":0,"command":"afplay /fixture/legacy.wav","hookJSON":"{\"type\":\"command\",\"command\":\"afplay /fixture/legacy.wav\"}"}],"parkedAt":"2026-07-27T12:09:27Z"}"#.utf8)
+        let parking = try XCTUnwrap(SoundHookEditor.decodeParked(data))
+        let current = try settingsWithGroups([group(entries: [["type": "command", "command": "node third.js"]])])
+        let restored = try SoundHookEditor.restore(into: current, parked: parking.hooks)
+        let expected = try settingsWithGroups([group(entries: [
+            ["type": "command", "command": "afplay /fixture/legacy.wav"],
+            ["type": "command", "command": "node third.js"]
+        ])])
+        try assertSameSettings(restored, expected)
+        try assertSameSettings(try SoundHookEditor.restore(into: restored, parked: parking.hooks), expected)
+    }
+
+    func testA07InvalidParkingFragmentRefusesSuccessfulRestoration() throws {
+        for (hookJSON, groupJSON) in [("invalid", nil), ("{}", "invalid"), ("{}", "{}"), ("{}", #"{"hooks":42}"#)] as [(String, String?)] {
+            let invalid = SoundHookEditor.ParkedHook(event: "PreToolUse", matcher: "Bash", index: 0,
+                command: "afplay /fixture/finish.wav", hookJSON: hookJSON, groupJSON: groupJSON)
+            XCTAssertThrowsError(try SoundHookEditor.restore(into: try settingsWithGroups([]), parked: [invalid])) {
+                XCTAssertEqual($0 as? SoundHookEditor.EditorError, .unparseableParking)
+            }
+        }
+    }
+
+    func testA07GroupsSharingOnlySomeSoundsStaySeparate() throws {
+        let b: [String: Any] = ["type": "command", "command": "afplay /fixture/b.wav"]
+        let c: [String: Any] = ["type": "command", "command": "afplay /fixture/c.wav"]
+        for entries in [[[sameSound, b], [sameSound, c]], [[sameSound, b, c], [sameSound, b]]] {
+            let groups = entries.map { group(entries: $0) }
+            let original = try settingsWithGroups(groups)
+            let parking = try XCTUnwrap(try SoundHookEditor.park(in: original))
+            for mask in 0..<4 {
+                let current = try settingsWithGroups(groups.enumerated().compactMap {
+                    mask & (1 << $0.offset) == 0 ? nil : $0.element
+                })
+                let restored = try SoundHookEditor.restore(into: current, parked: parking.parked)
+                try assertSameSettings(restored, original, "A07 overlapping sounds mask=\(mask)")
+                try assertSameSettings(try SoundHookEditor.restore(into: restored, parked: parking.parked), original)
+            }
+        }
+    }
+
+    func testA07MergeParkingKeepsNewGroupContextAndMultiplicity() throws {
+        // Le premier groupe a disparu des settings après parking : seul le
+        // nouveau contexte est parqué cette fois, sans remettre l'ancien.
+        let firstGroup = group(description: "first", entries: [sameSound])
+        let secondGroup = group(description: "second", entries: [sameSound])
+        let firstParking = try XCTUnwrap(try SoundHookEditor.park(in: try settingsWithGroups([firstGroup])))
+        let secondParking = try XCTUnwrap(try SoundHookEditor.park(in: try settingsWithGroups([secondGroup])))
+        let bothContexts = SoundHookEditor.mergeParked(previous: firstParking.parked, new: secondParking.parked)
+        XCTAssertEqual(bothContexts.count, 2, "A07 merge context without old group")
+        let bothRestored = try SoundHookEditor.restore(into: secondParking.updated, parked: bothContexts)
+        try assertSameSettings(bothRestored, try settingsWithGroups([secondGroup, firstGroup]))
+        try assertSameSettings(try SoundHookEditor.restore(into: bothRestored, parked: bothContexts), bothRestored)
+
+        let third: [String: Any] = ["type": "command", "command": "node keep.js"]
+        for groups in [
+            [group(description: "first", entries: [sameSound]), group(description: "second", entries: [sameSound])],
+            [group(entries: [sameSound]), group(entries: [sameSound])],
+            [group(entries: [sameSound, third]), group(entries: [sameSound, ["type": "command", "command": "node other.js"]])]
+        ] {
+            let first = try XCTUnwrap(try SoundHookEditor.park(in: try settingsWithGroups([groups[0]])))
+            let both = try XCTUnwrap(try SoundHookEditor.park(in: try settingsWithGroups(groups)))
+            let merged = SoundHookEditor.mergeParked(previous: first.parked, new: both.parked)
+            XCTAssertEqual(merged.count, 2, "A07 merge multiplicity/context")
+            XCTAssertEqual(SoundHookEditor.mergeParked(previous: merged, new: both.parked), merged)
+            let restored = try SoundHookEditor.restore(into: both.updated, parked: merged)
+            try assertSameSettings(restored, try settingsWithGroups(groups), "A07 merge restores both groups")
+        }
+    }
+
+    func testA07RepeatedParkingAfterPartialRestorationDoesNotDuplicate() throws {
+        let other: [String: Any] = ["type": "command", "command": "afplay /fixture/other.wav"]
+        for third in [[], [["type": "command", "command": "node keep.js"]]] {
+            let original = try settingsWithGroups([group(entries: [sameSound, other] + third)])
+            let first = try XCTUnwrap(try SoundHookEditor.park(in: original))
+            let partial = try settingsWithGroups([group(entries: [sameSound] + third)])
+            let second = try XCTUnwrap(try SoundHookEditor.park(in: partial))
+            let merged = SoundHookEditor.mergeParked(previous: first.parked, new: second.parked)
+            XCTAssertEqual(merged, first.parked, "A07 partial re-parking")
+            try assertSameSettings(try SoundHookEditor.restore(into: second.updated, parked: merged), original)
+        }
+    }
+
+    func testA07LegacyParkingMergeStillConsumesOnlyOneOccurrence() throws {
+        let current = try settingsWithGroups([group(entries: [sameSound]), group(entries: [sameSound])])
+        let parked = try XCTUnwrap(try SoundHookEditor.park(in: current))
+        let first = parked.parked[0]
+        let legacy = SoundHookEditor.ParkedHook(event: first.event, matcher: first.matcher, index: first.index,
+                                               command: first.command, hookJSON: first.hookJSON)
+        let merged = SoundHookEditor.mergeParked(previous: [legacy], new: parked.parked)
+        XCTAssertEqual(merged.count, 2, "A07 legacy merge multiplicity")
+        XCTAssertEqual(SoundHookEditor.mergeParked(previous: merged, new: parked.parked), merged)
+        try assertSameSettings(try SoundHookEditor.restore(into: parked.updated, parked: merged), current)
+    }
+
+    func testA07MergeNewSoundWithinSameGroupKeepsOneGroup() throws {
+        let other: [String: Any] = ["type": "command", "command": "afplay /fixture/other.wav"]
+        let third: [String: Any] = ["type": "command", "command": "node keep.js"]
+        for (initial, added, expected) in [
+            ([sameSound], [sameSound, sameSound], [sameSound, sameSound]),
+            ([sameSound], [sameSound, other], [sameSound, other]),
+            ([sameSound, third], [other, third], [sameSound, other, third])
+        ] {
+            let first = try XCTUnwrap(try SoundHookEditor.park(in: try settingsWithGroups([group(entries: initial)])))
+            let second = try XCTUnwrap(try SoundHookEditor.park(in: try settingsWithGroups([group(entries: added)])))
+            let merged = SoundHookEditor.mergeParked(previous: first.parked, new: second.parked)
+            let restored = try SoundHookEditor.restore(into: second.updated, parked: merged)
+            let wanted = try settingsWithGroups([group(entries: expected)])
+            try assertSameSettings(restored, wanted, "A07 merge within one group")
+            try assertSameSettings(try SoundHookEditor.restore(into: restored, parked: merged), wanted)
+        }
+    }
+
+    func testA07SharedAnchorDoesNotAbsorbDifferentMixedGroup() throws {
+        let common: [String: Any] = ["type": "command", "command": "node common.js"]
+        let x: [String: Any] = ["type": "command", "command": "node x.js"]
+        let y: [String: Any] = ["type": "command", "command": "node y.js"]
+        let other: [String: Any] = ["type": "command", "command": "afplay /fixture/other.wav"]
+        let original = try settingsWithGroups([
+            group(entries: [sameSound, common, x]), group(entries: [other, common, y])
+        ])
+        let parking = try XCTUnwrap(try SoundHookEditor.park(in: original))
+        let current = try settingsWithGroups([group(entries: [common, y])])
+        let restored = try SoundHookEditor.restore(into: current, parked: parking.parked)
+        let expected = try settingsWithGroups([
+            group(entries: [sameSound]), group(entries: [other, common, y])
+        ])
+        try assertSameSettings(restored, expected, "A07 shared anchor")
+        try assertSameSettings(try SoundHookEditor.restore(into: restored, parked: parking.parked), expected)
+    }
+
+    func testA07PartialMixedGroupWithForeignSoundIsNotConsumed() throws {
+        let third: [String: Any] = ["type": "command", "command": "node keep.js"]
+        let b: [String: Any] = ["type": "command", "command": "afplay /fixture/b.wav"]
+        let c: [String: Any] = ["type": "command", "command": "afplay /fixture/c.wav"]
+        let original = try settingsWithGroups([
+            group(entries: [sameSound, third]), group(entries: [sameSound, b, c, third])
+        ])
+        let parking = try XCTUnwrap(try SoundHookEditor.park(in: original))
+        let current = try settingsWithGroups([group(entries: [sameSound, b, third])])
+        let restored = try SoundHookEditor.restore(into: current, parked: parking.parked)
+        let expected = try settingsWithGroups([
+            group(entries: [sameSound]), group(entries: [sameSound, b, c, third])
+        ])
+        try assertSameSettings(restored, expected, "A07 foreign sound in mixed group")
+        try assertSameSettings(try SoundHookEditor.restore(into: restored, parked: parking.parked), expected)
+    }
+
+    func testA07ExactMixedGroupIsReservedBeforeSoundSubset() throws {
+        let third: [String: Any] = ["type": "command", "command": "node keep.js"]
+        let other: [String: Any] = ["type": "command", "command": "afplay /fixture/other.wav"]
+        let groups = [group(entries: [sameSound, other, third]), group(entries: [sameSound, third])]
+        let original = try settingsWithGroups(groups)
+        let parking = try XCTUnwrap(try SoundHookEditor.park(in: original))
+        let current = try settingsWithGroups([groups[1]])
+        let restored = try SoundHookEditor.restore(into: current, parked: parking.parked)
+        let expected = try settingsWithGroups([group(entries: [sameSound, other]), groups[1]])
+        try assertSameSettings(restored, expected, "A07 reserve exact mixed group")
+        try assertSameSettings(try SoundHookEditor.restore(into: restored, parked: parking.parked), expected)
+    }
+
 }
