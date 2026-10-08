@@ -1,0 +1,219 @@
+{
+  "version": "0.18.5",
+  "build": "40",
+  "sourceCommit": "74b0081be83b6a9879bd03eda7f59249632f4a84",
+  "featureCommit": "65b7d5271a260dff241904f51fcd9c86854770d3",
+  "pullRequest": "https://github.com/mehdi7129/atoll/pull/13",
+  "mergeCommit": "74b0081be83b6a9879bd03eda7f59249632f4a84",
+  "featurePullRequests": [
+    "https://github.com/mehdi7129/atoll/pull/9",
+    "https://github.com/mehdi7129/atoll/pull/10",
+    "https://github.com/mehdi7129/atoll/pull/11"
+  ],
+  "releaseURL": "https://github.com/mehdi7129/atoll/releases/tag/v0.18.5",
+  "publishedAt": "2026-10-08T15:36:05Z",
+  "tagCommitVerified": "74b0081be83b6a9879bd03eda7f59249632f4a84",
+  "checks": {
+    "app": "Developer ID verified",
+    "helper": "Developer ID verified",
+    "sparkleComponents": "5 Developer ID components verified",
+    "hardenedRuntime": "all 7 executable components verified",
+    "entitlements": "get-task-allow absent; app automation.apple-events only",
+    "appStaple": "valid",
+    "dmgStaple": "valid",
+    "gatekeeper": "app, dmg and patched app accepted",
+    "sparkleEdDSA": "6 enclosures verified; 6 modified copies rejected",
+    "deliveredBytes": "7 public downloads match validated local SHA256 and lengths"
+  },
+  "architectures": [
+    "x86_64",
+    "arm64"
+  ],
+  "assets": [
+    {
+      "name": "Atoll-0.18.5.zip",
+      "bytes": 8565634,
+      "sha256": "998af2affa12d1d2ea4a160c5ba21e49998fb90a49e12df1ce575c00893c2561",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.18.5/Atoll-0.18.5.zip"
+    },
+    {
+      "name": "Atoll40-39.delta",
+      "bytes": 485746,
+      "sha256": "4c9f1503a88b9b0e05df86e9101d3fb1a74885164f5da33f6c96bfec1b290a83",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.18.5/Atoll40-39.delta"
+    },
+    {
+      "name": "Atoll40-38.delta",
+      "bytes": 791934,
+      "sha256": "618bb22dad80192ee7e95bfb23cca78db687505f6a703d75739c3ef644c73c62",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.18.5/Atoll40-38.delta"
+    },
+    {
+      "name": "Atoll40-37.delta",
+      "bytes": 3976518,
+      "sha256": "ed1b9b5cdc445fdb9094e0e9442b952cd7086ab15d35ef3477eaef370fa8063f",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.18.5/Atoll40-37.delta"
+    },
+    {
+      "name": "Atoll40-36.delta",
+      "bytes": 4079166,
+      "sha256": "8dcf5b16d52e651194136f40f0b5f14d270270f0b7c6575604dc7e42522e2e3b",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.18.5/Atoll40-36.delta"
+    },
+    {
+      "name": "Atoll40-35.delta",
+      "bytes": 4109854,
+      "sha256": "ae9660127d80eb521b9e90e2ee26c71e22ee8e131b21618ba1a7d7ab425eb95c",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.18.5/Atoll40-35.delta"
+    },
+    {
+      "name": "Atoll-0.18.5.dmg",
+      "bytes": 9489882,
+      "sha256": "4b74a613c7e70cc84356c7736bd2528eb6c815e5738138fd5f75532a27c6b0b6",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.18.5/Atoll-0.18.5.dmg"
+    }
+  ],
+  "notarization": {
+    "app": {
+      "submissionID": "81d03675-010b-494b-a948-a533e523945f",
+      "status": "Accepted"
+    },
+    "dmg": {
+      "submissionID": "8d38447d-dc1a-48c6-a609-4eec1ea33a9b",
+      "status": "Accepted"
+    }
+  },
+  "sparkleEdDSA": {
+    "publicKeySource": "SHA256-verified published 0.18.4 ZIP",
+    "enclosures": [
+      {
+        "name": "Atoll-0.18.5.zip",
+        "verified": true,
+        "modifiedCopyRejected": true
+      },
+      {
+        "name": "Atoll40-39.delta",
+        "verified": true,
+        "modifiedCopyRejected": true
+      },
+      {
+        "name": "Atoll40-38.delta",
+        "verified": true,
+        "modifiedCopyRejected": true
+      },
+      {
+        "name": "Atoll40-37.delta",
+        "verified": true,
+        "modifiedCopyRejected": true
+      },
+      {
+        "name": "Atoll40-36.delta",
+        "verified": true,
+        "modifiedCopyRejected": true
+      },
+      {
+        "name": "Atoll40-35.delta",
+        "verified": true,
+        "modifiedCopyRejected": true
+      }
+    ]
+  },
+  "deltaUpgrade": {
+    "fromBuild": "39",
+    "toBuild": "40",
+    "patch": "Atoll40-39.delta",
+    "sourceArchiveMatchesPublishedSHA256": true,
+    "filesLinksModesAndSizesEqualFullArchive": true,
+    "comparedObjects": 134,
+    "codesign": "verified",
+    "staple": "valid",
+    "gatekeeper": "accepted",
+    "appLaunched": false
+  },
+  "dmgBundle": {
+    "readOnlyMountComparedToFullZIP": true,
+    "filesLinksModesAndSizesEqualFullArchive": true,
+    "comparedObjects": 134,
+    "detached": true
+  },
+  "publicDownloads": {
+    "checkedAt": "2026-10-08T15:36:28.031946+00:00",
+    "enclosuresHTTP200": 18,
+    "dmgHTTP200": true,
+    "downloadedSHA256Matches": 7,
+    "oldFeedPreservedUntilAssetVerification": true
+  },
+  "validation": {
+    "featureCodeUnchangedAtRelease": true,
+    "coreDebug": {
+      "executed": 1092,
+      "skipped": 1,
+      "failures": 0
+    },
+    "coreRelease": {
+      "executed": 1092,
+      "skipped": 1,
+      "failures": 0,
+      "unexpected": 0,
+      "test_duration_seconds": 14.196,
+      "suite_wall_seconds": 14.315
+    },
+    "curationRecoveryScenarios": 104,
+    "curationScenarios": 26,
+    "codexVerdictCounterexamples": 5,
+    "skillArchiveCompiledSabotage": true,
+    "curationCollisionCompiledSabotages": 2,
+    "existingCurationCompiledSabotages": 6,
+    "builds": {
+      "Debug": "passed",
+      "Release": "passed",
+      "distribution": "universal signed Release passed"
+    },
+    "featureEvidence": [
+      "../REVIEW-2026-10-08-a22-codex-harness.md",
+      "../REVIEW-2026-10-08-a19-skill-archive.md",
+      "../REVIEW-2026-10-08-a01-curation-collision.md",
+      "../audit-support/2026-10-08-milestone1/validation.json"
+    ],
+    "limits": [
+      "Fixtures privées et services compilés ; aucune génération authentifiée ni recette GUI pour ce lot.",
+      "Seul le delta 39 vers 40 a été appliqué ; les cinq deltas ont leurs signatures vérifiées.",
+      "Échec d'archive injecté par parent non répertoire ; pas de simulation de disque plein.",
+      "Aucun verrou interprocessus ajouté.",
+      "La mesure authentifiée quota de 0.18.4 reste historique ; elle ne fait pas partie des validations rejouées pour 0.18.5."
+    ],
+    "generationCallsForPublication": 0
+  },
+  "localVerification": {
+    "personalConfigurationsUnchanged": true,
+    "personalConfigurationsCompared": 3,
+    "stableAppUnchanged": true,
+    "debugBuildPreserved": true,
+    "debugBundlesCompared": 4,
+    "stableVersionObserved": "0.18.4",
+    "stableBuildObserved": "39",
+    "scope": "Comparaison avant packaging et après publication des assets ; aucune installation ni lancement d'app par cette publication."
+  },
+  "appcast": {
+    "url": "https://mehdi7129.github.io/atoll/appcast.xml",
+    "commit": "e5bde8581e415a27b17dda587225c57ee5199d7e",
+    "sha256": "440fd90f8fe996ce9b06f46f07eec2f9c387dd7d050e8e3b479f218b1c7c6cb8",
+    "servedBytesEqualLocal": true,
+    "servedVersion": "0.18.5",
+    "servedBuild": "40",
+    "checkedAt": "2026-10-08T15:38:40.245010+00:00",
+    "status": "passed",
+    "attempts": [
+      {
+        "checkedAt": "2026-10-08T15:38:20.048224+00:00",
+        "status": 200,
+        "sha256": "37d7a6ec3982bf38eb5fd7bae91eb1d8072bcc8ba10928541518b4de55124e3e"
+      },
+      {
+        "checkedAt": "2026-10-08T15:38:40.245010+00:00",
+        "status": 200,
+        "sha256": "440fd90f8fe996ce9b06f46f07eec2f9c387dd7d050e8e3b479f218b1c7c6cb8"
+      }
+    ]
+  }
+}

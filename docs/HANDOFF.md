@@ -4,18 +4,30 @@
 [CLAUDE.md](../CLAUDE.md). L'[ancien handoff](HANDOFF-2026-09-10-archive.md) conserve
 les mesures et pièges historiques, sans faire autorité sur l'état actuel.
 
-## v0.18.5, build 40 — en préparation
+## v0.18.5, build 40 — publiée
 
-La release de maintenance prépare les trois correctifs fusionnés ci-dessous,
-sans ajout de fonction ni changement d'interface : échec d'archivage sans perte
-du skill installé, collision de notes sans perte de l'original et reprise
-locale sans nouvel appel au modèle, harness Codex et sabotages fiabilisés.
-`project.yml` porte **0.18.5 / 40**. La version publiée reste **0.18.4 / 39**,
-avec son appcast conservé jusqu'à publication et vérification des nouveaux
-assets. Les validations de signature, notarisation, archives et distribution
-de 0.18.5 restent à effectuer ; aucune app installée n'est remplacée.
+La [release de maintenance](https://github.com/mehdi7129/atoll/releases/tag/v0.18.5)
+est publiée depuis `74b0081`, après fusion de la préparation
+[#13](https://github.com/mehdi7129/atoll/pull/13). Elle livre les trois correctifs
+ci-dessous, sans ajout de fonction ni changement d'interface : échec d'archivage
+sans perte du skill installé, collision de notes sans perte de l'original et
+reprise locale sans nouvel appel au modèle, harness Codex fiabilisé.
 
-## Premier jalon de robustesse — fusionné, pas encore publié
+App et DMG universels arm64 / x86_64 signés Developer ID, notarisés et staplés,
+acceptés par Gatekeeper. Les six signatures Sparkle sont vérifiées et six
+copies altérées rejetées. Le différentiel 39 → 40 et l'app du DMG reproduisent
+les 134 fichiers, liens et modes du ZIP complet. La suite Core en configuration
+Release passe : **1 092 tests, un skip live opt-in, zéro échec**.
+Sept téléchargements publics vérifiés par SHA256 et taille ; 19 URL disponibles.
+Appcast `e5bde85` publié après les assets, servi à l’identique avec 0.18.5/build 40 en tête.
+[Relevé de livraison](releases/0.18.5.json).
+
+L'app stable **v0.18.4/build 39**, quatre produits Debug et trois configurations
+personnelles contrôlés restent identiques. Aucune app installée n'est remplacée ;
+la mise à jour reste à appliquer par l'utilisateur. Le produit Release n'a pas
+été lancé et aucune génération authentifiée n'a été nécessaire pour publier.
+
+## Premier jalon de robustesse — livré en v0.18.5
 
 Les PR [#9](https://github.com/mehdi7129/atoll/pull/9),
 [#10](https://github.com/mehdi7129/atoll/pull/10) et
@@ -38,9 +50,9 @@ conservant l'historique et les trois entrées ; aucun conflit de code.
 [Relevé d'intégration](audit-support/2026-10-08-milestone1/validation.json).
 
 Cette validation utilise des fixtures privées et les services compilés, sans
-génération authentifiée ni lancement GUI. **La release reste v0.18.4, build 39** :
-ces trois correctifs ne sont pas encore distribués et l'app installée n'a pas
-été remplacée. Les autres constats de l'audit #8 restent à traiter séparément.
+génération authentifiée ni lancement GUI. Les trois correctifs sont distribués
+en **v0.18.5, build 40**, sans remplacement de l'app installée. Les autres
+constats de l'audit #8 restent à traiter séparément.
 
 ## v0.18.4, build 39 — publiée
 
@@ -194,20 +206,20 @@ cette release ; la publication n'a installé aucune app.
 
 | Élément | État vérifié |
 |---|---|
-| Version préparée | **v0.18.5, build 40** ; correctifs #9 → #10 → #11 fusionnés, distribution à valider |
-| Version publiée | **[v0.18.4, build 39](https://github.com/mehdi7129/atoll/releases/tag/v0.18.4)** |
-| Fusion / source | [PR #7](https://github.com/mehdi7129/atoll/pull/7) fusionnée ; tag sur `9790b4e` ; publication demandée par Mehdi |
-| Distribution | Universelle arm64 / x86_64 ; app et DMG signés Developer ID, notarisés, staplés et acceptés par Gatekeeper |
-| Mise à jour | Appcast `0fc82d2` poussé après les assets et identique au flux servi ; 19 URL disponibles, SHA256 des sept téléchargements et six signatures EdDSA vérifiés |
-| Référence précédente | v0.18.3, build 38 ; [preuves de sa livraison](releases/0.18.3.json) |
-| Tests fonctionnels | Code `a948e25` : 1 089 tests Core, 1 skip, 0 échec ; huit scénarios quota, 60 parcours runtime, 15 sabotages détectés ; Debug/Release réussis. Code inchangé pour la distribution |
-| Recettes | Trente minutes de transport Codex authentifié : 16 quotas frais, zéro Git/staging. Aperçu GUI protégé avec fixtures ; distribution non lancée. Aucune génération pour publier |
-| Installation de travail | `~/Applications/Atoll.app` **v0.18.3, build 38**, observée le 7 octobre avant publication ; la mise à jour reste à appliquer par l'utilisateur |
+| Version publiée | **[v0.18.5, build 40](https://github.com/mehdi7129/atoll/releases/tag/v0.18.5)** |
+| Fusion / source | Correctifs #9 → #10 → #11 fusionnés ; préparation [#13](https://github.com/mehdi7129/atoll/pull/13) ; source `74b0081` |
+| Distribution | Universelle arm64 / x86_64 ; app et DMG signés Developer ID, notarisés, staplés et acceptés par Gatekeeper ; six signatures Sparkle vérifiées |
+| Téléchargements publics | Sept assets téléchargés ; SHA256 et tailles conformes aux fichiers validés |
+| Mise à jour | Appcast `e5bde85` poussé après les assets, identique au flux servi ; 19 URL disponibles |
+| Référence précédente | v0.18.4, build 39 ; [preuves de sa livraison](releases/0.18.4.json) |
+| Tests fonctionnels | Ordre #9 → #10 → #11 validé : 1 092 tests Core, un skip, zéro échec ; 104 scénarios de récupération, 26 de curation, Codex nominal et cinq contre-épreuves, sabotages ciblés et Debug réussis. Core Release : 1 092 tests, un skip, zéro échec |
+| Recettes de distribution | Différentiel 39 → 40 et app du DMG comparés aux 134 objets du ZIP complet ; six copies altérées rejetées par les signatures Sparkle ; produit Release non lancé, aucune génération authentifiée |
+| Installation de travail | `~/Applications/Atoll.app` **v0.18.4, build 39**, quatre produits Debug et trois configurations personnelles contrôlés inchangés ; la mise à jour reste à appliquer par l'utilisateur |
 
 Vérifier l'état réel avant toute action : `git status --short --branch`,
 `git log -5 --oneline`, `git worktree list`, puis `gh release view`.
 Une source publiée et une app installée peuvent avoir des versions différentes.
-Le [relevé de livraison](releases/0.18.4.json) conserve les commits, identifiants
+Le [relevé de livraison](releases/0.18.5.json) conserve les commits, identifiants
 de notarisation, résultats et empreintes des fichiers distribués.
 
 ## Correctifs après le retour sur v0.18.0
