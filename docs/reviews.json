@@ -721,6 +721,29 @@
         "App/CodexService.swift",
         "Scripts/test-codex-read-storage.py"
       ]
+    },
+    {
+      "date": "2026-10-08",
+      "document": "docs/AUDIT-2026-10-08-robustesse-simplicite.md",
+      "depth": "sweep",
+      "note": "Audit transversal à quatre agents maximum, approfondissement des chemins à risque, reproductions synthétiques et contre-revues. 17 sujets proposés, aucun changement produit. Ne revendique pas une lecture ligne à ligne exhaustive ; preuves et limites dans le rapport.",
+      "files": [
+        "App/NotesCurationService.swift",
+        "AtollCore/Sources/AtollCore/LearnedSkillStore.swift",
+        "App/MemoryIndexer.swift",
+        "AtollCore/Sources/AtollCore/MemoryIndex.swift",
+        "App/InteractionCenter.swift",
+        "App/SessionStore.swift",
+        "AtollCore/Sources/AtollCore/SoundHookEditor.swift",
+        "AtollCore/Sources/AtollCore/HookSettingsEditor.swift",
+        "App/FleetPoller.swift",
+        "App/RetrospectiveRunner.swift",
+        "App/HookInstaller.swift",
+        "App/ModelQuotaPoller.swift",
+        "App/PluginInventory.swift",
+        "App/SoundCenter.swift",
+        "App/TerminalJumpService.swift"
+      ]
     }
   ]
 }
