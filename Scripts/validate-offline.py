@@ -17,6 +17,7 @@ EXCLUDED = {
     "test-codex-catalog.py": "Recette du CLI Codex installé ; validation native séparée.",
     "test-codex-read-storage.py": "Exige un binaire Codex natif ; mesure séparée, jamais implicite.",
     "test-ui.py": "Lance un aperçu GUI protégé ; captures à lire séparément.",
+    "test-ui-refresh.py": "Exerce les vues montées dans une copie GUI instrumentée et protégée.",
     "test-ui-sabotage.py": "Compile et lance des aperçus GUI protégés.",
     "test-settings-sabotage.py": "Compile et lance des aperçus GUI protégés.",
     "test-voiceover.py": "Exige une app et VoiceOver déjà autorisé.",
