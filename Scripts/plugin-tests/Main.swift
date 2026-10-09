@@ -113,13 +113,17 @@ struct Main {
     @MainActor static func cancellation() async throws {
         for global in [false, true] {
             let folder = try fixture("cancel-\(global)", config: ["installed": installed(1),
-                "availableDelay": 0.5, "mutationDelay": 0.6])
+                "waitForRelease": ["list", "install"], "mutationDelay": 0])
             let inventory = PluginInventory(claudePath: folder.appendingPathComponent("fake-cli").path)
             let search = Task { await inventory.search(need: "plugins fixture") }
             try await wait("recherche en vol") { !starts(folder, kind: "list").isEmpty }
             let mutation = Task { await inventory.install(pluginID: "p0@market") }
             try await wait("mutation en vol") { !starts(folder, kind: "install").isEmpty }
             if global { inventory.cancel() } else { inventory.cancelSearch() }
+            // Les deux enfants ont atteint leur barrière AVANT l'annulation.
+            // Aucun délai du scheduler ne peut terminer la recherche trop tôt.
+            try Data().write(to: folder.appendingPathComponent("release-list"))
+            try Data().write(to: folder.appendingPathComponent("release-install"))
             let searchResult = await search.value
             let mutationResult = await mutation.value
             try check(searchResult == "Recherche annulée." && inventory.searchMatches.isEmpty, "A12-search-cancelled")
@@ -288,7 +292,7 @@ struct Main {
     @MainActor static func waitingForSurvivingRefresh() async throws {
         for kind in ["search", "mutation"] {
             let folder = try fixture("refresh-survivor-\(kind)",
-                                     config: ["installed": installed(1), "listDelay": 3, "mutationDelay": 0.01])
+                                     config: ["installed": installed(1), "listDelay": 6, "mutationDelay": 0.01])
             let inventory = PluginInventory(claudePath: folder.appendingPathComponent("fake-cli").path)
             ProcessInspector.unverifiable = true
             setenv("ATOLL_PLUGIN_SURVIVOR", "1", 1)
@@ -305,7 +309,18 @@ struct Main {
             let error = kind == "search"
                 ? await inventory.search(need: "fixture", useAI: true)
                 : await inventory.install(pluginID: "p0@market")
-            try check(error != nil && started.duration(to: .now) < .seconds(1.5)
+            let expected = kind == "search"
+                ? "La lecture des plugins est toujours en cours. Réessayer après sa fin."
+                : "Action terminée, mais la lecture des plugins est toujours en cours."
+            if kind == "mutation" {
+                // Un timeout du spawn serait une fixture invalide, pas une preuve
+                // que l'attente du catalogue a rendu la main.
+                guard FileManager.default.fileExists(atPath: folder.appendingPathComponent("mutation-finished").path),
+                      error == nil || error == expected else {
+                    throw Failure(message: "Fixture mutation terminée avant attente non établie")
+                }
+            }
+            try check(error == expected && started.duration(to: .now) < .seconds(2.5)
                 && inventory.isRefreshing && !SessionStore.shared.internalPids.isEmpty,
                 "A09-plugin-refresh-wait-\(kind)-bounded")
             try check(starts(folder, kind: "list").count == 1

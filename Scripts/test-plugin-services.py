@@ -96,11 +96,11 @@ def main():
                     waiting = "let deadline = ContinuousClock.now.advanced(by: .seconds(timeout))"
                     assert text.count(waiting) == 2
                     text = text.replace(waiting, "let deadline = ContinuousClock.now.advanced(by: .seconds("
-                        'ProcessInfo.processInfo.environment["ATOLL_PLUGIN_WAITING"] == "1" ? 0.3 : timeout))')
+                        'ProcessInfo.processInfo.environment["ATOLL_PLUGIN_WAITING"] == "1" ? 1.0 : timeout))')
                     waiting = "let refreshDeadline = ContinuousClock.now.advanced(by: .seconds(Self.availableTimeout))"
                     assert text.count(waiting) == 1
                     text = text.replace(waiting, "let refreshDeadline = ContinuousClock.now.advanced(by: .seconds("
-                        'ProcessInfo.processInfo.environment["ATOLL_PLUGIN_WAITING"] == "1" ? 0.3 : Self.availableTimeout))')
+                        'ProcessInfo.processInfo.environment["ATOLL_PLUGIN_WAITING"] == "1" ? 1.0 : Self.availableTimeout))')
                     collect = "identity: identity, deadline: deadline, stdoutCap: 4_194_304, stderrCap: 4000)"
                     if collect in text:
                         text = text.replace(collect, "identity: identity, deadline: deadline, stdoutCap: 4_194_304, "
@@ -113,7 +113,7 @@ def main():
                        str(REPO / "Scripts/plugin-tests/Main.swift")]
             command += [str(path) for path in sorted((build / "AtollCore.build").glob("*.o"))]
             binary = root / "plugin-tests"
-            build_result = subprocess.run(command + ["-o", str(binary)], capture_output=True, text=True, timeout=240)
+            build_result = subprocess.run(command + ["-o", str(binary)], capture_output=True, text=True, timeout=600)
             (args.output / (name + "-build.log")).write_text(build_result.stdout + build_result.stderr)
             if build_result.returncode:
                 raise SystemExit("Compilation échouée ; aucun verdict de sabotage.\n" + build_result.stderr[-5000:])

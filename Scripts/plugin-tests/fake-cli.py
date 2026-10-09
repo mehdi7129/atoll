@@ -26,6 +26,12 @@ def record(phase):
 
 record("start")
 try:
+    if kind in config.get("waitForRelease", []):
+        deadline = time.monotonic() + 60
+        while not (root / ("release-" + kind)).exists():
+            if time.monotonic() >= deadline:
+                raise SystemExit("Barrière de fixture non libérée")
+            time.sleep(0.01)
     if arguments[:2] == ["plugin", "list"]:
         available = "--available" in arguments
         time.sleep(config.get("availableDelay", 0) if available else config.get("listDelay", 0))
