@@ -5,6 +5,15 @@ vérificateurs ci-dessous sont en lecture seule sur ces artefacts : ils ne lance
 pas l'app, ne l'installent pas et ne publient rien. Les clés privées ne sont pas
 nécessaires à la vérification.
 
+Pour isoler les produits du packaging du build quotidien, fournir un chemin privé :
+
+```sh
+ATOLL_RELEASE_DERIVED_DATA="$HOME/Library/Caches/AtollRelease-DerivedData" \
+  Scripts/release.sh
+```
+
+Sans cette variable, le chemin historique du script reste utilisé.
+
 ## Artefacts locaux
 
 Après le packaging, indiquer la version/build à contrôler, le relevé JSON de la

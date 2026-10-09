@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Vérifie le nettoyage réversible de release.sh, sans build ni publication."""
+import os
 import re
 import subprocess
 import tempfile
@@ -48,3 +49,26 @@ except AssertionError as error:
     print("PASS sabotage : nettoyage neutralisé détecté")
 else:
     raise AssertionError("Sabotage non détecté")
+
+# Le packaging peut employer un DerivedData isolé sans déplacer le build quotidien.
+def check_derived_data(source):
+    assignment = re.search(r'^DD=.*$', source, re.M)
+    assert assignment, "Affectation DerivedData introuvable"
+    env = dict(os.environ)
+    env.pop("ATOLL_RELEASE_DERIVED_DATA", None)
+    command = ["/bin/zsh", "-c", assignment.group() + '\nprint -r -- "$DD"']
+    default = subprocess.check_output(command, env=env, text=True).strip()
+    assert default == str(Path.home() / "Library/Developer/Atoll-DerivedData")
+    isolated = "/private/tmp/Atoll release ' $literal DerivedData"
+    env["ATOLL_RELEASE_DERIVED_DATA"] = isolated
+    assert subprocess.check_output(command, env=env, text=True).strip() == isolated, "DerivedData privé ignoré"
+
+check_derived_data(script)
+print("PASS DerivedData : défaut conservé, chemin privé littéral respecté")
+try:
+    check_derived_data(script.replace('${ATOLL_RELEASE_DERIVED_DATA:-$HOME/Library/Developer/Atoll-DerivedData}', '$HOME/Library/Developer/Atoll-DerivedData'))
+except AssertionError as error:
+    assert "privé ignoré" in str(error)
+    print("PASS sabotage : DerivedData privé ignoré détecté")
+else:
+    raise AssertionError("Sabotage DerivedData non détecté")
