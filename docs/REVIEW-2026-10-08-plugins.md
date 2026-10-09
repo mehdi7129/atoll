@@ -51,27 +51,26 @@ La recette finale passe **145 assertions** :
 
 | Scénario | Résultat |
 |---|---|
-| 30 plugins, borne 1 | 32 commandes, maximum 1 enfant, 4,85 s |
-| 30 plugins, borne 2 | 32 commandes, maximum 2 enfants, 2,58 s |
+| 30 plugins, borne 1 | 32 commandes, maximum 1 enfant, 4,46 s |
+| 30 plugins, borne 2 | 32 commandes, maximum 2 enfants, 2,06 s |
 | Identifiant redemandé, échec local, fallback | Déduplication, 29 coûts valides, autres lignes conservées |
 | Annulation recherche + installation simultanée | Recherche arrêtée, installation terminée |
 | Fermeture globale | Les deux commandes arrêtées, file de coûts vidée |
 | Version/source/disparition | Invalidation ciblée, réponse ancienne refusée |
 | Catalogue projet/binaire/home | Réponses tardives et erreurs rejetées ; état courant conservé |
 | Home changé après chargement | Ancien catalogue retiré, aucun nouvel appel |
-| Parent sorti, descendant tenant les pipes 3 s | Retour en 0,40 s, résultat non déclaré réussi |
+| Parent sorti, descendant tenant les pipes 3 s | Retour en 0,36 s, résultat non déclaré réussi |
 | Recherche survivante, identité indisponible | Budget, PID et workspace conservés ; second appel refusé ; libération après sortie |
 | Mutation survivante, identité indisponible | Verrou conservé ; aucune seconde installation simultanée |
 | Détail survivant, identité indisponible | Aucun fallback simultané ; place conservée et file reprise après sortie |
-| Recherche/mutation attendant un inventaire survivant | Retour en moins de 1,5 s avec délai de fixture 0,3 s ; PID conservé, aucune relance |
+| Recherche/mutation attendant un inventaire survivant | Retour en moins de 2,5 s avec délai de fixture 1 s ; PID conservé, aucune relance |
 
-La borne 2 réduit ici le temps du lot d'environ 47 %, en gardant une limite
+La borne 2 réduit ici le temps du lot d'environ 54 %, en gardant une limite
 explicite. Ces chiffres qualifient la fixture, pas le CPU ou la RAM des plugins
 installés chez un utilisateur.
 
-**Douze sabotages compilés sont en cours de vérification**, après le nominal
-final réussi. Les dix premiers avaient été détectés sur la variante précédant
-les deux bornes d’attente de catalogue. La campagne finale couvre : annulation
+**Douze sabotages compilés sont détectés**, après le nominal final réussi :
+annulation
 globale depuis la recherche ; concurrence à 30 ; cache non invalidé ; ancienne
 version acceptée ; ancien catalogue accepté ; changement de home ignoré ;
 drain EOF illimité réintroduit ; retrait prématuré du registre ; libération
@@ -85,7 +84,15 @@ et le délai de grâce dans une copie compilée du service, pour finir rapidemen
 Les processus, le registre, les gardes de réentrance et la file sont réels ;
 le budget et les collaborateurs d'app restent contrôlés. Les délais produit
 ne sont pas modifiés. L'identité volontairement indisponible interdit tout
-signal : la fixture finit seule après trois secondes.
+signal : les fixtures finissent seules après trois ou six secondes.
+
+La contre-épreuve a également renforcé le harness : deux barrières de fichiers
+privées garantissent le chevauchement recherche/mutation avant l'annulation,
+à la place de délais fragiles sous saturation de la machine. Le test d'attente
+après mutation exige que l'installation ait réellement fini et que le message
+provienne de la borne du catalogue. Un autre échec de spawn invalide la fixture,
+au lieu de valider ce sabotage. La campagne finale détecte les douze régressions
+sur leurs assertions attendues ; les essais intermédiaires ne sont pas comptés.
 
 ```sh
 python3 Scripts/test-plugin-services.py \
