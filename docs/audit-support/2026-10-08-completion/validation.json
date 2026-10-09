@@ -1,0 +1,1040 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-09T07:04:38.862413+00:00",
+  "status": "passed",
+  "scope": "Audit completion validation; this document does not prove publication or installation.",
+  "source": {
+    "frozen_product_commit": "9eaa69d1aacece461b30fcfad7a86fb09c0984f6",
+    "full_campaign_start_commit": "6c62659cff860d71f47f7e46d5f0efb085381567",
+    "consolidated_at_commit": "1a34bbd2e8926b31f6658d12d4dc5e0e977ed1a7",
+    "product_trees": {
+      "App": "c546e2cc04f05640490440601ab22fa86371bfbe",
+      "AtollCore/Sources": "333e8b3736f26048b26dd7a878c146a8cd48da0a",
+      "Bridge": "2d8cd55ba36f0c0217d2244eab4460eb82040fda",
+      "Shared": "a0d6507832a7d24b5898de84e7207dcb0004519e"
+    },
+    "core_tests_tree": "a880d6b53681284d1e0570281c25ecab4aa278a2",
+    "product_sources_unchanged": true
+  },
+  "counting": "XCTest tests, harness steps, service assertions and GUI cases are separate units. They overlap and are not summed as unique tests.",
+  "core": {
+    "debug": {
+      "executed": 1131,
+      "skipped": 1,
+      "failures": 0,
+      "evidence": "full-final/core.log",
+      "sha256": "632ef63dffef606d216d17bcf7f686e5809a33cf0e79e4a685a371e9790a1b85"
+    },
+    "release": {
+      "executed": 1131,
+      "skipped": 1,
+      "failures": 0,
+      "evidence": "core-release-recheck-all.log",
+      "sha256": "2c093f74dee06b08cadd307d28b5ba5f1c6a865cdd344787b85a88c3bed186cd"
+    },
+    "release_history": {
+      "initial_failed_attempt": {
+        "executed": 1131,
+        "skipped": 1,
+        "failures": 6,
+        "evidence": "core-release-final.log",
+        "sha256": "b258f20073ccc51b53e28f14485921d09d25d80dd4df27e950a3838a25fc70ff",
+        "failed_tests": [
+          "AtollCoreTests.BoundedProcessRunnerTests testParallelLargeStreamsAreDrainedWithStrictCaps",
+          "AtollCoreTests.BoundedProcessRunnerTests testParentExitCannotLeaveDrainWaitingOnSilentDescendant",
+          "AtollCoreTests.BoundedProcessRunnerTests testTermIgnoredEscalatesAndReturnsWithinDeadline",
+          "AtollCoreTests.CodexAccountClientTests testCancellationAfterLaunchSendsNoInitialize",
+          "AtollCoreTests.TaskCompletionTests testUnmatchedBracketsStayCheap"
+        ]
+      },
+      "targeted_unchanged_rerun": {
+        "executed": 8,
+        "skipped": 0,
+        "failures": 0,
+        "evidence": "core-release-timing-recheck.log",
+        "sha256": "b07e80afac53f2cab0fd5f84ab8224f60457bfec9959902ff789bf7c5e99dde8"
+      },
+      "resolution": "Timing failures under observed host contention; targeted and complete reruns passed without source changes."
+    }
+  },
+  "offline_full": {
+    "planned_steps": 120,
+    "passed_first_attempt": 119,
+    "passed_after_harness_fix": 1,
+    "unresolved": 0,
+    "raw_status": "failed",
+    "started_at": "2026-10-09T06:42:08.168058+00:00",
+    "finished_at": "2026-10-09T07:04:05.082851+00:00",
+    "steps": [
+      {
+        "name": "core",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 35.418
+      },
+      {
+        "name": "offline-validation",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 6.835
+      },
+      {
+        "name": "runtime",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 9.179
+      },
+      {
+        "name": "skill-review",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 1.7
+      },
+      {
+        "name": "curation",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 6.168
+      },
+      {
+        "name": "curation-recovery",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 17.158
+      },
+      {
+        "name": "curation-state",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 13.802
+      },
+      {
+        "name": "learning-note-context",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 7.833
+      },
+      {
+        "name": "learning-retrospective",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 7.896
+      },
+      {
+        "name": "learning-digest",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 2.113
+      },
+      {
+        "name": "learning-metrics",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 3.553
+      },
+      {
+        "name": "learning-usage-replay",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 1.42
+      },
+      {
+        "name": "memory-indexer",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 1.767
+      },
+      {
+        "name": "feedback",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 13.918
+      },
+      {
+        "name": "plugin-services",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 109.453
+      },
+      {
+        "name": "process-services",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 13.256
+      },
+      {
+        "name": "analysis-processes",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 13.632
+      },
+      {
+        "name": "codex-stdout",
+        "raw_status": "failed",
+        "status": "passed_after_harness_fix",
+        "seconds": 2.644
+      },
+      {
+        "name": "claude-permissions",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 4.442
+      },
+      {
+        "name": "codex-quota-poller",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 1.195
+      },
+      {
+        "name": "codex-exec",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 3.924
+      },
+      {
+        "name": "codex-exec-verdict",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 17.248
+      },
+      {
+        "name": "skill-generation",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 1.965
+      },
+      {
+        "name": "release-trash",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 0.147
+      },
+      {
+        "name": "hook-installation",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 6.311
+      },
+      {
+        "name": "curation/cancellation",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 2.932
+      },
+      {
+        "name": "curation/unchanged",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 4.929
+      },
+      {
+        "name": "curation/post-write",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 4.861
+      },
+      {
+        "name": "curation/archive-uniqueness",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 2.925
+      },
+      {
+        "name": "curation-recovery/checkpoint",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 16.433
+      },
+      {
+        "name": "curation-recovery/fingerprint",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 18.183
+      },
+      {
+        "name": "curation-recovery/swap-recovery",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 22.912
+      },
+      {
+        "name": "curation-recovery/swap-proof",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 21.457
+      },
+      {
+        "name": "curation-recovery/swap-marker",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 21.688
+      },
+      {
+        "name": "curation-recovery/swap-marker-write",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 19.673
+      },
+      {
+        "name": "curation-recovery/collision-preflight",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 22.56
+      },
+      {
+        "name": "curation-recovery/collision-preservation",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 24.143
+      },
+      {
+        "name": "curation-state/empty-fallback",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 17.836
+      },
+      {
+        "name": "curation-state/spawn-guard",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 22.57
+      },
+      {
+        "name": "curation-state/write-guard",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 22.468
+      },
+      {
+        "name": "curation-state/apply-guard",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 20.915
+      },
+      {
+        "name": "curation-state/reload-cadence",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 20.998
+      },
+      {
+        "name": "curation-state/repaired-absent",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 21.238
+      },
+      {
+        "name": "learning-digest/head-only",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 1.162
+      },
+      {
+        "name": "learning-digest/command-marker",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 1.106
+      },
+      {
+        "name": "learning-digest/shortened-count",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 1.51
+      },
+      {
+        "name": "learning-digest/dropped-count",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 1.111
+      },
+      {
+        "name": "learning-digest/read-stop",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 1.149
+      },
+      {
+        "name": "learning-metrics/unknown",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 4.2
+      },
+      {
+        "name": "learning-metrics/duration",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 2.896
+      },
+      {
+        "name": "learning-metrics/late-usage",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 3.065
+      },
+      {
+        "name": "learning-metrics/writes",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 3.309
+      },
+      {
+        "name": "learning-metrics/cache",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 24.431
+      },
+      {
+        "name": "learning-metrics/latest",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 25.335
+      },
+      {
+        "name": "learning-metrics/json",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 24.116
+      },
+      {
+        "name": "learning-metrics/cold-metrics",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 2.951
+      },
+      {
+        "name": "learning-metrics/cold-usage",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 2.799
+      },
+      {
+        "name": "learning-retrospective/checkpoint",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 5.448
+      },
+      {
+        "name": "learning-retrospective/counts",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 5.196
+      },
+      {
+        "name": "learning-retrospective/material",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 5.848
+      },
+      {
+        "name": "learning-retrospective/dedup",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 6.156
+      },
+      {
+        "name": "learning-retrospective/recovery-progress",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 5.307
+      },
+      {
+        "name": "learning-retrospective/recovery-independent",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 6.229
+      },
+      {
+        "name": "learning-retrospective/reader",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 6.11
+      },
+      {
+        "name": "learning-retrospective/usage",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 5.313
+      },
+      {
+        "name": "learning-retrospective/digest-metrics",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 5.219
+      },
+      {
+        "name": "learning-retrospective/journal-revision",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 5.152
+      },
+      {
+        "name": "learning-retrospective/notes-revision",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 5.209
+      },
+      {
+        "name": "memory-indexer/document",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 3.288
+      },
+      {
+        "name": "memory-indexer/empty",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 3.08
+      },
+      {
+        "name": "memory-indexer/cwd",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 3.186
+      },
+      {
+        "name": "memory-indexer/open",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 3.172
+      },
+      {
+        "name": "memory-indexer/seek",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 3.024
+      },
+      {
+        "name": "memory-indexer/read",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 3.158
+      },
+      {
+        "name": "memory-indexer/batch-offset",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 3.226
+      },
+      {
+        "name": "codex-quota-poller/overlap",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 0.991
+      },
+      {
+        "name": "codex-quota-poller/stop-reference",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 1.116
+      },
+      {
+        "name": "codex-quota-poller/before-fetch",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 0.891
+      },
+      {
+        "name": "codex-quota-poller/stale",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 0.999
+      },
+      {
+        "name": "codex-quota-poller/child-cancel",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 1.963
+      },
+      {
+        "name": "process-services/heartbeat",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 3.753
+      },
+      {
+        "name": "process-services/serialization",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 2.968
+      },
+      {
+        "name": "process-services/coalescing",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 3.127
+      },
+      {
+        "name": "process-services/barrier",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 3.158
+      },
+      {
+        "name": "process-services/fleet-ownership",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 6.026
+      },
+      {
+        "name": "process-services/keychain-ownership",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 6.078
+      },
+      {
+        "name": "analysis-processes/retrospective",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 7.505
+      },
+      {
+        "name": "analysis-processes/curation",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 6.252
+      },
+      {
+        "name": "claude-permissions/card",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 6.051
+      },
+      {
+        "name": "claude-permissions/phase",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 6.074
+      },
+      {
+        "name": "claude-permissions/helper-exit",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 10.666
+      },
+      {
+        "name": "claude-permissions/disconnected-helper",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 10.88
+      },
+      {
+        "name": "runtime/cancellation",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 5.892
+      },
+      {
+        "name": "runtime/quota-projection",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 8.236
+      },
+      {
+        "name": "runtime/oversize-diagnostic",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 6.612
+      },
+      {
+        "name": "runtime/launch-retro",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 5.758
+      },
+      {
+        "name": "runtime/launch-curation",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 6.829
+      },
+      {
+        "name": "runtime/launch-search",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 7.679
+      },
+      {
+        "name": "runtime/curation-retry",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 8.092
+      },
+      {
+        "name": "runtime/curation-journal",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 7.926
+      },
+      {
+        "name": "runtime/budget-recovery",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 7.864
+      },
+      {
+        "name": "runtime/budget-admission",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 8.092
+      },
+      {
+        "name": "runtime/capture-journal",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 7.933
+      },
+      {
+        "name": "skill-review/stale-catalog",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 1.669
+      },
+      {
+        "name": "skill-review/stale-error",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 1.59
+      },
+      {
+        "name": "skill-review/loading",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 1.656
+      },
+      {
+        "name": "skill-review/access-error",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 3.241
+      },
+      {
+        "name": "skill-review/access-recovery",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 3.061
+      },
+      {
+        "name": "skill-review/access-clear",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 3.187
+      },
+      {
+        "name": "learning-note-context/sabotage",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 6.622
+      },
+      {
+        "name": "learning-core",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 33.866
+      },
+      {
+        "name": "review-regressions",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 89.221
+      },
+      {
+        "name": "bounded-process-sabotage",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 23.531
+      },
+      {
+        "name": "hook-settings-sabotage",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 33.041
+      },
+      {
+        "name": "sound-hook-sabotage",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 36.404
+      },
+      {
+        "name": "skill-archive-sabotage",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 21.655
+      },
+      {
+        "name": "skill-reconciliation-sabotage",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 33.291
+      },
+      {
+        "name": "island-context-sabotage",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 31.9
+      },
+      {
+        "name": "memory-document-sabotage",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 24.554
+      },
+      {
+        "name": "docs",
+        "raw_status": "passed",
+        "status": "passed",
+        "seconds": 14.636
+      }
+    ],
+    "excluded": {
+      "test-codex-catalog.py": "Recette du CLI Codex installé ; validation native séparée.",
+      "test-codex-read-storage.py": "Exige un binaire Codex natif ; mesure séparée, jamais implicite.",
+      "test-ui.py": "Lance un aperçu GUI protégé ; captures à lire séparément.",
+      "test-ui-refresh.py": "Exerce les vues montées dans une copie GUI instrumentée et protégée.",
+      "test-ui-sabotage.py": "Compile et lance des aperçus GUI protégés.",
+      "test-settings-sabotage.py": "Compile et lance des aperçus GUI protégés.",
+      "test-voiceover.py": "Exige une app et VoiceOver déjà autorisé."
+    },
+    "evidence": "full-final/results.json",
+    "sha256": "5933cf3e4dede4f70e184b5cc28d823eb84546e92de25d5a770310e78ec01408",
+    "a21_history": {
+      "initial_error": "AF_UNIX path too long",
+      "initial_failure_preserved": true,
+      "fixture_fix_commit": "1454f6bca024415da68ccb334878b4344cd38961",
+      "fixture_fix_files": [
+        "Scripts/test-codex-stdout.py",
+        "Scripts/validate-offline.py"
+      ],
+      "product_unchanged": true,
+      "replays": [
+        {
+          "kind": "nominal",
+          "passed": true,
+          "scenarios": [
+            {
+              "closed_stdout": false,
+              "returncode": 0,
+              "passed": true
+            },
+            {
+              "closed_stdout": true,
+              "returncode": 0,
+              "passed": true
+            }
+          ],
+          "partial_write_and_eintr": true,
+          "source_sha256": {
+            "Bridge/main.swift": "2a66fcd205d0b0e26e2cd78ff746ee9fac752ef117cc4da1b1cadb1984f2d795",
+            "Bridge/CodexBridge.swift": "412b19532c0df6a66f80ff778c048851c57f147f51bb7ee4964a6d5ca1405f24",
+            "Shared/ProcessInspector.swift": "77c31e6c0cf23e430b883676c6b94f5b82cf484467998694cf6b24e2eb3baa37"
+          },
+          "evidence": "full-final-codex-stdout-nominal/results.json",
+          "sha256": "425bed98c183b79916f42566564845adfa667cad5873ae10221736a14f8d2edb"
+        },
+        {
+          "kind": "mutant",
+          "passed": true,
+          "scenarios": [
+            {
+              "closed_stdout": false,
+              "returncode": 0,
+              "passed": true
+            },
+            {
+              "closed_stdout": true,
+              "returncode": -6,
+              "passed": true
+            }
+          ],
+          "partial_write_and_eintr": true,
+          "source_sha256": {
+            "Bridge/main.swift": "2a66fcd205d0b0e26e2cd78ff746ee9fac752ef117cc4da1b1cadb1984f2d795",
+            "Bridge/CodexBridge.swift": "412b19532c0df6a66f80ff778c048851c57f147f51bb7ee4964a6d5ca1405f24",
+            "Shared/ProcessInspector.swift": "77c31e6c0cf23e430b883676c6b94f5b82cf484467998694cf6b24e2eb3baa37"
+          },
+          "evidence": "full-final-codex-stdout-mutant/results.json",
+          "sha256": "bf5723a4b292f1501f8c9a5b4e69a089560accf7ba149a39af568d4cf2064c81"
+        }
+      ]
+    }
+  },
+  "builds": {
+    "Debug": {
+      "status": "passed",
+      "evidence": "debug-final.log",
+      "sha256": "ddc7f02eb4aa4d250bebccb100e3402c9b0e28c60aefa39a79f5dd976d0b6217"
+    },
+    "Release": {
+      "status": "passed",
+      "evidence": "release-final.log",
+      "sha256": "656ad2c30ccf8213429f42df7a88e24fc859fd927638a7136a9d4fde1ea0a8ba"
+    }
+  },
+  "ci": {
+    "url": "https://github.com/mehdi7129/atoll/actions/runs/37895684273",
+    "head": "f8d802dc9e59715e84d4ca15c30749a66bdfdbeb",
+    "conclusion": "success",
+    "standard_steps": 26,
+    "standard_steps_passed": 26,
+    "product_tree_matches": true,
+    "evidence": "ci-final/artifact/results.json",
+    "sha256": "88dbbde77b8aab2ef724357b0c924b01bf0eb1fc111b3253108f91a672489fab",
+    "initial_attempt": {
+      "url": "https://github.com/mehdi7129/atoll/actions/runs/37894526195",
+      "head": "04246048041a94627ab23148dd663bb0fb831369",
+      "passed_steps": 25,
+      "failed_step": "process-services",
+      "failed_scenario": "queue-barrier",
+      "not_executed_after_failure": [
+        "precondition-order",
+        "interruption",
+        "nonzero",
+        "resolve-claude",
+        "resolve-codex",
+        "resolve-claude-inherited",
+        "resolve-codex-inherited",
+        "fleet-ownership",
+        "keychain-ownership"
+      ],
+      "classification": "Fixture ordering false positive; no missing dependency or demonstrated product regression.",
+      "controlled_false_positive_reproduced": true,
+      "fixture_fix_commit": "f8d802dc9e59715e84d4ca15c30749a66bdfdbeb",
+      "replays": {
+        "nominal": {
+          "passed": true,
+          "scenarios": 17,
+          "evidence": "ci-first/fixed-nominal/results.json",
+          "sha256": "f52220733f77ea82e4e806d05d334c3cb239e3149f1e3cfdd4c25cf95462b1b8"
+        },
+        "barrier": {
+          "passed": true,
+          "scenarios": 1,
+          "evidence": "ci-first/fixed-barrier/results.json",
+          "sha256": "dddb6d85b39201ba2c924c74269125792fa1789ef9afff7c304b7ace7454ff66"
+        },
+        "serialization": {
+          "passed": true,
+          "scenarios": 1,
+          "evidence": "ci-first/fixed-serialization/results.json",
+          "sha256": "3f3e95b10fd4d9ea2e2a98a483b9ef3fba56e5c00eec8e5f40c9972160839050"
+        },
+        "coalescing": {
+          "passed": true,
+          "scenarios": 1,
+          "evidence": "ci-first/fixed-coalescing/results.json",
+          "sha256": "6f162bc7193d065ac51f18a7730a0df60c28e5ac54f6cee3eb5fe2df4bd334c4"
+        }
+      }
+    }
+  },
+  "ui": {
+    "static_preview": {
+      "cases": [
+        {
+          "case": "settings-claude",
+          "passed": true,
+          "failures": []
+        },
+        {
+          "case": "settings-codex",
+          "passed": true,
+          "failures": []
+        },
+        {
+          "case": "settings-learning",
+          "passed": true,
+          "failures": []
+        },
+        {
+          "case": "settings-alerts",
+          "passed": true,
+          "failures": []
+        },
+        {
+          "case": "settings-autonomy",
+          "passed": true,
+          "failures": []
+        },
+        {
+          "case": "onboarding-unset",
+          "passed": true,
+          "failures": []
+        },
+        {
+          "case": "card-claude",
+          "passed": true,
+          "failures": []
+        }
+      ],
+      "screenshots_read": true,
+      "source_basis": "First Debug preview before the final process and harness changes; this qualifies rendered screens only.",
+      "evidence": "ui/results.json",
+      "sha256": "8875f06f7db3b091e21f033d764303d1d8073d540dadd9f3fe0a348edfbfe9c1"
+    },
+    "dynamic_preview": {
+      "cases": [
+        {
+          "case": "learning",
+          "passed": true
+        },
+        {
+          "case": "catalog",
+          "passed": true
+        }
+      ],
+      "sabotages": [
+        {
+          "mutation": "journal",
+          "detected": true,
+          "oracle": "A16 journal UI remained stale"
+        },
+        {
+          "mutation": "notes",
+          "detected": true,
+          "oracle": "A16 notes UI remained stale"
+        },
+        {
+          "mutation": "home",
+          "detected": true,
+          "oracle": "A20 home UI remained stale"
+        }
+      ],
+      "source_sha256": {
+        "App/CodexPreview.swift": "199d6dd1b121592f3ae21744f658731116b17609c24e76d3633b3febc8ef43d1",
+        "App/LearningSettingsPane.swift": "083f1be0b8276deeba09459b03f165ac37d4a73a8ba5d36d59744e4ab58de5a3",
+        "App/CodexSettingsPane.swift": "a228a1f2033128355c30df52cc785220aa20710e1051bea420ff84f29bdf8b19",
+        "App/CodexCatalogSection.swift": "92ad2426c503d9975951b9399c825d7c1073a7e02299fcc44c080e2392efe61d",
+        "App/CodexCatalogState.swift": "b5c5894c6bf1d10389aa16b654600f0ab940e5fb59e46874afc89762f11eb86f",
+        "App/RetrospectiveRunner.swift": "f44e317c122487b3a876a2f216d7aeb761dbcb5e0fe2405cd629c17f49acbb9b"
+      },
+      "adaptations": [
+        "global preview preserved",
+        "private Foundation home and app preference domain asserted",
+        "only view preview guards bypassed in temporary sources",
+        "actual journal persistence and delivery recovery",
+        "catalogue resolver/reader injected through existing constructor",
+        "home button keeps actual state assignment; service boundary selects only private home without starting services"
+      ],
+      "screenshots_read": true,
+      "reviewed_captures": 9,
+      "detailed_report": "docs/audit-support/2026-10-09-ui-refresh/validation.json",
+      "limitations": [
+        "AppKit keyboard entry is not exercised; fixture injects homePath then presses actual AX button",
+        "Codex service restart is replaced by private CodexPaths.selectHome",
+        "Catalogue reader is injected; no authenticated CLI",
+        "Audio and real terminal focus are not qualified"
+      ],
+      "evidence": "ui-refresh/results.json",
+      "sha256": "a2102825e52f13bd2897614c022e4c538f01039f29b5ca79cc9bb8d97e5b080b"
+    }
+  },
+  "limits": [
+    "No authenticated generation was run in this validation.",
+    "Protected previews use private fixtures; they do not qualify authenticated CLI sessions.",
+    "Human audio listening and return focus to a live user terminal remain separate qualifications.",
+    "Build and source validation do not prove signing, notarization, public asset availability, served appcast or installation.",
+    "Raw failed attempts and their validated replays are preserved; no raw result was rewritten.",
+    "Evidence paths are relative to the local audit evidence archive; raw logs are not embedded in this public summary."
+  ]
+}
