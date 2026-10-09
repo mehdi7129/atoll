@@ -2,12 +2,16 @@
 """Contre-épreuves du verdict offline ; seulement Python et fichiers jetables."""
 import contextlib
 import importlib.util
+import inspect
 import io
 import json
 import os
 from pathlib import Path
+import signal
+import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
@@ -59,6 +63,71 @@ class OfflineValidationTests(unittest.TestCase):
         code, report = self.run_main(steps)
         self.assertEqual(code, 1)
         self.assertEqual([s["status"] for s in report["steps"]], ["timed_out", "failed"])
+
+    def assert_timeout_stops_descendant(self, runner):
+        with tempfile.TemporaryDirectory(prefix="atoll-offline-descendant-") as temporary:
+            root = Path(temporary)
+            identity = root / "child.json"
+            # Le leader sort sur TERM ; son enfant l'ignore et garde le groupe.
+            source = (
+                "import json,os,pathlib,signal,time\n"
+                "child=os.fork()\n"
+                "if child==0:\n"
+                " signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+                f" pathlib.Path({str(identity)!r}).write_text(json.dumps([os.getpid(),os.getpgrp()]))\n"
+                " time.sleep(60)\n"
+                "else:\n"
+                " time.sleep(60)\n"
+            )
+            original_popen = subprocess.Popen
+
+            def ready_process(*arguments, **options):
+                process = original_popen(*arguments, **options)
+                # Le délai testé commence après la préparation, pas au lancement
+                # de Python sur une machine éventuellement occupée par un build.
+                deadline = time.monotonic() + 30
+                while not identity.exists() and process.poll() is None and time.monotonic() < deadline:
+                    time.sleep(0.02)
+                if not identity.exists():
+                    try:
+                        os.killpg(process.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                    process.wait()
+                    self.fail("Fixture du descendant non prête : " + (root / "process.log").read_text())
+                return process
+
+            try:
+                step = validation.Step("descendant", [sys.executable, "-c", source], timeout=0.1)
+                with patch.object(validation.subprocess, "Popen", side_effect=ready_process):
+                    result = runner(step, root / "process.log", dict(os.environ))
+                self.assertEqual(result["status"], "timed_out")
+                pid, _ = json.loads(identity.read_text())
+                state = subprocess.run(["/bin/ps", "-o", "stat=", "-p", str(pid)],
+                                       capture_output=True, text=True, timeout=5)
+                alive = state.returncode == 0 and not state.stdout.strip().startswith("Z")
+                self.assertFalse(alive, "offline-timeout-descendant-survived")
+            finally:
+                if identity.exists():
+                    pid, group = json.loads(identity.read_text())
+                    try:
+                        if os.getpgid(pid) == group:
+                            os.kill(pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+
+    def test_timeout_stops_descendant_after_leader_exits(self):
+        self.assert_timeout_stops_descendant(validation.run_command)
+
+    def test_timeout_descendant_sabotage_is_detected(self):
+        source = inspect.getsource(validation.run_command)
+        needle = "os.killpg(process.pid, signal.SIGKILL)"
+        self.assertEqual(source.count(needle), 1)
+        namespace = dict(validation.__dict__)
+        exec(compile(source.replace(needle, "pass  # Sabotage du nettoyage du groupe."),
+                     "<offline-timeout-mutant>", "exec"), namespace)
+        with self.assertRaisesRegex(AssertionError, "offline-timeout-descendant-survived"):
+            self.assert_timeout_stops_descendant(namespace["run_command"])
 
     def test_plans_are_offline_and_targeted_scope_is_explicit(self):
         root = Path("/private/fixture")

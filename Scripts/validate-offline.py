@@ -78,7 +78,7 @@ def plan(profile, output, build, only=()):
             "learning-retrospective": "checkpoint counts material dedup recovery-progress recovery-independent reader usage digest-metrics journal-revision notes-revision",
             "memory-indexer": "document empty cwd open seek read batch-offset",
             "codex-quota-poller": "overlap stop-reference before-fetch stale child-cancel",
-            "process-services": "heartbeat serialization coalescing barrier",
+            "process-services": "heartbeat serialization coalescing barrier fleet-ownership keychain-ownership",
             "analysis-processes": "retrospective curation",
             "claude-permissions": "card phase helper-exit disconnected-helper",
         }
@@ -145,12 +145,26 @@ def run_command(step, log, env):
             except subprocess.TimeoutExpired:
                 status = "timed_out"
                 # Seulement le groupe créé pour cette étape, jamais un nom de processus.
-                os.killpg(process.pid, signal.SIGTERM)
                 try:
-                    process.wait(timeout=2)
-                except subprocess.TimeoutExpired:
-                    os.killpg(process.pid, signal.SIGKILL)
-                    process.wait()
+                    try:
+                        os.killpg(process.pid, signal.SIGTERM)
+                    except ProcessLookupError:
+                        pass
+                    else:
+                        # Ne pas reap le leader pendant la grâce : son PID réserve
+                        # aussi le PGID, même s'il sort avant ses descendants.
+                        time.sleep(2)
+                        try:
+                            os.killpg(process.pid, signal.SIGKILL)
+                        except ProcessLookupError:
+                            pass
+                finally:
+                    # macOS peut renvoyer EPERM pour un groupe réduit à son
+                    # leader zombie. Toujours le reap, même après une erreur.
+                    try:
+                        code = process.wait(timeout=2)
+                    except subprocess.TimeoutExpired:
+                        pass
     except OSError as error:
         log.write_text(str(error) + "\n")
     return {"name": step.name, "command": step.command, "status": status, "returncode": code,
