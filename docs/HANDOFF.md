@@ -1,11 +1,11 @@
 # HANDOFF — reprendre Atoll
 
-État courant du **8 octobre 2026**, préparation de clôture de l'audit. Les règles
+État courant du **9 octobre 2026**, validation de clôture de l'audit terminée. Les règles
 actives restent dans [CLAUDE.md](../CLAUDE.md), avec leur
 [archive intégrale](archive/CLAUDE-2026-10-08.md). Les sections historiques en fin
 de fiche décrivent leur date ; elles ne remplacent pas l'état courant ci-dessous.
 
-## État courant : code corrigé, validation finale en cours
+## État courant : corrections validées, PR #16 en revue
 
 La version publiée reste **[0.18.5, build 40](https://github.com/mehdi7129/atoll/releases/tag/v0.18.5)**.
 Le [rapport d'intégration](REVIEW-2026-10-08-audit-completion.md) suit les **22 constats** :
@@ -15,15 +15,40 @@ Le [rapport d'intégration](REVIEW-2026-10-08-audit-completion.md) suit les **22
   [#14](https://github.com/mehdi7129/atoll/pull/14), merge `13dad53`, puis A07/A08
   par [#15](https://github.com/mehdi7129/atoll/pull/15), merge `0016c0c`.
 - **Quinze corrigés sur la branche d'intégration**
-  `integration/audit-completion-20261008`, tête de préparation `4cb97df` : mémoire,
+  `integration/audit-completion-20261008`, source produit `9eaa69d` : mémoire,
   permissions Claude, lifecycle des processus, plugins et feedback.
-  Validation offline commune et builds finaux en cours ; aucune publication
-  de ces quinze corrections annoncée à cette étape.
+  La [PR #16](https://github.com/mehdi7129/atoll/pull/16) reste ouverte pour revue,
+  avec sa validation commune terminée ;
+  aucune publication de ces quinze corrections annoncée à cette étape.
+
+Les suites Core Debug et Release passent chacune **1 131 tests, un skip et
+zéro échec**. La reprise Release dure 11,1 s, sans modifier sources ni tests.
+Le premier passage du 9 octobre
+avait six échecs sous une charge système supérieure à 600 ; il reste conservé
+dans les preuves. Huit tests ciblés ont ensuite passé avant la reprise complète.
+Les builds Debug et Release finaux passent, sans lancement de leurs produits.
+Le profil offline full comporte 120 étapes et 85 variantes nommées : 119 étapes
+passent immédiatement ; A21 passe après correction du chemin Unix de sa fixture
+et rejeu nominal/mutant. Son résultat brut reste `failed` avec exit 1 ; le
+[relevé consolidé](audit-support/2026-10-08-completion/validation.json) conserve
+cette histoire et conclut `passed`, sans échec non résolu.
+La [CI standard passe 26 étapes sur 26](https://github.com/mehdi7129/atoll/actions/runs/37895684273)
+sur `f8d802d`, dont l'arbre produit est identique à l'intégration finale.
+Les commits documentaires et de harness postérieurs ne sont pas présentés
+comme la tête exécutée par cette CI.
 
 L'intégration #14 → #15 a passé **1 129 tests Core**, un skip, zéro échec,
 190 parcours services, 12 parcours helper et les sabotages ciblés, puis les
 builds Debug/Release. Les validations propres aux nouveaux lots sont détaillées
 et séparées dans le rapport : elles ne remplacent pas le contrôle de l'arbre final.
+Le lot processus passe 17 parcours de services et douze sabotages compilés.
+Le nominal plugins passe 145 assertions et ses douze sabotages finaux sont
+compilés et détectés. Les huit contre-épreuves du runner offline passent, dont le nettoyage
+d'un descendant survivant au leader après timeout.
+Les [interactions GUI A16/A20](REVIEW-2026-10-09-ui-refresh.md) passent : deux
+nominaux, trois mutants compilés détectés et neuf captures effectivement lues.
+La saisie du home et le lecteur catalogue sont injectés ; ces preuves ne
+qualifient pas une saisie clavier AppKit ni un CLI authentifié.
 
 Les contre-reviews ont également corrigé la fermeture d'un helper déjà sorti
 (`ENOTCONN`), l'ordre de deux jumps successifs, l'offset JSONL après un premier
@@ -35,7 +60,12 @@ Les vérifications de distribution sont désormais [versionnées](RELEASE-VALIDA
 et ont été rejouées sur **0.18.5**. Cela ne qualifie pas une nouvelle release.
 Les instructions actives ont été raccourcies sans retirer leur archive. La
 [commande offline et la CI macOS](VALIDATION.md) sont intégrées, ainsi que le
-retrait des API inutilisées ; la validation complète de cet ensemble reste en cours.
+retrait des API inutilisées ; la validation consolidée de cet ensemble est terminée.
+L'audit initial et son contre-audit (#8) sont intégrés localement par `c25923f`,
+avec les 30 entrées de relecture conservées. Le store de curation et le snapshot
+diagnostic des sessions restent des extractions conditionnées à un gain concret
+de testabilité ; les invariants locaux sont testés sans refonte de ces façades.
+Les pistes de performance non mesurées ne sont pas déclarées corrigées.
 La maintenance prévue est 0.18.6/build 41 ; elle ne sera déclarée publiée qu'après
 les contrôles de ses artefacts et du flux servi.
 
@@ -43,6 +73,14 @@ Avant de reprendre : `git status --short --branch`, `git log -5 --oneline`,
 `git worktree list`, puis vérifier la PR et la release courantes. L'app installée
 observée lors des recettes précédentes est 0.18.5/build 40 ; vérifier son état
 réel avant toute action. Une fusion ou un build ne met pas à jour cette app.
+
+**Checkouts :** le dossier original `~/Desktop/Dynamic_Island` est propre mais
+reste sur `codex/atoll-future-exploration`, commit `65ce2b6`, avec un commit
+divergent lié à la PR #6. Il a été préservé, sans changement de branche.
+Le travail présent est dans le worktree
+`~/Library/Caches/atoll-audit-completion-20261008` et la PR #16 ; le dossier du
+Bureau n'est pas une copie mise à jour de ces corrections. Après fusion, vérifier
+`main` sur GitHub avant de choisir un checkout de reprise.
 
 ## Comportement du code actuel
 

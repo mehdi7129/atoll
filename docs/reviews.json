@@ -878,6 +878,31 @@
         "Scripts/test-release-trash.py",
         "Scripts/test-claude-uninstall.py"
       ]
+    },
+    {
+      "date": "2026-10-09",
+      "document": "docs/REVIEW-2026-10-08-audit-completion.md",
+      "depth": "sweep",
+      "note": "Contre-relecture ciblée du plan offline, des dépendances et verdicts, des droits et artefacts CI et du DerivedData privé. Descendant survivant au timeout reproduit, corrigé et vérifié par nominal et mutant Python compilé/exécuté ; huit contre-épreuves passent. Aucune qualification de CI distante ni nouvelle release.",
+      "files": [
+        "Scripts/validate-offline.py",
+        "Scripts/test-offline-validation.py",
+        ".github/workflows/validation.yml",
+        "Scripts/release.sh",
+        "Scripts/test-release-trash.py"
+      ]
+    },
+    {
+      "date": "2026-10-09",
+      "document": "docs/REVIEW-2026-10-09-ui-refresh.md",
+      "depth": "line-by-line",
+      "note": "Harness GUI A16/A20 relu intégralement, deux vrais écrans montés et trois mutants compilés ; cette entrée ne revendique pas une nouvelle relecture complète du code produit.",
+      "files": [
+        "Scripts/test-ui-refresh.py",
+        "Scripts/ui-refresh-tests/Fixture.swift",
+        "Scripts/ui-refresh-tests/Probe.swift",
+        "Scripts/ui-refresh-tests/RunnerExtension.swift.inc"
+      ]
     }
   ]
 }
