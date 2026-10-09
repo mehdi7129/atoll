@@ -1,0 +1,205 @@
+{
+  "date": "2026-10-08",
+  "product_base": "a1c7d6999d6921906f26c405fc4f48e7bde30e91",
+  "reviewed_pr_head": "910836add0e179a832f1a2bb751c24d8ac11eacc",
+  "new_findings": [
+    "A18",
+    "A19",
+    "A20",
+    "A21",
+    "A22"
+  ],
+  "amended_scope": [
+    "A04"
+  ],
+  "all_packaged_probes_reexecuted": true,
+  "observations": {
+    "A04_A18": {
+      "empty_memory": {
+        "initial_hits": 1,
+        "old_hits_after_reduction": 0,
+        "reduced_nonempty_hits": 1,
+        "stale_hits_after_empty_new_inode": 1,
+        "stale_hits_after_empty_same_inode": 1,
+        "stale_hits_after_whitespace": 1,
+        "stale_hits_after_worker_reset": 1
+      },
+      "permission": {
+        "access_really_denied": true,
+        "hits_after_mtime_change": 1,
+        "hits_after_nudge": 0,
+        "hits_after_real_removal": 1,
+        "hits_after_restoration_scan": 0,
+        "hits_after_worker_reset": 1,
+        "hits_before_restoration": 0,
+        "same_inode": true,
+        "same_mtime": true,
+        "same_size": true,
+        "real_removal_marked_missing": true
+      }
+    },
+    "A19": [
+      {
+        "call_threw": false,
+        "fixture": "control",
+        "installed_directory_exists": false,
+        "manifest_entry_count": 0,
+        "unique_resource_copies": 1
+      },
+      {
+        "call_threw": false,
+        "fixture": "archive_parent_regular_file",
+        "installed_directory_exists": false,
+        "manifest_entry_count": 0,
+        "unique_resource_copies": 0
+      }
+    ],
+    "A20": [
+      {
+        "displayed_executable": "/fixture/cli-a",
+        "displayed_project": "/fixture/project-a",
+        "issues": [
+          "Plugins : plugins from /fixture/project-a using /fixture/cli-a"
+        ],
+        "scenario": "control",
+        "skill_descriptions": [
+          "using /fixture/cli-a"
+        ],
+        "skill_paths": [
+          "/fixture/project-a/.agents/skills/example/SKILL.md"
+        ]
+      },
+      {
+        "displayed_executable": "/fixture/cli-a",
+        "displayed_project": "/fixture/project-b",
+        "issues": [
+          "Plugins : plugins from /fixture/project-a using /fixture/cli-a"
+        ],
+        "scenario": "project_changed",
+        "skill_descriptions": [
+          "using /fixture/cli-a"
+        ],
+        "skill_paths": [
+          "/fixture/project-a/.agents/skills/example/SKILL.md"
+        ]
+      },
+      {
+        "displayed_executable": "/fixture/cli-b",
+        "displayed_project": "/fixture/project-a",
+        "issues": [
+          "Plugins : plugins from /fixture/project-a using /fixture/cli-a"
+        ],
+        "scenario": "executable_changed",
+        "skill_descriptions": [
+          "using /fixture/cli-a"
+        ],
+        "skill_paths": [
+          "/fixture/project-a/.agents/skills/example/SKILL.md"
+        ]
+      },
+      {
+        "displayed_executable": "/fixture/cli-a",
+        "displayed_project": "/fixture/project-a",
+        "issues": [],
+        "scenario": "home_changed_inflight",
+        "skill_descriptions": [],
+        "skill_paths": []
+      }
+    ],
+    "A21": [
+      {
+        "implementation": "baseline",
+        "case": "reader-open",
+        "exit": 0,
+        "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"PermissionRequest\",\"decision\":{\"behavior\":\"allow\"}}}",
+        "stderr_empty": true
+      },
+      {
+        "implementation": "baseline",
+        "case": "reader-closed",
+        "exit": -6,
+        "broken_pipe": true,
+        "filehandle_exception": true
+      },
+      {
+        "implementation": "existing-writer-control",
+        "case": "reader-open",
+        "exit": 0,
+        "stdout": "{\"hookSpecificOutput\":{\"decision\":{\"behavior\":\"allow\"},\"hookEventName\":\"PermissionRequest\"}}",
+        "stderr_empty": true
+      },
+      {
+        "implementation": "existing-writer-control",
+        "case": "reader-closed",
+        "exit": 0,
+        "broken_pipe": false,
+        "filehandle_exception": false
+      }
+    ],
+    "A22": {
+      "original_nominal": {
+        "exit_code": 1,
+        "catalogue_preparation_failure_visible_in_stderr": true,
+        "reported_pass": []
+      },
+      "original_sabotage": {
+        "exit_code": 0,
+        "catalogue_preparation_failure_visible_in_stderr": false,
+        "reported_pass": [
+          "PASS sabotage compilé : fichier d’instructions manquant détecté avant lancement ; copie temporaire uniquement."
+        ]
+      },
+      "fixture_argv_updated_nominal": {
+        "exit_code": 0,
+        "catalogue_preparation_failure_visible_in_stderr": false,
+        "reported_pass": [
+          "PASS préparation hors ligne : compilation réelle, dernier usage exact, cache natif, bornes et interruption",
+          "PASS CodexRun.prepare réel hors ligne : fichier d’instructions, quoting espaces/apostrophe/guillemets/UTF-8, modèle choisi, sandbox, profils exclus et nettoyage ; aucun usage modèle mesuré"
+        ]
+      },
+      "fixture_argv_updated_sabotage": {
+        "exit_code": 0,
+        "catalogue_preparation_failure_visible_in_stderr": false,
+        "reported_pass": [
+          "PASS sabotage compilé : fichier d’instructions manquant détecté avant lancement ; copie temporaire uniquement."
+        ]
+      },
+      "original_noop_sabotage": {
+        "exit_code": 0,
+        "catalogue_preparation_failure_visible_in_stderr": false,
+        "reported_pass": [
+          "PASS sabotage compilé : fichier d’instructions manquant détecté avant lancement ; copie temporaire uniquement."
+        ]
+      }
+    }
+  },
+  "additional_checks": [
+    {
+      "command": "python3 Scripts/test-claude-uninstall.py <audited Debug helper>",
+      "exit": 0,
+      "modes": [
+        "absent",
+        "foreign",
+        "managed",
+        "healthy"
+      ]
+    },
+    {
+      "command": "python3 Scripts/test-release-trash.py",
+      "exit": 0,
+      "sabotage_detected": true
+    },
+    {
+      "command": "python3 Scripts/test-codex-exec.py --prepare-only",
+      "exit": 1,
+      "failure": "préparation réelle impossible avec le catalogue factice",
+      "product_regression_proven": false
+    }
+  ],
+  "limits": [
+    "A20 State controlled, no native GUI exercised",
+    "A21 transport stub, no active real CLI reaction measured",
+    "No live auth, personal disk fault, real PID recycling or new release qualification",
+    "Baseline Core and 218 scenarios inherited from first pass, not rerun in counter-audit"
+  ]
+}

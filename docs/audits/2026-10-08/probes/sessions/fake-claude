@@ -1,0 +1,4 @@
+#!/bin/sh
+/bin/sleep 8 &
+printf "[]"
+exit 0
