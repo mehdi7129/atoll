@@ -45,11 +45,22 @@ Core lorsqu'elle est nécessaire ; le rapport porte alors `scope: selected`.
 Un nom inconnu est refusé. Le test du plan exige que chaque harness du dépôt
 soit classé, pour qu'un nouveau script ne soit pas oublié silencieusement.
 
+L'étape documentaire utilise `check-docs.py --no-tests --preflight` dans tous
+les profils : elle valide les sources pendant qu'une release peut encore
+conserver l'ancien appcast public. Seule l'égalité entre la version préparée
+et la première entrée du flux est différée ; les autres contrôles restent
+actifs, notamment les tags des URL présentes dans l'appcast. Ce résultat ne
+qualifie pas une distribution. Après packaging, exécuter le contrôle
+strict `check-docs.py --no-tests`, puis les [vérifications des artefacts et
+octets publics](RELEASE-VALIDATION.md). Après publication du flux, exécuter
+`check-docs.py --no-tests --network`. Les assets précèdent toujours l'appcast ;
+aucun contrôle réseau ni accès authentifié n'est ajouté à la CI offline.
+
 ## Périmètres conservés séparément
 
 - `test-codex-catalog.py` et `test-codex-read-storage.py` nécessitent un vrai
   binaire Codex. Ils restent des recettes natives explicites.
-- `test-ui.py`, `test-ui-sabotage.py`, `test-settings-sabotage.py` et
+- `test-ui.py`, `test-ui-refresh.py`, `test-ui-sabotage.py`, `test-settings-sabotage.py` et
   `test-voiceover.py` ouvrent un aperçu protégé ou demandent VoiceOver. Leurs
   captures et interactions se vérifient séparément.
 - Les modes `--live` de `test-codex-exec.py` et `test-skill-generation.py` ne

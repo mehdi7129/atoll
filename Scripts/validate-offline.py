@@ -107,7 +107,9 @@ def plan(profile, output, build, only=()):
                      "skill-archive-sabotage", "skill-reconciliation-sabotage", "island-context-sabotage"]:
             add(name, "--output", output / name, core=False, timeout=1800)
         add("memory-document-sabotage", "--output", output / "memory-document.json", core=False, timeout=1800)
-    steps.append(Step("docs", [sys.executable, str(REPO / "Scripts/check-docs.py"), "--no-tests"], timeout=600))
+    # Les sources peuvent précéder l'appcast public pendant une préparation de release.
+    steps.append(Step("docs", [sys.executable, str(REPO / "Scripts/check-docs.py"),
+                               "--no-tests", "--preflight"], timeout=600))
     if only:
         unknown = set(only) - {step.name for step in steps}
         if unknown:

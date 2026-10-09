@@ -132,6 +132,10 @@ class OfflineValidationTests(unittest.TestCase):
     def test_plans_are_offline_and_targeted_scope_is_explicit(self):
         root = Path("/private/fixture")
         full = validation.plan("full", root, root / "core/debug")
+        for profile in ["core", "standard", "full"]:
+            docs = next(step for step in validation.plan(profile, root, root / "core/debug") if step.name == "docs")
+            self.assertEqual(docs.command[2:], ["--no-tests", "--preflight"],
+                             "offline-docs-preflight-required")
         for step in full:
             self.assertNotIn("--live", step.command)
             self.assertNotIn("--network", step.command)
