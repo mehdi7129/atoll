@@ -13,6 +13,7 @@ struct CodexSettingsPane: View {
     @State private var installed = false
     @State private var message: String?
     @State private var homePath = CodexPreview.enabled ? "" : CodexPaths.configuredHome ?? ""
+    @State private var catalogHome = CodexPreview.enabled ? URL(fileURLWithPath: "/compte-codex") : CodexPaths.homeURL
     @State private var diagnostic: String?
     @State private var checking = false
     @State private var diagnosticExpanded = false
@@ -91,6 +92,7 @@ struct CodexSettingsPane: View {
             }
             quotaSection
             CodexCatalogSection(projectPath: projectPath, executableOverride: executablePath,
+                                home: catalogHome,
                                 chooseProject: chooseProject)
             advancedSettings
         }
@@ -98,6 +100,7 @@ struct CodexSettingsPane: View {
         .disclosureGroupStyle(SettingsDisclosureStyle())
         .onAppear {
             refreshInstalled()
+            if !CodexPreview.enabled { catalogHome = CodexPaths.homeURL }
             if CodexPreview.enabled {
                 projectPath = "/projets/projet-exemple"
                 diagnosticExpanded = CommandLine.arguments.contains("--preview-diagnostic")
@@ -169,18 +172,24 @@ struct CodexSettingsPane: View {
     }
 
     private func configure(install: Bool) {
-        guard !CodexPreview.enabled else {
-            installed = install
-            message = install ? "Approuve les hooks Atoll dans /hooks." : "Intégration retirée pour cet aperçu."
-            return
+        Task { @MainActor in
+            guard !CodexPreview.enabled else {
+                installed = install
+                message = install ? "Approuve les hooks Atoll dans /hooks." : "Intégration retirée pour cet aperçu."
+                return
+            }
+            let requestedHome = CodexPaths.homeURL
+            defer { refreshInstalled() }
+            do {
+                try await HookInstaller.configureCodex(install: install)
+                guard CodexPaths.homeURL == requestedHome else { return }
+                diagnostic = nil
+                message = install ? "Définitions à jour. Approuve les hooks Atoll dans /hooks."
+                    : "Intégration retirée. Tes autres hooks et la mémoire commune sont conservés."
+            } catch {
+                if CodexPaths.homeURL == requestedHome { message = error.localizedDescription }
+            }
         }
-        do {
-            try HookInstaller.configureCodex(install: install)
-            refreshInstalled()
-            diagnostic = nil
-            message = install ? "Définitions à jour. Approuve les hooks Atoll dans /hooks."
-                : "Intégration retirée. Tes autres hooks et la mémoire commune sont conservés."
-        } catch { message = error.localizedDescription }
     }
 
     private var advancedSettings: some View {
@@ -196,6 +205,7 @@ struct CodexSettingsPane: View {
                             do {
                                 let path = homePath.trimmingCharacters(in: .whitespacesAndNewlines)
                                 try CodexService.shared.changeHome(to: path.isEmpty ? nil : (path as NSString).expandingTildeInPath)
+                                catalogHome = CodexPaths.homeURL
                                 refreshInstalled()
                                 diagnostic = nil
                                 message = nil

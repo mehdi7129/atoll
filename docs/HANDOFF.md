@@ -1,10 +1,200 @@
 # HANDOFF — reprendre Atoll
 
-État du **8 octobre 2026**. Fiche courante ; les règles détaillées restent dans
-[CLAUDE.md](../CLAUDE.md). L'[ancien handoff](HANDOFF-2026-09-10-archive.md) conserve
-les mesures et pièges historiques, sans faire autorité sur l'état actuel.
+État courant du **9 octobre 2026**, validation de clôture de l'audit terminée. Les règles
+actives restent dans [CLAUDE.md](../CLAUDE.md), avec leur
+[archive intégrale](archive/CLAUDE-2026-10-08.md). Les sections historiques en fin
+de fiche décrivent leur date ; elles ne remplacent pas l'état courant ci-dessous.
 
-## Lot A07/A08 — préparation en revue, sans distribution
+## État courant : corrections validées, PR #16 en revue
+
+La version publiée reste **[0.18.5, build 40](https://github.com/mehdi7129/atoll/releases/tag/v0.18.5)**.
+Le [rapport d'intégration](REVIEW-2026-10-08-audit-completion.md) suit les **22 constats** :
+
+- **Trois livrés** en 0.18.5 : A01, A19 et A22.
+- **Quatre fusionnés sur main**, sans nouvelle distribution : A02/A03 par
+  [#14](https://github.com/mehdi7129/atoll/pull/14), merge `13dad53`, puis A07/A08
+  par [#15](https://github.com/mehdi7129/atoll/pull/15), merge `0016c0c`.
+- **Quinze corrigés sur la branche d'intégration**
+  `integration/audit-completion-20261008`, source produit `9eaa69d` : mémoire,
+  permissions Claude, lifecycle des processus, plugins et feedback.
+  La [PR #16](https://github.com/mehdi7129/atoll/pull/16) reste ouverte pour revue,
+  avec sa validation commune terminée ;
+  aucune publication de ces quinze corrections annoncée à cette étape.
+
+Les suites Core Debug et Release passent chacune **1 131 tests, un skip et
+zéro échec**. La reprise Release dure 11,1 s, sans modifier sources ni tests.
+Le premier passage du 9 octobre
+avait six échecs sous une charge système supérieure à 600 ; il reste conservé
+dans les preuves. Huit tests ciblés ont ensuite passé avant la reprise complète.
+Les builds Debug et Release finaux passent, sans lancement de leurs produits.
+Le profil offline full comporte 120 étapes et 85 variantes nommées : 119 étapes
+passent immédiatement ; A21 passe après correction du chemin Unix de sa fixture
+et rejeu nominal/mutant. Son résultat brut reste `failed` avec exit 1 ; le
+[relevé consolidé](audit-support/2026-10-08-completion/validation.json) conserve
+cette histoire et conclut `passed`, sans échec non résolu.
+La [CI standard passe 26 étapes sur 26](https://github.com/mehdi7129/atoll/actions/runs/37895684273)
+sur `f8d802d`, dont l'arbre produit est identique à l'intégration finale.
+Les commits documentaires et de harness postérieurs ne sont pas présentés
+comme la tête exécutée par cette CI.
+
+L'intégration #14 → #15 a passé **1 129 tests Core**, un skip, zéro échec,
+190 parcours services, 12 parcours helper et les sabotages ciblés, puis les
+builds Debug/Release. Les validations propres aux nouveaux lots sont détaillées
+et séparées dans le rapport : elles ne remplacent pas le contrôle de l'arbre final.
+Le lot processus passe 17 parcours de services et douze sabotages compilés.
+Le nominal plugins passe 145 assertions et ses douze sabotages finaux sont
+compilés et détectés. Les huit contre-épreuves du runner offline passent, dont le nettoyage
+d'un descendant survivant au leader après timeout.
+Les [interactions GUI A16/A20](REVIEW-2026-10-09-ui-refresh.md) passent : deux
+nominaux, trois mutants compilés détectés et neuf captures effectivement lues.
+La saisie du home et le lecteur catalogue sont injectés ; ces preuves ne
+qualifient pas une saisie clavier AppKit ni un CLI authentifié.
+
+Les contre-reviews ont également corrigé la fermeture d'un helper déjà sorti
+(`ENOTCONN`), l'ordre de deux jumps successifs, l'offset JSONL après un premier
+lot validé et le maintien du budget d'un enfant encore vivant après timeout.
+Les captures d'aperçu restent distinctes de l'écoute humaine et du focus sur un
+terminal authentifié, qui ne sont pas qualifiés par les fixtures.
+
+Les vérifications de distribution sont désormais [versionnées](RELEASE-VALIDATION.md)
+et ont été rejouées sur **0.18.5**. Cela ne qualifie pas une nouvelle release.
+Les instructions actives ont été raccourcies sans retirer leur archive. La
+[commande offline et la CI macOS](VALIDATION.md) sont intégrées, ainsi que le
+retrait des API inutilisées ; la validation consolidée de cet ensemble est terminée.
+L'audit initial et son contre-audit (#8) sont intégrés localement par `c25923f`,
+avec les 30 entrées de relecture conservées. Le store de curation et le snapshot
+diagnostic des sessions restent des extractions conditionnées à un gain concret
+de testabilité ; les invariants locaux sont testés sans refonte de ces façades.
+Les pistes de performance non mesurées ne sont pas déclarées corrigées.
+La maintenance prévue est 0.18.6/build 41 ; elle ne sera déclarée publiée qu'après
+les contrôles de ses artefacts et du flux servi.
+
+Avant de reprendre : `git status --short --branch`, `git log -5 --oneline`,
+`git worktree list`, puis vérifier la PR et la release courantes. L'app installée
+observée lors des recettes précédentes est 0.18.5/build 40 ; vérifier son état
+réel avant toute action. Une fusion ou un build ne met pas à jour cette app.
+
+**Checkouts :** le dossier original `~/Desktop/Dynamic_Island` est propre mais
+reste sur `codex/atoll-future-exploration`, commit `65ce2b6`, avec un commit
+divergent lié à la PR #6. Il a été préservé, sans changement de branche.
+Le travail présent est dans le worktree
+`~/Library/Caches/atoll-audit-completion-20261008` et la PR #16 ; le dossier du
+Bureau n'est pas une copie mise à jour de ces corrections. Après fusion, vérifier
+`main` sur GitHub avant de choisir un checkout de reprise.
+
+## Comportement du code actuel
+
+- Atoll suit **Codex CLI dans le terminal**, Claude Code, ou les deux. Le bouton
+  choisit les sessions affichées, la palette et le quota. Les deux collecteurs
+  restent actifs ; une carte garde son fournisseur jusqu'à sa résolution.
+- Le moteur des trois analyses et la destination des skills sont deux choix
+  distincts du bouton d'affichage. Apprentissage et failover sont opt-in.
+- Îlot invisible sans activité ni Rockstar ; liste bornée avec « +N autres » ;
+  sélecteur dans le panneau ouvert ; Rockstar exclusivement Claude, marqueur et quota
+  simultanés. Questions, plans et interruption Codex restent dans le terminal.
+- Hooks Codex migrés avec sauvegarde, retraits et personnalisations respectés ;
+  réparation complète explicite. `config.toml` n'est jamais écrit par Atoll.
+- Mémoire commune aux deux CLI. Recall manuel disponible des deux côtés ;
+  injection proactive Codex désactivée faute de contrat vérifié.
+- Skills : zéro proposition pour une tâche banale ou déjà couverte ; corps
+  généralement de 200–600 tokens, procédures utiles et commandes préservées.
+  Au-delà de 8 000 caractères, refus tracé, jamais troncature. La revue compare
+  avec l'installation, précharge l'antériorité et conserve la sélection.
+
+## Limites à connaître, pas des tâches à relancer aveuglément
+
+1. **Claude authentifié** : le test de génération a reçu un 403 d'accès abonnement.
+   Mehdi confirme maintenant ne plus disposer d'un abonnement Claude. Différer
+   cette recette jusqu'à disponibilité d'un accès ; ne pas basculer sur une clé API.
+2. **Retour au terminal visible** : le PTY a permis de tester le CLI, pas le focus
+   d'un onglet réel. L'outil de contrôle GUI a refusé Terminal. Aucun échec du
+   bouton d'Atoll n'est établi ; cette recette reste non exercée.
+3. **Protections conservées** : aucun signal vers un PID non vérifié, aucun succès
+   d'outil Codex inventé, aucune réparation destructive de journal/manifest,
+   sources de notes obligatoires et catalogues invalides bloquants. Événements
+   anonymes et interruptions parent/enfant restent incertains sans preuve causale.
+4. **Mouvement réduit** désactive l'onde ; les fondus et transitions de taille
+   existants demeurent. L'OCR ne remplace ni la lecture des captures ni VoiceOver.
+
+Les fusions et publications antérieures ont eu lieu avec l'accord de Mehdi malgré les deux recettes différées.
+Ne pas les déclarer réussies lors d'une reprise de session.
+
+## Vérifier ou modifier
+
+Avant de croire un document et après toute modification documentaire :
+
+```sh
+python3 Scripts/check-docs.py --no-tests
+```
+
+Pendant une préparation de release, ajouter `--preflight` tant que l'appcast
+n'a pas été régénéré. Après publication, utiliser `--no-tests --network` pour
+les URL des assets et le flux GitHub Pages réellement servi.
+
+```sh
+swift test --package-path AtollCore
+python3 Scripts/test-runtime.py
+python3 Scripts/test-skill-review.py
+python3 Scripts/test-release-trash.py
+```
+
+Les sabotages ciblés sont documentés dans les rapports. Une compilation ratée
+n'est jamais une régression détectée. Ne relancer une génération `--live` que
+si elle répond à une question nouvelle : elle consomme le quota du compte.
+
+Pour compiler, suivre le [README](../README.md). Ne jamais lancer le produit
+`Build/Products` ni recopier un Debug sur l'app stable. `Scripts/prepare-preview.py`
+crée une copie protégée dans `/private/tmp`, fictive même rouverte sans arguments.
+`Scripts/test-ui.py` et `Scripts/test-voiceover.py` utilisent cette copie.
+
+La recette authentifiée utilise `Scripts/prepare-cli-validation.py` : deux homes
+privés vérifiés, hooks privés et copie native. **Fermer l'Atoll normal avant de
+lancer la copie native** ; ne jamais avoir deux instances normales. Retirer les
+copies d'authentification et restaurer les préférences et l'app stable à la fin.
+Ne pas activer un accès VoiceOver temporaire sans l'autorisation correspondante.
+
+## Publier une prochaine version
+
+1. Mettre à jour version **et** build dans `project.yml`, README et cette fiche.
+2. Tester, committer et fusionner le code ; garder l'appcast courant servi.
+3. `zsh Scripts/release.sh` : signature Developer ID, notarisation app et DMG,
+   staples, ZIP signé Sparkle, deltas. Le nettoyage passe par la corbeille.
+4. Publier DMG, ZIP et deltas de **ce build** sous leur tag. Vérifier toutes les
+   URL référencées : les entrées anciennes restent sous leurs propres tags.
+5. Pousser `docs/appcast.xml` en dernier, attendre GitHub Pages et vérifier le
+   flux servi avec `check-docs.py --no-tests --network`. Mettre cette fiche à jour.
+
+Profil notarytool : `atoll-notary`. Clés de signature dans le Keychain ; ne jamais
+les exporter dans les logs ou le dépôt. Préserver le DerivedData Debug et les
+archives `dist/updates`. Les anciennes sorties remplacées restent récupérables
+à la corbeille. Une nouvelle release ne nécessite pas de réinstaller l'app stable.
+
+Incident local du 10 septembre : 44 copies non suivies suffixées « 2 », toutes
+identiques aux originaux et absentes des six listes de compilation Release, ont
+été conservées dans `/private/tmp/atoll-018-sync-copies-yjutnk0r/` avec manifeste.
+La cause reste indéterminée ; si elles réapparaissent, comparer avant de déplacer,
+sans les intégrer au build ni supprimer un changement distinct.
+
+## Références utiles
+
+- [Validation finale, preuves et P3](REVIEW-2026-09-10-skills-validation.md)
+- [Correction du compact, contexte et configuration](REVIEW-2026-09-10-island-context-setup.md)
+- [Plan skills et seconde analyse](PLAN-2026-09-10-final-validation-skills.md)
+- [Corrections R01–R11](REVIEW-2026-09-10-pr2-corrections.md)
+- [Contrat Codex / Claude](CODEX-INTEGRATION.md), [analyses et passation](CODEX-FAILOVER.md)
+- [Vision produit](VISION-2026-08.md) : soustraire avant d'ajouter
+
+Le rendez-vous du recall est **clos et tranché depuis le 9 septembre**. Ne pas
+reprendre les anciennes mentions « décision en attente » : mesures et choix
+sont conservés dans `CLAUDE.md` et l'archive historique.
+
+## Historique daté — livraisons et validations antérieures
+
+Les résultats et états d'installation ci-dessous sont conservés comme preuves
+datées. Les mentions « en revue » des lots A02/A03 et A07/A08 décrivent leur
+préparation, avant les fusions indiquées en tête de cette fiche.
+
+### 8 octobre 2026 — A07/A08 avant fusion de la PR #15
 
 La branche `fix/a07-a08-preserve-hook-groups`, basée sur `aed6546`, corrige
 la restitution des sons dans leur groupe d’origine et les doublons Atoll
@@ -26,7 +216,7 @@ build 40**. L’app installée observée lors de cette recette est désormais ce
 version ; les observations plus anciennes
 ci-dessous décrivent le moment de leur propre validation.
 
-## A02 / A03 — correctifs préparés, non distribués
+### 8 octobre 2026 — A02/A03 avant fusion de la PR #14
 
 Le [lot suivant](REVIEW-2026-10-08-a02-a03-integrity.md) protège l’état illisible
 du rangement et conserve le manifeste des skills quand leur accès échoue.
@@ -41,7 +231,7 @@ trois régressions intermédiaires. Aucune recette GUI ni génération authentif
 [Synthèse et limites](audit-support/2026-10-08-a02-a03/validation.json).
 Ces deux points restent distincts des trois déjà livrés ; A07/A08 viennent ensuite.
 
-## v0.18.5, build 40 — publiée
+### v0.18.5, build 40 — publiée
 
 La [release de maintenance](https://github.com/mehdi7129/atoll/releases/tag/v0.18.5)
 est publiée depuis `74b0081`, après fusion de la préparation
@@ -64,7 +254,7 @@ personnelles contrôlés restent identiques. Aucune app installée n'est remplac
 la mise à jour reste à appliquer par l'utilisateur. Le produit Release n'a pas
 été lancé et aucune génération authentifiée n'a été nécessaire pour publier.
 
-## Premier jalon de robustesse — livré en v0.18.5
+### Premier jalon de robustesse — livré en v0.18.5
 
 Les PR [#9](https://github.com/mehdi7129/atoll/pull/9),
 [#10](https://github.com/mehdi7129/atoll/pull/10) et
@@ -91,7 +281,7 @@ génération authentifiée ni lancement GUI. Les trois correctifs sont distribu�
 en **v0.18.5, build 40**, sans remplacement de l'app installée. Les autres
 constats de l'audit #8 restent à traiter séparément.
 
-## v0.18.4, build 39 — publiée
+### v0.18.4, build 39 — publiée
 
 Mehdi a demandé la release le 7 octobre pour mettre à jour son app lui-même.
 La [PR #7](https://github.com/mehdi7129/atoll/pull/7) est fusionnée, tag sur
@@ -119,7 +309,7 @@ d'installation datés de septembre ci-dessous sont historiques.
 Après la mise à jour, réactiver le quota dans Réglages → Codex si souhaité.
 La release ne modifie pas cet opt-in et ne supprime aucun ancien staging.
 
-## v0.18.3, build 38 — publiée
+### v0.18.3, build 38 — publiée
 
 [Release](https://github.com/mehdi7129/atoll/releases/tag/v0.18.3) autorisée par
 Mehdi le 23 septembre, tag sur `d438b8e`. Code produit identique à `30847d6`,
@@ -130,7 +320,7 @@ Le différentiel 37 → 38 reproduit fichiers, liens et modes de l’archive com
 GitHub Pages sert le build 38, vérifié avec `check-docs.py --no-tests --network`.
 L’app installée n’est pas remplacée ; appliquer la mise à jour depuis Atoll ou le DMG.
 
-## PR #5 fusionnée — corrections du rendement de l’apprentissage
+### PR #5 fusionnée — corrections du rendement de l’apprentissage
 
 Mehdi a autorisé les corrections de l’[audit du 11 septembre](AUDIT-2026-09-11-learning-efficiency.md).
 La [PR #5](https://github.com/mehdi7129/atoll/pull/5) est **fusionnée sur `main`**
@@ -208,7 +398,7 @@ accessibilité toujours active, annonce conservée, toutes les cloches de termin
 Cursor désormais muettes. Écoute humaine non effectuée. Ne pas désactiver les sons
 Atoll ni modifier `config.toml` pour reproduire ce correctif.
 
-## v0.18.2 publiée — réglages réorganisés
+### v0.18.2 publiée — réglages réorganisés
 
 Mehdi a demandé la fusion et la release le 11 septembre. La
 [PR #4](https://github.com/mehdi7129/atoll/pull/4) est **fusionnée** sur `main`
@@ -239,7 +429,7 @@ Lors de cette release, l’app stable était **v0.18.1, build 36**. Ses fichiers
 et les huit configurations personnelles contrôlées sont identiques avant/après
 cette release ; la publication n'a installé aucune app.
 
-## État de livraison
+### Livraison 0.18.5 — relevé historique du 8 octobre 2026
 
 | Élément | État vérifié |
 |---|---|
@@ -259,7 +449,7 @@ Une source publiée et une app installée peuvent avoir des versions différente
 Le [relevé de livraison](releases/0.18.5.json) conserve les commits, identifiants
 de notarisation, résultats et empreintes des fichiers distribués.
 
-## Correctifs après le retour sur v0.18.0
+### Correctifs après le retour sur v0.18.0
 
 Branche `codex/island-context-setup`, base `25132e3`, correctifs `88ecbb2`.
 **Livrés en v0.18.1, build 36**, après fusion de la
@@ -284,109 +474,3 @@ Le helper corrigé doit être utilisé, puis un nouvel événement reçu.
 Preuves, limites et captures : [rapport de validation](REVIEW-2026-09-10-island-context-setup.md).
 La procédure de release ne remplace pas la copie stable. La mise à jour se fait
 depuis Réglages → Mises à jour ou depuis le DMG publié.
-
-## Comportement du code actuel
-
-- Atoll suit **Codex CLI dans le terminal**, Claude Code, ou les deux. Le bouton
-  choisit les sessions affichées, la palette et le quota. Les deux collecteurs
-  restent actifs ; une carte garde son fournisseur jusqu'à sa résolution.
-- Le moteur des trois analyses et la destination des skills sont deux choix
-  distincts du bouton d'affichage. Apprentissage et failover sont opt-in.
-- Îlot invisible sans activité ni Rockstar ; liste bornée avec « +N autres » ;
-  sélecteur dans le panneau ouvert ; Rockstar exclusivement Claude, marqueur et quota
-  simultanés. Questions, plans et interruption Codex restent dans le terminal.
-- Hooks Codex migrés avec sauvegarde, retraits et personnalisations respectés ;
-  réparation complète explicite. `config.toml` n'est jamais écrit par Atoll.
-- Mémoire commune aux deux CLI. Recall manuel disponible des deux côtés ;
-  injection proactive Codex désactivée faute de contrat vérifié.
-- Skills : zéro proposition pour une tâche banale ou déjà couverte ; corps
-  généralement de 200–600 tokens, procédures utiles et commandes préservées.
-  Au-delà de 8 000 caractères, refus tracé, jamais troncature. La revue compare
-  avec l'installation, précharge l'antériorité et conserve la sélection.
-
-## Limites à connaître, pas des tâches à relancer aveuglément
-
-1. **Claude authentifié** : le test de génération a reçu un 403 d'accès abonnement.
-   Mehdi confirme maintenant ne plus disposer d'un abonnement Claude. Différer
-   cette recette jusqu'à disponibilité d'un accès ; ne pas basculer sur une clé API.
-2. **Retour au terminal visible** : le PTY a permis de tester le CLI, pas le focus
-   d'un onglet réel. L'outil de contrôle GUI a refusé Terminal. Aucun échec du
-   bouton d'Atoll n'est établi ; cette recette reste non exercée.
-3. **Protections conservées** : aucun signal vers un PID non vérifié, aucun succès
-   d'outil Codex inventé, aucune réparation destructive de journal/manifest,
-   sources de notes obligatoires et catalogues invalides bloquants. Événements
-   anonymes et interruptions parent/enfant restent incertains sans preuve causale.
-4. **Mouvement réduit** désactive l'onde ; les fondus et transitions de taille
-   existants demeurent. L'OCR ne remplace ni la lecture des captures ni VoiceOver.
-
-La fusion et la publication ont eu lieu avec l'accord de Mehdi malgré les deux recettes différées.
-Ne pas les déclarer réussies lors d'une reprise de session.
-
-## Vérifier ou modifier
-
-Avant de croire un document et après toute modification documentaire :
-
-```sh
-python3 Scripts/check-docs.py --no-tests
-```
-
-Pendant une préparation de release, ajouter `--preflight` tant que l'appcast
-n'a pas été régénéré. Après publication, utiliser `--no-tests --network` pour
-les URL des assets et le flux GitHub Pages réellement servi.
-
-```sh
-swift test --package-path AtollCore
-python3 Scripts/test-runtime.py
-python3 Scripts/test-skill-review.py
-python3 Scripts/test-release-trash.py
-```
-
-Les sabotages ciblés sont documentés dans les rapports. Une compilation ratée
-n'est jamais une régression détectée. Ne relancer une génération `--live` que
-si elle répond à une question nouvelle : elle consomme le quota du compte.
-
-Pour compiler, suivre le [README](../README.md). Ne jamais lancer le produit
-`Build/Products` ni recopier un Debug sur l'app stable. `Scripts/prepare-preview.py`
-crée une copie protégée dans `/private/tmp`, fictive même rouverte sans arguments.
-`Scripts/test-ui.py` et `Scripts/test-voiceover.py` utilisent cette copie.
-
-La recette authentifiée utilise `Scripts/prepare-cli-validation.py` : deux homes
-privés vérifiés, hooks privés et copie native. **Fermer l'Atoll normal avant de
-lancer la copie native** ; ne jamais avoir deux instances normales. Retirer les
-copies d'authentification et restaurer les préférences et l'app stable à la fin.
-Ne pas activer un accès VoiceOver temporaire sans l'autorisation correspondante.
-
-## Publier une prochaine version
-
-1. Mettre à jour version **et** build dans `project.yml`, README et cette fiche.
-2. Tester, committer et fusionner le code ; garder l'appcast courant servi.
-3. `zsh Scripts/release.sh` : signature Developer ID, notarisation app et DMG,
-   staples, ZIP signé Sparkle, deltas. Le nettoyage passe par la corbeille.
-4. Publier DMG, ZIP et deltas de **ce build** sous leur tag. Vérifier toutes les
-   URL référencées : les entrées anciennes restent sous leurs propres tags.
-5. Pousser `docs/appcast.xml` en dernier, attendre GitHub Pages et vérifier le
-   flux servi avec `check-docs.py --no-tests --network`. Mettre cette fiche à jour.
-
-Profil notarytool : `atoll-notary`. Clés de signature dans le Keychain ; ne jamais
-les exporter dans les logs ou le dépôt. Préserver le DerivedData Debug et les
-archives `dist/updates`. Les anciennes sorties remplacées restent récupérables
-à la corbeille. Une nouvelle release ne nécessite pas de réinstaller l'app stable.
-
-Incident local du 10 septembre : 44 copies non suivies suffixées « 2 », toutes
-identiques aux originaux et absentes des six listes de compilation Release, ont
-été conservées dans `/private/tmp/atoll-018-sync-copies-yjutnk0r/` avec manifeste.
-La cause reste indéterminée ; si elles réapparaissent, comparer avant de déplacer,
-sans les intégrer au build ni supprimer un changement distinct.
-
-## Références utiles
-
-- [Validation finale, preuves et P3](REVIEW-2026-09-10-skills-validation.md)
-- [Correction du compact, contexte et configuration](REVIEW-2026-09-10-island-context-setup.md)
-- [Plan skills et seconde analyse](PLAN-2026-09-10-final-validation-skills.md)
-- [Corrections R01–R11](REVIEW-2026-09-10-pr2-corrections.md)
-- [Contrat Codex / Claude](CODEX-INTEGRATION.md), [analyses et passation](CODEX-FAILOVER.md)
-- [Vision produit](VISION-2026-08.md) : soustraire avant d'ajouter
-
-Le rendez-vous du recall est **clos et tranché depuis le 9 septembre**. Ne pas
-reprendre les anciennes mentions « décision en attente » : mesures et choix
-sont conservés dans `CLAUDE.md` et l'archive historique.

@@ -1,0 +1,87 @@
+{
+  "base": "a1c7d6999d6921906f26c405fc4f48e7bde30e91",
+  "tracked_files": 573,
+  "scopes": [
+    {
+      "scope": "App",
+      "files": 60,
+      "lines_including_comments": 15147
+    },
+    {
+      "scope": "AtollCore/Sources",
+      "files": 85,
+      "lines_including_comments": 16379
+    },
+    {
+      "scope": "AtollCore/Tests",
+      "files": 85,
+      "lines_including_comments": 15470
+    },
+    {
+      "scope": "Bridge",
+      "files": 5,
+      "lines_including_comments": 1639
+    },
+    {
+      "scope": "Shared",
+      "files": 2,
+      "lines_including_comments": 240
+    },
+    {
+      "scope": "Scripts",
+      "files": 41,
+      "lines_including_comments": 7180
+    }
+  ],
+  "workflows_tracked": [],
+  "largest_source": [
+    {
+      "file": "App/RetrospectiveRunner.swift",
+      "lines": 1176
+    },
+    {
+      "file": "AtollCore/Sources/AtollCore/MemoryIndex.swift",
+      "lines": 1150
+    },
+    {
+      "file": "App/NotesCurationService.swift",
+      "lines": 1119
+    },
+    {
+      "file": "App/SessionStore.swift",
+      "lines": 1083
+    },
+    {
+      "file": "AtollCore/Sources/AtollCore/SkillCatalog.swift",
+      "lines": 951
+    },
+    {
+      "file": "Bridge/main.swift",
+      "lines": 860
+    },
+    {
+      "file": "App/PluginInventory.swift",
+      "lines": 752
+    },
+    {
+      "file": "App/MemoryIndexer.swift",
+      "lines": 720
+    },
+    {
+      "file": "AtollCore/Sources/AtollCore/CodexIntegration.swift",
+      "lines": 720
+    },
+    {
+      "file": "AtollCore/Sources/AtollCore/LearnedSkillStore.swift",
+      "lines": 708
+    },
+    {
+      "file": "App/ExpandedView.swift",
+      "lines": 633
+    },
+    {
+      "file": "App/AppDelegate.swift",
+      "lines": 618
+    }
+  ]
+}

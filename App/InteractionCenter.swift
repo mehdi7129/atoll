@@ -10,7 +10,7 @@ private let log = Logger(subsystem: "dev.mehdiguiard.atoll", category: "interact
 ///
 /// Course avec le terminal (documentée, issue #12176) : le prompt TUI s'affiche
 /// pendant que le hook bloque — premier répondu gagne. Quand un événement de
-/// résolution arrive (PostToolUse, PermissionDenied, Stop, SessionEnd), la carte
+/// résolution de session arrive (nouveau prompt, Stop, SessionEnd), la carte
 /// est annulée et la connexion fermée en silence.
 @MainActor
 @Observable
@@ -236,6 +236,14 @@ final class InteractionCenter {
         server?.cancelPending(request.id)
     }
 
+    /// Le serveur connaît la demande dont le helper est sorti ou le délai expiré.
+    /// Cette identité de connexion est une preuve ; le nom d'outil ne l'est pas.
+    func pendingExpired(_ id: String) {
+        guard let request = pending.first(where: { $0.id == id }) else { return }
+        handBackToTerminal(id)
+        SessionStore.shared.markAutoApproved(request.sessionID)
+    }
+
     /// Course perdue / session terminée : annule les cartes de la session.
     func cancelForSession(_ sessionID: String) {
         let toCancel = pending.filter { $0.sessionID == sessionID }
@@ -244,33 +252,6 @@ final class InteractionCenter {
         for request in toCancel {
             server?.cancelPending(request.id)
             log.info("carte annulée (résolue ailleurs): \(request.id, privacy: .public)")
-        }
-    }
-
-    /// Annulation par un événement d'OUTIL (`PostToolUse`, `PostToolUseFailure`).
-    ///
-    /// Ces hooks-là ne prouvent PAS que la demande en attente a été tranchée :
-    /// les hooks d'outils d'un sous-agent portent le `session_id` du parent, si
-    /// bien qu'un `Task` en parallèle refermait la carte du parent — l'îlot
-    /// perdait la demande et rendait la main au terminal pendant que le helper
-    /// attendait encore. On n'annule donc que la carte portant le MÊME outil, et
-    /// **l'ambiguïté ne referme rien** : sans nom d'outil exploitable de part et
-    /// d'autre, on laisse la carte vivre (elle reste annulable par `Stop`,
-    /// `SessionEnd`, `PermissionDenied` ou un nouveau prompt, qui eux prouvent
-    /// que la session a avancé).
-    ///
-    /// `PermissionRequest` ne porte pas de `tool_use_id` (vérifié sur le binaire
-    /// 2.1.223, il n'a que `tool_name`/`tool_input`/`permission_suggestions`) :
-    /// le nom d'outil est le discriminant le plus fin dont on dispose.
-    func cancelForSession(_ sessionID: String, tool: String?) {
-        guard let tool, !tool.isEmpty else { return }
-        let toCancel = pending.filter { $0.sessionID == sessionID && $0.toolName == tool }
-        guard !toCancel.isEmpty else { return }
-        let ids = Set(toCancel.map(\.id))
-        pending.removeAll { ids.contains($0.id) }
-        for request in toCancel {
-            server?.cancelPending(request.id)
-            log.info("carte annulée (outil résolu ailleurs): \(request.id, privacy: .public)")
         }
     }
 
@@ -284,5 +265,6 @@ final class InteractionCenter {
             // d'envoyer du JSON malformé au CLI.
             server?.cancelPending(request.id)
         }
+        SessionStore.shared.markAutoApproved(request.sessionID)
     }
 }

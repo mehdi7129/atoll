@@ -29,7 +29,6 @@ final class CodexSetupTests: XCTestCase {
                 .filter { $0.lastPathComponent.hasPrefix("hooks.json.atoll-migration-") }
             XCTAssertEqual(backups.count, 1)
             XCTAssertEqual(try Data(contentsOf: XCTUnwrap(backups.first)), original)
-            XCTAssertFalse(CodexHookSettingsEditor.needsMigration(result))
             let json = try XCTUnwrap(JSONSerialization.jsonObject(with: result) as? [String: Any])
             let hooks = try XCTUnwrap(json["hooks"] as? [String: [[String: Any]]])
             let foreign = try XCTUnwrap(hooks["PermissionRequest"]?.first)
@@ -68,8 +67,7 @@ final class CodexSetupTests: XCTestCase {
         var raw = String(decoding: try CodexHookSettingsEditor.edit(nil, install: true), as: UTF8.self)
         raw = raw.replacingOccurrences(of: "\"async\" : true", with: "\"async\" : 1")
         let data = Data(raw.utf8)
-        XCTAssertTrue(CodexHookSettingsEditor.needsMigration(data))
-        XCTAssertFalse(CodexHookSettingsEditor.sameJSON(data, try CodexHookSettingsEditor.edit(data, install: true)))
+        XCTAssertFalse(CodexHookSettingsEditor.sameJSON(data, try CodexHookSettingsEditor.migrate(data)))
     }
 
     func testMigrationPreservesRemovedEventsCustomTimeoutAndFormatting() throws {
@@ -88,7 +86,6 @@ final class CodexSetupTests: XCTestCase {
             let original = try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted])
             try original.write(to: settings)
             let before = try settings.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
-            XCTAssertFalse(CodexHookSettingsEditor.needsMigration(original))
             XCTAssertFalse(try CodexHookInstallation.migrateIfInstalled(settingsURL: settings,
                 binDirectory: root.appendingPathComponent("bin"), helperURL: root.appendingPathComponent("helper")))
             XCTAssertEqual(try Data(contentsOf: settings), original)
@@ -107,7 +104,6 @@ final class CodexSetupTests: XCTestCase {
             let original = try JSONSerialization.data(withJSONObject: [
                 "hooks": ["PermissionRequest": [["hooks": [handler]]]]
             ])
-            XCTAssertFalse(CodexHookSettingsEditor.needsMigration(original), "\(customization)")
             XCTAssertTrue(CodexHookSettingsEditor.sameJSON(original, try CodexHookSettingsEditor.migrate(original)))
         }
     }

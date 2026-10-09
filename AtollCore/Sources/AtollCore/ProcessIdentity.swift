@@ -59,8 +59,9 @@ public struct ProcessIdentity: Codable, Equatable, Hashable, Sendable {
     }
 
     @discardableResult
-    public func send(_ signal: Int32) -> Bool {
-        guard Self.current(of: pid) == self else { return false }
-        return kill(pid, signal) == 0
+    public func send(_ signal: Int32, read: (Int32) -> Self? = Self.current,
+                     deliver: (Int32, Int32) -> Int32 = { kill($0, $1) }) -> Bool {
+        guard read(pid) == self else { return false }
+        return deliver(pid, signal) == 0
     }
 }

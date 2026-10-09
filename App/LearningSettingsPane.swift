@@ -8,6 +8,7 @@ struct LearningPane: View {
     @AppStorage(LearningSettings.skillDestinationKey) private var skillDestination = "origin"
     @State private var center = SkillReviewCenter.shared
     @State private var curation = NotesCurationService.shared
+    @State private var runner = RetrospectiveRunner.shared
     @State private var notes: [LearningNoteSummary] = []
     @State private var noteProjects: [(project: String, count: Int)] = []
     @State private var noteVolume = 0
@@ -63,7 +64,13 @@ struct LearningPane: View {
             guard !CodexPreview.enabled else { return }
             center.refresh()
             refreshNotes()
-            attempts = RetrospectiveRunner.shared.recentAttempts()
+            attempts = runner.recentAttempts()
+        }
+        .onChange(of: runner.journalRevision) { _, _ in
+            if !CodexPreview.enabled { attempts = runner.recentAttempts() }
+        }
+        .onChange(of: runner.notesRevision) { _, _ in
+            if !CodexPreview.enabled { refreshNotes() }
         }
         .onChange(of: curation.lastRunAt) { _, _ in
             if !CodexPreview.enabled { refreshNotes() }

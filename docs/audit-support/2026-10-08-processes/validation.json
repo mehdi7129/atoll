@@ -1,0 +1,139 @@
+{
+  "date": "2026-10-09",
+  "base_commit": "5cddb8b",
+  "findings": [
+    "A09",
+    "A10",
+    "A11",
+    "A21"
+  ],
+  "passed": true,
+  "source_sha256": {
+    "App/AppDelegate.swift": "67f307efee300303faf531e0cf192d15bc3281a205bc342a67455815fcdee684",
+    "App/ClaudeCodeSettingsPane.swift": "1b67805798114e52021360699cc81473a187f38257d492070a130f5a68d513e5",
+    "App/ClaudeExecutable.swift": "2b133ecd022b9eb73effecc4865489355517c63791951f6eaffb84019b2644c1",
+    "App/CodexExecutable.swift": "63b24ac247cc2c945ad95c7e2b0a835e1af94b5d37149c86188ca6a091e30bac",
+    "App/CodexService.swift": "4bf4fc0645afb33d460467956b17efd2bcf2887c17710144597c077a61881285",
+    "App/CodexSettingsPane.swift": "8567c62e4bcca0af90cab6f905697e844ea18946ac7d6aa6399378764a17dc37",
+    "App/FleetPoller.swift": "5ca0b8738c3d0eb1957c7b5074257cdeaa1af158ad3fd49d41c43126034bb47e",
+    "App/HookInstaller.swift": "6b62a6d58afcc21c145360496e16b7212985d9a926c45e2f1e95386b7b926468",
+    "App/LearningSettings.swift": "2aece7c7491da94ad0bfee628d68eef2ed12dd8cf59620d469fad175c7026e6d",
+    "App/MemorySettingsSection.swift": "c85c34b02924314546233f3b5540cad54dc3b6beaf49921688a54dbfd2b8787f",
+    "App/ModelQuotaPoller.swift": "072fb4d48ec43600bdf3c4f874057bce27342321b77c8b47393e7f75bc83a98e",
+    "App/NotesCurationService.swift": "a0265ea8f0d720b032a0983becdce6404a46d751fe2aa0cb9b44b3a2da517944",
+    "App/OnboardingView.swift": "f2837fb5061d80cedf118633d58d8cf7d6cd9d4de8f46091db4cbdd78f68f4f7",
+    "App/RetrospectiveRunner.swift": "2dea98464ba39c4057714f4e5a0b251aac7c82c4bac84244dbf1e0a5d0fdbccc",
+    "App/SettingsView.swift": "67cff790a050302e801871313c513f351a0681762fc70429547a21ed089e9194",
+    "App/SoundCenter.swift": "2a6807e10336af300dfafa4385edafffc8f84142c22cee6da0820cc416ddb2cb",
+    "AtollCore/Sources/AtollCore/BoundedProcessRunner.swift": "c3532f603dec732a7bc1c88d672d75502a739e3308468621d6e798e5672bcc33",
+    "AtollCore/Sources/AtollCore/ProcessIdentity.swift": "283fd07ec935f777c1b528e76d8c5f7a2958ce2d9e3a34a3d342c0c5ad708979",
+    "Bridge/CodexBridge.swift": "412b19532c0df6a66f80ff778c048851c57f147f51bb7ee4964a6d5ca1405f24"
+  },
+  "tests": {
+    "bounded_process_runner": 6,
+    "actual_process_services": 17,
+    "actual_analysis_processes": 8,
+    "retrospective_compatibility": 26,
+    "curation_compatibility": 26,
+    "actual_codex_helper_stdout": 2,
+    "stdout_partial_write_and_eintr": true
+  },
+  "sabotages": [
+    {
+      "name": "inherited-eof",
+      "detected": true,
+      "oracle": "testParentExitCannotLeaveDrainWaitingOnSilentDescendant"
+    },
+    {
+      "name": "unbounded-output",
+      "detected": true,
+      "oracle": "testParallelLargeStreamsAreDrainedWithStrictCaps"
+    },
+    {
+      "name": "recycled-pid",
+      "detected": true,
+      "oracle": "testEachSignalRechecksIdentityIncludingEscalation"
+    },
+    {
+      "name": "heartbeat-final-sabotage",
+      "detected": true,
+      "evidence_sha256": "7f86fac5ce2c5eca476c4c1525a43efbeccecef7ef5341d91839a9209825e793"
+    },
+    {
+      "name": "serialization-final-sabotage",
+      "detected": true,
+      "evidence_sha256": "14f2b430673f1164414b57dbab297001d6a3841c3f9b2065ed05b283169ac160"
+    },
+    {
+      "name": "coalescing-final-sabotage",
+      "detected": true,
+      "evidence_sha256": "a3207a923ccd105abc89b6a4e8b5fa161a2cf4f068cfeaaa499e0ebbc9dbfce9"
+    },
+    {
+      "name": "barrier-sabotage-verified",
+      "detected": true,
+      "evidence_sha256": "06fc40600aa6fe986ae4488c47fc2394dab90fe690e63ad27ab532bd0f1af423"
+    },
+    {
+      "name": "ownership-retro-sabotage",
+      "detected": true,
+      "evidence_sha256": "73a32b3fc0bc1520aee775acdce40fde95dc7f7f0987590d24031597f4718b35"
+    },
+    {
+      "name": "ownership-curation-sabotage",
+      "detected": true,
+      "evidence_sha256": "88c997ae0912fd9f1850969ad437711c08ff0833823ae0dbb9601502859ebcdb"
+    },
+    {
+      "name": "stdout-sabotage",
+      "detected": true,
+      "evidence_sha256": "bf5723a4b292f1501f8c9a5b4e69a089560accf7ba149a39af568d4cf2064c81"
+    },
+    {
+      "name": "fleet-ownership-sabotage-final",
+      "detected": true,
+      "oracle": "A09 probe lost live child ownership",
+      "evidence_sha256": "eb386d786f6de3f8da2710596353cfcb1595a5f31c49e4c45df8de78f3a4c19d"
+    },
+    {
+      "name": "keychain-ownership-sabotage-final",
+      "detected": true,
+      "oracle": "A09 probe lost live child ownership",
+      "evidence_sha256": "abd1081e50985d97559940376b01e288c6740fc3b1b4e4c016f649d52a5c6157"
+    }
+  ],
+  "analysis_parent_exit_to_result_seconds": [
+    0.23543596267700195,
+    0.2422029972076416,
+    0.24485182762145996,
+    0.28081512451171875
+  ],
+  "report_sha256": {
+    "core-sabotage/results.json": "009a75c0da1c7daaa2a29ea6b78f1aa2f95fab360f40f1de69d14d3f4e934864",
+    "analysis-ownership/results.json": "1716b7bba1de0f60e777aed8f2b78261ad12fe19a2e92b68b19d83cc6a6af5b5",
+    "stdout/results.json": "425bed98c183b79916f42566564845adfa667cad5873ae10221736a14f8d2edb",
+    "curation-ownership-final.json": "a4102e2903e3e77450c5c6fe5d4a45c0d30a45478abe01ceae82c778f08e09b3",
+    "retrospective-ownership-final.log": "fd611efb54cfb78c74eea0867daebfdb78676e0554bcc482586a468163ea4338",
+    "services-ownership-complete/results.json": "f52220733f77ea82e4e806d05d334c3cb239e3149f1e3cfdd4c25cf95462b1b8"
+  },
+  "isolation": {
+    "app_launched": false,
+    "real_generative_cli_calls": 0,
+    "real_keychain_access": false,
+    "personal_configuration_written": false
+  },
+  "limits": [
+    "Core suite here is targeted; full Core and application builds belong to combined integration.",
+    "Analysis survivor fixtures only accelerate source-copy timeouts and refuse identity signals in a controlled collaborator.",
+    "Resolver fixtures relocate the two global Codex executable paths; helper fixture relocates only the fixed socket.",
+    "No authenticated model, GUI interaction or real Keychain permission flow was exercised.",
+    "Fleet and Keychain survivor fixtures keep the actual service classes and replace only the runner identity capture with nil; their 0.5 s deadlines are injected through existing parameters."
+  ],
+  "product_base_commit": "c37a172388cfcceae2c43bb7f3a764ea30cd2eb9",
+  "test_source_sha256": {
+    "Scripts/test-process-services.py": "45628f7b09897ecea5dd64bde2f86f480ae711b7895e7949fed47f555a2f2f09",
+    "Scripts/process-tests/Main.swift": "d61802758cd0595b26f041a182010fda72c66f89e071811e8b6bd957bb2aef72",
+    "Scripts/process-tests/Stubs.swift": "d61d8e5b486e83494e2ae6a5858807dd49eee08cd6bf93ce3a220a7b1e47dd1c",
+    "Scripts/process-tests/fake-helper.py": "a5450f4fff816a989af9cf4680479e0c692b3d2e8c2ce597297a6ff649fa25e1"
+  }
+}

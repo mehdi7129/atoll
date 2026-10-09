@@ -21,6 +21,9 @@ final class RetrospectiveRunner {
     private(set) var phase: Phase = .idle
     private(set) var lastOutcome: String?
     private(set) var pendingDeliveryCount = 0
+    /// Invalidation locale des vues, uniquement après une écriture effective.
+    private(set) var journalRevision = 0
+    private(set) var notesRevision = 0
 
     /// Branchement vers l'index mémoire 7a : chaque note écrite est indexée.
     @ObservationIgnored var noteSink: ((URL, RetrospectiveReport.Note) -> Void)?
@@ -30,7 +33,7 @@ final class RetrospectiveRunner {
     @ObservationIgnored private var queue: [Job] = []
     @ObservationIgnored private var pendingDelay: Task<Void, Never>?
     @ObservationIgnored private var process: Process?
-    @ObservationIgnored private var timeoutTask: Task<Void, Never>?
+    @ObservationIgnored private var outputTask: Task<BoundedProcessRunner.Result, Never>?
     @ObservationIgnored private var lastEndedSnapshot: SessionStore.Tracked?
     /// Entrée de journal du run en cours, complétée par `finish`.
     @ObservationIgnored private var pendingAttempt: AttemptRecord?
@@ -155,8 +158,8 @@ final class RetrospectiveRunner {
         queue.removeAll()
         pendingDelay?.cancel()
         pendingDelay = nil
-        timeoutTask?.cancel()
-        timeoutTask = nil
+        outputTask?.cancel()
+        outputTask = nil
         terminateWithEscalation()
         phase = .idle
     }
@@ -171,7 +174,35 @@ final class RetrospectiveRunner {
         if activeExecution?.provider == .codex || activeOrigin == .codex || activeDestination == .codex { terminateActive() }
     }
 
+    /// Une collecte bornée peut rendre la main sans pouvoir tuer un enfant
+    /// dont l’identité est devenue illisible. Il reste propriétaire du budget
+    /// et du PID jusqu’à sa sortie réelle, sans bloquer le MainActor.
+    private func finishExecution(_ lease: UUID) {
+        let outcome = lastOutcome ?? "cancelled"
+        let release = {
+            if let process = self.process {
+                SessionStore.shared.unregisterInternalPid(process.processIdentifier)
+            }
+            self.process = nil
+            self.processIdentity = nil
+            AnalysisBudget.shared.finish(lease, outcome: outcome)
+            self.activeExecution = nil
+            self.activeOrigin = nil
+            self.activeDestination = nil
+            self.scheduleNext()
+        }
+        if let process, process.isRunning {
+            Task { @MainActor in
+                while process.isRunning { try? await Task.sleep(for: .milliseconds(100)) }
+                release()
+            }
+        } else {
+            release()
+        }
+    }
+
     private func terminateWithEscalation() {
+        outputTask?.cancel()
         guard let identity = processIdentity else { return }
         ProcessInspector.signal(SIGTERM, to: identity)
         Task.detached(priority: .utility) {
@@ -515,12 +546,7 @@ final class RetrospectiveRunner {
         activeExecution = execution
         activeOrigin = job.transcriptProvider
         activeDestination = destination.provider
-        defer {
-            AnalysisBudget.shared.finish(lease, outcome: lastOutcome ?? "cancelled")
-            activeExecution = nil
-            activeOrigin = nil
-            activeDestination = nil
-        }
+        defer { finishExecution(lease) }
         // Le budget commun persiste la préparation puis l’intention de spawn.
         phase = .running(job.snapshot.id)
         lastOutcome = nil
@@ -642,6 +668,7 @@ final class RetrospectiveRunner {
         // (revalidation, écriture des fichiers) est commun : c'est la propriété
         // qui rend la bascule sûre — Atoll écrit toujours lui-même, après ses
         // propres contrôles, quel que soit le modèle qui a répondu.
+        let deadline = ContinuousClock.now.advanced(by: .seconds(Self.timeoutSeconds))
         let launch: CodexRun.Launch?
         switch provider {
         case .claude:
@@ -698,6 +725,10 @@ final class RetrospectiveRunner {
         process.standardOutput = stdout
         process.standardError = stderr
 
+        guard BoundedProcessRunner.remaining(until: deadline) > 0 else {
+            finish(job, outcome: "failed(spawn)", transcriptBytes: 0)
+            return
+        }
         do {
             try AnalysisBudget.shared.prepareToLaunch(lease)
             processIdentity = try ProcessInspector.launchOwned(process)
@@ -714,49 +745,18 @@ final class RetrospectiveRunner {
         SessionStore.shared.registerInternalPid(pid)
         log.info("rétrospective lancée (pid \(pid)) pour \(job.snapshot.id, privacy: .public)")
 
-        timeoutTask?.cancel()   // jamais réaffecter sans annuler (même hygiène qu'à la fin d'un run)
-        timeoutTask = Task {
-            try? await Task.sleep(for: .seconds(Self.timeoutSeconds))
-            guard !Task.isCancelled else { return }
-            log.error("rétrospective (pid \(pid)) : timeout \(Int(Self.timeoutSeconds)) s — SIGTERM")
-            if let identity { ProcessInspector.signal(SIGTERM, to: identity) }
-            try? await Task.sleep(for: .seconds(5))
-            guard !Task.isCancelled else { return }
-            if let identity { ProcessInspector.signal(SIGKILL, to: identity) }
+        outputTask = Task {
+            await BoundedProcessRunner.collect(process: process, stdout: stdout, stderr: stderr,
+                identity: identity, deadline: deadline, stdoutCap: Self.stdoutCapBytes,
+                stderrCap: 2000, terminationGrace: 5)
         }
-
-        // Lectures BLOQUANTES sur des tâches détachées (readabilityHandler est
-        // inopérant en LSUIElement — piège vécu) ; livraison au MainActor.
-        // Les DEUX pipes sont drainés EN PARALLÈLE (revue) : en série, un
-        // stderr saturé (~64 Ko) bloque `claude` dans son `write`, stdout ne
-        // se ferme jamais et il faut attendre le timeout. Au-delà du cap on
-        // continue de lire en jetant : on ne cesse jamais de vider le tuyau.
-        async let outputTask: Data = Task.detached(priority: .utility) {
-            var collected = Data()
-            var overflowed = false
-            let handle = stdout.fileHandleForReading
-            while let chunk = try? handle.read(upToCount: 1 << 16), !chunk.isEmpty {
-                if overflowed { continue }
-                collected.append(chunk)
-                if collected.count > Self.stdoutCapBytes { overflowed = true } // borné
-            }
-            return collected
-        }.value
-        async let errorTask: String = Task.detached(priority: .utility) {
-            let data = BoundedProcessOutput.drain(stderr.fileHandleForReading, cap: 2000, tail: true)
-            let text = String(decoding: data.suffix(2000), as: UTF8.self)
-            return text.trimmingCharacters(in: .whitespacesAndNewlines)
-        }.value
-        let output = await outputTask
-        let errorTail = await errorTask
+        let result = await outputTask!.value
+        let output = result.stdout
+        let errorTail = String(decoding: result.stderr, as: UTF8.self)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         AnalysisBudget.shared.recordUsage(lease, stdout: output)
+        outputTask = nil
 
-        await Task.detached(priority: .utility) { process.waitUntilExit() }.value
-        timeoutTask?.cancel()
-        timeoutTask = nil
-        SessionStore.shared.unregisterInternalPid(pid)
-        self.process = nil
-        processIdentity = nil
 
         guard runGeneration == generation, !Task.isCancelled else {
             finish(job, outcome: "failed(cancelled)", transcriptBytes: 0)
@@ -767,13 +767,14 @@ final class RetrospectiveRunner {
         // jusqu'à sa nouvelle taille, que ce modèle n'a pas nécessairement lue.
         let transcriptBytes = pendingAttempt?.transcriptBytes ?? 0
 
-        guard process.terminationStatus == 0 else {
-            log.error("rétrospective (pid \(pid)) : exit \(process.terminationStatus) — \(errorTail, privacy: .public)")
+        let status = result.status ?? -1
+        guard result.succeeded else {
+            log.error("rétrospective (pid \(pid)) : exit \(status) — \(errorTail, privacy: .public)")
             // Le code de sortie va AU JOURNAL : c'est lui qui distingue un
             // arrêt d'Atoll (143 = SIGTERM, ex. session reprise) d'un refus du
             // modèle. Sans lui, le journal — dont c'est la raison d'être —
             // n'affichait qu'« failed(exit) », muet sur la cause (vu en vrai).
-            finish(job, outcome: "failed(exit \(process.terminationStatus))",
+            finish(job, outcome: result.timedOut ? "failed(timeout)" : "failed(exit \(status))",
                    transcriptBytes: transcriptBytes)
             return
         }
@@ -815,7 +816,10 @@ final class RetrospectiveRunner {
                 try deliveryStore.save(delivery)
                 pendingDeliveryCount = (try? deliveryStore.pending().count) ?? 1
                 try deliveryStore.apply(&delivery, notesDirectory: BridgePaths.learningNotesDirectory,
-                    proposals: destination.store.proposedDirectory) { [weak self] url, note in self?.noteSink?(url, note) }
+                    proposals: destination.store.proposedDirectory) { [weak self] url, note in
+                        self?.notesRevision &+= 1
+                        self?.noteSink?(url, note)
+                    }
                 try persistReceipt(delivery)
                 try deliveryStore.acknowledge(delivery)
                 pendingDeliveryCount = (try? deliveryStore.pending().count) ?? 0
@@ -891,7 +895,10 @@ final class RetrospectiveRunner {
                         continue
                     }
                     try deliveryStore.apply(&delivery, notesDirectory: BridgePaths.learningNotesDirectory,
-                        proposals: destination.store.proposedDirectory) { [weak self] url, note in self?.noteSink?(url, note) }
+                        proposals: destination.store.proposedDirectory) { [weak self] url, note in
+                        self?.notesRevision &+= 1
+                        self?.noteSink?(url, note)
+                    }
                     try persistReceipt(delivery)
                     try deliveryStore.acknowledge(delivery)
                     recovered = true
@@ -1116,6 +1123,7 @@ final class RetrospectiveRunner {
                 withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
             let data = try JSONEncoder().encode(capped)
             try data.write(to: BridgePaths.learningStateURL, options: .atomic)
+            journalRevision &+= 1
             try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: BridgePaths.learningStateURL.path)
             return true
         } catch {

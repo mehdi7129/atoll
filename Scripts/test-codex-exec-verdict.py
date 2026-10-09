@@ -6,10 +6,14 @@ une copie jetable ; les sources produit et l'authentification restent intactes.
 """
 from pathlib import Path
 import subprocess
+import argparse
 import sys
 import tempfile
 
 
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--build-dir", type=Path, help="Réutiliser un produit Core Debug existant.")
+args = parser.parse_args()
 repo = Path(__file__).resolve().parent.parent
 source = (repo / "Scripts/test-codex-exec.py").read_text()
 success = "PASS sabotage compilé : fichier d’instructions manquant détecté"
@@ -56,7 +60,8 @@ for name, content, expected_success, expected_nominal, diagnostic in cases:
         harness = root / "Scripts/test-codex-exec.py"
         harness.write_text(content)
         result = subprocess.run(
-            [sys.executable, str(harness), "--prepare-only", "--sabotage-instructions-file"],
+            [sys.executable, str(harness), "--prepare-only", "--sabotage-instructions-file"]
+            + (["--build-dir", str(args.build_dir.resolve())] if args.build_dir else []),
             capture_output=True, text=True, timeout=360,
         )
         output = result.stdout + result.stderr

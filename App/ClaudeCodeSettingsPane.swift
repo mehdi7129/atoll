@@ -168,7 +168,7 @@ struct ClaudeCodePane: View {
                 HStack {
                     ProgressView().controlSize(.small)
                     Text("Recherche…")
-                    Button("Annuler") { if !CodexPreview.enabled { plugins.cancel() } }
+                    Button("Annuler") { if !CodexPreview.enabled { plugins.cancelSearch() } }
                 }
             }
             ForEach(plugins.searchMatches, id: \.pluginID) { match in
@@ -216,21 +216,23 @@ struct ClaudeCodePane: View {
     }
 
     private func toggleHooks() {
-        hookError = nil
-        guard !CodexPreview.enabled else { hooksInstalled.toggle(); return }
-        do {
-            if hooksInstalled {
-                try HookInstaller.uninstall()
-            } else {
-                try HookInstaller.install()
+        Task { @MainActor in
+            hookError = nil
+            guard !CodexPreview.enabled else { hooksInstalled.toggle(); return }
+            do {
+                if hooksInstalled {
+                    try await HookInstaller.uninstall()
+                } else {
+                    try await HookInstaller.install()
+                }
+            } catch {
+                hookError = error.localizedDescription
             }
-        } catch {
-            hookError = error.localizedDescription
+            hooksInstalled = HookInstaller.isInstalled
+            // Le parking suit la disponibilité des hooks : désinstaller restaure les
+            // règles (fait par le helper), réinstaller en Rockstar les reparque.
+            let level = AutonomyLevel.resolve(UserDefaults.standard.string(forKey: InteractionCenter.autonomyKey))
+            denyParkingError = await HookInstaller.syncDenyParking(level: level)
         }
-        hooksInstalled = HookInstaller.isInstalled
-        // Le parking suit la disponibilité des hooks : désinstaller restaure les
-        // règles (fait par le helper), réinstaller en Rockstar les reparque.
-        let level = AutonomyLevel.resolve(UserDefaults.standard.string(forKey: InteractionCenter.autonomyKey))
-        denyParkingError = HookInstaller.syncDenyParking(level: level)
     }
 }

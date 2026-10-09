@@ -179,7 +179,8 @@ final class LearningSettings {
     ///
     /// Renvoie un message d'erreur à afficher, nil si tout est en ordre.
     @discardableResult
-    func syncProactiveRecall() -> String? {
+    func syncProactiveRecall() async -> String? {
+        await HookInstaller.waitForPendingOperation()
         let config = proactiveRecallConfig
         do {
             // ~/.atoll en 0700 (revue) : ce dossier porte l'index mémoire de
@@ -205,7 +206,7 @@ final class LearningSettings {
             return nil // déjà dans le bon mode
         }
         do {
-            try HookInstaller.install() // idempotent : relit la config et réécrit le hook
+            try await HookInstaller.install() // idempotent : relit la config et réécrit le hook
             return nil
         } catch {
             return "Hooks non mis à jour pour le recall proactif : \(error.localizedDescription)"

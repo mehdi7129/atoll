@@ -185,22 +185,25 @@ struct OnboardingView: View {
     }
 
     private func installHooks() {
-        hookError = nil
-        do {
-            if provider == .codex { try HookInstaller.configureCodex(install: true) }
-            else { try HookInstaller.install() }
-            ProviderPreferences.shared.selection = provider
-            // Installer un CLI ne choisit jamais l'abonnement qui paie les
-            // analyses, même si l'ancienne version n'avait pas cette clé.
-        } catch {
-            hookError = error.localizedDescription
-        }
-        refreshInstalled()
-        if CodexPreview.enabled { hooksInstalled = true }
-        // Même chemin que les Réglages : le parking des règles deny suit la
-        // disponibilité des hooks (ex. niveau Rockstar déjà choisi).
-        if provider == .claude {
-            HookInstaller.syncDenyParking(level: InteractionCenter.shared.autonomyLevel)
+        Task { @MainActor in
+            let requestedProvider = provider
+            hookError = nil
+            do {
+                if requestedProvider == .codex { try await HookInstaller.configureCodex(install: true) }
+                else { try await HookInstaller.install() }
+                if provider == requestedProvider { ProviderPreferences.shared.selection = requestedProvider }
+                // Installer un CLI ne choisit jamais l'abonnement qui paie les
+                // analyses, même si l'ancienne version n'avait pas cette clé.
+            } catch {
+                if provider == requestedProvider { hookError = error.localizedDescription }
+            }
+            refreshInstalled()
+            if CodexPreview.enabled { hooksInstalled = true }
+            // Même chemin que les Réglages : le parking des règles deny suit la
+            // disponibilité des hooks (ex. niveau Rockstar déjà choisi).
+            if requestedProvider == .claude {
+                await HookInstaller.syncDenyParking(level: InteractionCenter.shared.autonomyLevel)
+            }
         }
     }
 

@@ -273,8 +273,10 @@ final class SoundCenter {
             loaded = nil
         case .system(let name):
             // `NSSound(named:)` résout les sons de /System/Library/Sounds et
-            // ~/Library/Sounds. Le nom a été validé « composant nu » au décodage.
-            loaded = NSSound(named: name)
+            // ~/Library/Sounds. Son registre renvoie un singleton : en faire
+            // une copie pour isoler lecture et volume de chaque événement.
+            // Le nom a été validé « composant nu » au décodage.
+            loaded = NSSound(named: name)?.copy() as? NSSound
         case .custom(let file):
             // `file` est validé nu par SoundChoice.decode : pas de remontée de
             // dossier possible ici.
@@ -407,6 +409,7 @@ final class SoundCenter {
     /// écrit AVANT la modification de settings.json : si Atoll meurt entre les
     /// deux, la restitution reste possible.
     func parkUserSoundHooks() throws {
+        try HookInstaller.requireNoActiveHelper()
         // Un parking illisible : ÉCHOUER plutôt qu'écraser — l'écraser
         // détruirait définitivement les hooks déjà mis de côté (même règle que
         // le parking Rockstar).
@@ -440,6 +443,7 @@ final class SoundCenter {
 
     /// Rend ses hooks sonores à l'utilisateur, puis efface le parking.
     func restoreUserSoundHooks() throws {
+        try HookInstaller.requireNoActiveHelper()
         switch parkingState() {
         case .none:
             return

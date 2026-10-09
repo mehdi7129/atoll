@@ -105,6 +105,7 @@ final class CodexService {
     }
 
     func changeHome(to path: String?) throws {
+        try HookInstaller.requireNoActiveHelper()
         try CodexPaths.selectHome(path)
         stop()
         for card in CodexInteractionCenter.shared.pending { CodexInteractionCenter.shared.handBack(card.id) }

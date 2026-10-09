@@ -655,11 +655,6 @@ public enum CodexHookSettingsEditor {
         }
     }
 
-    public static func needsMigration(_ data: Data?) -> Bool {
-        guard let data, hasManagedHooks(data), let updated = try? migrate(data) else { return false }
-        return !sameJSON(data, updated)
-    }
-
     /// Mise à niveau des formes livrées autrefois, sur place. Une absence est
     /// un retrait, pas une invitation à réinstaller. Matchers, ordre et clés
     /// personnelles restent intacts. Une valeur personnalisée n'est pas périmée.

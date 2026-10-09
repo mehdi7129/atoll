@@ -1,0 +1,156 @@
+{
+  "date": "2026-10-09",
+  "base_commit": "7a02788207c1d3adc54b2a9ba5ab22571530d858",
+  "findings": [
+    "A16",
+    "A20"
+  ],
+  "passed": true,
+  "source_sha256": {
+    "App/CodexPreview.swift": "199d6dd1b121592f3ae21744f658731116b17609c24e76d3633b3febc8ef43d1",
+    "App/LearningSettingsPane.swift": "083f1be0b8276deeba09459b03f165ac37d4a73a8ba5d36d59744e4ab58de5a3",
+    "App/CodexSettingsPane.swift": "a228a1f2033128355c30df52cc785220aa20710e1051bea420ff84f29bdf8b19",
+    "App/CodexCatalogSection.swift": "92ad2426c503d9975951b9399c825d7c1073a7e02299fcc44c080e2392efe61d",
+    "App/CodexCatalogState.swift": "b5c5894c6bf1d10389aa16b654600f0ab940e5fb59e46874afc89762f11eb86f",
+    "App/RetrospectiveRunner.swift": "f44e317c122487b3a876a2f216d7aeb761dbcb5e0fe2405cd629c17f49acbb9b"
+  },
+  "harness_sha256": {
+    "Scripts/test-ui-refresh.py": "dcda04d0eb93530de5c099213e63cf4308730bd6aad707e414798ed87e8da1d5",
+    "Scripts/ui-refresh-tests/Fixture.swift": "426f1ba4ec78d5ab983f8bf66a81a8abf532c61dbb9501daa9b0113d7a239d18",
+    "Scripts/ui-refresh-tests/Probe.swift": "394c583a3ee30512e01bc64c3ffd2d9ce4f4b8e489d0578e940d7dbbb584cec6",
+    "Scripts/ui-refresh-tests/RunnerExtension.swift.inc": "fe2b444c0bd65a4b5854e1524112fb99003dedc639a31e908990c297f3326be3"
+  },
+  "cases": [
+    {
+      "case": "learning",
+      "passed": true,
+      "evidence": "nominal-learning-5",
+      "status": {
+        "completedReads": 0,
+        "error": "",
+        "journalRevision": 4,
+        "notesRevision": 1,
+        "pendingRead": false,
+        "reads": 0
+      }
+    },
+    {
+      "case": "catalog",
+      "passed": true,
+      "evidence": "nominal-catalog-5",
+      "status": {
+        "completedReads": 3,
+        "error": "",
+        "journalRevision": 0,
+        "notesRevision": 0,
+        "pendingRead": false,
+        "reads": 3
+      }
+    }
+  ],
+  "sabotages": [
+    {
+      "mutation": "journal",
+      "detected": true,
+      "oracle": "A16 journal UI remained stale",
+      "evidence": "journal-learning-2"
+    },
+    {
+      "mutation": "notes",
+      "detected": true,
+      "oracle": "A16 notes UI remained stale",
+      "evidence": "notes-learning-2"
+    },
+    {
+      "mutation": "home",
+      "detected": true,
+      "oracle": "A20 home UI remained stale",
+      "evidence": "home-catalog-2"
+    }
+  ],
+  "builds": [
+    {
+      "variant": "nominal",
+      "compiled": true,
+      "log_sha256": "2635935d391722854fa42f9aabf8b03a2146c4afbe83f281527378dbeaadbc6b"
+    },
+    {
+      "variant": "journal",
+      "compiled": true,
+      "log_sha256": "b0dda25e9ae886fcef430ce92f433612969ea2cfb2963ee06f1bf86923a250dd"
+    },
+    {
+      "variant": "notes",
+      "compiled": true,
+      "log_sha256": "bedf656471ca4dffa2bb5e96f9fe769c93d75ec6add6fa6282a607bc3d2f4933"
+    },
+    {
+      "variant": "home",
+      "compiled": true,
+      "log_sha256": "d4014cd0579e3cf61080f66b73ae0108a5c35027eb6139b1c5a2b4e8be9ee56e"
+    }
+  ],
+  "captures": [
+    {
+      "path": "nominal-learning-5/apres-journal.png",
+      "sha256": "fc6d46947d739d4ee0b64929467cb7a04b22c520f7057133bcc2f41070b41c25",
+      "visually_reviewed": true,
+      "ax_sha256": "b8a20f98ddb1ee18c18ecf022f0ad89bf120eca228ebf98f0f48ccf76c947e80"
+    },
+    {
+      "path": "nominal-learning-5/apres-reprise.png",
+      "sha256": "27d9cf9238ad41121036d7c494f3e4edf85c1953a844bd648b0b27dfeed8ef18",
+      "visually_reviewed": true,
+      "ax_sha256": "e26b40a34332c0e5762e7de0502a538ecc6347f24fc8ce24d06f4580f2774ab5"
+    },
+    {
+      "path": "nominal-learning-5/avant-journal.png",
+      "sha256": "b034068f6301f16e825722cb8f759dc8d4cdf2122cb476e70187fc655e1cf832",
+      "visually_reviewed": true,
+      "ax_sha256": "a1d5305060b662b3cc6f1d122b46dcdbe0c22451d178cfd5903e6869f36f7c78"
+    },
+    {
+      "path": "nominal-catalog-5/apres-home.png",
+      "sha256": "c8597e7a670227c0a3890db8157e9b2109091c7bc74b1a586082a270f2863206",
+      "visually_reviewed": true,
+      "ax_sha256": "ca0b3d2e88e03f10b0117c6457978a2a0d88e18fd05f54f2d15d306ef12af7d1"
+    },
+    {
+      "path": "nominal-catalog-5/apres-reponse-tardive.png",
+      "sha256": "d06d31dbb6fe5c93415bcd0796756f216024ad8061c8a6b614b8f4ba2781d7ea",
+      "visually_reviewed": true,
+      "ax_sha256": "d0930b4c6eb0f5c3a4e1e0c22a84fdbdb20e40134ad400803aed040c2cb39c86"
+    },
+    {
+      "path": "nominal-catalog-5/avant-home.png",
+      "sha256": "57c42fbdc939e3be8dae452f8a43c7109d9adc74add4acaa541bcf6b3fa66f54",
+      "visually_reviewed": true,
+      "ax_sha256": "86d6343a2a9dcb50ff0fda727600a98b99ab2472df0047904b5271a9354e725e"
+    },
+    {
+      "path": "journal-learning-2/echec.png",
+      "sha256": "b034068f6301f16e825722cb8f759dc8d4cdf2122cb476e70187fc655e1cf832",
+      "visually_reviewed": true,
+      "ax_sha256": "5569cab6472021e5e0ce1e557e4bd474b019983311424461ff58d88263919354"
+    },
+    {
+      "path": "notes-learning-2/echec.png",
+      "sha256": "0cb923fe5bad68e9dbe907362a60e8f2af65fbd6bf599b23bc6ce1e6749faa0d",
+      "visually_reviewed": true,
+      "ax_sha256": "2667e88b405144b0d92362978c63858ff0b8eb8c9c326e9076089e84c88992f3"
+    },
+    {
+      "path": "home-catalog-2/echec.png",
+      "sha256": "0b445b3caa6c09fbe5a7ba6c26160dd7866a0cf65a7c822d33a270e60f1dfcc5",
+      "visually_reviewed": true,
+      "ax_sha256": "1bd21e1ef6c821a905e0eea4bd6fca8da999622b497d738dbf9ee21c1349e81d"
+    }
+  ],
+  "raw_results_sha256": "a2102825e52f13bd2897614c022e4c538f01039f29b5ca79cc9bb8d97e5b080b",
+  "limitations": [
+    "AppKit keyboard entry is not exercised; fixture injects homePath then presses actual AX button",
+    "Codex service restart is replaced by private CodexPaths.selectHome",
+    "Catalogue reader is injected; no authenticated CLI",
+    "Audio and real terminal focus are not qualified"
+  ]
+}

@@ -1,0 +1,188 @@
+{
+  "date": "2026-10-08",
+  "base": "a1c7d6999d6921906f26c405fc4f48e7bde30e91",
+  "scope": "audit et propositions uniquement, aucun changement produit",
+  "environment": {
+    "macOS": "27.0.1 (26A434)",
+    "Xcode": "27.0 (27A266a)",
+    "Swift": "6.4, language mode 5",
+    "architecture": "arm64",
+    "Python": "3.9.6"
+  },
+  "baseline": [
+    {
+      "command": "swift test --package-path AtollCore --build-system native",
+      "executed": 1089,
+      "skipped": 1,
+      "failures": 0
+    },
+    {
+      "command": "python3 Scripts/test-runtime.py",
+      "scenarios_passed": 60
+    },
+    {
+      "command": "python3 Scripts/test-codex-quota-poller.py",
+      "scenarios_passed": 8
+    },
+    {
+      "command": "python3 Scripts/test-curation.py --build-system native",
+      "scenarios_passed": 26
+    },
+    {
+      "command": "python3 Scripts/test-curation-recovery.py --build-system native",
+      "scenarios_passed": 98
+    },
+    {
+      "command": "python3 Scripts/test-learning-retrospective.py",
+      "scenarios_passed": 26
+    },
+    {
+      "command": "xcodegen generate, puis xcodebuild -project Atoll.xcodeproj -scheme Atoll -configuration Debug -derivedDataPath <dossier hors depot> build",
+      "result": "BUILD SUCCEEDED",
+      "warnings": "Aucun warning Swift ; AppIntents extraction skipped sans dependance"
+    },
+    {
+      "command": "python3 Scripts/check-docs.py --no-tests",
+      "result": "pass, avertissements de couverture/relecture ; suites executees separement"
+    }
+  ],
+  "packaged_probes_reexecuted": true,
+  "observations": {
+    "A01": {
+      "originalBytesPreserved": false,
+      "originalBytesInArchive": false,
+      "orphanStillPresent": true,
+      "fakeCliLaunches": 1,
+      "outcome": "2 note(s) → 2 · 1 contradiction(s)"
+    },
+    "A02": {
+      "corruptStatePreserved": false,
+      "lastOutcome": null,
+      "replacementFields": [
+        "lastRunAt",
+        "warnings"
+      ],
+      "cliLaunches": 0
+    },
+    "A03": {
+      "rootPresentBefore": true,
+      "childVisibleBefore": false,
+      "manifestPreserved": false,
+      "fileStillExists": true,
+      "removed": [
+        "durable"
+      ],
+      "unmanagedAfter": [
+        "atoll-durable"
+      ]
+    },
+    "A04_A05": {
+      "project_memory_count": 1,
+      "project_memory_cwd": null,
+      "project_scoped_memory_hits": 0,
+      "stages": [
+        {
+          "hits": {
+            "ancienalpha": 2,
+            "croissancegamma": 0,
+            "nouveaubeta": 0
+          },
+          "stage": "initial"
+        },
+        {
+          "hits": {
+            "ancienalpha": 2,
+            "croissancegamma": 0,
+            "nouveaubeta": 0
+          },
+          "stage": "same_inode_same_size"
+        },
+        {
+          "hits": {
+            "ancienalpha": 2,
+            "croissancegamma": 0,
+            "nouveaubeta": 0
+          },
+          "stage": "same_inode_growing"
+        }
+      ]
+    },
+    "A06": {
+      "pendingBeforePostA": [
+        "B"
+      ],
+      "pendingAfterPostA": [],
+      "canceled": [
+        "B"
+      ],
+      "replies": [
+        "A"
+      ],
+      "phase": "busy"
+    },
+    "A07": {
+      "controlMatchers": [
+        "Bash",
+        "Edit"
+      ],
+      "partialRestoreMatchers": [
+        "Edit",
+        "Edit"
+      ]
+    },
+    "A08": {
+      "managedHookCountAfterMixedGroupInstall": 2,
+      "foreignHookPreserved": true,
+      "malformedRootHooksReplaced": true
+    },
+    "A09": {
+      "fleetSeconds": 8.253929916667403,
+      "fleetWatchdogSeconds": 5,
+      "primitiveParentRunningAt020Seconds": false,
+      "primitiveDrainReturnSeconds": 1.315
+    },
+    "A10": {
+      "fakeHelperSleepSeconds": 0.6,
+      "mainActorHeartbeatRequestedSeconds": 0.02,
+      "mainActorHeartbeatObservedSeconds": 0.788171584
+    },
+    "A15": {
+      "sharedNSSoundInstance": true,
+      "firstVolumeAfterChangingSecond": 0.8,
+      "audioPlayed": false
+    },
+    "A17": {
+      "activationSucceeded": false,
+      "fakeCLIExit": 42,
+      "reported": "focused, fenetre"
+    }
+  },
+  "limits": [
+    "A11/A12/A13/A14/A16: source seulement, limites detaillees dans le rapport",
+    "Fixtures synthetiques, aucune mesure de frequence sur donnees personnelles",
+    "Aucune execution IA authentifiee ou acces Keychain reel",
+    "Aucune nouvelle recette GUI, audio, VoiceOver, Release ou notarisation",
+    "SwiftPM backend native deprecie ; pas de migration proposee dans cet audit"
+  ],
+  "audit_documentation_validation": {
+    "command": "python3 Scripts/check-docs.py --no-tests",
+    "exit_code": 0,
+    "warnings": 25,
+    "interpretation": "Aucune derive verifiable ; warnings de couverture, fonctions test-only et dist/updates absent dans le worktree. Tests executes separement."
+  },
+  "counteraudit": {
+    "details": "counteraudit/validation.json",
+    "new_findings": [
+      "A18",
+      "A19",
+      "A20",
+      "A21",
+      "A22"
+    ],
+    "amended_scope": [
+      "A04"
+    ],
+    "additional_offline_harness_failed": "Scripts/test-codex-exec.py --prepare-only",
+    "note": "Baseline ci-dessus conservee ; ne pas presenter toutes les validations comme vertes."
+  }
+}

@@ -5,7 +5,7 @@ import AtollCore
 
 private let log = Logger(subsystem: "dev.mehdiguiard.atoll", category: "fleet")
 
-/// Interroge périodiquement `claude agents --json --all` — l'interface SUPPORTÉE
+/// Interroge périodiquement `claude agents --json` — l'interface SUPPORTÉE
 /// d'énumération de la flotte — et en fait l'AUTORITÉ de découverte des sessions.
 ///
 /// Pourquoi : le daemon d'arrière-plan de Claude Code a rendu le scan de processus
@@ -61,13 +61,15 @@ final class FleetPoller {
     }
 
     private func pollOnce() async {
-        let path = await resolveClaudePath()
+        let deadline = ContinuousClock.now.advanced(by: .seconds(Self.commandTimeout))
+        let path = await resolveClaudePath(deadline: deadline)
+        guard !Task.isCancelled else { return }
         guard let path else {
             available = false
             SessionStore.shared.applyFleetSnapshot([], available: false)
             return
         }
-        if let data = await Self.runAgentsJSON(claudePath: path) {
+        if let data = await Self.runAgentsJSON(claudePath: path, deadline: deadline) {
             // Code de sortie 0 ne veut pas dire « sortie comprise ». Un format
             // non reconnu était décodé en `[]` puis publié avec `available:
             // true` : l'îlot concluait que TOUTES les sessions avaient disparu,
@@ -93,7 +95,7 @@ final class FleetPoller {
         }
     }
 
-    private func resolveClaudePath() async -> String? {
+    private func resolveClaudePath(deadline: ContinuousClock.Instant) async -> String? {
         if let claudePath { return claudePath }
         // Chemin usuel de l'installeur natif : vérif CHEAP (pas de shell),
         // retentée à chaque poll (claude peut apparaître après coup).
@@ -103,60 +105,44 @@ final class FleetPoller {
         // une fois. Sur échec, on ne la répète pas (repli scan silencieux).
         guard !triedLoginResolve else { return nil }
         triedLoginResolve = true
-        let resolved = await Task.detached(priority: .utility) { () -> String? in
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/bin/zsh")
-            process.arguments = ["-l", "-c", "command -v claude"]
-            let pipe = Pipe()
-            process.standardOutput = pipe
-            process.standardError = FileHandle.nullDevice
-            guard (try? process.run()) != nil else { return nil }
-            Self.armWatchdog(process)
-            let data = (try? pipe.fileHandleForReading.readToEnd()) ?? Data()
-            process.waitUntilExit()
-            let path = String(decoding: data, as: UTF8.self)
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            return (process.terminationStatus == 0 && !path.isEmpty
-                    && FileManager.default.isExecutableFile(atPath: path)) ? path : nil
-        }.value
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        process.arguments = ["-l", "-c", "command -v claude"]
+        process.standardInput = FileHandle.nullDevice
+        let result = try? await BoundedProcessRunner.run(process,
+            timeout: BoundedProcessRunner.remaining(until: deadline), stdoutCap: 16_384)
+        let path = result.map { String(decoding: $0.stdout, as: UTF8.self)
+            .trimmingCharacters(in: .whitespacesAndNewlines) } ?? ""
+        let resolved = result?.succeeded == true && !path.isEmpty
+            && FileManager.default.isExecutableFile(atPath: path) ? path : nil
         claudePath = resolved
         return resolved
     }
 
     /// Exécute `claude agents --json` (exec direct — pas de shell). Renvoie stdout
     /// si exit 0, nil sinon (commande absente/erreur/daemon figé → repli scan).
-    /// BORNÉ par un watchdog : un `claude` qui hang est tué (sinon la boucle de
-    /// poll gèlerait à jamais et le repli ne se réengagerait pas).
-    private static func runAgentsJSON(claudePath: String) async -> Data? {
-        await Task.detached(priority: .utility) { () -> Data? in
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: claudePath)
-            // SANS --all : seules les sessions ACTIVES (une session terminée
-            // sort du snapshot → Atoll la clôt).
-            process.arguments = ["agents", "--json"]
-            process.standardInput = FileHandle.nullDevice
-            let out = Pipe()
-            process.standardError = FileHandle.nullDevice
-            process.standardOutput = out
-            guard (try? process.run()) != nil else { return nil }
-            armWatchdog(process)
-            let data = (try? out.fileHandleForReading.readToEnd()) ?? Data()
-            process.waitUntilExit()
-            // Tué par le watchdog → status ≠ 0 → nil → available=false → repli.
-            return process.terminationStatus == 0 ? data : nil
-        }.value
-    }
+    /// La collecte est bornée même si l'enfant ne peut pas être signalé.
+    /// Dans ce cas, aucun nouveau poll n'est lancé avant sa vraie sortie.
+    private static var activeProbe: Process?
+    private static var collectingProbe = false
 
-    /// Tue un process qui dépasse `commandTimeout` (SIGTERM puis SIGKILL). Le
-    /// terminate ferme stdout → readToEnd retourne, la boucle continue.
-    nonisolated private static func armWatchdog(_ process: Process) {
-        let pid = process.processIdentifier
-        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + commandTimeout) {
-            guard process.isRunning else { return }
-            process.terminate()
-            DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 1) {
-                if process.isRunning { kill(pid, SIGKILL) }
-            }
+    static func runAgentsJSON(claudePath: String,
+                              deadline: ContinuousClock.Instant = .now.advanced(by: .seconds(5))) async -> Data? {
+        guard !collectingProbe, activeProbe?.isRunning != true else { return nil }
+        guard BoundedProcessRunner.remaining(until: deadline) > 0, !Task.isCancelled else { return nil }
+        let process = Process()
+        activeProbe = process
+        collectingProbe = true
+        defer {
+            collectingProbe = false
+            if !process.isRunning { activeProbe = nil }
         }
+        process.executableURL = URL(fileURLWithPath: claudePath)
+        // SANS --all : seules les sessions actives sont demandées, comme avant.
+        process.arguments = ["agents", "--json"]
+        process.standardInput = FileHandle.nullDevice
+        let result = try? await BoundedProcessRunner.run(process,
+            timeout: BoundedProcessRunner.remaining(until: deadline), stdoutCap: 4 * 1024 * 1024)
+        return result?.succeeded == true ? result?.stdout : nil
     }
 }

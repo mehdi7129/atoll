@@ -4,18 +4,19 @@ import AtollCore
 struct CodexCatalogSection: View {
     let projectPath: String
     let executableOverride: String
+    let home: URL
     let chooseProject: () -> Void
-    @State private var skills: [CatalogEntry] = []
-    @State private var plugins: CodexPluginCatalog?
-    @State private var reading = false
-    @State private var message = "Catalogue non chargé."
+    @State private var catalog = CodexCatalogState()
     @State private var query = ""
-    @State private var issues: [String] = []
+
+    private var context: CodexCatalogState.Context {
+        .init(projectPath: projectPath, executableOverride: executableOverride, home: home)
+    }
 
     var body: some View {
         Section {
-            if !issues.isEmpty {
-                Text(issues.joined(separator: "\n")).font(.callout).foregroundStyle(.orange)
+            if !catalog.issues.isEmpty {
+                Text(catalog.issues.joined(separator: "\n")).font(.callout).foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
             }
             DisclosureGroup("Skills et plugins Codex") {
@@ -31,21 +32,21 @@ struct CodexCatalogSection: View {
                             Button("Changer de projet…", action: chooseProject)
                         }
                     }
-                    Button(reading ? "Lecture du catalogue…" : "Lire le catalogue de ce projet") { refresh() }
-                        .disabled(reading || !projectPath.hasPrefix("/") || CodexPaths.configurationError != nil)
-                    SettingsHelp(message).textSelection(.enabled)
+                    Button(catalog.reading ? "Lecture du catalogue…" : "Lire le catalogue de ce projet") { refresh() }
+                        .disabled(catalog.reading || !projectPath.hasPrefix("/") || CodexPaths.configurationError != nil)
+                    SettingsHelp(catalog.message).textSelection(.enabled)
                 }
                 .padding(.vertical, 8)
-                if !skills.isEmpty || plugins != nil {
+                if !catalog.skills.isEmpty || catalog.plugins != nil {
                     TextField("Rechercher localement un nom ou une description", text: $query)
-                    ForEach(skills.filter { matches("\($0.id) \($0.description)") }, id: \.path) { entry in
+                    ForEach(catalog.skills.filter { matches("\($0.id) \($0.description)") }, id: \.path) { entry in
                         DisclosureGroup("\(entry.name) · \(entry.isAvailable ? "activé" : "désactivé")") {
                             Text(entry.description).font(.callout)
                             Text("\(entry.origin) · \(entry.path.path)").font(.caption).foregroundStyle(.secondary)
                                 .textSelection(.enabled)
                         }
                     }
-                    if let plugins {
+                    if let plugins = catalog.plugins {
                         ForEach(plugins.marketplaces.indices, id: \.self) { index in
                             let market = plugins.marketplaces[index]
                             ForEach(market.plugins.filter { matches($0.name) }, id: \.id) { plugin in
@@ -63,55 +64,16 @@ struct CodexCatalogSection: View {
                     .textSelection(.enabled)
             }
         }
-        .onChange(of: projectPath) { _, _ in invalidate() }
-        .onChange(of: executableOverride) { _, _ in invalidate() }
+        .onChange(of: context, initial: true) { _, next in catalog.updateContext(next) }
     }
 
     private func matches(_ text: String) -> Bool { query.isEmpty || text.localizedStandardContains(query) }
-    private func invalidate() { skills = []; plugins = nil; issues = []; message = "Catalogue à relire pour ce projet et ce binaire." }
 
     private func refresh() {
         guard !CodexPreview.enabled else {
-            if CommandLine.arguments.contains("--preview-catalog-error") {
-                issues = ["Catalogue indisponible : réessaie la lecture dans Codex."]
-            } else { message = "Aucun skill dans ce projet de démonstration." }
+            catalog.showPreview(error: CommandLine.arguments.contains("--preview-catalog-error"))
             return
         }
-        let home = CodexPaths.homeURL, cwd = projectPath, override = executableOverride
-        reading = true
-        issues = []
-        Task { @MainActor in
-            defer { reading = false }
-            guard let path = await CodexExecutable.resolve(overridePath: override) else {
-                message = CodexExecutable.notFoundMessage; issues = [message]; return
-            }
-            let results = await Task.detached(priority: .utility) {
-                let executable = URL(fileURLWithPath: path)
-                return (CodexReadClient.read(.skills(cwd: cwd), executable: executable, home: home),
-                        CodexReadClient.read(.plugins(cwd: cwd), executable: executable, home: home))
-            }.value
-            guard home == CodexPaths.homeURL, cwd == projectPath, override == executableOverride else { return }
-            var notes: [String] = []
-            skills = []; plugins = nil
-            switch results.0 {
-            case .available(let data):
-                if let catalog = CodexSkillCatalog.parse(data, cwd: cwd) {
-                    skills = catalog.entries
-                    notes.append("\(skills.count) skills · scope et activation fournis par Codex")
-                    issues += catalog.errors
-                } else { issues.append("Format skills/list non reconnu.") }
-            case .unavailable(let reason): issues.append(reason)
-            }
-            switch results.1 {
-            case .available(let data):
-                plugins = try? JSONDecoder().decode(CodexPluginCatalog.self, from: data)
-                if let plugins {
-                    notes.append("\(plugins.marketplaces.reduce(0) { $0 + $1.plugins.count }) plugins locaux recensés")
-                    issues += (plugins.marketplaceLoadErrors ?? []).map { "\($0.marketplacePath) : \($0.message)" }
-                } else { issues.append("Format plugin/list non reconnu.") }
-            case .unavailable(let reason): issues.append("Plugins : " + reason)
-            }
-            message = notes.joined(separator: "\n")
-        }
+        catalog.refresh(context: context)
     }
 }

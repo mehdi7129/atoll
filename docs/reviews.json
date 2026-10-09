@@ -788,6 +788,121 @@
         "Scripts/test-hook-settings-sabotage.py",
         "Scripts/test-hook-installation.py"
       ]
+    },
+    {
+      "date": "2026-10-08",
+      "document": "docs/REVIEW-2026-10-08-plugins.md",
+      "depth": "line-by-line",
+      "note": "Lecture intégrale explicitement attestée par le rapport plugins ; garde des générations, ownership, file et cache. Les panneaux consommateurs restent une relecture ciblée.",
+      "files": [
+        "App/PluginInventory.swift",
+        "App/CodexCatalogState.swift",
+        "App/CodexCatalogSection.swift"
+      ]
+    },
+    {
+      "date": "2026-10-08",
+      "document": "docs/REVIEW-2026-10-08-audit-completion.md",
+      "depth": "sweep",
+      "note": "Contre-reviews ciblées de la mémoire, des permissions, du feedback et des raccordements UI plugins. Défauts adjacents ENOTCONN, offset JSONL et ordre des jumps reproduits et corrigés avec sabotages compilés. Ne revendique pas une lecture intégrale des grands services.",
+      "files": [
+        "App/MemoryIndexer.swift",
+        "AtollCore/Sources/AtollCore/MemoryIndex.swift",
+        "AtollCore/Tests/AtollCoreTests/MemoryDocumentTests.swift",
+        "Scripts/test-memory-indexer.py",
+        "Scripts/test-memory-document-sabotage.py",
+        "Scripts/memory-index-tests/Main.swift",
+        "App/InteractionCenter.swift",
+        "App/SessionStore.swift",
+        "App/BridgeServer.swift",
+        "App/AppDelegate.swift",
+        "AtollCore/Sources/AtollCore/SessionPhase.swift",
+        "Scripts/test-claude-permissions.py",
+        "Scripts/claude-permission-tests/Main.swift",
+        "Scripts/claude-permission-tests/Stubs.swift",
+        "App/SoundCenter.swift",
+        "App/TerminalJumpService.swift",
+        "App/RetrospectiveRunner.swift",
+        "App/LearningSettingsPane.swift",
+        "Scripts/test-feedback.py",
+        "Scripts/feedback-tests/Main.swift",
+        "Scripts/learning-tests/RetrospectiveMain.swift",
+        "App/ClaudeCodeSettingsPane.swift",
+        "App/CodexSettingsPane.swift",
+        "Scripts/test-plugin-services.py",
+        "Scripts/plugin-tests/Main.swift",
+        "Scripts/plugin-tests/Stubs.swift",
+        "Scripts/plugin-tests/fake-cli.py"
+      ]
+    },
+    {
+      "date": "2026-10-08",
+      "document": "docs/AUDIT-2026-10-08-robustesse-simplicite.md",
+      "depth": "sweep",
+      "note": "Audit transversal à quatre agents maximum, approfondissement des chemins à risque, reproductions synthétiques et contre-revues. 17 sujets proposés, aucun changement produit. Ne revendique pas une lecture ligne à ligne exhaustive ; preuves et limites dans le rapport.",
+      "files": [
+        "App/NotesCurationService.swift",
+        "AtollCore/Sources/AtollCore/LearnedSkillStore.swift",
+        "App/MemoryIndexer.swift",
+        "AtollCore/Sources/AtollCore/MemoryIndex.swift",
+        "App/InteractionCenter.swift",
+        "App/SessionStore.swift",
+        "AtollCore/Sources/AtollCore/SoundHookEditor.swift",
+        "AtollCore/Sources/AtollCore/HookSettingsEditor.swift",
+        "App/FleetPoller.swift",
+        "App/RetrospectiveRunner.swift",
+        "App/HookInstaller.swift",
+        "App/ModelQuotaPoller.swift",
+        "App/PluginInventory.swift",
+        "App/SoundCenter.swift",
+        "App/TerminalJumpService.swift"
+      ]
+    },
+    {
+      "date": "2026-10-08",
+      "document": "docs/REVIEW-2026-10-08-counteraudit.md",
+      "depth": "sweep",
+      "note": "Contre-audit de PR8, perimetres permutes : A04 elargi et cinq oublis A18–A22, dont harness hors ligne en echec et faux succes de sabotage. Couverture exacte et limites dans le rapport ; aucun correctif produit.",
+      "files": [
+        "App/MemoryIndexer.swift",
+        "AtollCore/Sources/AtollCore/MemoryIndex.swift",
+        "AtollCore/Sources/AtollCore/LearnedSkillStore.swift",
+        "App/SkillReviewCenter.swift",
+        "App/CodexCatalogSection.swift",
+        "App/CodexSettingsPane.swift",
+        "Bridge/CodexBridge.swift",
+        "Bridge/main.swift",
+        "AtollCore/Sources/AtollCore/CodexReadClient.swift",
+        "Scripts/test-codex-exec.py",
+        "Scripts/release.sh",
+        "Scripts/test-release-trash.py",
+        "Scripts/test-claude-uninstall.py"
+      ]
+    },
+    {
+      "date": "2026-10-09",
+      "document": "docs/REVIEW-2026-10-08-audit-completion.md",
+      "depth": "sweep",
+      "note": "Contre-relecture ciblée du plan offline, des dépendances et verdicts, des droits et artefacts CI et du DerivedData privé. Descendant survivant au timeout reproduit, corrigé et vérifié par nominal et mutant Python compilé/exécuté ; huit contre-épreuves passent. Aucune qualification de CI distante ni nouvelle release.",
+      "files": [
+        "Scripts/validate-offline.py",
+        "Scripts/test-offline-validation.py",
+        ".github/workflows/validation.yml",
+        "Scripts/release.sh",
+        "Scripts/test-release-trash.py"
+      ]
+    },
+    {
+      "date": "2026-10-09",
+      "document": "docs/REVIEW-2026-10-09-ui-refresh.md",
+      "depth": "line-by-line",
+      "note": "Harness GUI A16/A20 relu intégralement, deux vrais écrans montés et trois mutants compilés ; cette entrée ne revendique pas une nouvelle relecture complète du code produit.",
+      "files": [
+        "Scripts/test-ui-refresh.py",
+        "Scripts/ui-refresh-tests/Fixture.swift",
+        "Scripts/ui-refresh-tests/Probe.swift",
+        "Scripts/ui-refresh-tests/RunnerExtension.swift.inc"
+      ]
     }
   ]
 }

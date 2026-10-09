@@ -44,15 +44,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // (revue) : `repairIfInstalled` relit ce fichier pour décider si
         // UserPromptSubmit est bloquant — l'écrire après faisait réécrire
         // settings.json deux fois de suite, dans deux modes opposés.
-        LearningSettings.shared.syncProactiveRecall()
-
-        // Répare le wrapper ~/.atoll/bin si l'app a été déplacée (idempotent).
-        HookInstaller.repairIfInstalled()
-
-        // Récupération après crash / relance : le parking des règles deny doit
-        // TOUJOURS refléter le niveau d'autonomie courant (jamais de règles
-        // parquées hors Rockstar, jamais de règles actives en Rockstar).
-        HookInstaller.syncDenyParking(level: InteractionCenter.shared.autonomyLevel)
+        Task { @MainActor in
+            await LearningSettings.shared.syncProactiveRecall()
+            // L'ordre config → réparation → réconciliation reste séquentiel.
+            await HookInstaller.repairIfInstalled()
+            await HookInstaller.syncDenyParking(level: InteractionCenter.shared.autonomyLevel)
+        }
 
         // Le menu « Bienvenue… » demande l'onboarding via cette notif (le cast
         // NSApp.delegate as? AppDelegate échoue avec @NSApplicationDelegateAdaptor).
@@ -84,7 +81,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let store = SessionStore.shared
         let server = BridgeServer(
             onEvent: { event, requestID in
-                Task { @MainActor in
+                MainActor.assumeIsolated {
                     // apply() AVANT register() : la machine à états pose d'abord
                     // waitingPermission ; si register auto-approuve (rockstar/auto),
                     // il ré-avance la phase — sinon la carte reste en attente.
@@ -103,6 +100,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 Task { @MainActor in
                     SessionStore.shared.serverRunning = running
                 }
+            },
+            onPendingExpired: { requestID in
+                MainActor.assumeIsolated { InteractionCenter.shared.pendingExpired(requestID) }
             }
         )
         bridgeServer = server

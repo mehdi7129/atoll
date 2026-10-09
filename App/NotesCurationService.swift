@@ -60,7 +60,7 @@ final class NotesCurationService {
     @ObservationIgnored private var process: Process?
     /// Cause exacte du dernier échec de sous-processus (affichée telle quelle).
     @ObservationIgnored private var spawnFailure: String?
-    @ObservationIgnored private var timeoutTask: Task<Void, Never>?
+    @ObservationIgnored private var outputTask: Task<BoundedProcessRunner.Result, Never>?
     @ObservationIgnored private var schedulerTask: Task<Void, Never>?
     @ObservationIgnored private var cycleTask: Task<Void, Never>?
     @ObservationIgnored private var runGeneration = UUID()
@@ -197,13 +197,39 @@ final class NotesCurationService {
             // lancée consomme son échéance ; une préparation attend 30 min.
             recordOutcome("analyse annulée", touched: false)
         }
-        timeoutTask?.cancel()
-        timeoutTask = nil
+        outputTask?.cancel()
+        outputTask = nil
         terminateWithEscalation()
         if process == nil { phase = .idle }
     }
 
+    /// Une collecte bornée peut rendre la main sans pouvoir tuer un enfant
+    /// dont l’identité est devenue illisible. Il reste propriétaire du budget
+    /// et du PID jusqu’à sa sortie réelle, sans bloquer le MainActor.
+    private func finishExecution(_ lease: UUID) {
+        let outcome = lastOutcome ?? "cancelled"
+        let release = {
+            if let process = self.process {
+                SessionStore.shared.unregisterInternalPid(process.processIdentifier)
+            }
+            self.process = nil
+            self.processIdentity = nil
+            AnalysisBudget.shared.finish(lease, outcome: outcome)
+            self.activeExecution = nil
+            self.activeLease = nil
+        }
+        if let process, process.isRunning {
+            Task { @MainActor in
+                while process.isRunning { try? await Task.sleep(for: .milliseconds(100)) }
+                release()
+            }
+        } else {
+            release()
+        }
+    }
+
     private func terminateWithEscalation() {
+        outputTask?.cancel()
         guard let identity = processIdentity else { return }
         ProcessInspector.signal(SIGTERM, to: identity)
         Task.detached(priority: .utility) {
@@ -263,16 +289,13 @@ final class NotesCurationService {
         }
         activeExecution = execution
         activeLease = lease
-        defer {
-            AnalysisBudget.shared.finish(lease, outcome: lastOutcome ?? "cancelled")
-            activeExecution = nil
-            activeLease = nil
-        }
+        defer { finishExecution(lease) }
         let provider = execution.provider
         let userPrompt = NotesCurationPrompt.userPrompt(notes: notes)
         AnalysisBudget.shared.updateMetrics(lease, promptCharacters: provider == .codex
             ? CodexExecPlan.fullPrompt(system: NotesCurationPrompt.systemPrompt, user: userPrompt).count
             : NotesCurationPrompt.systemPrompt.count + userPrompt.count)
+        let deadline = ContinuousClock.now.advanced(by: .seconds(Self.timeoutSeconds))
         var parsed: NotesCurationOutput?
         switch provider {
         case .claude:
@@ -287,7 +310,7 @@ final class NotesCurationService {
             }
             defer { launch.cleanUp() }
             guard let output = await spawnShell(command: launch.shellCommand, generation: generation,
-                                                workingDirectory: launch.workspace) else {
+                                                workingDirectory: launch.workspace, deadline: deadline) else {
                 guard runGeneration == generation else { return }
                 finish(outcome: spawnFailure ?? "échec du lancement de l'analyse", touched: false)
                 return
@@ -314,7 +337,7 @@ final class NotesCurationService {
             }
             defer { launch.cleanUp() }
             guard runGeneration == generation, !Task.isCancelled else { return }
-            guard await spawnShell(command: launch.shellCommand, generation: generation, workingDirectory: launch.workspace) != nil else {
+            guard await spawnShell(command: launch.shellCommand, generation: generation, workingDirectory: launch.workspace, deadline: deadline) != nil else {
                 guard runGeneration == generation else { return }
                 finish(outcome: spawnFailure ?? "échec du lancement de l'analyse", touched: false)
                 return
@@ -965,7 +988,8 @@ final class NotesCurationService {
     /// stdout n'est qu'un journal d'événements — le rapport est dans le fichier
     /// de `--output-last-message` —, mais le non-`nil` reste le signal
     /// « le process est allé au bout avec exit 0 ».
-    private func spawnShell(command shellCommand: String, generation: UUID, workingDirectory: URL?) async -> Data? {
+    private func spawnShell(command shellCommand: String, generation: UUID, workingDirectory: URL?,
+                            deadline: ContinuousClock.Instant) async -> Data? {
         guard runGeneration == generation, !Task.isCancelled else { return nil }
         guard readState() != nil else { spawnFailure = lastOutcome; return nil }
         guard let lease = activeLease, let execution = activeExecution,
@@ -993,6 +1017,10 @@ final class NotesCurationService {
         spawnFailure = nil
         // La dépense commence ICI, pas au cycle : c'est ce qui borne la
         // tolérance « quota inconnu ».
+        guard BoundedProcessRunner.remaining(until: deadline) > 0 else {
+            spawnFailure = "La préparation de l’analyse a dépassé son délai."
+            return nil
+        }
         do {
             try AnalysisBudget.shared.prepareToLaunch(lease)
             processIdentity = try ProcessInspector.launchOwned(process)
@@ -1010,57 +1038,27 @@ final class NotesCurationService {
         SessionStore.shared.registerInternalPid(pid)
         log.info("curation lancée (pid \(pid))")
 
-        timeoutTask = Task {
-            try? await Task.sleep(for: .seconds(Self.timeoutSeconds))
-            guard !Task.isCancelled else { return }
-            log.error("curation (pid \(pid)) : timeout — SIGTERM")
-            if let identity { ProcessInspector.signal(SIGTERM, to: identity) }
-            try? await Task.sleep(for: .seconds(5))
-            guard !Task.isCancelled else { return }
-            if let identity { ProcessInspector.signal(SIGKILL, to: identity) }
+        outputTask = Task {
+            await BoundedProcessRunner.collect(process: process, stdout: stdout, stderr: stderr,
+                identity: identity, deadline: deadline, stdoutCap: Self.stdoutCapBytes,
+                stderrCap: 2000, terminationGrace: 5)
         }
-
-        // Les DEUX pipes sont drainés EN PARALLÈLE (revue) : les lire l'un
-        // après l'autre laissait `claude` bloqué dans un `write` sur stderr
-        // plein (~64 Ko) — stdout ne se fermait jamais, le lecteur n'atteignait
-        // jamais EOF, et il fallait attendre le timeout de 10 minutes. Même
-        // raison au-delà du cap : on continue de lire en JETANT, on ne cesse
-        // jamais de vider le tuyau.
-        async let outputTask: Data = Task.detached(priority: .utility) {
-            var collected = Data()
-            var overflowed = false
-            let handle = stdout.fileHandleForReading
-            while let chunk = try? handle.read(upToCount: 1 << 16), !chunk.isEmpty {
-                if overflowed { continue }
-                collected.append(chunk)
-                if collected.count > Self.stdoutCapBytes { overflowed = true }
-            }
-            return collected
-        }.value
-        async let errorTask: String = Task.detached(priority: .utility) {
-            let data = BoundedProcessOutput.drain(stderr.fileHandleForReading, cap: 2000, tail: true)
-            return String(decoding: data.suffix(2000), as: UTF8.self)
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-        }.value
-        let output = await outputTask
-        let errorTail = await errorTask
+        let result = await outputTask!.value
+        let output = result.stdout
+        let errorTail = String(decoding: result.stderr, as: UTF8.self)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         AnalysisBudget.shared.recordUsage(lease, stdout: output)
+        outputTask = nil
 
-        // Hors MainActor : `waitUntilExit` boucle en attendant le SIGCHLD.
-        await Task.detached(priority: .utility) { process.waitUntilExit() }.value
-        timeoutTask?.cancel()
-        timeoutTask = nil
-        SessionStore.shared.unregisterInternalPid(pid)
-        self.process = nil
-        processIdentity = nil
         guard runGeneration == generation, !Task.isCancelled else { return nil }
 
-        guard process.terminationStatus == 0 else {
-            log.error("curation (pid \(pid)) : exit \(process.terminationStatus) — \(errorTail, privacy: .public)")
+        let status = result.status ?? -1
+        guard result.succeeded else {
+            log.error("curation (pid \(pid)) : exit \(status) — \(errorTail, privacy: .public)")
             // La CAUSE au lieu d'un « échec du lancement » générique : dépassement
             // de budget, timeout (SIGTERM = 143) et binaire introuvable
             // envoyaient exactement le même message, qui désignait le PATH.
-            spawnFailure = "l'analyse a échoué (exit \(process.terminationStatus))"
+            spawnFailure = (result.timedOut ? "l'analyse a dépassé son délai" : "l'analyse a échoué (exit \(status))")
                 + (errorTail.isEmpty ? "" : " — \(errorTail.prefix(120))")
             return nil
         }

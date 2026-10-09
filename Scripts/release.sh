@@ -18,7 +18,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # DerivedData HORS du Bureau (iCloud tamponne des xattrs qui cassent CodeSign).
-DD="$HOME/Library/Developer/Atoll-DerivedData"
+DD="${ATOLL_RELEASE_DERIVED_DATA:-$HOME/Library/Developer/Atoll-DerivedData}"
 PROFILE="atoll-notary"
 IDENTITY="Developer ID Application"
 cd "$ROOT"

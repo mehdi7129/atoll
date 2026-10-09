@@ -22,6 +22,7 @@ final class BridgeServer: @unchecked Sendable {
     /// Connexions PermissionRequest gardées ouvertes en attendant la décision
     /// de l'îlot (requestID → fd du helper bloqué).
     private var pendingReplies: [String: Int32] = [:]
+    private var pendingHelpers: [String: DispatchSourceProcess] = [:]
 
     /// Appelés sur la main queue. requestID non-nil = PermissionRequest en
     /// attente de décision via reply()/cancelPending().
@@ -56,6 +57,7 @@ final class BridgeServer: @unchecked Sendable {
     func reply(_ requestID: String, decision: Data) {
         queue.async { [weak self] in
             guard let self, let fd = self.pendingReplies.removeValue(forKey: requestID) else { return }
+            self.pendingHelpers.removeValue(forKey: requestID)?.cancel()
             // Le helper est garanti bloqué en lecture : on repasse le fd en
             // bloquant pour ne jamais tronquer la décision sur EAGAIN.
             let flags = fcntl(fd, F_GETFL)
@@ -82,6 +84,7 @@ final class BridgeServer: @unchecked Sendable {
     func cancelPending(_ requestID: String) {
         queue.async { [weak self] in
             guard let self, let fd = self.pendingReplies.removeValue(forKey: requestID) else { return }
+            self.pendingHelpers.removeValue(forKey: requestID)?.cancel()
             close(fd)
             log.info("requête \(requestID, privacy: .public) rendue au terminal")
         }
@@ -166,6 +169,8 @@ final class BridgeServer: @unchecked Sendable {
                 close(fd)
             }
             pendingReplies.removeAll()
+            for watcher in pendingHelpers.values { watcher.cancel() }
+            pendingHelpers.removeAll()
             acceptSource?.cancel()
             acceptSource = nil
             listenFD = -1
@@ -326,6 +331,7 @@ final class BridgeServer: @unchecked Sendable {
             }
             log.info("permission en attente \(requestID, privacy: .public) — \(event.toolSummary ?? event.toolName ?? "?", privacy: .public)")
             DispatchQueue.main.async { self.onEvent(event, requestID) }
+            watchPendingHelper(requestID, fd: fd)
             return
         }
 
@@ -340,7 +346,36 @@ final class BridgeServer: @unchecked Sendable {
         }
     }
 
-    /// Le filet de temps s'est déclenché : plus PERSONNE n'attend derrière ce
+    /// Le half-close du socket est normal : seul le processus client peut
+    /// prouver la fin de CETTE demande. Aucun timer ni signal n'est nécessaire.
+    private func watchPendingHelper(_ requestID: String, fd: Int32) {
+        var pid: pid_t = 0
+        var size = socklen_t(MemoryLayout<pid_t>.size)
+        let peerResult = getsockopt(fd, SOL_LOCAL, LOCAL_PEERPID, &pid, &size)
+        guard peerResult == 0, pid > 1 else {
+            // Un client déjà sorti peut avoir fermé la connexion avant cette
+            // lecture : ENOTCONN prouve sa fermeture, contrairement à l'EOF
+            // du half-close normal ou à une autre erreur d'identification.
+            if peerResult == -1, errno == ENOTCONN { pendingRepliesTimeout(requestID) }
+            return
+        }
+        guard let identity = ProcessIdentity.current(of: pid) else {
+            if kill(pid, 0) == -1, errno == ESRCH { pendingRepliesTimeout(requestID) }
+            return
+        }
+        let watcher = DispatchSource.makeProcessSource(identifier: pid, eventMask: .exit, queue: queue)
+        watcher.setEventHandler { [weak self] in self?.pendingRepliesTimeout(requestID) }
+        pendingHelpers[requestID] = watcher
+        watcher.resume()
+        // Fermer la course où le helper meurt entre la lecture et l'abonnement.
+        if let current = ProcessIdentity.current(of: pid) {
+            if current != identity { pendingRepliesTimeout(requestID) }
+        } else if kill(pid, 0) == -1, errno == ESRCH {
+            pendingRepliesTimeout(requestID)
+        }
+    }
+
+    /// Le helper est sorti ou son délai a expiré : personne n'attend derrière ce
     /// descripteur.
     ///
     /// ⚠️ FERMER LE FD NE SUFFIT PAS, et c'est le trou que Codex a relevé en
@@ -349,6 +384,7 @@ final class BridgeServer: @unchecked Sendable {
     /// donc le centre d'interaction, qui la retire.
     private func pendingRepliesTimeout(_ requestID: String) {
         guard let fd = pendingReplies.removeValue(forKey: requestID) else { return }
+        pendingHelpers.removeValue(forKey: requestID)?.cancel()
         close(fd)
         log.info("attente \(requestID, privacy: .public) expirée — descripteur fermé")
         let notify = onPendingExpired

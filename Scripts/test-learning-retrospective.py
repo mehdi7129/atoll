@@ -8,9 +8,12 @@ import tempfile
 
 repo = Path(__file__).resolve().parent.parent
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument("--sabotage", choices=["checkpoint", "counts", "material", "dedup", "recovery-progress", "recovery-independent", "reader", "usage", "digest-metrics"])
+parser.add_argument("--sabotage", choices=["checkpoint", "counts", "material", "dedup", "recovery-progress", "recovery-independent", "reader", "usage", "digest-metrics", "journal-revision", "notes-revision"])
+parser.add_argument("--build-dir", type=Path, help="Réutiliser un produit Core Debug existant.")
 args = parser.parse_args()
 mutations = {
+    "journal-revision": ("journalRevision &+= 1", "journalRevision &+= 0", "A16 journal non notifié", 1),
+    "notes-revision": ("self?.notesRevision &+= 1", "self?.notesRevision &+= 0", "A16 notes non notifiées", 2),
     "usage": ("AnalysisBudget.shared.recordUsage(lease, stdout: output)", "()",
               "usage du runner absent du journal", 1),
     "digest-metrics": ("AnalysisBudget.shared.updateMetrics(lease, digestFragmentsShortened: digest.fragmentsShortened,\n            digestEntriesDropped: digest.entriesDropped, digestSourceReadStopped: digest.sourceReadStopped)",
@@ -29,9 +32,13 @@ mutations = {
     "dedup": ("let filtered = novelReport(report, project: job.snapshot.cwd, destination: destination)", "let filtered = report",
               "doublons de sortie non filtrés", 1),
 }
-base = ["--package-path", str(repo / "AtollCore"), "--build-system", "native"]
-subprocess.run(["swift", "build", *base, "--jobs", "4"], check=True)
-build = Path(subprocess.check_output(["swift", "build", *base, "--show-bin-path"], text=True).strip())
+if args.build_dir:
+    build = args.build_dir.resolve()
+else:
+    base = ["--package-path", str(repo / "AtollCore"), "--build-system", "native"]
+    subprocess.run(["swift", "build", *base, "--jobs", "4"], check=True)
+    build = Path(subprocess.check_output(["swift", "build", *base, "--show-bin-path"], text=True).strip())
+
 with tempfile.TemporaryDirectory(prefix="atoll-retrospective-regression-") as name:
     root = Path(name)
     source = repo / "App/RetrospectiveRunner.swift"

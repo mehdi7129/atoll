@@ -22,25 +22,35 @@ enum TerminalJumpService {
         case failed(String)
     }
 
-    private static let queue = DispatchQueue(label: "dev.mehdiguiard.atoll.jump", qos: .userInitiated)
+    @MainActor private static var pendingJump: Task<Void, Never>?
+    @MainActor private static var jumpGeneration = UUID()
 
     /// Lance le jump hors du thread principal et rappelle `completion` sur le main.
     @MainActor
     static func jump(to anchor: TerminalAnchor, completion: @escaping @MainActor (Result) -> Void) {
         let kind = TerminalResolver.resolve(anchor)
-        queue.async {
-            let result = perform(kind: kind, anchor: anchor)
-            DispatchQueue.main.async { completion(result) }
+        let previous = pendingJump
+        let generation = UUID()
+        jumpGeneration = generation
+        pendingJump = Task {
+            // Conserver l'ordre de l'ancienne queue série : un premier jump
+            // plus lent ne doit pas reprendre le focus après le suivant.
+            await previous?.value
+            let result = await Task.detached(priority: .userInitiated) {
+                await perform(kind: kind, anchor: anchor)
+            }.value
+            completion(result)
+            if jumpGeneration == generation { pendingJump = nil }
         }
     }
 
     // MARK: - Exécution (hors main thread)
 
-    private static func perform(kind: TerminalKind, anchor: TerminalAnchor) -> Result {
+    private static func perform(kind: TerminalKind, anchor: TerminalAnchor) async -> Result {
         log.info("jump vers \(kind.displayName, privacy: .public) (tmux: \(anchor.isTmux))")
         switch kind {
         case .vscodeFamily(let cli):
-            return focusIDE(cli: cli, kind: kind, anchor: anchor)
+            return await focusIDE(cli: cli, kind: kind, anchor: anchor)
         case .terminalApp:
             return focusViaAppleScript(
                 bundleID: "com.apple.Terminal", appName: "Terminal",
@@ -60,9 +70,12 @@ enum TerminalJumpService {
 
     // MARK: - VS Code / Cursor (aucune permission requise)
 
-    private static func focusIDE(cli: String, kind: TerminalKind, anchor: TerminalAnchor) -> Result {
+    static func focusIDE(cli: String, kind: TerminalKind, anchor: TerminalAnchor,
+                         resolveCLI: (String, String?) -> String? = resolveIDECLI,
+                         activate: (String?) -> Bool = activateBundle,
+                         timeout: TimeInterval = 5) async -> Result {
         if let cwd = anchor.cwd,
-           let cliPath = resolveIDECLI(cli: cli, bundleID: anchor.bundleID) {
+           let cliPath = resolveCLI(cli, anchor.bundleID) {
             // Viser la RACINE du workspace (plus proche ancêtre avec .git), pas le
             // cwd brut : `-r` sur un sous-dossier détournerait une autre fenêtre.
             let root = WorkspaceRoot.resolve(cwd: cwd) { path in
@@ -71,14 +84,14 @@ enum TerminalJumpService {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: cliPath)
             process.arguments = ["-r", root]
-            process.standardOutput = FileHandle.nullDevice
-            process.standardError = FileHandle.nullDevice
-            if (try? process.run()) != nil {
-                activateBundle(anchor.bundleID)
-                return .focused(kind.displayName, granularity: "fenêtre")
+            let result = try? await BoundedProcessRunner.run(process, timeout: timeout)
+            if result?.succeeded == true, activate(anchor.bundleID) {
+                // Le CLI a accepté la cible, mais ne prouve pas quelle fenêtre
+                // est devant. Seule l’activation de l’app est confirmée.
+                return .focused(kind.displayName, granularity: "app")
             }
         }
-        if activateBundle(anchor.bundleID) {
+        if activate(anchor.bundleID) {
             return .focused(kind.displayName, granularity: "app")
         }
         return .failed("Impossible de focuser \(kind.displayName).")
