@@ -5,6 +5,13 @@ import time
 from pathlib import Path
 root = Path(os.environ['ATOLL_PROCESS_ROOT'])
 verb = sys.argv[1]
+if (root / ('block-' + verb)).exists():
+    (root / ('ready-' + verb)).touch()
+    deadline = time.monotonic() + 10
+    while not (root / ('release-' + verb)).exists():
+        if time.monotonic() >= deadline:
+            raise SystemExit('Barrière de fixture non libérée')
+        time.sleep(.005)
 if os.environ.get('ATOLL_PROCESS_NO_IDENTITY') == '1':
     with (root / 'probe-launches').open('a') as out:
         out.write('spawn\n')

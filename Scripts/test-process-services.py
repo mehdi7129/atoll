@@ -23,10 +23,9 @@ inputs = ['App/FleetPoller.swift', 'App/ModelQuotaPoller.swift', 'App/HookInstal
 report = {'source_sha256': {p: hashlib.sha256((repo / p).read_bytes()).hexdigest() for p in inputs}, 'scenarios': []}
 with tempfile.TemporaryDirectory(prefix='atoll-process-services-') as temporary:
     root = Path(temporary)
-    source = repo / 'App/HookInstaller.swift'
+    source = root / 'HookInstaller.swift'
+    text = (repo / 'App/HookInstaller.swift').read_text()
     if args.sabotage and not args.sabotage.endswith('ownership'):
-        source = root / 'HookInstaller.swift'
-        text = (repo / 'App/HookInstaller.swift').read_text()
         needle, replacement = {
             'heartbeat': ('let result = try await BoundedProcessRunner.run(process, timeout: timeout,',
                           'Thread.sleep(forTimeInterval: 0.4)\n            let result = try await BoundedProcessRunner.run(process, timeout: timeout,'),
@@ -37,7 +36,16 @@ with tempfile.TemporaryDirectory(prefix='atoll-process-services-') as temporary:
                         'if let tail { await tail.value }'),
         }[args.sabotage]
         assert text.count(needle) == 1
-        source.write_text(text.replace(needle, replacement))
+        text = text.replace(needle, replacement)
+    # Témoins dans la copie compilée : prouver l'entrée des appels et de la
+    # barrière, sans supposer que créer une Task suffit à l'avoir exécutée.
+    needle = 'guard !CodexPreview.enabled else { return }'
+    assert text.count(needle) == 1
+    text = text.replace(needle, 'HookFixtureProbe.calls.append(verb)\n        ' + needle)
+    needle = 'static func waitForPendingOperation() async {'
+    assert text.count(needle) == 1
+    text = text.replace(needle, needle + '\n        HookFixtureProbe.barrierEntered = true')
+    source.write_text(text)
     objects = sorted((args.build_dir / 'AtollCore.build').glob('*.o'))
     assert objects
     fleet, keychain = repo / 'App/FleetPoller.swift', repo / 'App/ModelQuotaPoller.swift'
