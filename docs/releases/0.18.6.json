@@ -1,0 +1,336 @@
+{
+  "status": "passed",
+  "version": "0.18.6",
+  "build": "41",
+  "sourceCommit": "3e10e8041510211f288ee1c7890c1206ba64c992",
+  "featureCommit": "9eaa69d1aacece461b30fcfad7a86fb09c0984f6",
+  "mergeCommit": "3e10e8041510211f288ee1c7890c1206ba64c992",
+  "pullRequest": "https://github.com/mehdi7129/atoll/pull/17",
+  "featurePullRequests": [
+    "https://github.com/mehdi7129/atoll/pull/14",
+    "https://github.com/mehdi7129/atoll/pull/15",
+    "https://github.com/mehdi7129/atoll/pull/16"
+  ],
+  "releaseURL": "https://github.com/mehdi7129/atoll/releases/tag/v0.18.6",
+  "publishedAt": "2026-10-09T08:52:11Z",
+  "tagCommitVerified": "3e10e8041510211f288ee1c7890c1206ba64c992",
+  "checks": {
+    "app": "Developer ID verified",
+    "helper": "Developer ID verified",
+    "sparkleComponents": "5 Developer ID components verified",
+    "hardenedRuntime": "all 7 executable components verified",
+    "entitlements": "get-task-allow absent; app automation.apple-events only",
+    "appStaple": "valid",
+    "dmgStaple": "valid",
+    "gatekeeper": "app, dmg and patched app accepted",
+    "sparkleEdDSA": "6 enclosures verified; 6 modified copies rejected",
+    "deliveredBytes": "7 public downloads match validated local SHA256 and lengths"
+  },
+  "architectures": [
+    "x86_64",
+    "arm64"
+  ],
+  "assets": [
+    {
+      "name": "Atoll-0.18.6.zip",
+      "bytes": 8801151,
+      "sha256": "78dcde5104036d17ac9344bf8ea3c6ed6247a5dcd011aa9d0d29d1ab459b9308",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.18.6/Atoll-0.18.6.zip"
+    },
+    {
+      "name": "Atoll41-40.delta",
+      "bytes": 1876774,
+      "sha256": "1f337de586ef064a3aefe6baa1b31f55d432074a3783b36538021b4f2aa1b1ed",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.18.6/Atoll41-40.delta"
+    },
+    {
+      "name": "Atoll41-39.delta",
+      "bytes": 1877282,
+      "sha256": "0c4f5e48b2c734a1811fe1263c98a10646f5314fdd3af558dcb901bdf12a89d3",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.18.6/Atoll41-39.delta"
+    },
+    {
+      "name": "Atoll41-38.delta",
+      "bytes": 1885302,
+      "sha256": "3aa953fb00cb3717e9fd733749e21e5debb61f1d2d3756289d28459f39f3a873",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.18.6/Atoll41-38.delta"
+    },
+    {
+      "name": "Atoll41-37.delta",
+      "bytes": 4239102,
+      "sha256": "72a9a230b6b7c20059f05c815adec0976c7cb9668700163c967d1badcbbae293",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.18.6/Atoll41-37.delta"
+    },
+    {
+      "name": "Atoll41-36.delta",
+      "bytes": 4336974,
+      "sha256": "d9fbd9a00a2e7cdd8b770a443d3222346b90e753e82f1666d182b27f768c2f08",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.18.6/Atoll41-36.delta"
+    },
+    {
+      "name": "Atoll-0.18.6.dmg",
+      "bytes": 9748492,
+      "sha256": "c2696db2f0a6b90e010241f3ee456b6692ee3db6f1a8a0de14d2065709873f71",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.18.6/Atoll-0.18.6.dmg"
+    }
+  ],
+  "notarization": {
+    "app": {
+      "submissionID": "c42eb6ca-e80a-4ed8-b874-28e3c2b1f4f9",
+      "status": "Accepted"
+    },
+    "dmg": {
+      "submissionID": "96c85687-f2ea-4bf7-aefa-f0dbe7b72d54",
+      "status": "Accepted"
+    }
+  },
+  "sparkleEdDSA": {
+    "publicKeySource": "SHA256-verified published 0.18.5 ZIP",
+    "enclosures": [
+      {
+        "name": "Atoll-0.18.6.zip",
+        "verified": true,
+        "modifiedCopyRejected": true
+      },
+      {
+        "name": "Atoll41-40.delta",
+        "verified": true,
+        "modifiedCopyRejected": true
+      },
+      {
+        "name": "Atoll41-39.delta",
+        "verified": true,
+        "modifiedCopyRejected": true
+      },
+      {
+        "name": "Atoll41-38.delta",
+        "verified": true,
+        "modifiedCopyRejected": true
+      },
+      {
+        "name": "Atoll41-37.delta",
+        "verified": true,
+        "modifiedCopyRejected": true
+      },
+      {
+        "name": "Atoll41-36.delta",
+        "verified": true,
+        "modifiedCopyRejected": true
+      }
+    ]
+  },
+  "deltaUpgrade": {
+    "fromBuild": "40",
+    "toBuild": "41",
+    "patch": "Atoll41-40.delta",
+    "sourceArchiveMatchesPublishedSHA256": true,
+    "filesLinksModesAndSizesEqualFullArchive": true,
+    "comparedObjects": 134,
+    "codesign": "verified",
+    "staple": "valid",
+    "gatekeeper": "accepted",
+    "appLaunched": false
+  },
+  "dmgBundle": {
+    "readOnlyMountComparedToFullZIP": true,
+    "filesLinksModesAndSizesEqualFullArchive": true,
+    "comparedObjects": 134,
+    "detached": true
+  },
+  "publicDownloads": {
+    "checkedAt": "2026-10-09T08:54:12.502030+00:00",
+    "enclosuresHTTP200": 18,
+    "dmgHTTP200": true,
+    "downloadedSHA256Matches": 7,
+    "oldFeedPreservedUntilAssetVerification": true,
+    "beforeFeedFinishedAt": "2026-10-09T08:52:19.468949+00:00"
+  },
+  "validation": {
+    "featureCodeUnchangedAtRelease": true,
+    "productTrees": {
+      "App": "c546e2cc04f05640490440601ab22fa86371bfbe",
+      "AtollCore/Sources": "333e8b3736f26048b26dd7a878c146a8cd48da0a",
+      "Bridge": "2d8cd55ba36f0c0217d2244eab4460eb82040fda",
+      "Shared": "a0d6507832a7d24b5898de84e7207dcb0004519e"
+    },
+    "coreDebug": {
+      "executed": 1131,
+      "skipped": 1,
+      "failures": 0
+    },
+    "coreRelease": {
+      "executed": 1131,
+      "skipped": 1,
+      "failures": 0
+    },
+    "coreReleaseHistory": {
+      "initial_failed_attempt": {
+        "executed": 1131,
+        "skipped": 1,
+        "failures": 6,
+        "evidence": "core-release-final.log",
+        "sha256": "b258f20073ccc51b53e28f14485921d09d25d80dd4df27e950a3838a25fc70ff",
+        "failed_tests": [
+          "AtollCoreTests.BoundedProcessRunnerTests testParallelLargeStreamsAreDrainedWithStrictCaps",
+          "AtollCoreTests.BoundedProcessRunnerTests testParentExitCannotLeaveDrainWaitingOnSilentDescendant",
+          "AtollCoreTests.BoundedProcessRunnerTests testTermIgnoredEscalatesAndReturnsWithinDeadline",
+          "AtollCoreTests.CodexAccountClientTests testCancellationAfterLaunchSendsNoInitialize",
+          "AtollCoreTests.TaskCompletionTests testUnmatchedBracketsStayCheap"
+        ]
+      },
+      "targeted_unchanged_rerun": {
+        "executed": 8,
+        "skipped": 0,
+        "failures": 0,
+        "evidence": "core-release-timing-recheck.log",
+        "sha256": "b07e80afac53f2cab0fd5f84ab8224f60457bfec9959902ff789bf7c5e99dde8"
+      },
+      "resolution": "Timing failures under observed host contention; targeted and complete reruns passed without source changes."
+    },
+    "offlineFull": {
+      "planned_steps": 120,
+      "passed_first_attempt": 119,
+      "passed_after_harness_fix": 1,
+      "unresolved": 0,
+      "raw_status": "failed",
+      "a21_history": {
+        "initial_error": "AF_UNIX path too long",
+        "initial_failure_preserved": true,
+        "fixture_fix_commit": "1454f6bca024415da68ccb334878b4344cd38961",
+        "fixture_fix_files": [
+          "Scripts/test-codex-stdout.py",
+          "Scripts/validate-offline.py"
+        ],
+        "product_unchanged": true,
+        "replays": [
+          {
+            "kind": "nominal",
+            "passed": true,
+            "scenarios": [
+              {
+                "closed_stdout": false,
+                "returncode": 0,
+                "passed": true
+              },
+              {
+                "closed_stdout": true,
+                "returncode": 0,
+                "passed": true
+              }
+            ],
+            "partial_write_and_eintr": true,
+            "source_sha256": {
+              "Bridge/main.swift": "2a66fcd205d0b0e26e2cd78ff746ee9fac752ef117cc4da1b1cadb1984f2d795",
+              "Bridge/CodexBridge.swift": "412b19532c0df6a66f80ff778c048851c57f147f51bb7ee4964a6d5ca1405f24",
+              "Shared/ProcessInspector.swift": "77c31e6c0cf23e430b883676c6b94f5b82cf484467998694cf6b24e2eb3baa37"
+            },
+            "evidence": "full-final-codex-stdout-nominal/results.json",
+            "sha256": "425bed98c183b79916f42566564845adfa667cad5873ae10221736a14f8d2edb"
+          },
+          {
+            "kind": "mutant",
+            "passed": true,
+            "scenarios": [
+              {
+                "closed_stdout": false,
+                "returncode": 0,
+                "passed": true
+              },
+              {
+                "closed_stdout": true,
+                "returncode": -6,
+                "passed": true
+              }
+            ],
+            "partial_write_and_eintr": true,
+            "source_sha256": {
+              "Bridge/main.swift": "2a66fcd205d0b0e26e2cd78ff746ee9fac752ef117cc4da1b1cadb1984f2d795",
+              "Bridge/CodexBridge.swift": "412b19532c0df6a66f80ff778c048851c57f147f51bb7ee4964a6d5ca1405f24",
+              "Shared/ProcessInspector.swift": "77c31e6c0cf23e430b883676c6b94f5b82cf484467998694cf6b24e2eb3baa37"
+            },
+            "evidence": "full-final-codex-stdout-mutant/results.json",
+            "sha256": "bf5723a4b292f1501f8c9a5b4e69a089560accf7ba149a39af568d4cf2064c81"
+          }
+        ]
+      }
+    },
+    "ci": {
+      "runURL": "https://github.com/mehdi7129/atoll/actions/runs/37898153598",
+      "headSHA": "3e10e8041510211f288ee1c7890c1206ba64c992",
+      "status": "passed",
+      "passedSteps": 26,
+      "totalSteps": 26,
+      "resultsSHA256": "9e020b0be15358e93fbf162101517b429402f273b18814aefd3b7aedad19968e"
+    },
+    "ui": {
+      "staticCases": 7,
+      "dynamicCases": 2,
+      "compiledMutantsDetected": 3,
+      "dynamicCapturesRead": 9,
+      "limits": [
+        "AppKit keyboard entry is not exercised; fixture injects homePath then presses actual AX button",
+        "Codex service restart is replaced by private CodexPaths.selectHome",
+        "Catalogue reader is injected; no authenticated CLI",
+        "Audio and real terminal focus are not qualified"
+      ]
+    },
+    "builds": {
+      "Debug": "passed",
+      "Release": "passed",
+      "distribution": "universal signed Release passed"
+    },
+    "featureEvidence": [
+      "../REVIEW-2026-10-08-audit-completion.md",
+      "../REVIEW-2026-10-09-ui-refresh.md",
+      "../audit-support/2026-10-08-completion/validation.json"
+    ],
+    "consolidatedEvidenceSHA256": "ff1f56983cb470b94cb83d8ad4d8927ff881065872170c9faf06b0170959d080",
+    "counting": "XCTest tests, harness steps, service assertions and GUI cases are separate units. They overlap and are not summed as unique tests.",
+    "limits": [
+      "No authenticated generation was run in this validation.",
+      "Protected previews use private fixtures; they do not qualify authenticated CLI sessions.",
+      "Human audio listening and return focus to a live user terminal remain separate qualifications.",
+      "Raw failed attempts and their validated replays are preserved; no raw result was rewritten.",
+      "Evidence paths are relative to the local audit evidence archive; raw logs are not embedded in this public summary.",
+      "Seul le delta 40 vers 41 a été appliqué ; toutes les enclosures ont leurs signatures vérifiées.",
+      "La publication ne remplace pas l’app installée."
+    ],
+    "generationCallsForPublication": 0
+  },
+  "localVerification": {
+    "personalConfigurationsUnchanged": true,
+    "personalConfigurationsCompared": 3,
+    "stableAppUnchanged": true,
+    "debugBuildPreserved": true,
+    "debugBundlesCompared": 4,
+    "stableVersionObserved": "0.18.5",
+    "stableBuildObserved": "40",
+    "scope": "Snapshots identiques depuis la reprise de publication et après publication ; aucun remplacement de l’app installée.",
+    "preparationPauseComparison": {
+      "stableAppUnchanged": true,
+      "debugBundlesUnchanged": 4,
+      "otherConfigurationsUnchanged": 2,
+      "codexConfigurationChanged": true,
+      "scope": "Entre le snapshot avant packaging et la reprise après pause.",
+      "limit": "Une différence de config.toml est constatée entre avant packaging et reprise ; son instant et son origine restent indéterminés. Cette période ne prouve pas l’intégrité de cette configuration."
+    }
+  },
+  "appcast": {
+    "url": "https://mehdi7129.github.io/atoll/appcast.xml",
+    "commit": "bcf601bfc22f9b204a17edaec5b6f2d3e0f28190",
+    "sha256": "c48012799bd8e0e1afbdeedf8a78fde23cce30fbc909ca2ec520cf21dd45ab6b",
+    "servedBytesEqualLocal": true,
+    "servedVersion": "0.18.6",
+    "servedBuild": "41",
+    "checkedAt": "2026-10-09T08:54:12.502030+00:00",
+    "status": "passed"
+  },
+  "evidenceSHA256": {
+    "package": "9a2bfa26e4aa411057de2b6c18eac4078f452d28f8e7123d861fefd09e882171",
+    "publicBeforeFeed": "b9b94cc58a1a1c79b3194f55345697b4d9e4395aaced8e64340394b90a2630ae",
+    "publicAfterFeed": "abf6542f6ffe481c2ff0d1aeea0e9019bd14d7a6bc179cf5b842161620dd2390",
+    "localBefore": "3865a326f42a357c39bb4a32c0a0cf4978fd4379351674ac8aa5d915aa2e1c37",
+    "localAfter": "3865a326f42a357c39bb4a32c0a0cf4978fd4379351674ac8aa5d915aa2e1c37",
+    "localBeforePause": "10005b3673b005c5a1ed37c3b59aeab7213a6289ed29af10f505916a5a3673b6"
+  }
+}

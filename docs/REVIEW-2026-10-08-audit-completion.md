@@ -4,13 +4,14 @@ Validation terminée le **9 octobre 2026**, sur
 `integration/audit-completion-20261008`, source produit figée à `9eaa69d`.
 La [PR #16](https://github.com/mehdi7129/atoll/pull/16) est fusionnée le 9 octobre,
 merge `fd763f70ea2b8ca8114f71dcc7c82feec2cf5c06`. Les 22 constats sont corrigés
-sur `main` ; la nouvelle distribution n'est pas encore effectuée.
+sur `main` et livrés ; la maintenance **0.18.6/build 41** est publiée le 9 octobre 2026.
 Ce rapport suit les 22 constats de l'[audit initial](AUDIT-2026-10-08-robustesse-simplicite.md)
 et de son [contre-audit](REVIEW-2026-10-08-counteraudit.md), issus de la
 [PR documentaire #8](https://github.com/mehdi7129/atoll/pull/8).
-Il distingue les corrections distribuées, le code fusionné et la maintenance
-en préparation. La version publiée reste **0.18.5, build 40** ; **0.18.6, build 41**
-est en préparation.
+La version publiée est **0.18.6, build 41**, depuis `3e10e804` après fusion de la
+[préparation #17](https://github.com/mehdi7129/atoll/pull/17). Le code produit
+qualifié est inchangé ; [les preuves de livraison](releases/0.18.6.json)
+sont distinctes des résultats d'intégration ci-dessous.
 Le [relevé consolidé](audit-support/2026-10-08-completion/validation.json)
 conserve les résultats bruts, reprises, empreintes et limites de cette validation.
 Le contenu historique de #8, réuni par `c25923f`, est intégré sur `main` par #16,
@@ -19,36 +20,35 @@ La PR documentaire #8 est également marquée fusionnée après son intégration
 
 ## État des 22 constats
 
-Trois corrections sont livrées en 0.18.5. Quatre autres sont fusionnées sur
-`main` par les PR [#14](https://github.com/mehdi7129/atoll/pull/14) (`13dad53`)
-et [#15](https://github.com/mehdi7129/atoll/pull/15) (`0016c0c`), sans nouvelle
-distribution. Les quinze restantes ont été corrigées, validées puis fusionnées
-par #16 (`fd763f7`). Les dix-neuf corrections postérieures à 0.18.5 attendent
-la distribution de 0.18.6/build 41.
+Les **22 corrections sont livrées** : A01, A19 et A22 en 0.18.5 ; les dix-neuf
+autres en **0.18.6/build 41**, après les PR
+[#14](https://github.com/mehdi7129/atoll/pull/14) (`13dad53`),
+[#15](https://github.com/mehdi7129/atoll/pull/15) (`0016c0c`) puis
+[#16](https://github.com/mehdi7129/atoll/pull/16) (`fd763f7`).
 
-| ID | Correction | État à cette étape | Preuve ciblée |
+| ID | Correction | Livraison | Preuve ciblée |
 |---|---|---|---|
 | A01 | Collision de notes refusée avant remplacement, résultat conservé pour reprise | Livré en 0.18.5 | [Curation](REVIEW-2026-10-08-a01-curation-collision.md) |
-| A02 | État de curation illisible conservé et retenté | Fusionné, PR #14 | [Intégrité](REVIEW-2026-10-08-a02-a03-integrity.md) |
-| A03 | Accès refusé à un skill distingué de sa disparition | Fusionné, PR #14 | [Intégrité](REVIEW-2026-10-08-a02-a03-integrity.md) |
-| A04 | Markdown remplacé transactionnellement, y compris à métadonnées identiques | Fusionné, PR #16 | [Mémoire](REVIEW-2026-10-08-memory.md) |
-| A05 | Dernière ligne complète de `cwd` conservée | Fusionné, PR #16 | [Mémoire](REVIEW-2026-10-08-memory.md) |
-| A06 | Carte Claude et phase corrélées à la demande et à son helper | Fusionné, PR #16 | [Permissions](REVIEW-2026-10-08-claude-permissions.md) |
-| A07 | Hooks sonores restitués dans leur matcher d'origine | Fusionné, PR #15 | [Hooks](REVIEW-2026-10-08-a07-a08-hooks.md) |
-| A08 | Doublons Atoll normalisés dans les groupes mixtes, hooks tiers conservés | Fusionné, PR #15 | [Hooks](REVIEW-2026-10-08-a07-a08-hooks.md) |
-| A09 | Résolution, processus et drains bornés ; budget des enfants vivants conservé | Fusionné, PR #16 | [Processus](REVIEW-2026-10-08-processes.md) ; [consommateur plugins](REVIEW-2026-10-08-plugins.md) |
-| A10 | Installation du helper sérialisée hors MainActor | Fusionné, PR #16 | [Processus](REVIEW-2026-10-08-processes.md) |
-| A11 | Identité du processus revérifiée avant chaque signal | Fusionné, PR #16 | [Processus](REVIEW-2026-10-08-processes.md) |
-| A12 | Annulation limitée à la recherche plugins concernée | Fusionné, PR #16 | [Plugins](REVIEW-2026-10-08-plugins.md) |
-| A13 | Estimations limitées à deux CLI simultanés, une par identifiant | Fusionné, PR #16 | [Plugins](REVIEW-2026-10-08-plugins.md) |
-| A14 | Cache de coût invalidé selon version, source, scope et disparition | Fusionné, PR #16 | [Plugins](REVIEW-2026-10-08-plugins.md) |
-| A15 | Instance NSSound distincte par événement | Fusionné, PR #16 | [Feedback](REVIEW-2026-10-08-feedback.md) |
-| A16 | Journal et notes du panneau invalidés après persistance | Fusionné, PR #16 | [Feedback](REVIEW-2026-10-08-feedback.md) |
-| A17 | Fin du CLI attendue, granularité annoncée prouvée, ordre des jumps conservé | Fusionné, PR #16 | [Feedback](REVIEW-2026-10-08-feedback.md) |
-| A18 | Lecture refusée retentée sans acquittement anticipé de l'offset | Fusionné, PR #16 | [Mémoire](REVIEW-2026-10-08-memory.md) |
+| A02 | État de curation illisible conservé et retenté | Livré en 0.18.6, PR #14 | [Intégrité](REVIEW-2026-10-08-a02-a03-integrity.md) |
+| A03 | Accès refusé à un skill distingué de sa disparition | Livré en 0.18.6, PR #14 | [Intégrité](REVIEW-2026-10-08-a02-a03-integrity.md) |
+| A04 | Markdown remplacé transactionnellement, y compris à métadonnées identiques | Livré en 0.18.6, PR #16 | [Mémoire](REVIEW-2026-10-08-memory.md) |
+| A05 | Dernière ligne complète de `cwd` conservée | Livré en 0.18.6, PR #16 | [Mémoire](REVIEW-2026-10-08-memory.md) |
+| A06 | Carte Claude et phase corrélées à la demande et à son helper | Livré en 0.18.6, PR #16 | [Permissions](REVIEW-2026-10-08-claude-permissions.md) |
+| A07 | Hooks sonores restitués dans leur matcher d'origine | Livré en 0.18.6, PR #15 | [Hooks](REVIEW-2026-10-08-a07-a08-hooks.md) |
+| A08 | Doublons Atoll normalisés dans les groupes mixtes, hooks tiers conservés | Livré en 0.18.6, PR #15 | [Hooks](REVIEW-2026-10-08-a07-a08-hooks.md) |
+| A09 | Résolution, processus et drains bornés ; budget des enfants vivants conservé | Livré en 0.18.6, PR #16 | [Processus](REVIEW-2026-10-08-processes.md) ; [consommateur plugins](REVIEW-2026-10-08-plugins.md) |
+| A10 | Installation du helper sérialisée hors MainActor | Livré en 0.18.6, PR #16 | [Processus](REVIEW-2026-10-08-processes.md) |
+| A11 | Identité du processus revérifiée avant chaque signal | Livré en 0.18.6, PR #16 | [Processus](REVIEW-2026-10-08-processes.md) |
+| A12 | Annulation limitée à la recherche plugins concernée | Livré en 0.18.6, PR #16 | [Plugins](REVIEW-2026-10-08-plugins.md) |
+| A13 | Estimations limitées à deux CLI simultanés, une par identifiant | Livré en 0.18.6, PR #16 | [Plugins](REVIEW-2026-10-08-plugins.md) |
+| A14 | Cache de coût invalidé selon version, source, scope et disparition | Livré en 0.18.6, PR #16 | [Plugins](REVIEW-2026-10-08-plugins.md) |
+| A15 | Instance NSSound distincte par événement | Livré en 0.18.6, PR #16 | [Feedback](REVIEW-2026-10-08-feedback.md) |
+| A16 | Journal et notes du panneau invalidés après persistance | Livré en 0.18.6, PR #16 | [Feedback](REVIEW-2026-10-08-feedback.md) |
+| A17 | Fin du CLI attendue, granularité annoncée prouvée, ordre des jumps conservé | Livré en 0.18.6, PR #16 | [Feedback](REVIEW-2026-10-08-feedback.md) |
+| A18 | Lecture refusée retentée sans acquittement anticipé de l'offset | Livré en 0.18.6, PR #16 | [Mémoire](REVIEW-2026-10-08-memory.md) |
 | A19 | Échec d'archivage conservant le skill installé et son manifeste | Livré en 0.18.5 | [Archivage](REVIEW-2026-10-08-a19-skill-archive.md) |
-| A20 | Catalogue associé au projet, binaire et home ; résultats tardifs ignorés | Fusionné, PR #16 | [Plugins](REVIEW-2026-10-08-plugins.md) |
-| A21 | Helper fail-open quand stdout est fermé | Fusionné, PR #16 | [Processus](REVIEW-2026-10-08-processes.md) |
+| A20 | Catalogue associé au projet, binaire et home ; résultats tardifs ignorés | Livré en 0.18.6, PR #16 | [Plugins](REVIEW-2026-10-08-plugins.md) |
+| A21 | Helper fail-open quand stdout est fermé | Livré en 0.18.6, PR #16 | [Processus](REVIEW-2026-10-08-processes.md) |
 | A22 | Nominal Codex obligatoire et sabotage causal vérifié | Livré en 0.18.5 | [Harness Codex](REVIEW-2026-10-08-a22-codex-harness.md) |
 
 ## Corrections revues à leur tour
@@ -101,9 +101,9 @@ concret, conformément à la garde du tableau structurel de l'audit. Le lifecycl
 des rétrospectives réutilise l'exécuteur borné en conservant les séparations
 préparation/livraison et les API de la façade.
 
-Les quatre tâches d'entretien de l'audit sont suivies séparément :
+Les quatre tâches d'entretien de l'audit sont terminées et livrées :
 
-| Tâche | État de préparation |
+| Tâche | État livré |
 |---|---|
 | Retrait des API sans consommateur produit | Intégré par `d0561e3` ; types et tests d'adoption utiles conservés |
 | Commande offline commune et CI macOS | Intégrées par `4cb97df`, arrêt des descendants par `0424604`, préflight des sources par `d2749a5` ; [profils et commandes](VALIDATION.md), sans compte, génération ni publication automatique |
@@ -134,7 +134,7 @@ leurs nombres ne constituent pas un total de tests uniques.
 | Core Debug et Release sur l'intégration finale | **1 131 tests, un skip, zéro échec** dans chaque configuration ; Release repris en 11,1 s sans modification de sources ni tests |
 | Builds Debug et Release finaux | Réussis sur la source produit `9eaa69d` ; produits de build non lancés |
 | Suite offline full | 120 étapes consolidées : 119 réussies au premier passage, A21 réussi après correction de sa fixture et rejeu nominal/mutant ; résultat brut en échec conservé |
-| CI GitHub standard | [26 étapes sur 26 réussies](https://github.com/mehdi7129/atoll/actions/runs/37895684273), sur `f8d802d` ; arbre produit identique à l'intégration finale |
+| CI GitHub standard | [26 étapes sur 26 réussies](https://github.com/mehdi7129/atoll/actions/runs/37898153598), sur `3e10e804` ; source exacte de la release |
 | Interactions GUI A16/A20 | Deux nominaux et trois mutants compilés détectés ; neuf captures inspectées ; [relevé](audit-support/2026-10-09-ui-refresh/validation.json) |
 
 Les tests utilisent les classes produit et des fixtures privées. Un sabotage
@@ -162,8 +162,10 @@ déterministe dans la fixture `queue-barrier`. Le défaut du test a été reprod
 puis corrigé par `f8d802d` ; les 17 parcours et les mutants barrière,
 sérialisation et coalescence ont été rejoués. La nouvelle CI passe les 26 étapes
 sur cette tête. L'arbre produit est identique à celui de l'intégration finale ;
-ce résultat n'est pas attribué aux commits documentaires ou de harness ajoutés
-ensuite, qui portent leurs validations distinctes.
+ce premier succès reste lié à sa tête. La campagne finale
+[26 étapes sur 26](https://github.com/mehdi7129/atoll/actions/runs/37898153598)
+passe sur la source exacte `3e10e804`, avec les évolutions de harness intégrées.
+Les mises à jour documentaires de publication restent distinctes de cette CI.
 
 **Interface :** sept cas OCR de la copie protégée passent : réglages Claude,
 Codex, Apprentissage, Alertes, Autonomie, onboarding sans fournisseur et carte
@@ -183,10 +185,17 @@ un catalogue authentifié ne sont pas qualifiés par cette recette.
 existants de **0.18.5** : six signatures Sparkle acceptées et leurs copies
 altérées rejetées, sept binaires universels, delta 39 → 40 et app du DMG
 identiques aux 134 objets de l'archive, 19 URL et sept téléchargements SHA256.
-Ce contrôle qualifie l'outil et cette ancienne livraison ; il ne qualifie pas
-une prochaine release. Les résultats de publication seront consignés dans leur
-propre fiche de livraison. La cible de maintenance prévue est **0.18.6, build 41** ;
-sa préparation ne modifie pas le statut publié de 0.18.5.
+Ce contrôle qualifie l'outil et cette ancienne livraison. La maintenance
+**0.18.6, build 41** a ensuite reçu sa propre validation :
+
+App et DMG universels arm64 / x86_64 signés Developer ID, notarisés,
+staplés et acceptés par Gatekeeper. Les 6 signatures Sparkle sont vérifiées
+et leurs 6 copies altérées rejetées. Le différentiel 40 → 41 et l'app du DMG
+reproduisent les 134 fichiers, liens et modes du ZIP complet.
+Les 7 téléchargements publics correspondent aux SHA256 et tailles validés ;
+les 19 URL contrôlées sont disponibles. Le flux Sparkle a été publié après les
+assets et sert les octets vérifiés, avec 0.18.6/build 41 en tête.
+[Relevé de livraison 0.18.6](releases/0.18.6.json).
 
 Les preuves locales de cette campagne sont regroupées dans
 `~/Library/Caches/atoll-audit-completion-evidence-20261008/`, notamment `memory`,
@@ -236,8 +245,14 @@ cloud. L'app installée et les préférences personnelles ne sont pas remplacée
 par une validation ou une publication. Le snapshot de reprise `local-resume.json`
 est identique à `local-before.json` pour l'app stable, les quatre produits Debug
 habituels et les trois configurations personnelles contrôlés.
+Le contrôle de publication part d'un nouveau snapshot pris à sa reprise :
+l'app, les quatre Debug et les trois configurations sont identiques jusqu'à
+l'achèvement. Entre avant packaging et reprise, une différence de `config.toml`
+a été constatée, d'origine indéterminée ; cet intervalle n'est pas présenté comme
+une preuve d'intégrité de cette configuration. Le relevé de livraison conserve
+ces comparaisons distinctes.
 
-**Suite de livraison :** qualifier les artefacts de la maintenance 0.18.6/build 41,
-publier les assets puis le flux vérifié. La fusion #16 est acquise ; ces étapes
-de distribution restent distinctes de la validation et de cette fusion.
-Aucune nouvelle publication n'est déclarée à cette étape.
+**Clôture :** les 22 constats et les quatre tâches d'entretien sont livrés.
+Les artefacts 0.18.6/build 41, leurs téléchargements publics et le flux servi
+sont vérifiés. L'app installée reste sous le contrôle de l'utilisateur ;
+les limites de recette ci-dessus demeurent explicites.

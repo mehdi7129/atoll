@@ -1,27 +1,43 @@
 # HANDOFF — reprendre Atoll
 
-État courant du **9 octobre 2026**, validation de clôture de l'audit terminée. Les règles
+État courant du **9 octobre 2026**, audit clôturé et maintenance publiée. Les règles
 actives restent dans [CLAUDE.md](../CLAUDE.md), avec leur
 [archive intégrale](archive/CLAUDE-2026-10-08.md). Les sections historiques en fin
 de fiche décrivent leur date ; elles ne remplacent pas l'état courant ci-dessous.
 
-## État courant : 22 constats corrigés sur main, 0.18.6 en préparation
+## État courant : 22 constats corrigés et livrés, 0.18.6 publiée
 
-La version publiée reste **[0.18.5, build 40](https://github.com/mehdi7129/atoll/releases/tag/v0.18.5)**.
+La version publiée est **[v0.18.6, build 41](https://github.com/mehdi7129/atoll/releases/tag/v0.18.6)**.
 Le [rapport d'intégration](REVIEW-2026-10-08-audit-completion.md) suit les **22 constats** :
 
 - **Trois livrés** en 0.18.5 : A01, A19 et A22.
-- **Quatre fusionnés sur main**, sans nouvelle distribution : A02/A03 par
+- **Quatre livrés en 0.18.6** : A02/A03 par
   [#14](https://github.com/mehdi7129/atoll/pull/14), merge `13dad53`, puis A07/A08
   par [#15](https://github.com/mehdi7129/atoll/pull/15), merge `0016c0c`.
-- **Quinze fusionnés sur main par la PR #16**, source produit `9eaa69d` : mémoire,
+- **Quinze livrés en 0.18.6 après fusion de la PR #16**, source produit `9eaa69d` : mémoire,
   permissions Claude, lifecycle des processus, plugins et feedback.
   La [PR #16](https://github.com/mehdi7129/atoll/pull/16) est fusionnée le 9 octobre,
   merge `fd763f70ea2b8ca8114f71dcc7c82feec2cf5c06`, après validation commune.
 
-Les 22 constats sont donc corrigés sur `main`. Les dix-neuf corrections
-postérieures à 0.18.5 attendent encore la distribution de **0.18.6, build 41**,
-actuellement en préparation ; la fusion n'a pas publié ni installé cette version.
+Les 22 constats sont corrigés et livrés : trois en 0.18.5 et dix-neuf en
+**0.18.6, build 41**. Cette maintenance part de `3e10e804`, après fusion de la
+[préparation #17](https://github.com/mehdi7129/atoll/pull/17), avec le code produit
+qualifié inchangé. La publication n'a remplacé aucune app installée.
+
+App et DMG universels arm64 / x86_64 signés Developer ID, notarisés,
+staplés et acceptés par Gatekeeper. Les 6 signatures Sparkle sont vérifiées
+et leurs 6 copies altérées rejetées. Le différentiel 40 → 41 et l'app du DMG
+reproduisent les 134 fichiers, liens et modes du ZIP complet.
+Les 7 téléchargements publics correspondent aux SHA256 et tailles validés ;
+les 19 URL contrôlées sont disponibles. Le flux Sparkle a été publié après les
+assets et sert les octets vérifiés, avec 0.18.6/build 41 en tête.
+[Relevé de livraison](releases/0.18.6.json).
+
+L'app stable, les quatre produits Debug et les trois configurations contrôlés
+sont identiques entre la reprise de publication et son achèvement. Une différence
+de `config.toml` a été constatée entre le snapshot avant packaging et la reprise,
+d'origine indéterminée ; l'intégrité de cette configuration n'est pas revendiquée
+sur cet intervalle. Les contrôles initiaux des tests restent des preuves séparées.
 
 Les suites Core Debug et Release passent chacune **1 131 tests, un skip et
 zéro échec**. La reprise Release dure 11,1 s, sans modifier sources ni tests.
@@ -34,10 +50,9 @@ passent immédiatement ; A21 passe après correction du chemin Unix de sa fixtur
 et rejeu nominal/mutant. Son résultat brut reste `failed` avec exit 1 ; le
 [relevé consolidé](audit-support/2026-10-08-completion/validation.json) conserve
 cette histoire et conclut `passed`, sans échec non résolu.
-La [CI standard passe 26 étapes sur 26](https://github.com/mehdi7129/atoll/actions/runs/37895684273)
-sur `f8d802d`, dont l'arbre produit est identique à l'intégration finale.
-Les commits documentaires et de harness postérieurs ne sont pas présentés
-comme la tête exécutée par cette CI.
+La [CI standard passe 26 étapes sur 26](https://github.com/mehdi7129/atoll/actions/runs/37898153598)
+sur `3e10e804`, la source exacte de la release. Les contrôles documentaires
+après publication sont séparés de cette exécution.
 
 L'intégration #14 → #15 a passé **1 129 tests Core**, un skip, zéro échec,
 190 parcours services, 12 parcours helper et les sabotages ciblés, puis les
@@ -58,8 +73,9 @@ lot validé et le maintien du budget d'un enfant encore vivant après timeout.
 Les captures d'aperçu restent distinctes de l'écoute humaine et du focus sur un
 terminal authentifié, qui ne sont pas qualifiés par les fixtures.
 
-Les vérifications de distribution sont désormais [versionnées](RELEASE-VALIDATION.md)
-et ont été rejouées sur **0.18.5**. Cela ne qualifie pas une nouvelle release.
+Les vérifications de distribution sont [versionnées](RELEASE-VALIDATION.md).
+Leur première qualification sur 0.18.5 et la livraison de 0.18.6 ont chacune
+leurs preuves ; les résultats de l'ancienne release ne sont pas réattribués.
 Les instructions actives ont été raccourcies sans retirer leur archive. La
 [commande offline et la CI macOS](VALIDATION.md) sont intégrées, ainsi que le
 retrait des API inutilisées ; la validation consolidée de cet ensemble est terminée.
@@ -70,8 +86,9 @@ Le store de curation et le snapshot
 diagnostic des sessions restent des extractions conditionnées à un gain concret
 de testabilité ; les invariants locaux sont testés sans refonte de ces façades.
 Les pistes de performance non mesurées ne sont pas déclarées corrigées.
-La maintenance en préparation est 0.18.6/build 41 ; elle ne sera déclarée publiée qu'après
-les contrôles de ses artefacts et du flux servi.
+Les quatre tâches d'entretien sont terminées : API inutilisées retirées,
+commande offline et CI communes, vérificateurs de distribution versionnés,
+instructions actives séparées de l'archive conservée.
 
 Avant de reprendre : `git status --short --branch`, `git log -5 --oneline`,
 `git worktree list`, puis vérifier la PR et la release courantes. L'app installée
@@ -82,8 +99,8 @@ réel avant toute action. Une fusion ou un build ne met pas à jour cette app.
 reste sur `codex/atoll-future-exploration`, commit `65ce2b6`, avec un commit
 divergent lié à la PR #6. Il a été préservé, sans changement de branche.
 Les corrections sont sur `main` et dans le worktree d'intégration
-`~/Library/Caches/atoll-audit-completion-20261008`. La préparation de release est
-isolée dans `~/Library/Caches/atoll-release-0.18.6-20261009`. Le dossier du Bureau
+`~/Library/Caches/atoll-audit-completion-20261008`. La livraison a été préparée
+et vérifiée dans `~/Library/Caches/atoll-release-0.18.6-20261009`. Le dossier du Bureau
 n'est pas une copie mise à jour de ces corrections ; vérifier la branche avant
 de choisir un checkout de reprise.
 
