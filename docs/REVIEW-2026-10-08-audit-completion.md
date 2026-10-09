@@ -2,49 +2,53 @@
 
 Validation terminée le **9 octobre 2026**, sur
 `integration/audit-completion-20261008`, source produit figée à `9eaa69d`.
-La [PR #16](https://github.com/mehdi7129/atoll/pull/16) reste ouverte pour revue ;
-la fusion et la nouvelle distribution ne sont pas encore effectuées.
+La [PR #16](https://github.com/mehdi7129/atoll/pull/16) est fusionnée le 9 octobre,
+merge `fd763f70ea2b8ca8114f71dcc7c82feec2cf5c06`. Les 22 constats sont corrigés
+sur `main` ; la nouvelle distribution n'est pas encore effectuée.
 Ce rapport suit les 22 constats de l'[audit initial](AUDIT-2026-10-08-robustesse-simplicite.md)
 et de son [contre-audit](REVIEW-2026-10-08-counteraudit.md), issus de la
 [PR documentaire #8](https://github.com/mehdi7129/atoll/pull/8).
-Il distingue les corrections distribuées, le code fusionné et l'intégration
-validée en revue. La version publiée reste **0.18.5, build 40**.
+Il distingue les corrections distribuées, le code fusionné et la maintenance
+en préparation. La version publiée reste **0.18.5, build 40** ; **0.18.6, build 41**
+est en préparation.
 Le [relevé consolidé](audit-support/2026-10-08-completion/validation.json)
 conserve les résultats bruts, reprises, empreintes et limites de cette validation.
-Le contenu historique de #8 est intégré localement par `c25923f`, en conservant
-les 30 entrées alors présentes dans le registre des relectures.
+Le contenu historique de #8, réuni par `c25923f`, est intégré sur `main` par #16,
+en conservant les 30 entrées alors présentes dans le registre des relectures.
+La PR documentaire #8 est également marquée fusionnée après son intégration via #16.
 
 ## État des 22 constats
 
 Trois corrections sont livrées en 0.18.5. Quatre autres sont fusionnées sur
 `main` par les PR [#14](https://github.com/mehdi7129/atoll/pull/14) (`13dad53`)
 et [#15](https://github.com/mehdi7129/atoll/pull/15) (`0016c0c`), sans nouvelle
-distribution. Les quinze restantes sont corrigées et validées dans la branche
-d'intégration, en revue dans #16.
+distribution. Les quinze restantes ont été corrigées, validées puis fusionnées
+par #16 (`fd763f7`). Les dix-neuf corrections postérieures à 0.18.5 attendent
+la distribution de 0.18.6/build 41.
 
 | ID | Correction | État à cette étape | Preuve ciblée |
 |---|---|---|---|
 | A01 | Collision de notes refusée avant remplacement, résultat conservé pour reprise | Livré en 0.18.5 | [Curation](REVIEW-2026-10-08-a01-curation-collision.md) |
 | A02 | État de curation illisible conservé et retenté | Fusionné, PR #14 | [Intégrité](REVIEW-2026-10-08-a02-a03-integrity.md) |
 | A03 | Accès refusé à un skill distingué de sa disparition | Fusionné, PR #14 | [Intégrité](REVIEW-2026-10-08-a02-a03-integrity.md) |
-| A04 | Markdown remplacé transactionnellement, y compris à métadonnées identiques | Validé, PR #16 en revue | [Mémoire](REVIEW-2026-10-08-memory.md) |
-| A05 | Dernière ligne complète de `cwd` conservée | Validé, PR #16 en revue | [Mémoire](REVIEW-2026-10-08-memory.md) |
-| A06 | Carte Claude et phase corrélées à la demande et à son helper | Validé, PR #16 en revue | [Permissions](REVIEW-2026-10-08-claude-permissions.md) |
+| A04 | Markdown remplacé transactionnellement, y compris à métadonnées identiques | Fusionné, PR #16 | [Mémoire](REVIEW-2026-10-08-memory.md) |
+| A05 | Dernière ligne complète de `cwd` conservée | Fusionné, PR #16 | [Mémoire](REVIEW-2026-10-08-memory.md) |
+| A06 | Carte Claude et phase corrélées à la demande et à son helper | Fusionné, PR #16 | [Permissions](REVIEW-2026-10-08-claude-permissions.md) |
 | A07 | Hooks sonores restitués dans leur matcher d'origine | Fusionné, PR #15 | [Hooks](REVIEW-2026-10-08-a07-a08-hooks.md) |
 | A08 | Doublons Atoll normalisés dans les groupes mixtes, hooks tiers conservés | Fusionné, PR #15 | [Hooks](REVIEW-2026-10-08-a07-a08-hooks.md) |
-| A09 | Résolution, processus et drains bornés ; budget des enfants vivants conservé | Validé, PR #16 en revue | [Processus](REVIEW-2026-10-08-processes.md) ; [consommateur plugins](REVIEW-2026-10-08-plugins.md) |
-| A10 | Installation du helper sérialisée hors MainActor | Validé, PR #16 en revue | [Processus](REVIEW-2026-10-08-processes.md) |
-| A11 | Identité du processus revérifiée avant chaque signal | Validé, PR #16 en revue | [Processus](REVIEW-2026-10-08-processes.md) |
-| A12 | Annulation limitée à la recherche plugins concernée | Validé, PR #16 en revue | [Plugins](REVIEW-2026-10-08-plugins.md) |
-| A13 | Estimations limitées à deux CLI simultanés, une par identifiant | Validé, PR #16 en revue | [Plugins](REVIEW-2026-10-08-plugins.md) |
-| A14 | Cache de coût invalidé selon version, source, scope et disparition | Validé, PR #16 en revue | [Plugins](REVIEW-2026-10-08-plugins.md) |
-| A15 | Instance NSSound distincte par événement | Validé, PR #16 en revue | [Feedback](REVIEW-2026-10-08-feedback.md) |
-| A16 | Journal et notes du panneau invalidés après persistance | Validé, PR #16 en revue | [Feedback](REVIEW-2026-10-08-feedback.md) |
-| A17 | Fin du CLI attendue, granularité annoncée prouvée, ordre des jumps conservé | Validé, PR #16 en revue | [Feedback](REVIEW-2026-10-08-feedback.md) |
-| A18 | Lecture refusée retentée sans acquittement anticipé de l'offset | Validé, PR #16 en revue | [Mémoire](REVIEW-2026-10-08-memory.md) |
+| A09 | Résolution, processus et drains bornés ; budget des enfants vivants conservé | Fusionné, PR #16 | [Processus](REVIEW-2026-10-08-processes.md) ; [consommateur plugins](REVIEW-2026-10-08-plugins.md) |
+| A10 | Installation du helper sérialisée hors MainActor | Fusionné, PR #16 | [Processus](REVIEW-2026-10-08-processes.md) |
+| A11 | Identité du processus revérifiée avant chaque signal | Fusionné, PR #16 | [Processus](REVIEW-2026-10-08-processes.md) |
+| A12 | Annulation limitée à la recherche plugins concernée | Fusionné, PR #16 | [Plugins](REVIEW-2026-10-08-plugins.md) |
+| A13 | Estimations limitées à deux CLI simultanés, une par identifiant | Fusionné, PR #16 | [Plugins](REVIEW-2026-10-08-plugins.md) |
+| A14 | Cache de coût invalidé selon version, source, scope et disparition | Fusionné, PR #16 | [Plugins](REVIEW-2026-10-08-plugins.md) |
+| A15 | Instance NSSound distincte par événement | Fusionné, PR #16 | [Feedback](REVIEW-2026-10-08-feedback.md) |
+| A16 | Journal et notes du panneau invalidés après persistance | Fusionné, PR #16 | [Feedback](REVIEW-2026-10-08-feedback.md) |
+| A17 | Fin du CLI attendue, granularité annoncée prouvée, ordre des jumps conservé | Fusionné, PR #16 | [Feedback](REVIEW-2026-10-08-feedback.md) |
+| A18 | Lecture refusée retentée sans acquittement anticipé de l'offset | Fusionné, PR #16 | [Mémoire](REVIEW-2026-10-08-memory.md) |
 | A19 | Échec d'archivage conservant le skill installé et son manifeste | Livré en 0.18.5 | [Archivage](REVIEW-2026-10-08-a19-skill-archive.md) |
-| A20 | Catalogue associé au projet, binaire et home ; résultats tardifs ignorés | Validé, PR #16 en revue | [Plugins](REVIEW-2026-10-08-plugins.md) |
-| A21 | Helper fail-open quand stdout est fermé | Validé, PR #16 en revue | [Processus](REVIEW-2026-10-08-processes.md) |
+| A20 | Catalogue associé au projet, binaire et home ; résultats tardifs ignorés | Fusionné, PR #16 | [Plugins](REVIEW-2026-10-08-plugins.md) |
+| A21 | Helper fail-open quand stdout est fermé | Fusionné, PR #16 | [Processus](REVIEW-2026-10-08-processes.md) |
 | A22 | Nominal Codex obligatoire et sabotage causal vérifié | Livré en 0.18.5 | [Harness Codex](REVIEW-2026-10-08-a22-codex-harness.md) |
 
 ## Corrections revues à leur tour
@@ -233,7 +237,7 @@ par une validation ou une publication. Le snapshot de reprise `local-resume.json
 est identique à `local-before.json` pour l'app stable, les quatre produits Debug
 habituels et les trois configurations personnelles contrôlés.
 
-**Suite de livraison :** vérifier la tête exacte puis fusionner la PR #16,
-préparer la maintenance et qualifier ses artefacts avant publication du flux.
-Ces opérations restent distinctes de la validation terminée ci-dessus ; aucune
-fusion ni nouvelle publication n'est déclarée à cette étape.
+**Suite de livraison :** qualifier les artefacts de la maintenance 0.18.6/build 41,
+publier les assets puis le flux vérifié. La fusion #16 est acquise ; ces étapes
+de distribution restent distinctes de la validation et de cette fusion.
+Aucune nouvelle publication n'est déclarée à cette étape.

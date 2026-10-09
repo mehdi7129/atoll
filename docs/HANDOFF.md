@@ -5,7 +5,7 @@ actives restent dans [CLAUDE.md](../CLAUDE.md), avec leur
 [archive intégrale](archive/CLAUDE-2026-10-08.md). Les sections historiques en fin
 de fiche décrivent leur date ; elles ne remplacent pas l'état courant ci-dessous.
 
-## État courant : corrections validées, PR #16 en revue
+## État courant : 22 constats corrigés sur main, 0.18.6 en préparation
 
 La version publiée reste **[0.18.5, build 40](https://github.com/mehdi7129/atoll/releases/tag/v0.18.5)**.
 Le [rapport d'intégration](REVIEW-2026-10-08-audit-completion.md) suit les **22 constats** :
@@ -14,12 +14,14 @@ Le [rapport d'intégration](REVIEW-2026-10-08-audit-completion.md) suit les **22
 - **Quatre fusionnés sur main**, sans nouvelle distribution : A02/A03 par
   [#14](https://github.com/mehdi7129/atoll/pull/14), merge `13dad53`, puis A07/A08
   par [#15](https://github.com/mehdi7129/atoll/pull/15), merge `0016c0c`.
-- **Quinze corrigés sur la branche d'intégration**
-  `integration/audit-completion-20261008`, source produit `9eaa69d` : mémoire,
+- **Quinze fusionnés sur main par la PR #16**, source produit `9eaa69d` : mémoire,
   permissions Claude, lifecycle des processus, plugins et feedback.
-  La [PR #16](https://github.com/mehdi7129/atoll/pull/16) reste ouverte pour revue,
-  avec sa validation commune terminée ;
-  aucune publication de ces quinze corrections annoncée à cette étape.
+  La [PR #16](https://github.com/mehdi7129/atoll/pull/16) est fusionnée le 9 octobre,
+  merge `fd763f70ea2b8ca8114f71dcc7c82feec2cf5c06`, après validation commune.
+
+Les 22 constats sont donc corrigés sur `main`. Les dix-neuf corrections
+postérieures à 0.18.5 attendent encore la distribution de **0.18.6, build 41**,
+actuellement en préparation ; la fusion n'a pas publié ni installé cette version.
 
 Les suites Core Debug et Release passent chacune **1 131 tests, un skip et
 zéro échec**. La reprise Release dure 11,1 s, sans modifier sources ni tests.
@@ -61,12 +63,14 @@ et ont été rejouées sur **0.18.5**. Cela ne qualifie pas une nouvelle release
 Les instructions actives ont été raccourcies sans retirer leur archive. La
 [commande offline et la CI macOS](VALIDATION.md) sont intégrées, ainsi que le
 retrait des API inutilisées ; la validation consolidée de cet ensemble est terminée.
-L'audit initial et son contre-audit (#8) sont intégrés localement par `c25923f`,
-avec les 30 entrées de relecture conservées. Le store de curation et le snapshot
+L'audit initial et son contre-audit (#8), réunis par `c25923f`, sont désormais
+sur `main` grâce à #16, avec les 30 entrées de relecture d'origine conservées.
+La PR documentaire #8 est également marquée fusionnée après son intégration via #16.
+Le store de curation et le snapshot
 diagnostic des sessions restent des extractions conditionnées à un gain concret
 de testabilité ; les invariants locaux sont testés sans refonte de ces façades.
 Les pistes de performance non mesurées ne sont pas déclarées corrigées.
-La maintenance prévue est 0.18.6/build 41 ; elle ne sera déclarée publiée qu'après
+La maintenance en préparation est 0.18.6/build 41 ; elle ne sera déclarée publiée qu'après
 les contrôles de ses artefacts et du flux servi.
 
 Avant de reprendre : `git status --short --branch`, `git log -5 --oneline`,
@@ -77,10 +81,11 @@ réel avant toute action. Une fusion ou un build ne met pas à jour cette app.
 **Checkouts :** le dossier original `~/Desktop/Dynamic_Island` est propre mais
 reste sur `codex/atoll-future-exploration`, commit `65ce2b6`, avec un commit
 divergent lié à la PR #6. Il a été préservé, sans changement de branche.
-Le travail présent est dans le worktree
-`~/Library/Caches/atoll-audit-completion-20261008` et la PR #16 ; le dossier du
-Bureau n'est pas une copie mise à jour de ces corrections. Après fusion, vérifier
-`main` sur GitHub avant de choisir un checkout de reprise.
+Les corrections sont sur `main` et dans le worktree d'intégration
+`~/Library/Caches/atoll-audit-completion-20261008`. La préparation de release est
+isolée dans `~/Library/Caches/atoll-release-0.18.6-20261009`. Le dossier du Bureau
+n'est pas une copie mise à jour de ces corrections ; vérifier la branche avant
+de choisir un checkout de reprise.
 
 ## Comportement du code actuel
 
