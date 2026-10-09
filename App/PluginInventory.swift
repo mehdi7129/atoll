@@ -130,7 +130,8 @@ final class PluginInventory {
         guard !isRefreshing else { return }
         let generation = operationGeneration
         isRefreshing = true // AVANT le premier await (sinon la garde ne garde rien)
-        defer { isRefreshing = false }
+        let scope = searchScope ?? UUID()
+        defer { Self.whenFinished(scope: scope) { self.isRefreshing = false } }
         let timeout = includeAvailable ? Self.availableTimeout : Self.listTimeout
         let deadline = ContinuousClock.now.advanced(by: .seconds(timeout))
 
@@ -147,7 +148,7 @@ final class PluginInventory {
             arguments: arguments,
             claude: claude,
             timeout: BoundedProcessRunner.remaining(until: deadline),
-            scope: searchScope
+            scope: scope
         )
         guard generation == operationGeneration,
               searchScope == nil || searchScope == searchGeneration else { return }
@@ -231,8 +232,10 @@ final class PluginInventory {
         // de temps incluant la résolution du binaire et la collecte des pipes.
         let deadline = ContinuousClock.now.advanced(by: .seconds(Self.detailsTimeout * 2))
         defer {
-            if activeCosts[pluginID]?.token == request.token { activeCosts[pluginID] = nil }
-            startQueuedCosts()
+            Self.whenFinished(scope: request.token) {
+                if self.activeCosts[pluginID]?.token == request.token { self.activeCosts[pluginID] = nil }
+                self.startQueuedCosts()
+            }
         }
         guard let claude = await resolveClaudePath(deadline: deadline) else { return }
         guard isCurrent(request), !Task.isCancelled else { return }
@@ -254,7 +257,8 @@ final class PluginInventory {
                 timeout: min(Self.detailsTimeout, BoundedProcessRunner.remaining(until: deadline)),
                 scope: request.token
             )
-            guard isCurrent(request), !Task.isCancelled else { return }
+            guard isCurrent(request), !Task.isCancelled,
+                  !Self.inFlight.isRunning(scope: request.token) else { return }
             guard outcome.status == 0 else { continue }
             let text = String(decoding: outcome.output, as: UTF8.self)
             guard let tokens = PluginDetails.alwaysOnTokens(from: text) else { continue }
@@ -319,7 +323,8 @@ final class PluginInventory {
             return "Une autre action plugin est en cours."
         }
         busyPluginID = pluginID
-        defer { busyPluginID = nil }
+        let scope = UUID()
+        defer { Self.whenFinished(scope: scope) { self.busyPluginID = nil } }
         let generation = operationGeneration
         let deadline = ContinuousClock.now.advanced(by: .seconds(timeout))
 
@@ -330,7 +335,7 @@ final class PluginInventory {
         }
         guard generation == operationGeneration, !Task.isCancelled else { return "Action annulée." }
         let outcome = await Self.run(arguments: arguments, claude: claude,
-                                     timeout: BoundedProcessRunner.remaining(until: deadline))
+                                     timeout: BoundedProcessRunner.remaining(until: deadline), scope: scope)
         guard generation == operationGeneration, !Task.isCancelled else { return "Action annulée." }
         guard outcome.status == 0 else {
             let message = Self.failureMessage(outcome, verb: verb)
@@ -354,6 +359,9 @@ final class PluginInventory {
         // ajouté pour empêcher. Le motif d'attente existe déjà dans `search()`,
         // et pour la même raison.
         while isRefreshing {
+            guard ContinuousClock.now < deadline else {
+                return "Action terminée, mais la lecture des plugins est toujours en cours."
+            }
             try? await Task.sleep(for: .milliseconds(300))
             guard generation == operationGeneration, !Task.isCancelled else { return "Action annulée." }
         }
@@ -411,6 +419,11 @@ final class PluginInventory {
             processes.append((process, identity, scope))
         }
 
+        func isRunning(scope: UUID) -> Bool {
+            lock.lock(); defer { lock.unlock() }
+            return processes.contains { $0.scope == scope && $0.process.isRunning }
+        }
+
         func release(_ process: Process) {
             lock.lock(); defer { lock.unlock() }
             processes.removeAll { $0.process === process }
@@ -433,6 +446,17 @@ final class PluginInventory {
     }
 
     @ObservationIgnored static let inFlight = InFlight()
+
+    /// Une collecte bornée ne prouve pas la sortie de l'enfant. Conserver le
+    /// verrou et le budget jusqu'à sa sortie, sans bloquer le retour à l'UI.
+    private static func whenFinished(scope: UUID, _ finish: @escaping @MainActor () -> Void) {
+        if inFlight.isRunning(scope: scope) {
+            Task { @MainActor in
+                while inFlight.isRunning(scope: scope) { try? await Task.sleep(for: .milliseconds(100)) }
+                finish()
+            }
+        } else { finish() }
+    }
 
     /// Arrête les commandes en vol. Appelé par `applicationWillTerminate` : la
     /// recherche de plugins est un `claude -p` FACTURÉ, il ne doit pas survivre
@@ -476,9 +500,12 @@ final class PluginInventory {
         var lease: UUID?
         var resultLabel = "cancelled"
         defer {
-            if let lease { AnalysisBudget.shared.finish(lease, outcome: resultLabel) }
-            activeSearchProvider = nil
-            isSearching = false
+            let finishedLease = lease, finishedLabel = resultLabel
+            Self.whenFinished(scope: generation) {
+                if let finishedLease { AnalysisBudget.shared.finish(finishedLease, outcome: finishedLabel) }
+                self.activeSearchProvider = nil
+                self.isSearching = false
+            }
         }
         // L'exécuteur, son modèle et son home sont figés AVANT le catalogue async.
         if useAI {
@@ -490,7 +517,12 @@ final class PluginInventory {
             } catch { return error.localizedDescription }
         }
         if snapshot?.available.isEmpty ?? true {
+            let refreshDeadline = ContinuousClock.now.advanced(by: .seconds(Self.availableTimeout))
             while isRefreshing {
+                guard ContinuousClock.now < refreshDeadline else {
+                    resultLabel = "catalogueUnavailable"
+                    return "La lecture des plugins est toujours en cours. Réessayer après sa fin."
+                }
                 try? await Task.sleep(for: .milliseconds(100))
                 guard generation == searchGeneration, !Task.isCancelled else { return "Recherche annulée." }
             }
@@ -536,7 +568,7 @@ final class PluginInventory {
             resultLabel = "preparationFailed"
             return CodexRun.lastFailure ?? "Préparation impossible."
         }
-        defer { launch.cleanUp() }
+        defer { Self.whenFinished(scope: generation) { launch.cleanUp() } }
         guard generation == searchGeneration, !Task.isCancelled else { return "Recherche annulée." }
         let outcome = await Self.run(arguments: [], claude: "", timeout: 120, launch: launch,
             scope: generation,
@@ -639,8 +671,16 @@ final class PluginInventory {
         SessionStore.shared.registerInternalPid(pid)
         Self.inFlight.adopt(process, identity: identity, scope: scope)
         defer {
-            Self.inFlight.release(process)
-            SessionStore.shared.unregisterInternalPid(pid)
+            let release = {
+                Self.inFlight.release(process)
+                SessionStore.shared.unregisterInternalPid(pid)
+            }
+            if process.isRunning {
+                Task { @MainActor in
+                    while process.isRunning { try? await Task.sleep(for: .milliseconds(100)) }
+                    release()
+                }
+            } else { release() }
         }
         let result = await BoundedProcessRunner.collect(process: process, stdout: stdout, stderr: stderr,
             identity: identity, deadline: deadline, stdoutCap: 4_194_304, stderrCap: 4000)

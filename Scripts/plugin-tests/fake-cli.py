@@ -42,6 +42,9 @@ try:
         if short in config.get("fail", []) or identity in config.get("fallback", []):
             sys.exit(1)
         print("Always-on: %s tokens" % config.get("tokens", {}).get(short, 100), flush=True)
+    elif kind == "analyse":
+        time.sleep(config.get("analysisDelay", 0.1))
+        print("{}", flush=True)
     elif kind in ["install", "enable", "disable"]:
         time.sleep(config.get("mutationDelay", 0.3))
         (root / "mutation-finished").write_text(identity)

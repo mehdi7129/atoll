@@ -56,6 +56,20 @@ def main():
                               errorTail: lastMeaningfulLine(error), killedByWatchdog: false)''',
          "pipe", "A09-plugin-inherited-pipe-bounded"),
     ]
+    mutations += [
+        ("release-live-registry", "App/PluginInventory.swift", "if process.isRunning {",
+         "if false, process.isRunning {", "survivor", "A09-plugin-live-search-ownership"),
+        ("release-live-scope", "App/PluginInventory.swift", "if inFlight.isRunning(scope: scope) {",
+         "if false, inFlight.isRunning(scope: scope) {", "survivor", "A09-plugin-live-search-ownership"),
+        ("overlap-live-fallback", "App/PluginInventory.swift", "!Self.inFlight.isRunning(scope: request.token)",
+         "true", "survivor", "A09-plugin-live-detail-ownership"),
+        ("unbounded-search-refresh-wait", "App/PluginInventory.swift",
+         "guard ContinuousClock.now < refreshDeadline else", "guard true else",
+         "refresh-wait", "A09-plugin-refresh-wait-search-bounded"),
+        ("unbounded-mutation-refresh-wait", "App/PluginInventory.swift",
+         "guard ContinuousClock.now < deadline else", "guard true else",
+         "refresh-wait", "A09-plugin-refresh-wait-mutation-bounded"),
+    ]
     results = []
     with tempfile.TemporaryDirectory(prefix="atoll-plugin-services-") as temporary:
         private = Path(temporary)
@@ -72,6 +86,25 @@ def main():
                     if text.count(mutation[2]) != 1:
                         raise SystemExit("Couture de sabotage absente ou ambiguë : " + name)
                     text = text.replace(mutation[2], mutation[3])
+                if relative == "App/PluginInventory.swift":
+                    # Seulement les délais du scénario survivant sont accélérés.
+                    # Le vrai run, le registre, les gardes et le budget restent compilés.
+                    timing = "let deadline = ContinuousClock.now.advanced(by: .seconds(max(0, timeout)))"
+                    assert text.count(timing) == 1
+                    text = text.replace(timing, "let deadline = ContinuousClock.now.advanced(by: .seconds("
+                        'ProcessInfo.processInfo.environment["ATOLL_PLUGIN_SURVIVOR"] == "1" ? 0.05 : max(0, timeout)))')
+                    waiting = "let deadline = ContinuousClock.now.advanced(by: .seconds(timeout))"
+                    assert text.count(waiting) == 2
+                    text = text.replace(waiting, "let deadline = ContinuousClock.now.advanced(by: .seconds("
+                        'ProcessInfo.processInfo.environment["ATOLL_PLUGIN_WAITING"] == "1" ? 0.3 : timeout))')
+                    waiting = "let refreshDeadline = ContinuousClock.now.advanced(by: .seconds(Self.availableTimeout))"
+                    assert text.count(waiting) == 1
+                    text = text.replace(waiting, "let refreshDeadline = ContinuousClock.now.advanced(by: .seconds("
+                        'ProcessInfo.processInfo.environment["ATOLL_PLUGIN_WAITING"] == "1" ? 0.3 : Self.availableTimeout))')
+                    collect = "identity: identity, deadline: deadline, stdoutCap: 4_194_304, stderrCap: 4000)"
+                    if collect in text:
+                        text = text.replace(collect, "identity: identity, deadline: deadline, stdoutCap: 4_194_304, "
+                            'stderrCap: 4000, terminationGrace: ProcessInfo.processInfo.environment["ATOLL_PLUGIN_SURVIVOR"] == "1" ? 0.05 : 1)')
                 target = root / Path(relative).name
                 target.write_text(text)
                 compiled.append(str(target))

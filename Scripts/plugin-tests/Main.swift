@@ -229,6 +229,96 @@ struct Main {
         print("PASS A09 plugins : parent sorti, descendant garde les pipes, retour borné.")
     }
 
+    @MainActor static func survivingChild() async throws {
+        for kind in ["search", "mutation", "details"] {
+            let folder = try fixture("survivor-\(kind)", config: ["installed": installed(2),
+                "analysisDelay": 3, "mutationDelay": 3, "detailsDelay": 3])
+            let cli = folder.appendingPathComponent("fake-cli")
+            let inventory = PluginInventory(claudePath: cli.path, detailConcurrencyLimit: 1)
+            inventory.refresh(includeAvailable: true)
+            try await wait("catalogue du survivant") { inventory.lastRefreshedAt != nil }
+            ProcessInspector.unverifiable = true
+            setenv("ATOLL_PLUGIN_SURVIVOR", "1", 1)
+            defer {
+                ProcessInspector.unverifiable = false
+                unsetenv("ATOLL_PLUGIN_SURVIVOR")
+                CodexRun.fixtureLaunch = nil
+            }
+            if kind == "search" {
+                CodexRun.fixtureLaunch = .init(shellCommand: "exec '\(cli.path)' plugin analyse",
+                    outputFile: nil, workspace: folder)
+                let error = await inventory.search(need: "fixture", useAI: true)
+                try check(error != nil && inventory.isSearching && AnalysisBudget.shared.active != nil
+                    && !SessionStore.shared.internalPids.isEmpty,
+                    "A09-plugin-live-search-ownership")
+                try check(!FileManager.default.fileExists(atPath: folder.appendingPathComponent("cleaned").path),
+                          "A09-plugin-live-workspace")
+                _ = await inventory.search(need: "fixture again", useAI: true)
+                inventory.cancelSearch()
+                try check(starts(folder, kind: "analyse").count == 1 && AnalysisBudget.shared.active != nil,
+                          "A09-plugin-live-search-overlap")
+                try await wait("fin recherche survivante") { !inventory.isSearching }
+                try check(AnalysisBudget.shared.active == nil, "A09-plugin-budget-released-after-exit")
+                try await wait("nettoyage après sortie") {
+                    FileManager.default.fileExists(atPath: folder.appendingPathComponent("cleaned").path)
+                }
+            } else if kind == "mutation" {
+                _ = await inventory.install(pluginID: "p0@market")
+                try check(inventory.busyPluginID == "p0@market" && !SessionStore.shared.internalPids.isEmpty,
+                          "A09-plugin-live-mutation-ownership")
+                let blocked = await inventory.install(pluginID: "p1@market")
+                try check(blocked != nil && starts(folder, kind: "install").count == 1,
+                          "A09-plugin-live-mutation-overlap")
+                try await wait("fin mutation survivante") { inventory.busyPluginID == nil }
+            } else {
+                inventory.loadTokenCost(for: "p0@market")
+                inventory.loadTokenCost(for: "p1@market")
+                try await wait("premier coût survivant") { starts(folder, kind: "details").count >= 1 }
+                try await Task.sleep(for: .milliseconds(500))
+                try check(starts(folder, kind: "details").count == 1 && !SessionStore.shared.internalPids.isEmpty,
+                          "A09-plugin-live-detail-ownership")
+                try await wait("deuxième coût après sortie") { starts(folder, kind: "details").count == 2 }
+                inventory.cancel()
+            }
+            try await wait("libération du PID après sortie réelle") { SessionStore.shared.internalPids.isEmpty }
+        }
+        print("PASS A09 survivants : recherche/budget/fichiers, mutation et file de détails restent réservés.")
+    }
+
+    @MainActor static func waitingForSurvivingRefresh() async throws {
+        for kind in ["search", "mutation"] {
+            let folder = try fixture("refresh-survivor-\(kind)",
+                                     config: ["installed": installed(1), "listDelay": 3, "mutationDelay": 0.01])
+            let inventory = PluginInventory(claudePath: folder.appendingPathComponent("fake-cli").path)
+            ProcessInspector.unverifiable = true
+            setenv("ATOLL_PLUGIN_SURVIVOR", "1", 1)
+            defer {
+                ProcessInspector.unverifiable = false
+                unsetenv("ATOLL_PLUGIN_SURVIVOR")
+                unsetenv("ATOLL_PLUGIN_WAITING")
+            }
+            inventory.refresh()
+            try await wait("lecture expirée mais vivante") { inventory.lastError != nil }
+            unsetenv("ATOLL_PLUGIN_SURVIVOR")
+            setenv("ATOLL_PLUGIN_WAITING", "1", 1)
+            let started = ContinuousClock.now
+            let error = kind == "search"
+                ? await inventory.search(need: "fixture", useAI: true)
+                : await inventory.install(pluginID: "p0@market")
+            try check(error != nil && started.duration(to: .now) < .seconds(1.5)
+                && inventory.isRefreshing && !SessionStore.shared.internalPids.isEmpty,
+                "A09-plugin-refresh-wait-\(kind)-bounded")
+            try check(starts(folder, kind: "list").count == 1
+                && starts(folder, kind: "analyse").isEmpty
+                && AnalysisBudget.shared.active == nil,
+                "A09-plugin-refresh-wait-no-relaunch")
+            try await wait("libération lecture après sortie réelle") {
+                !inventory.isRefreshing && SessionStore.shared.internalPids.isEmpty
+            }
+        }
+        print("PASS A09 attente catalogue : retour borné, enfant conservé, aucune relance.")
+    }
+
     @MainActor static func main() async {
         do {
             let selected = CommandLine.arguments.dropFirst().first ?? "all"
@@ -237,6 +327,8 @@ struct Main {
             if ["all", "cache"].contains(selected) { try await cache() }
             if ["all", "catalog"].contains(selected) { try await catalog() }
             if ["all", "pipe"].contains(selected) { try await inheritedPipe() }
+            if ["all", "survivor"].contains(selected) { try await survivingChild() }
+            if ["all", "refresh-wait"].contains(selected) { try await waitingForSurvivingRefresh() }
             metrics["checks"] = checks
             print(String(decoding: try JSONSerialization.data(withJSONObject: metrics, options: [.sortedKeys]), as: UTF8.self))
         } catch {
