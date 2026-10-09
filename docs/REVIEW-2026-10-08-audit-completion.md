@@ -256,3 +256,13 @@ ces comparaisons distinctes.
 Les artefacts 0.18.6/build 41, leurs téléchargements publics et le flux servi
 sont vérifiés. L'app installée reste sous le contrôle de l'utilisateur ;
 les limites de recette ci-dessus demeurent explicites.
+
+
+## Complément après installation, 9 octobre 2026
+
+Mehdi a installé 0.18.6/build 41 et confirmé les deux préécoutes ainsi que
+l’ouverture de Cursor depuis la carte Codex. La CI de `9d95536` sur `main` est
+également terminée : 26 étapes sur 26 réussies. Le [relevé d’usage](REVIEW-2026-10-09-installed-checks.md)
+conserve la portée exacte de ces confirmations ; les résultats historiques
+ci-dessus ne sont pas réécrits. L’onglet Terminal et la génération Claude
+authentifiée restent non qualifiés.

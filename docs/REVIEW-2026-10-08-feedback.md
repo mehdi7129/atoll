@@ -49,3 +49,11 @@ humaine ni une qualification du focus sur un terminal authentifié.
 Les preuves complémentaires de l'ordre des jumps sont dans les sous-dossiers
 `counterreview` (avant/après la régression) et `feedback-order` (nominal et quatre
 sabotages) du même dossier de preuves.
+
+## Complément d’usage du 9 octobre 2026
+
+Sur la version installée 0.18.6/build 41, Mehdi a confirmé l’écoute des deux
+préécoutes d’Alertes et l’ouverture de Cursor par le bouton de la carte Codex.
+Ce [relevé distinct](REVIEW-2026-10-09-installed-checks.md) complète les tests
+silencieux ci-dessus. Il ne qualifie ni les déclenchements automatiques des sons,
+ni un onglet Terminal, ni un fichier précis dans Cursor.
