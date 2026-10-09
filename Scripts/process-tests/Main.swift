@@ -10,6 +10,31 @@ import AtollCore
             if !value() { fputs("FAIL: \(message)\n", stderr); exit(1) }
         }
         switch scenario {
+        case "fleet-ownership", "keychain-ownership":
+            func probe() async -> Bool {
+                if scenario == "fleet-ownership" {
+                    return await FleetPoller.runAgentsJSON(claudePath: helper.path,
+                        deadline: .now.advanced(by: .milliseconds(500))) != nil
+                }
+                return await ModelQuotaPoller.readAccessToken(executable: helper, timeout: 0.5) != nil
+            }
+            func launches() -> Int {
+                ((try? String(contentsOf: root.appendingPathComponent("probe-launches"))) ?? "").split(separator: "\n").count
+            }
+            let first = Task { await probe() }
+            let fixtureDeadline = ContinuousClock.now.advanced(by: .seconds(5))
+            while launches() == 0 {
+                check(ContinuousClock.now < fixtureDeadline, "A09 probe fixture did not become ready")
+                try await Task.sleep(for: .milliseconds(10))
+            }
+            let firstSucceeded = await first.value
+            check(!firstSucceeded && launches() == 1, "A09 probe fixture did not time out")
+            let second = await probe()
+            check(!second && launches() == 1, "A09 probe lost live child ownership")
+            try Data().write(to: root.appendingPathComponent("probe-release"))
+            try await Task.sleep(for: .milliseconds(300))
+            let resumed = await probe()
+            check(resumed && launches() == 2, "A09 probe did not resume after child exit")
         case "resolve-claude", "resolve-codex", "resolve-claude-inherited", "resolve-codex-inherited":
             let cli = scenario.contains("claude") ? "claude" : "codex"
             let inherited = scenario.hasSuffix("inherited")

@@ -5,6 +5,17 @@ import time
 from pathlib import Path
 root = Path(os.environ['ATOLL_PROCESS_ROOT'])
 verb = sys.argv[1]
+if os.environ.get('ATOLL_PROCESS_NO_IDENTITY') == '1':
+    with (root / 'probe-launches').open('a') as out:
+        out.write('spawn\n')
+    deadline = time.monotonic() + 10
+    while not (root / 'probe-release').exists() and time.monotonic() < deadline:
+        time.sleep(.01)
+    if verb == 'agents':
+        print('[]')
+    else:
+        print('{"claudeAiOauth":{"accessToken":"fixture-token"}}')
+    sys.exit(0)
 if verb == 'agents':
     if os.fork() == 0:
         time.sleep(1.5)

@@ -5,7 +5,7 @@ import AtollCore
 
 private let log = Logger(subsystem: "dev.mehdiguiard.atoll", category: "fleet")
 
-/// Interroge périodiquement `claude agents --json --all` — l'interface SUPPORTÉE
+/// Interroge périodiquement `claude agents --json` — l'interface SUPPORTÉE
 /// d'énumération de la flotte — et en fait l'AUTORITÉ de découverte des sessions.
 ///
 /// Pourquoi : le daemon d'arrière-plan de Claude Code a rendu le scan de processus
@@ -121,12 +121,22 @@ final class FleetPoller {
 
     /// Exécute `claude agents --json` (exec direct — pas de shell). Renvoie stdout
     /// si exit 0, nil sinon (commande absente/erreur/daemon figé → repli scan).
-    /// BORNÉ par un watchdog : un `claude` qui hang est tué (sinon la boucle de
-    /// poll gèlerait à jamais et le repli ne se réengagerait pas).
+    /// La collecte est bornée même si l'enfant ne peut pas être signalé.
+    /// Dans ce cas, aucun nouveau poll n'est lancé avant sa vraie sortie.
+    private static var activeProbe: Process?
+    private static var collectingProbe = false
+
     static func runAgentsJSON(claudePath: String,
                               deadline: ContinuousClock.Instant = .now.advanced(by: .seconds(5))) async -> Data? {
+        guard !collectingProbe, activeProbe?.isRunning != true else { return nil }
         guard BoundedProcessRunner.remaining(until: deadline) > 0, !Task.isCancelled else { return nil }
         let process = Process()
+        activeProbe = process
+        collectingProbe = true
+        defer {
+            collectingProbe = false
+            if !process.isRunning { activeProbe = nil }
+        }
         process.executableURL = URL(fileURLWithPath: claudePath)
         // SANS --all : seules les sessions actives sont demandées, comme avant.
         process.arguments = ["agents", "--json"]

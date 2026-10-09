@@ -22,7 +22,7 @@ final class ModelQuotaPoller {
     /// Borne de la lecture du Trousseau. Généreuse — un déverrouillage manuel
     /// prend quelques secondes — mais FINIE : sans elle, un dialogue laissé
     /// sans réponse figeait le poller pour toute la durée de vie de l'app.
-    /// `nonisolated` : lue depuis la closure Sendable du watchdog.
+    /// `nonisolated` : utilisable comme valeur par défaut des appels async.
     nonisolated static let keychainTimeout: TimeInterval = 20
 
     private(set) var scopedLimits: [OAuthUsage.ScopedLimit] = []
@@ -90,9 +90,20 @@ final class ModelQuotaPoller {
     /// `/usr/bin/security` (identité STABLE — un accès SecItemCopyMatching
     /// depuis l'app redemanderait l'autorisation à CHAQUE build Debug redéployé,
     /// le trousseau voyant chaque binaire adhoc comme une app différente).
+    private static var activeKeychainRead: Process?
+    private static var collectingKeychainRead = false
+
     static func readAccessToken(executable: URL = URL(fileURLWithPath: "/usr/bin/security"),
                                 timeout: TimeInterval = keychainTimeout) async -> String? {
+        // Une identité illisible interdit le signal, pas le suivi de l'enfant.
+        guard !collectingKeychainRead, activeKeychainRead?.isRunning != true else { return nil }
         let process = Process()
+        activeKeychainRead = process
+        collectingKeychainRead = true
+        defer {
+            collectingKeychainRead = false
+            if !process.isRunning { activeKeychainRead = nil }
+        }
         process.executableURL = executable
         process.arguments = ["find-generic-password", "-s", "Claude Code-credentials", "-w"]
         process.standardInput = FileHandle.nullDevice
