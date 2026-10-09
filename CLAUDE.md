@@ -5,8 +5,9 @@ pour l'état du travail, les preuves et les limites. L'[archive intégrale du
 2026-10-08](docs/archive/CLAUDE-2026-10-08.md) conserve les incidents, versions et
 arbitrages détaillés ; elle n'est pas un état courant.
 
-Version publiée : **v0.18.5**, build 40. La [fiche de livraison](docs/releases/0.18.5.json)
-distingue les artefacts distribués du code encore en développement.
+Version en préparation : **v0.18.6**, build 41. La dernière version distribuée
+reste [v0.18.5, build 40](docs/releases/0.18.5.json) jusqu’à validation et
+publication des nouveaux artefacts et du flux Sparkle.
 
 ## Produit et façon de travailler
 
