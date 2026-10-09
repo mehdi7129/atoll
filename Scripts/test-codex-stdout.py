@@ -21,7 +21,8 @@ objects = sorted((args.build_dir / 'AtollCore.build').glob('*.o'))
 assert objects
 report = {'scenarios': [], 'source_sha256': {p: hashlib.sha256((repo/p).read_bytes()).hexdigest()
     for p in ['Bridge/main.swift', 'Bridge/CodexBridge.swift', 'Shared/ProcessInspector.swift']}}
-with tempfile.TemporaryDirectory(prefix='atoll-stdout-') as temporary:
+# sun_path macOS est limité : le TMPDIR du rapport peut être beaucoup plus long.
+with tempfile.TemporaryDirectory(prefix='atoll-stdout-', dir='/private/tmp') as temporary:
     root = Path(temporary)
     # Même classe complète, seule l'adresse du socket est injectable pour la recette.
     paths = (repo / 'AtollCore/Sources/AtollCore/CodexPaths.swift').read_text()

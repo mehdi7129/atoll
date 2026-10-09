@@ -60,7 +60,7 @@ def plan(profile, output, build, only=()):
         for name in ["process-services", "analysis-processes", "codex-stdout"]:
             add(name, "--build-dir", build, "--output", output / name,
                 *(["--sabotage"] if profile == "full" and name == "codex-stdout" else []))
-        add("claude-permissions", "--build-dir", build, "--output", output / "claude-permissions")
+        add("claude-permissions", "--build-dir", build, "--output", output / "claude-permissions.json")
         add("codex-quota-poller", core=False)
         add("codex-exec", "--prepare-only", "--build-dir", build,
             *(["--sabotage-instructions-file"] if profile == "full" else []))
