@@ -73,6 +73,12 @@ lot validé et le maintien du budget d'un enfant encore vivant après timeout.
 Les captures d'aperçu restent distinctes de l'écoute humaine et du focus sur un
 terminal authentifié, qui ne sont pas qualifiés par les fixtures.
 
+Après installation de **0.18.6/build 41**, Mehdi confirme avoir entendu les deux
+préécoutes et que **OUVRIR DANS CURSOR** ouvre bien Cursor. La CI de `9d95536`
+sur `main` passe 26 étapes sur 26. Le [relevé d’usage](REVIEW-2026-10-09-installed-checks.md)
+limite cette confirmation à l’ouverture de l’application ; aucun onglet Terminal
+ni fichier précis Cursor n’est qualifié par ce geste.
+
 Les vérifications de distribution sont [versionnées](RELEASE-VALIDATION.md).
 Leur première qualification sur 0.18.5 et la livraison de 0.18.6 ont chacune
 leurs preuves ; les résultats de l'ancienne release ne sont pas réattribués.
@@ -92,8 +98,8 @@ instructions actives séparées de l'archive conservée.
 
 Avant de reprendre : `git status --short --branch`, `git log -5 --oneline`,
 `git worktree list`, puis vérifier la PR et la release courantes. L'app installée
-observée lors des recettes précédentes est 0.18.5/build 40 ; vérifier son état
-réel avant toute action. Une fusion ou un build ne met pas à jour cette app.
+observée après la mise à jour de Mehdi le 9 octobre est **0.18.6/build 41** ;
+vérifier son état réel avant toute action. Une fusion ou un build ne met pas à jour cette app.
 
 **Checkouts :** le dossier original `~/Desktop/Dynamic_Island` est propre mais
 reste sur `codex/atoll-future-exploration`, commit `65ce2b6`, avec un commit
@@ -128,9 +134,10 @@ de choisir un checkout de reprise.
 1. **Claude authentifié** : le test de génération a reçu un 403 d'accès abonnement.
    Mehdi confirme maintenant ne plus disposer d'un abonnement Claude. Différer
    cette recette jusqu'à disponibilité d'un accès ; ne pas basculer sur une clé API.
-2. **Retour au terminal visible** : le PTY a permis de tester le CLI, pas le focus
-   d'un onglet réel. L'outil de contrôle GUI a refusé Terminal. Aucun échec du
-   bouton d'Atoll n'est établi ; cette recette reste non exercée.
+2. **Retour à l'application / onglet Terminal** : le retour à Cursor est confirmé
+   par Mehdi sur 0.18.6. Cela qualifie l'ouverture de l'app, pas un onglet précis.
+   Le contrôle GUI refuse Terminal et la fixture synthétique a expiré ; la recette
+   d'un onglet Terminal reste non qualifiée. Aucun échec du bouton n'est établi.
 3. **Protections conservées** : aucun signal vers un PID non vérifié, aucun succès
    d'outil Codex inventé, aucune réparation destructive de journal/manifest,
    sources de notes obligatoires et catalogues invalides bloquants. Événements
