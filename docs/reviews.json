@@ -788,6 +788,52 @@
         "Scripts/test-hook-settings-sabotage.py",
         "Scripts/test-hook-installation.py"
       ]
+    },
+    {
+      "date": "2026-10-08",
+      "document": "docs/REVIEW-2026-10-08-plugins.md",
+      "depth": "line-by-line",
+      "note": "Lecture intégrale explicitement attestée par le rapport plugins ; garde des générations, ownership, file et cache. Les panneaux consommateurs restent une relecture ciblée.",
+      "files": [
+        "App/PluginInventory.swift",
+        "App/CodexCatalogState.swift",
+        "App/CodexCatalogSection.swift"
+      ]
+    },
+    {
+      "date": "2026-10-08",
+      "document": "docs/REVIEW-2026-10-08-audit-completion.md",
+      "depth": "sweep",
+      "note": "Contre-reviews ciblées de la mémoire, des permissions, du feedback et des raccordements UI plugins. Défauts adjacents ENOTCONN, offset JSONL et ordre des jumps reproduits et corrigés avec sabotages compilés. Ne revendique pas une lecture intégrale des grands services.",
+      "files": [
+        "App/MemoryIndexer.swift",
+        "AtollCore/Sources/AtollCore/MemoryIndex.swift",
+        "AtollCore/Tests/AtollCoreTests/MemoryDocumentTests.swift",
+        "Scripts/test-memory-indexer.py",
+        "Scripts/test-memory-document-sabotage.py",
+        "Scripts/memory-index-tests/Main.swift",
+        "App/InteractionCenter.swift",
+        "App/SessionStore.swift",
+        "App/BridgeServer.swift",
+        "App/AppDelegate.swift",
+        "AtollCore/Sources/AtollCore/SessionPhase.swift",
+        "Scripts/test-claude-permissions.py",
+        "Scripts/claude-permission-tests/Main.swift",
+        "Scripts/claude-permission-tests/Stubs.swift",
+        "App/SoundCenter.swift",
+        "App/TerminalJumpService.swift",
+        "App/RetrospectiveRunner.swift",
+        "App/LearningSettingsPane.swift",
+        "Scripts/test-feedback.py",
+        "Scripts/feedback-tests/Main.swift",
+        "Scripts/learning-tests/RetrospectiveMain.swift",
+        "App/ClaudeCodeSettingsPane.swift",
+        "App/CodexSettingsPane.swift",
+        "Scripts/test-plugin-services.py",
+        "Scripts/plugin-tests/Main.swift",
+        "Scripts/plugin-tests/Stubs.swift",
+        "Scripts/plugin-tests/fake-cli.py"
+      ]
     }
   ]
 }

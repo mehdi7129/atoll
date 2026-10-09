@@ -368,6 +368,10 @@ docs/        recherche et documents de conception
 
 Pour reprendre le développement : [fiche de reprise](docs/HANDOFF.md),
 [règles du projet](CLAUDE.md) et [direction produit](docs/VISION-2026-08.md).
+La [validation offline et la CI](docs/VALIDATION.md) partagent une commande commune.
+Les [vérifications de distribution](docs/RELEASE-VALIDATION.md) sont versionnées ;
+le [suivi de l’audit de robustesse](docs/REVIEW-2026-10-08-audit-completion.md)
+distingue corrections, validations et livraison.
 [PLAN.md](PLAN.md) conserve le plan initial historique. Les résultats mesurés et les
 limites de validation sont regroupés dans la fiche de reprise, avec les rapports
 de chaque release. Le [contrat des analyses](docs/CODEX-FAILOVER.md) distingue
