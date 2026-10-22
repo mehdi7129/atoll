@@ -96,7 +96,7 @@ struct CompactView: View {
                   let window = bucket.windows.first, window.isCurrent(at: Date()) else { return nil }
             // Sans durée connue, le détail nomme la fenêtre. Le compact garde
             // le pourcentage réel, sans inventer « 5h » ni répéter le fournisseur.
-            let label = window.label == "principale" || window.label == "secondaire" ? "" : window.label
+            let label = window.label == "principale" || window.label == "secondaire" ? "" : window.displayLabel(at: Date())
             return (label, window.usedFraction)
         }
         guard viewModel.hasFreshFiveHour else { return nil }

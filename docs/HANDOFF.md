@@ -1,11 +1,39 @@
 # HANDOFF — reprendre Atoll
 
-État courant du **9 octobre 2026**, audit clôturé et maintenance publiée. Les règles
+État courant du **22 octobre 2026**, correctif quota Codex en préparation de release.
+L'audit précédent est clôturé et sa maintenance publiée. Les règles
 actives restent dans [CLAUDE.md](../CLAUDE.md), avec leur
 [archive intégrale](archive/CLAUDE-2026-10-08.md). Les sections historiques en fin
 de fiche décrivent leur date ; elles ne remplacent pas l'état courant ci-dessous.
 
-## État courant : 22 constats corrigés et livrés, 0.18.6 publiée
+## En préparation : 0.18.7, build 42 — délai restant du quota Codex
+
+Mehdi a explicitement autorisé la release le 22 octobre après validation du
+correctif. Les versions du projet sont **0.18.7/build 42** ; la dernière release
+publique vérifiée dans cette fiche reste **0.18.6/build 41**. Ne pas annoncer
+0.18.7 publiée avant d'avoir vérifié les artefacts publics et le flux servi.
+
+Le label des fenêtres Codex d'au moins un jour est calculé depuis la date de
+reset, avec arrondi supérieur : **5j** pour cinq jours restants, puis **4j** le
+lendemain. Sous un jour, il passe en heures puis en minutes. La fenêtre courte
+**5h**, les pourcentages, dates de reset, règles de fraîcheur et préférences
+restent inchangés. Sans date de reset exploitable, la durée totale reste le repli.
+
+Validation ciblée : **30 tests, zéro échec** ; le retour compilé de l'ancien
+label **7j** déclenche cinq échecs dans le test de régression. Build Debug réussi.
+Deux cas d'aperçu protégés passent et leurs captures ont été lues ; le texte a
+été vérifié via le repli Accessibility après échec de l'OCR natif (`e5rt`).
+Aucune nouvelle génération authentifiée. Le build et les fixtures ne prouvent
+ni publication, ni mise à jour de l'app installée.
+[Rapport et preuves](REVIEW-2026-10-22-codex-quota-days.md).
+
+Préparation dans `~/Library/Caches/atoll-quota-days-20261022`, branche
+`fix/codex-quota-days-remaining`, depuis `e36409b`. Le checkout du Bureau et
+l'app stable sont préservés. Avant packaging : contrôles de release et
+`python3 Scripts/check-docs.py --no-tests --preflight`. Après publication :
+documenter le relevé de livraison et vérifier `--no-tests --network`.
+
+## Dernière livraison : 22 constats corrigés et livrés, 0.18.6 publiée
 
 La version publiée est **[v0.18.6, build 41](https://github.com/mehdi7129/atoll/releases/tag/v0.18.6)**.
 Le [rapport d'intégration](REVIEW-2026-10-08-audit-completion.md) suit les **22 constats** :

@@ -6,8 +6,20 @@ public struct CodexQuota: Equatable, Sendable {
     public struct Window: Equatable, Sendable, Identifiable {
         public let id: String
         public let label: String
+        public let durationMinutes: Int?
         public let usedFraction: Double
         public let resetsAt: Date?
+        /// Les fenêtres longues affichent le délai restant, arrondi au jour
+        /// supérieur ; la durée totale reste disponible dans `label`.
+        public func displayLabel(at now: Date) -> String {
+            guard let durationMinutes, durationMinutes >= 1440,
+                  let resetsAt, resetsAt > now else { return label }
+            let remaining = resetsAt.timeIntervalSince(now)
+            guard remaining.isFinite, remaining < Double(Int.max) else { return label }
+            if remaining >= 86400 { return "\(Int(ceil(remaining / 86400)))j" }
+            if remaining >= 3600 { return "\(Int(ceil(remaining / 3600)))h" }
+            return "\(max(1, Int(ceil(remaining / 60))))min"
+        }
         public func isCurrent(at now: Date) -> Bool { resetsAt.map { $0 > now } ?? true }
     }
     public struct Bucket: Equatable, Sendable, Identifiable {
@@ -51,7 +63,7 @@ public struct CodexQuota: Equatable, Sendable {
                     else { label = "\(m)min" }
                 } else { label = key == "primary" ? "principale" : "secondaire" }
                 let reset = (window["resetsAt"] as? NSNumber)?.doubleValue
-                return Window(id: key, label: label, usedFraction: percent.doubleValue / 100,
+                return Window(id: key, label: label, durationMinutes: minutes, usedFraction: percent.doubleValue / 100,
                               resetsAt: reset.flatMap { $0.isFinite && $0 > 0 ? Date(timeIntervalSince1970: $0) : nil })
             }
             guard !windows.isEmpty else { return nil }

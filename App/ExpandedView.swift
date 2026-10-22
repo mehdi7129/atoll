@@ -404,7 +404,7 @@ struct ExpandedView: View {
                         .foregroundStyle(colors.dim).lineLimit(1)
                     ForEach(bucket.windows) { window in
                         if window.isCurrent(at: Date()) {
-                            quotaGauge(label: window.label, fraction: window.usedFraction, resetsAt: window.resetsAt)
+                            quotaGauge(label: window.displayLabel(at: Date()), fraction: window.usedFraction, resetsAt: window.resetsAt)
                         } else {
                             Text("\(window.label) : actualisation…").foregroundStyle(colors.dim)
                         }
