@@ -1,17 +1,16 @@
 # HANDOFF — reprendre Atoll
 
-État courant du **22 octobre 2026**, correctif quota Codex en préparation de release.
+État courant du **22 octobre 2026**, correctif quota Codex publié en 0.18.7.
 L'audit précédent est clôturé et sa maintenance publiée. Les règles
 actives restent dans [CLAUDE.md](../CLAUDE.md), avec leur
 [archive intégrale](archive/CLAUDE-2026-10-08.md). Les sections historiques en fin
 de fiche décrivent leur date ; elles ne remplacent pas l'état courant ci-dessous.
 
-## En préparation : 0.18.7, build 42 — délai restant du quota Codex
+## Publiée : 0.18.7, build 42 — délai restant du quota Codex
 
-Mehdi a explicitement autorisé la release le 22 octobre après validation du
-correctif. Les versions du projet sont **0.18.7/build 42** ; la dernière release
-publique vérifiée dans cette fiche reste **0.18.6/build 41**. Ne pas annoncer
-0.18.7 publiée avant d'avoir vérifié les artefacts publics et le flux servi.
+La **[v0.18.7, build 42](https://github.com/mehdi7129/atoll/releases/tag/v0.18.7)**
+est publiée depuis `82b90725`, après fusion de la
+[PR #20](https://github.com/mehdi7129/atoll/pull/20), avec l'autorisation de Mehdi.
 
 Le label des fenêtres Codex d'au moins un jour est calculé depuis la date de
 reset, avec arrondi supérieur : **5j** pour cinq jours restants, puis **4j** le
@@ -23,17 +22,25 @@ Validation ciblée : **30 tests, zéro échec** ; le retour compilé de l'ancien
 label **7j** déclenche cinq échecs dans le test de régression. Build Debug réussi.
 Deux cas d'aperçu protégés passent et leurs captures ont été lues ; le texte a
 été vérifié via le repli Accessibility après échec de l'OCR natif (`e5rt`).
-Aucune nouvelle génération authentifiée. Le build et les fixtures ne prouvent
-ni publication, ni mise à jour de l'app installée.
+Aucune nouvelle génération authentifiée. La suite Core Release complète passe
+**1 133 tests, un skip, zéro échec**. La
+[CI de la PR #20](https://github.com/mehdi7129/atoll/actions/runs/39759975021)
+passe **26 étapes sur 26**, avec **1 133 tests, deux skips et zéro échec**.
 [Rapport et preuves](REVIEW-2026-10-22-codex-quota-days.md).
 
-Préparation dans `~/Library/Caches/atoll-quota-days-20261022`, branche
-`fix/codex-quota-days-remaining`, depuis `e36409b`. Le checkout du Bureau et
-l'app stable sont préservés. Avant packaging : contrôles de release et
-`python3 Scripts/check-docs.py --no-tests --preflight`. Après publication :
-documenter le relevé de livraison et vérifier `--no-tests --network`.
+App et DMG signés Developer ID, notarisés et staplés ; les sept binaires sont
+universels arm64 / x86_64. Six signatures Sparkle vérifiées, six copies altérées
+rejetées. Le delta **41 → 42** et l'app du DMG reproduisent les **134 objets**
+du ZIP complet. Les sept assets publics téléchargés correspondent aux SHA256
+et tailles validés. L'activation du flux `e94c4cd` suit les assets ; le contenu
+servi est identique aux octets validés, avec **0.18.7/build 42** en tête.
+[Relevé de livraison](releases/0.18.7.json).
 
-## Dernière livraison : 22 constats corrigés et livrés, 0.18.6 publiée
+Préparation dans `~/Library/Caches/atoll-quota-days-20261022`, depuis `e36409b`.
+Le checkout du Bureau et l'app stable sont préservés ; la publication n'installe
+aucune app. L'installation observée avant release reste **0.18.6/build 41**.
+
+## Livraison précédente : 22 constats corrigés et livrés, 0.18.6 publiée
 
 La version publiée est **[v0.18.6, build 41](https://github.com/mehdi7129/atoll/releases/tag/v0.18.6)**.
 Le [rapport d'intégration](REVIEW-2026-10-08-audit-completion.md) suit les **22 constats** :
