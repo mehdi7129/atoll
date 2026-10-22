@@ -23,12 +23,15 @@ final class RetrospectiveRunner {
     private(set) var pendingDeliveryCount = 0
     /// Invalidation locale des vues, uniquement après une écriture effective.
     private(set) var journalRevision = 0
-    private(set) var notesRevision = 0
 
-    /// Branchement vers l'index mémoire 7a : chaque note écrite est indexée.
-    @ObservationIgnored var noteSink: ((URL, RetrospectiveReport.Note) -> Void)?
     /// Prévient la 7c qu'au moins un skill vient d'être proposé (rafraîchit la file).
     @ObservationIgnored var onProposalsChanged: (() -> Void)?
+
+    /// Le démarrage injecte ici l'état du migrateur ; aucun couplage aux homes
+    /// personnels dans les harnesses. Une migration incomplète interdit aussi
+    /// la livraison automatique d'une sortie déjà payée.
+    @ObservationIgnored var generationAllowed: () -> Bool = { true }
+    private var generationPermitted: Bool { LearningSettings.shared.isEnabled && generationAllowed() }
 
     @ObservationIgnored private var queue: [Job] = []
     @ObservationIgnored private var pendingDelay: Task<Void, Never>?
@@ -43,7 +46,7 @@ final class RetrospectiveRunner {
     }
 
     /// `forced` = déclenché par un trigger de debug : ce job court-circuite le
-    /// gate ET l'interrupteur général (c'est tout son intérêt).
+    /// gate. L'interrupteur et la barrière de migration restent impératifs.
     struct Job {
         let snapshot: SessionStore.Tracked
         let endedAt: Date
@@ -68,7 +71,7 @@ final class RetrospectiveRunner {
     /// condensé, revalidation Swift, écriture des fichiers par Atoll. Seul le
     /// parseur du transcript change.
     func codexSessionEnded(_ ended: CodexSessions.EndedSession) {
-        guard LearningSettings.shared.isEnabled else { return }
+        guard generationPermitted else { return }
         guard let path = ended.transcriptPath, FileManager.default.fileExists(atPath: path) else {
             log.info("session Codex \(ended.sessionID, privacy: .public) : rollout introuvable — pas de bilan")
             return
@@ -115,7 +118,7 @@ final class RetrospectiveRunner {
 
     func sessionEnded(_ snapshot: SessionStore.Tracked, reason: SessionStore.SessionEndReason) {
         lastEndedSnapshot = snapshot
-        guard LearningSettings.shared.isEnabled else { return } // zéro travail si OFF
+        guard generationPermitted else { return } // zéro travail si OFF
         // Les sessions synthétiques (hookless) n'ont qu'un transcript DEVINÉ
         // (newestTranscript, encodage lossy) : rétrospective sur le mauvais
         // fichier possible (revue) → on s'abstient, hooks requis.
@@ -149,7 +152,7 @@ final class RetrospectiveRunner {
         }
     }
 
-    /// Kill-switch (toggle OFF) : effet < 1 s, avec sa PROPRE escalade
+    /// Kill-switch (toggle OFF) : signal immédiat, avec sa PROPRE escalade
     /// SIGTERM → SIGKILL (revue : annuler timeoutTask supprimait le seul
     /// SIGKILL du code — un claude sourd au SIGTERM restait facturé, et
     /// `process` non-nil bloquait toute rétro future jusqu'au redémarrage).
@@ -162,6 +165,12 @@ final class RetrospectiveRunner {
         outputTask = nil
         terminateWithEscalation()
         phase = .idle
+    }
+
+    func settingsChanged() {
+        guard generationPermitted else { disable(); return }
+        recoverPendingDeliveries()
+        scheduleNext()
     }
 
     func terminateActive() {
@@ -189,6 +198,9 @@ final class RetrospectiveRunner {
             self.activeExecution = nil
             self.activeOrigin = nil
             self.activeDestination = nil
+            // ON peut survenir pendant l'arrêt d'un ancien processus. La
+            // reprise attend sa sortie réelle, puis se fait sans nouveau run.
+            self.recoverPendingDeliveries()
             self.scheduleNext()
         }
         if let process, process.isRunning {
@@ -336,6 +348,7 @@ final class RetrospectiveRunner {
     // MARK: - File
 
     private func scheduleNext() {
+        guard generationPermitted else { return }
         guard !isBusy, pendingDelay == nil, let job = queue.first else { return }
         phase = .waiting(job.snapshot.id)
         pendingDelay = Task { [weak self] in
@@ -344,6 +357,7 @@ final class RetrospectiveRunner {
             // de A annulé aurait sauté sa fenêtre de résurrection). On dort
             // jusqu'à ce que le job de tête ait VRAIMENT ses 15 s d'âge.
             while let self, !Task.isCancelled {
+                guard self.generationPermitted else { self.disable(); return }
                 guard let head = self.queue.first else {
                     self.pendingDelay = nil
                     self.phase = .idle
@@ -355,7 +369,7 @@ final class RetrospectiveRunner {
                     try? await Task.sleep(for: .seconds(Self.startDelaySeconds - age))
                     continue
                 }
-                if NotesCurationService.shared.phase != .idle || AnalysisBudget.shared.active != nil {
+                if AnalysisBudget.shared.active != nil {
                     try? await Task.sleep(for: .seconds(1))
                     continue
                 }
@@ -372,6 +386,7 @@ final class RetrospectiveRunner {
     }
 
     func evaluateAndRun(_ job: Job) async {
+        guard generationPermitted else { return }
         // Une sortie déjà payée se récupère AVANT les quotas et le choix du
         // modèle. Même un abonnement devenu indisponible ne doit pas la perdre.
         guard recoverBeforeAnalysis(job) else { return }
@@ -494,6 +509,7 @@ final class RetrospectiveRunner {
 
     private func run(_ job: Job, provider forcedProvider: AgentProvider = .claude,
                      execution supplied: AnalysisExecution? = nil) async {
+        guard generationPermitted else { return }
         guard let transcriptPath = job.snapshot.transcriptPath else {
             phase = .idle
             scheduleNext()
@@ -589,12 +605,12 @@ final class RetrospectiveRunner {
         // l'annulation. `transcriptBytes: 0` : ne pas marquer la session
         // « traitée » à sa taille de l'instant, sinon sa vraie fin de session
         // deviendrait inéligible jusqu'à +50 Ko de croissance.
-        guard runGeneration == generation, !Task.isCancelled else {
+        guard runGeneration == generation, generationPermitted, !Task.isCancelled else {
             log.info("session ressuscitée pendant la préparation — rien n'est lancé")
             finish(job, outcome: "failed(cancelled)", transcriptBytes: 0)
             return
         }
-        guard job.forced || LearningSettings.shared.isEnabled else {
+        guard generationPermitted else {
             log.info("apprentissage coupé pendant la préparation — rien n'est lancé")
             finish(job, outcome: "failed(disabled)", transcriptBytes: 0)
             return
@@ -637,28 +653,24 @@ final class RetrospectiveRunner {
         let catalog: [CatalogEntry]
         do { catalog = try await destination.catalog(project: sessionDirectory) }
         catch {
-            guard runGeneration == generation else { finish(job, outcome: "failed(cancelled)", transcriptBytes: 0); return }
+            guard runGeneration == generation, generationPermitted else { finish(job, outcome: "failed(cancelled)", transcriptBytes: 0); return }
             lastOutcome = error.localizedDescription
             finish(job, outcome: "failed(catalog)", transcriptBytes: 0)
             return
         }
-        guard runGeneration == generation, !Task.isCancelled else {
+        guard runGeneration == generation, generationPermitted, !Task.isCancelled else {
             finish(job, outcome: "failed(cancelled)", transcriptBytes: 0)
             return
         }
-        let noteHistory = LearningNoteHistory.read(from: BridgePaths.learningNotesDirectory)
-        let noteContext = noteHistory.promptContext(project: job.snapshot.cwd, query: digest.text)
         let skillHistory = destination.store.noveltyHistory()
         let userPrompt = RetrospectivePrompt.userPrompt(
             digest: digest.text,
             projectPath: job.snapshot.cwd,
             gitBranch: job.snapshot.gitBranch,
             model: job.snapshot.model,
-            existingNoteSlugs: noteContext.additionalSlugs,
-            existingCapabilities: SkillDestination.summary(catalog),
-            existingNotesListedInSummary: noteContext.hasSummarizedNotes
-        ) + "\n" + noteContext.summary
-          + "\n" + skillHistory.summary(query: digest.text)
+            existingNoteSlugs: [],
+            existingCapabilities: SkillDestination.summary(catalog)
+        ) + "\n" + skillHistory.summary(query: digest.text)
           + "\nSkill destination: \(destination.provider.label). Produce instructions for that CLI only; never assume tools or commands from the other agent are available."
         AnalysisBudget.shared.updateMetrics(lease, promptCharacters: provider == .codex
             ? CodexExecPlan.fullPrompt(system: RetrospectivePrompt.systemPrompt, user: userPrompt).count
@@ -698,7 +710,7 @@ final class RetrospectiveRunner {
             return
         }
         defer { launch.cleanUp() }
-        guard runGeneration == generation, !Task.isCancelled else {
+        guard runGeneration == generation, generationPermitted, !Task.isCancelled else {
             finish(job, outcome: "failed(cancelled)", transcriptBytes: 0)
             return
         }
@@ -758,7 +770,7 @@ final class RetrospectiveRunner {
         outputTask = nil
 
 
-        guard runGeneration == generation, !Task.isCancelled else {
+        guard runGeneration == generation, generationPermitted, !Task.isCancelled else {
             finish(job, outcome: "failed(cancelled)", transcriptBytes: 0)
             return
         }
@@ -786,15 +798,15 @@ final class RetrospectiveRunner {
         var parsed: Result<RetrospectiveReport, RetrospectiveReport.ParseError>
         if let outputFile = launch.outputFile {
             let data = BoundedProcessOutput.file(at: outputFile, cap: Self.stdoutCapBytes) ?? Data()
-            parsed = RetrospectiveReport.parse(codexOutput: data)
+            parsed = RetrospectiveReport.parse(codexOutput: data, includeNotes: false)
         } else {
             // Un .zprofile bavard peut précéder le JSON sur stdout (shell de
             // login) : au premier échec « pas du JSON », on retente depuis la
             // première accolade.
-            parsed = RetrospectiveReport.parse(cliOutput: output)
+            parsed = RetrospectiveReport.parse(cliOutput: output, includeNotes: false)
             if case .failure(.notJSON) = parsed,
                let brace = output.firstIndex(of: UInt8(ascii: "{")) {
-                parsed = RetrospectiveReport.parse(cliOutput: Data(output[brace...]))
+                parsed = RetrospectiveReport.parse(cliOutput: Data(output[brace...]), includeNotes: false)
             }
         }
         switch parsed {
@@ -815,11 +827,7 @@ final class RetrospectiveRunner {
             do {
                 try deliveryStore.save(delivery)
                 pendingDeliveryCount = (try? deliveryStore.pending().count) ?? 1
-                try deliveryStore.apply(&delivery, notesDirectory: BridgePaths.learningNotesDirectory,
-                    proposals: destination.store.proposedDirectory) { [weak self] url, note in
-                        self?.notesRevision &+= 1
-                        self?.noteSink?(url, note)
-                    }
+                try deliveryStore.applySkillsOnly(&delivery, proposals: destination.store.proposedDirectory)
                 try persistReceipt(delivery)
                 try deliveryStore.acknowledge(delivery)
                 pendingDeliveryCount = (try? deliveryStore.pending().count) ?? 0
@@ -858,20 +866,14 @@ final class RetrospectiveRunner {
 
     private func novelReport(_ report: RetrospectiveReport, project: String?,
                              destination: SkillDestination) -> RetrospectiveReport {
-        var notes = LearningNoteHistory.read(from: BridgePaths.learningNotesDirectory)
         var skills = destination.store.noveltyHistory()
-        let newNotes = report.notes.filter { note in
-            guard !notes.contains(note, project: project) else { return false }
-            notes.record(note, project: project)
-            return true
-        }
         let newSkills = report.skills.filter { skill in
             guard !skills.contains(skill) else { return false }
             skills.record(skill, status: .proposed)
             return true
         }
         return RetrospectiveReport(sessionSummary: report.sessionSummary,
-            nothingLearned: report.nothingLearned, notes: newNotes, skills: newSkills,
+            nothingLearned: report.nothingLearned, notes: [], skills: newSkills,
             costUSD: report.costUSD, modelCosts: report.modelCosts,
             flags: report.flags, rejectedSkills: report.rejectedSkills)
     }
@@ -879,8 +881,7 @@ final class RetrospectiveRunner {
     /// Aucun modèle ni quota nécessaire pour reprendre une sortie déjà payée.
     /// Les destinations qui ont changé restent en attente, sans redirection.
     func recoverPendingDeliveries() {
-        guard LearningSettings.shared.isEnabled, !isBusy,
-              NotesCurationService.shared.phase == .idle, AnalysisBudget.shared.active == nil else { return }
+        guard generationPermitted, !isBusy, AnalysisBudget.shared.active == nil else { return }
         do {
             let pending = try deliveryStore.pending()
             pendingDeliveryCount = pending.count
@@ -894,11 +895,7 @@ final class RetrospectiveRunner {
                         failures.append("La destination a changé : résultat conservé.")
                         continue
                     }
-                    try deliveryStore.apply(&delivery, notesDirectory: BridgePaths.learningNotesDirectory,
-                        proposals: destination.store.proposedDirectory) { [weak self] url, note in
-                        self?.notesRevision &+= 1
-                        self?.noteSink?(url, note)
-                    }
+                    try deliveryStore.applySkillsOnly(&delivery, proposals: destination.store.proposedDirectory)
                     try persistReceipt(delivery)
                     try deliveryStore.acknowledge(delivery)
                     recovered = true
@@ -924,7 +921,7 @@ final class RetrospectiveRunner {
     }
 
     private func recoverBeforeAnalysis(_ job: Job) -> Bool {
-        guard LearningSettings.shared.isEnabled else { return true }
+        guard generationPermitted else { return false }
         recoverPendingDeliveries()
         do {
             if try deliveryStore.pending().contains(where: {

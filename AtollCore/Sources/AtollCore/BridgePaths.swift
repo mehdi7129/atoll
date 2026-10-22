@@ -52,12 +52,6 @@ public enum BridgePaths {
         homeDirectory.appendingPathComponent(".claude/settings.json.atoll-backup")
     }
 
-    /// Racine des jobs du daemon Claude Code (un dossier par job, nommé par un
-    /// préfixe de 8 hex). Lue en SEULE LECTURE : format interne et instable,
-    /// même régime que les transcripts (règle n° 3).
-    public static var claudeJobsURL: URL {
-        homeDirectory.appendingPathComponent(".claude/jobs")
-    }
 
     // MARK: - Mémoire (Phase 7a)
 
@@ -112,13 +106,6 @@ public enum BridgePaths {
         homeDirectory.appendingPathComponent(".atoll/parked-sound-hooks.json")
     }
 
-    /// Réglages sonores, ÉCRITS par l'app et LUS PAR LE HELPER — même dispositif
-    /// que `proactive-recall.json`. C'est ce qui permet au son de sonner quand
-    /// Atoll est fermée : le helper, lui, tourne à chaque hook. Voir
-    /// `SoundFallback`.
-    public static var soundSettingsURL: URL {
-        homeDirectory.appendingPathComponent(".atoll/sound-settings.json")
-    }
 
     /// État éphémère du helper (témoins d'anti-rafale). Séparé des réglages :
     /// ce dossier peut être vidé à tout moment sans rien perdre.
@@ -151,10 +138,6 @@ public enum BridgePaths {
         learningDirectory.appendingPathComponent("proposed", isDirectory: true)
     }
 
-    /// Archives (rien n'est jamais supprimé sans copie ici).
-    public static var learningArchiveDirectory: URL {
-        learningDirectory.appendingPathComponent("archive", isDirectory: true)
-    }
 
     /// État du runner : sessions déjà traitées (dédup) + horodatages de
     /// tentatives (plafond par fenêtre de 5 h).

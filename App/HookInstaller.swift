@@ -37,15 +37,9 @@ enum HookInstaller {
     }
 
     static func uninstall() async throws {
-        // Rendre d'abord ses hooks sonores à l'utilisateur : une fois les hooks
-        // Atoll retirés, l'app ne verrait plus passer les événements et plus
-        // rien ne jouerait de son — ses `afplay` doivent reprendre du service.
-        //
-        // L'échec REMONTE (pas de `try?`) : c'est le dernier chemin de
-        // restitution automatique. L'avaler laisserait l'utilisateur lire
-        // « désinstallé » alors que ses hooks ne vivent plus que dans
-        // `~/.atoll`, dossier qu'il supprimera naturellement ensuite.
-        try await runHelper("uninstall", before: { try SoundCenter.shared.restoreUserSoundHooks() })
+        // Le helper conserve la restitution legacy des parkings, sans dépendre
+        // du service sonore retiré du fonctionnement normal.
+        try await runHelper("uninstall")
     }
 
     // MARK: - Rockstar : suspension des règles deny
@@ -82,10 +76,7 @@ enum HookInstaller {
         await waitForPendingOperation()
         guard parkingRequest == request else { return nil }
         do {
-            if level == .rockstar && isInstalled {
-                // Idempotent : reparque aussi des règles (ré)apparues entre-temps.
-                try await parkDenyRules()
-            } else if denyRulesParked {
+            if denyRulesParked {
                 try await restoreDenyRules()
             }
             return nil
@@ -97,10 +88,34 @@ enum HookInstaller {
     /// À chaque lancement : si les hooks sont installés, réexécute `install`
     /// (idempotent) pour réparer le wrapper si l'app a été déplacée.
     static func repairIfInstalled() async {
-        await waitForPendingOperation()
-        guard isInstalled else { return }
-        try? await runHelper("install")
+        try? await repairPassiveIfInstalled()
     }
+
+    /// Réparation du pointeur stable, sans réinstaller les événements retirés,
+    /// ni recall, ni aucune fonction productrice de l'ancien périmètre.
+    static func repairPassiveIfInstalled(includeCodex: Bool = true) async throws {
+        await waitForPendingOperation()
+        try requireNoActiveHelper()
+        let settings = try? Data(contentsOf: BridgePaths.claudeSettingsURL)
+        if HookSettingsEditor.hasManagedHooks(in: settings) || StatusLineEditor.isInstalled(in: settings) {
+            try await runHelper("repair-passive")
+        }
+        guard includeCodex else { return }
+        if let error = CodexPaths.configurationError { throw InstallerError.helperFailed(error) }
+        try CodexHookInstallation.migrateIfInstalled(settingsURL: CodexPaths.hooksURL,
+            binDirectory: BridgePaths.binDirectory, helperURL: helperURL)
+    }
+
+    /// Les écritures de migration et les installateurs partagent une porte.
+    /// Une action UI arrivée pendant l'upgrade échoue proprement et se retente.
+    static func beginEssentialMigration() async throws {
+        await waitForPendingOperation()
+        try requireNoActiveHelper()
+        guard !migrationIsRunning else { throw InstallerError.helperFailed("La migration est déjà en cours.") }
+        migrationIsRunning = true
+    }
+
+    static func endEssentialMigration() { migrationIsRunning = false }
 
     // Le MainActor sérialise la file, pas l'attente des processus. Une tâche
     // par demande absorbe les doubles clics consécutifs ; la file garde l’ordre.
@@ -110,6 +125,7 @@ enum HookInstaller {
     private static var unfinishedProcess: Process?
     private static var helperIsRunning = false
     private static var parkingRequest: UUID?
+    private static var migrationIsRunning = false
 
     /// Relire les états APRÈS les opérations déjà demandées. Une réparation
     /// différée ne doit pas réinstaller ce qu'une désinstallation vient de retirer.
@@ -143,7 +159,7 @@ enum HookInstaller {
             try Task.checkCancellation()
             // Une identité illisible peut interdire le kill. Ne jamais lancer
             // un second writer tant que cet enfant est encore vivant.
-            guard unfinishedProcess?.isRunning != true else {
+            guard !migrationIsRunning, unfinishedProcess?.isRunning != true else {
                 throw InstallerError.helperFailed("Une opération précédente est encore en cours. Réessaie après sa fin.")
             }
             unfinishedProcess = nil

@@ -92,11 +92,6 @@ enum CodexPreview {
         model.previewUsage = UsageSnapshot(fiveHourFraction: 0.27, sevenDayFraction: 0.64)
         CodexService.shared.seedPreviewQuota()
         ProviderPreferences.shared.selection = args.contains("--preview-claude") ? .claude : .codex
-        if args.contains("--preview-cards") {
-            InteractionCenter.shared.seedPreviewRequests()
-            CodexInteractionCenter.shared.seedPreviewRequests()
-            if args.contains("--preview-codex-card") { InteractionPresentation.shared.move(1) }
-        }
         if args.contains("--preview-skills") { SkillReviewCenter.shared.seedPreviewProposals() }
         model.state = args.contains("--preview-compact") ? .compact : .expanded
         model.isPinned = model.state == .expanded
@@ -110,7 +105,7 @@ enum CodexPreview {
         defaults.register(defaults: [
             "paletteID": Palette.monoOrange.id,
             ProviderPreferences.codexPaletteKey: Palette.monoCyan.id,
-            InteractionCenter.autonomyKey: args.contains("--preview-rockstar") ? "rockstar" : "manual"
+            "essentialPreview": true
         ])
         if args.contains("--preview-codex-settings") || args.contains("--preview-analysis-settings") || args.contains("--preview-settings=learning") || args.contains("--preview-all-settings") {
             defaults.set(args.contains("--preview-analysis-claude") ? "claude" : "codex", forKey: LearningSettings.analysisProviderKey)
@@ -120,12 +115,10 @@ enum CodexPreview {
         }
         let otherPane = args.first { $0.hasPrefix("--preview-settings=") }
             .map { String($0.dropFirst("--preview-settings=".count)) }
-        defaults.set(true, forKey: MemoryIndexer.enabledKey)
-        defaults.set(args.contains("--preview-recall-enabled"), forKey: LearningSettings.proactiveRecallKey)
-        defaults.set(!args.contains("--preview-sounds-off"), forKey: SoundCenter.enabledKey)
+        defaults.set(args.contains("--preview-generation-on"), forKey: LearningSettings.enabledKey)
         if args.contains("--preview-learning-proposals") { SkillReviewCenter.shared.seedPreviewProposals() }
         if args.contains("--preview-all-settings") {
-            let tabs = ["learning": "apprentissage", "alerts": "alertes", "autonomy": "autonomie", "updates": "maj", "about": "apropos"]
+            let tabs = ["learning": "apprentissage", "connections": "connexions", "claude": "connexions", "codex": "connexions", "updates": "maj", "about": "apropos"]
             defaults.set(tabs[otherPane ?? ""] ?? otherPane ?? "general", forKey: "settingsTab")
         }
         let settingsPreview = args.contains("--preview-codex-settings") || args.contains("--preview-analysis-settings") || args.contains("--preview-all-settings") || otherPane != nil
@@ -250,11 +243,6 @@ private struct PreviewContent: View {
             HStack {
                 Button("Compact") { model.close() }
                 Button("Étendu") { model.isPinned = true; model.open() }
-                Button("Rejouer les cartes") {
-                    InteractionCenter.shared.seedPreviewRequests()
-                    CodexInteractionCenter.shared.seedPreviewRequests()
-                    InteractionPresentation.shared.refresh()
-                }
                 Toggle("Clair", isOn: $light)
                 Toggle("Mouvement réduit", isOn: $reduceMotion)
                 Button("Animation") {

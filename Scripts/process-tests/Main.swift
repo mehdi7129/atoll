@@ -111,6 +111,93 @@ import AtollCore
             try release("slow")
             try await operation.value
             try HookInstaller.requireNoActiveHelper()
+        case "migration-exclusion":
+            try await HookInstaller.beginEssentialMigration()
+            do {
+                try await HookInstaller.runHelper("first", executable: helper, timeout: 2)
+                check(false, "EM-helper-started-during-migration")
+            } catch {}
+            check(!FileManager.default.fileExists(atPath: root.appendingPathComponent("order").path), "EM-helper-started-during-migration")
+            do {
+                try await HookInstaller.beginEssentialMigration()
+                check(false, "EM-parallel-migration-allowed")
+            } catch {}
+            HookInstaller.endEssentialMigration()
+            try await HookInstaller.runHelper("after", executable: helper, timeout: 2)
+            let lines = try String(contentsOf: root.appendingPathComponent("order"), encoding: .utf8).split(separator: "\n").map(String.init)
+            check(lines == ["after-start", "after-end"], "EM-helper-not-resumed-after-migration")
+        case "essential-migration":
+            check(BridgePaths.homeDirectory.path == root.path, "EM-home-escaped-fixture")
+            let defaults = EssentialFixtureDefaults()
+            defaults.set(true, forKey: "learningRetrospectiveEnabled")
+            defaults.set(true, forKey: "learningCurationWeekly")
+            defaults.set(true, forKey: "soundsEnabled")
+            let migration = EssentialMigration(defaults: defaults)
+            check(!migration.isComplete, "EM-unstarted-migration-approved-generation")
+            let firstMigration = await migration.run()
+            check(firstMigration, "EM-facade-upgrade-failed")
+            check(migration.isComplete && !migration.isRunning && migration.errorMessage == nil, "EM-facade-upgrade-state")
+            check(defaults.object(forKey: "learningRetrospectiveEnabled") as? Bool == true, "EM-facade-changed-skills-opt-in")
+            check(defaults.object(forKey: "learningCurationWeekly") as? Bool == false, "EM-facade-curation-still-on")
+            CodexPaths.selectedHome = root.appendingPathComponent("codex-second")
+            check(!migration.isComplete, "EM-changed-home-approved-without-migration")
+            let secondMigration = await migration.run()
+            check(secondMigration, "EM-second-home-not-migrated")
+            check(migration.isComplete, "EM-second-home-not-complete")
+        case "essential-migration-retry":
+            check(BridgePaths.homeDirectory.path == root.path, "EM-home-escaped-fixture")
+            let parking = root.appendingPathComponent(".atoll/parked-sound-hooks.json")
+            try FileManager.default.createDirectory(at: parking.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data("broken".utf8).write(to: parking)
+            let migration = EssentialMigration(defaults: EssentialFixtureDefaults())
+            let failedMigration = await migration.run()
+            check(!failedMigration, "EM-failed-migration-reported-success")
+            check(!migration.isComplete && !migration.isRunning && migration.errorMessage != nil, "EM-failed-migration-approved-generation")
+            let preservedParking = try Data(contentsOf: parking)
+            check(preservedParking == Data("broken".utf8), "EM-failed-migration-lost-parking")
+            try FileManager.default.removeItem(at: parking)
+            let retriedMigration = await migration.run()
+            check(retriedMigration, "EM-repaired-migration-not-retried")
+            check(migration.isComplete && migration.errorMessage == nil, "EM-retry-kept-stale-error")
+        case "essential-migration-invalid-home":
+            check(BridgePaths.homeDirectory.path == root.path, "EM-home-escaped-fixture")
+            let parking = root.appendingPathComponent(".atoll/rockstar-parked-deny.json")
+            try FileManager.default.createDirectory(at: parking.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try RockstarPermissionsEditor.encodeParked(.init(deny: ["Read(.env)"], parkedAt: Date())).write(to: parking)
+            let otherHome = root.appendingPathComponent("other-account")
+            try FileManager.default.createDirectory(at: otherHome, withIntermediateDirectories: true)
+            let foreign = Data("other account hooks".utf8)
+            try foreign.write(to: otherHome.appendingPathComponent("hooks.json"))
+            CodexPaths.selectedHome = otherHome
+            CodexPaths.selectionError = "Sélection CODEX_HOME illisible"
+            let defaults = EssentialFixtureDefaults()
+            defaults.set(true, forKey: "learningCurationWeekly")
+            let migration = EssentialMigration(defaults: defaults)
+            let result = await migration.run()
+            let settingsData = try? Data(contentsOf: BridgePaths.claudeSettingsURL)
+            check(settingsData != nil, "EM-invalid-home-left-claude-deny-parked")
+            let settings = settingsData.flatMap { (try? JSONSerialization.jsonObject(with: $0)) as? [String: Any] }
+            check((settings?["permissions"] as? [String: Any])?["deny"] as? [String] == ["Read(.env)"], "EM-invalid-home-left-claude-deny-parked")
+            check(defaults.object(forKey: "learningCurationWeekly") as? Bool == false, "EM-invalid-home-left-common-producer-on")
+            let after = try Data(contentsOf: otherHome.appendingPathComponent("hooks.json"))
+            check(after == foreign, "EM-invalid-home-wrote-other-account")
+            check(!result && !migration.isComplete && migration.errorMessage?.contains("CODEX_HOME") == true, "EM-invalid-home-no-diagnostic")
+        case "migration-repair-ownership":
+            let hooks = try JSONSerialization.data(withJSONObject: ["hooks": ["PermissionRequest": [["hooks": [
+                ["type": "command", "command": CodexHookSettingsEditor.command, "timeout": 600]
+            ]]]]])
+            try hooks.write(to: CodexPaths.hooksURL)
+            do {
+                try await HookInstaller.runHelper("ownership", executable: helper, timeout: 1)
+                check(false, "EM-ownership-fixture-did-not-time-out")
+            } catch {}
+            do {
+                try await HookInstaller.repairPassiveIfInstalled()
+                check(false, "EM-repair-overlapped-live-writer")
+            } catch {}
+            let after = try Data(contentsOf: CodexPaths.hooksURL)
+            check(after == hooks, "EM-repair-overwrote-during-live-writer")
+            try Data().write(to: root.appendingPathComponent("probe-release"))
         case "alternating":
             try block("first")
             let first = Task { try await HookInstaller.runHelper("first", executable: helper, timeout: 2) }

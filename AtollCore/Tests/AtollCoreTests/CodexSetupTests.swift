@@ -15,7 +15,7 @@ final class CodexSetupTests: XCTestCase {
             let bin = root.appendingPathComponent("bin")
             let original = try JSONSerialization.data(withJSONObject: [
                 "description": "personnelle", "hooks": ["PermissionRequest": [["matcher": "Bash", "hooks": [
-                    ["command": CodexHookSettingsEditor.command, "async": true, "timeout": 3],
+                    ["command": CodexHookSettingsEditor.command, "timeout": 600, "statusMessage": "Waiting for approval in Atoll"],
                     ["command": "echo personal", "enabled": false, "timeout": 17]
                 ]]]]
             ])
@@ -35,7 +35,9 @@ final class CodexSetupTests: XCTestCase {
             XCTAssertEqual(foreign["matcher"] as? String, "Bash")
             let handlers = try XCTUnwrap(foreign["hooks"] as? [[String: Any]])
             XCTAssertEqual(handlers.count, 2)
-            XCTAssertEqual(handlers[0]["timeout"] as? Int, 600)
+            XCTAssertEqual(handlers[0]["timeout"] as? Int, 3)
+            XCTAssertEqual(handlers[0]["async"] as? Bool, true)
+            XCTAssertNil(handlers[0]["statusMessage"])
             let handler = handlers[1]
             XCTAssertEqual(handler["command"] as? String, "echo personal")
             XCTAssertEqual(handler["enabled"] as? Bool, false)
@@ -94,7 +96,7 @@ final class CodexSetupTests: XCTestCase {
         }
     }
 
-    func testMigrationPreservesShortTimeoutWhenHandlerIsCustomized() throws {
+    func testMigrationKeepsCustomFieldsButCannotKeepAnAtollDecisionHook() throws {
         for customization: [String: Any] in [
             ["statusMessage": "Mon attente courte"], ["async": false], ["customFlag": true]
         ] {
@@ -104,7 +106,13 @@ final class CodexSetupTests: XCTestCase {
             let original = try JSONSerialization.data(withJSONObject: [
                 "hooks": ["PermissionRequest": [["hooks": [handler]]]]
             ])
-            XCTAssertTrue(CodexHookSettingsEditor.sameJSON(original, try CodexHookSettingsEditor.migrate(original)))
+            let migrated = try CodexHookSettingsEditor.migratePassive(original)
+            handler["async"] = true
+            let expected = try JSONSerialization.data(withJSONObject: [
+                "hooks": ["PermissionRequest": [["hooks": [handler]]]]
+            ])
+            XCTAssertTrue(CodexHookSettingsEditor.sameJSON(expected, migrated))
+            XCTAssertTrue(CodexHookSettingsEditor.sameJSON(migrated, try CodexHookSettingsEditor.migratePassive(migrated)))
         }
     }
 
@@ -140,8 +148,8 @@ final class CodexSetupTests: XCTestCase {
 
     func testTrustDisabledAndObsoleteAreDifferentFromPresent() throws {
         let base: [String: Any] = ["command": CodexHookSettingsEditor.command,
-            "eventName": "permissionRequest", "async": false, "timeoutSec": 600,
-            "statusMessage": "Waiting for approval in Atoll", "enabled": true, "trustStatus": "trusted"]
+            "eventName": "permissionRequest", "async": true, "timeoutSec": 3,
+            "enabled": true, "trustStatus": "trusted"]
         func diagnostic(_ edits: [String: Any]) throws -> CodexHookDiagnostics {
             var hook = base; hook.merge(edits, uniquingKeysWith: { _, new in new })
             let data = try JSONSerialization.data(withJSONObject: ["data": [["hooks": [hook], "errors": []]]])
@@ -150,7 +158,7 @@ final class CodexSetupTests: XCTestCase {
         XCTAssertEqual(try diagnostic([:]).untrustedCount, 0)
         XCTAssertEqual(try diagnostic(["trustStatus": "modified"]).untrustedCount, 1)
         XCTAssertEqual(try diagnostic(["enabled": false]).disabledCount, 1)
-        XCTAssertEqual(try diagnostic(["async": true, "timeoutSec": 3]).obsoleteCount, 1)
+        XCTAssertEqual(try diagnostic(["async": false, "timeoutSec": 600, "statusMessage": "Waiting for approval in Atoll"]).obsoleteCount, 1)
     }
 
     func testActualBashPatchAndMCPPermissionFixturesRemainComplete() throws {
@@ -170,8 +178,7 @@ final class CodexSetupTests: XCTestCase {
             ["command": CodexHookSettingsEditor.command,
              "eventName": kind.rawValue.prefix(1).lowercased() + kind.rawValue.dropFirst(),
              "async": !CodexHookSettingsEditor.synchronousEvents.contains(kind),
-             "timeoutSec": kind == .permissionRequest ? 600 : 3,
-             "statusMessage": kind == .permissionRequest ? CodexHookSettingsEditor.permissionStatusMessage : "",
+             "timeoutSec": 3,
              "enabled": true,
              "trustStatus": [.subagentStart, .subagentStop].contains(kind) ? "untrusted" : "trusted"]
         }

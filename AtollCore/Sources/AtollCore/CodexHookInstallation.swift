@@ -55,8 +55,8 @@ public enum CodexHookInstallation {
     /// convertir en « exit 0, stdout vide ».
     ///
     /// Ici le shell reste vivant, attend le worker, et sort 0 **quel que soit le
-    /// sort du worker** : ce que celui-ci a écrit sur stdout est déjà parti vers
-    /// Codex (allow/deny), et s'il est mort sans rien écrire, l'abstention est
+    /// sort du worker** : le helper d'observation garde stdout vide ; s'il est
+    /// mort sans rien écrire, l'abstention est
     /// exactement ce qu'il faut. Constat de la revue de Codex du 2026-09-09 :
     /// « sans ce changement, l'architecture demandée est absente ».
     ///

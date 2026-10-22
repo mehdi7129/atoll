@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Le vrai helper signale le manifest illisible et retire quand même ses hooks.
+"""Retrait des seuls hooks Claude : skills et manifestes restent intacts.
 
-Racines Foundation privées vérifiées avant toute écriture. Aucun compte ni
-réglage personnel n'est utilisé. --expect-failure sert à la copie sabotée.
+Racines Foundation privées vérifiées avant toute écriture. Les manifestes
+absents, valides et corrompus n'affectent pas cette déconnexion. Le flag legacy
+--sabotage-manifest réintroduit uninstallAll en copie pour prouver la protection.
 """
 import argparse
+import hashlib
 import json
 import os
 import subprocess
@@ -15,28 +17,31 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("helper", type=Path)
 parser.add_argument("--expect-failure", action="store_true")
 parser.add_argument("--sabotage-manifest", action="store_true")
+parser.add_argument("--build-dir", type=Path)
 args = parser.parse_args()
 helper = args.helper.resolve(strict=True)
 if args.sabotage_manifest:
     assert not args.expect_failure
     subprocess.run(["python3", __file__, str(helper)], check=True)
     repo = Path(__file__).resolve().parent.parent
-    subprocess.run(["swift", "build", "--package-path", str(repo / "AtollCore")], check=True)
-    build = Path(subprocess.check_output(["swift", "build", "--package-path", str(repo / "AtollCore"), "--show-bin-path"], text=True).strip())
+    build = (args.build_dir or repo / "AtollCore/.build/debug").resolve()
+    objects = sorted((build / "AtollCore.build").glob("*.o"))
+    assert objects, "Réutiliser les objets Core compilés avec --build-dir"
     with tempfile.TemporaryDirectory(prefix="atoll-uninstall-sabotage-") as directory:
         root = Path(directory)
         source = (repo / "Bridge/main.swift").read_text()
-        assert source.count("skillRestoreFailed = true") == 1
-        (root / "main.swift").write_text(source.replace("skillRestoreFailed = true", "skillRestoreFailed = false"))
-        sources = [root / "main.swift", repo / "Shared/ProcessInspector.swift"]
-        sources += [p for p in (repo / "Bridge").glob("*.swift") if p.name != "main.swift"]
+        needle = "        let soundRestoreFailed = restoreParkedSoundHooks()"
+        assert source.count(needle) == 1
+        (root / "main.swift").write_text(source.replace(needle, needle + "\n        _ = try? LearnedSkillStore().uninstallAll()"))
+        sources = [root / "main.swift", repo / "Shared/ProcessInspector.swift", repo / "Bridge/CodexBridge.swift"]
         command = ["swiftc", "-swift-version", "5", "-I", str(build / "Modules"), "-lsqlite3",
                    "-import-objc-header", str(repo / "Shared/BridgingHeader.h")]
-        command += [str(p) for p in sources] + [str(p) for p in (build / "AtollCore.build").glob("*.o")]
         binary = root / "atoll-bridge"
-        subprocess.run(command + ["-o", str(binary)], check=True)
+        compiled = subprocess.run(command + list(map(str, sources + objects)) + ["-o", str(binary)], capture_output=True, text=True, timeout=120)
+        assert compiled.returncode == 0, compiled.stderr
         subprocess.run(["python3", __file__, str(binary), "--expect-failure"], check=True)
     raise SystemExit(0)
+
 failures = []
 with tempfile.TemporaryDirectory(prefix="atoll-uninstall-test-") as directory:
     for mode in ["absent", "foreign", "managed", "healthy"]:
@@ -55,21 +60,33 @@ with tempfile.TemporaryDirectory(prefix="atoll-uninstall-test-") as directory:
         if mode == "managed":
             result = run("install")
             assert result.returncode == 0, result.stderr
+            assert not (root / ".claude/skills/atoll-recall/SKILL.md").exists(), "Recall réinstallé"
         elif mode == "absent":
             settings.unlink()
         learning = root / ".atoll/learning"
         learning.mkdir(parents=True, exist_ok=True)
-        if mode != "healthy":
-            (learning / "installed.json").write_text("{broken manifest")
         retained = root / ".claude/skills/atoll-kept/SKILL.md"
         retained.parent.mkdir(parents=True)
-        retained.write_text("Procédure à conserver, propriété non démontrée.")
+        markdown = "Procédure à conserver, avec une ressource unique."
+        retained.write_text(markdown)
+        resource = retained.parent / "scripts/unique.py"
+        resource.parent.mkdir(); resource.write_text("unique resource\n")
+        if mode == "healthy":
+            manifest = learning / "installed-v2-claude.json"
+            manifest.write_text(json.dumps({"v": 2, "legacySnapshot": [], "skills": [{
+                "destination": "claude", "slug": "kept", "dirName": "atoll-kept",
+                "installedAt": "2026-01-01T00:00:00Z", "skillSHA256": hashlib.sha256(markdown.encode()).hexdigest()}]}))
+            assert json.loads(run("status").stdout)["learnedSkills"] == 1, "Fixture de skill géré invalide"
+        else:
+            manifest = learning / "installed.json"
+            manifest.write_text("{broken manifest")
+        protected = {file: file.read_bytes() for file in [retained, resource, manifest]}
         result = run("uninstall")
-        if result.returncode != (0 if mode == "healthy" else 1):
-            failures.append(mode + " : erreur de manifest masquée par le code de sortie")
-        if mode != "healthy" and "skills appris conservés" not in result.stderr:
-            failures.append(mode + " : diagnostic du retrait absent")
-        assert retained.read_text().startswith("Procédure à conserver"), "Retrait sans propriété démontrée"
+        if result.returncode != 0:
+            failures.append(mode + " : retrait hooks couplé au manifeste des skills")
+        for file, before in protected.items():
+            if not file.exists() or file.read_bytes() != before:
+                failures.append(mode + " : skill, ressource ou manifeste modifié par la déconnexion")
         if mode != "absent":
             restored = json.loads(settings.read_text())
             assert restored.get("hooks", {}).get("SessionStart") == foreign["hooks"]["SessionStart"], "Hook étranger modifié"
@@ -81,4 +98,4 @@ if args.expect_failure:
 elif failures:
     raise SystemExit("; ".join(failures))
 else:
-    print("PASS retrait Claude : erreur explicite, hooks retirés, skills et hooks étrangers préservés")
+    print("PASS retrait Claude : hooks retirés, skills gérés/ressources/manifestes et hooks étrangers préservés")

@@ -131,12 +131,6 @@ final class SessionStore {
     /// pour ne pas clignoter pendant un outil silencieux, assez court pour ne
     /// pas mentir (le bug : une session inactive depuis 16 min affichée « busy »).
     private static let syntheticIdleSeconds: TimeInterval = 15
-    /// Absences de flotte tolérées pour une session dont une carte de permission
-    /// attend encore. Large (≈ 1 à 5 min selon la cadence du poll) : une vraie
-    /// décision a le temps d'être prise, mais une carte fantôme finit par être
-    /// rendue au terminal plutôt que de rester à l'écran indéfiniment.
-    private static let pendingCardFleetTolerance = 50
-
     // MARK: - Cycle de vie
 
     func start() {
@@ -267,21 +261,6 @@ final class SessionStore {
         sessions.first { $0.id == id }?.terminalAnchor
     }
 
-    /// Une décision ou la fin du helper a résolu une demande. Une autre carte
-    /// de la même session garde toutefois l'attente, même pour le même outil.
-    func markAutoApproved(_ sessionID: String) {
-        guard let index = sessions.firstIndex(where: { $0.id == sessionID }) else { return }
-        if let request = InteractionCenter.shared.pending.first(where: { $0.sessionID == sessionID }) {
-            sessions[index].phase = .waitingPermission(tool: request.toolSummary ?? request.toolName)
-            scheduleSnapshot()
-            return
-        }
-        if case .waitingPermission = sessions[index].phase {
-            sessions[index].phase = .busy
-            scheduleSnapshot()
-        }
-    }
-
     private func rank(_ session: Tracked) -> Int {
         switch session.phase {
         case .waitingPermission: return 0
@@ -296,18 +275,6 @@ final class SessionStore {
     func apply(_ event: ParsedHookEvent) {
         eventCount += 1
         let now = Date()
-
-        // Seule une progression de la session entière clôt toutes ses cartes.
-        // Une décision d'outil peut concerner une autre demande simultanée.
-        switch event.kind {
-        case .stop, .sessionEnd, .userPromptSubmit:
-            // La session a avancé : les demandes du tour précédent sont closes.
-            // userPromptSubmit inclus : un nouveau prompt prouve qu'aucun dialogue
-            // de permission n'est plus en attente pour cette session.
-            InteractionCenter.shared.cancelForSession(event.sessionID)
-        default:
-            break
-        }
 
         if let index = sessions.firstIndex(where: { $0.id == event.sessionID }) {
             var session = sessions[index]
@@ -377,14 +344,6 @@ final class SessionStore {
             sessions.append(session)
         }
 
-        // Une fin d'outil, même homonyme, ne résout aucune autre demande. Le
-        // reducer pur ne connaît pas les connexions vivantes ; la carte réelle
-        // reste donc l'autorité pour l'attente de cette session.
-        if let index = sessions.firstIndex(where: { $0.id == event.sessionID }),
-           sessions[index].phase.isAlive,
-           let request = InteractionCenter.shared.pending.first(where: { $0.sessionID == event.sessionID }) {
-            sessions[index].phase = .waitingPermission(tool: request.toolSummary ?? request.toolName)
-        }
         scheduleSnapshot()
     }
 
@@ -397,7 +356,6 @@ final class SessionStore {
         let snapshot = sessions[index]
         fleetMissed[snapshot.id] = nil
         tailer.stopWatching(snapshot.id)
-        InteractionCenter.shared.cancelForSession(snapshot.id)
         idleTimers[snapshot.id]?.cancel()
         idleTimers[snapshot.id] = nil
         scheduleRemoval(snapshot.id)
@@ -446,21 +404,6 @@ final class SessionStore {
             }
         case .stop, .sessionEnd:
             session.subagentCount = 0 // fin de tour : plus de sous-agents en vol
-            // Fin de tour = le transcript vient d'être complété → indexation
-            // mémoire quasi temps réel (coalescée côté indexeur).
-            if let path = session.transcriptPath {
-                MemoryIndexer.shared.nudge(transcriptPath: path)
-            }
-            if event.kind == .stop {
-                // Le son remplace le hook `afplay` que l'utilisateur avait sur
-                // `Stop` : même instant, mais réglable et anti-rafale.
-                //
-                // NE PAS RETIRER CE BLOC en croyant nettoyer le cockpit : il a
-                // longtemps contenu AUSSI l'annonce de fin de tâche, et c'est
-                // par proximité qu'on recasserait ce que la v0.15.1 a réparé.
-                // Le son ne dépend d'aucune tâche lancée : il suit le hook.
-                SoundCenter.shared.play(.taskCompleted)
-            }
         default:
             break
         }
@@ -583,9 +526,8 @@ final class SessionStore {
 
     private func transcriptInterrupted(_ sessionID: String) {
         // Échap au prompt du terminal ne déclenche AUCUN hook : c'est le seul
-        // signal qu'un dialogue interactif en cours a été abandonné → on annule
-        // notre carte (sinon elle traînerait jusqu'au timeout de 24 h).
-        InteractionCenter.shared.cancelForSession(sessionID)
+        // signal local qu’un dialogue interactif a été abandonné ; il permet
+        // de corriger l’état observé sans envoyer de commande au CLI.
         guard let index = sessions.firstIndex(where: { $0.id == sessionID }) else { return }
         switch sessions[index].phase {
         case .busy, .toolRunning, .starting, .waitingPermission:
@@ -651,10 +593,7 @@ final class SessionStore {
                 // (enveloppe forgée, ancêtre claude introuvable — ex. hook lancé
                 // depuis un npm/node non reconnu). 5 min sans événement suffisent
                 // pour la déclarer morte — vécu : les sessions de test traînaient.
-                // MAIS une carte en attente prouve que la session est vivante
-                // (le helper y est bloqué) : ne jamais la GC dans ce cas.
-                let hasPendingCard = InteractionCenter.shared.pending.contains { $0.sessionID == sessions[index].id }
-                if !sessions[index].isSynthetic, !hasPendingCard,
+                if !sessions[index].isSynthetic,
                    Date().timeIntervalSince(sessions[index].lastEventAt) > 300 {
                     markEnded(at: index, reason: .reconcileGC)
                 }
@@ -823,10 +762,8 @@ final class SessionStore {
         // (vérifié : les sessions non lancées par l'agent view y figurent aussi).
         // Une session absente du snapshot est donc terminée — hook comprise (une
         // session bg stoppée sans SessionEnd propre traînerait sinon 5 min).
-        // GARDE-FOUS : (1) tolérance de 2 absences consécutives — un snapshot
-        // transitoirement vide/partiel ne tue pas une session vivante ; (2) une
-        // carte de permission en attente prouve la session vivante (un helper y
-        // est bloqué) → jamais clôturée.
+        // Deux absences consécutives sont nécessaires : un snapshot
+        // transitoirement vide/partiel ne tue pas une session vivante.
         // DISJONCTEUR DE PASSE. La tolérance ci-dessous compte PAR session ;
         // elle ne dit donc rien d'une panne qui les rend toutes absentes en même
         // temps (format de sortie changé, daemon qui hoquette). Quand on suivait
@@ -850,25 +787,6 @@ final class SessionStore {
                 fleetMissed[id] = 0
                 continue
             }
-            // Carte de permission en attente = session vivante (un helper y est
-            // bloqué) → jamais clôturée sur simple absence. Le garde-fou était
-            // ANNONCÉ ici et implémenté dans le chemin jumeau (`reconcile`),
-            // mais absent de cette boucle : la carte était retirée de l'îlot et
-            // la main rendue au terminal pendant que le helper attendait encore.
-            // …mais PAS indéfiniment. Rien d'autre ne nettoie une carte dont le
-            // helper est mort : `BridgeServer` ne détecte pas l'EOF sur le fd
-            // gardé ouvert, et son timeout de 86 400 s ferme le fd sans prévenir
-            // l'îlot. `markEnded` → `cancelForSession` était le SEUL chemin, et
-            // le couper laissait une carte fantôme pour toujours après un
-            // `claude stop` (revue des corrections, 2026-07-27). On tolère donc
-            // largement — le temps qu'une vraie décision se prenne — puis on
-            // clôt et la carte est rendue au terminal.
-            if InteractionCenter.shared.pending.contains(where: { $0.sessionID == id }),
-               (fleetMissed[id] ?? 0) < Self.pendingCardFleetTolerance {
-                fleetMissed[id] = (fleetMissed[id] ?? 0) + 1
-                continue
-            }
-            //
             // On NE teste PAS le pid : celui d'une session bg est un processus géré
             // par le daemon qui SURVIT à l'arrêt de la session → il ne dit rien de
             // la vie de la session. Le JSON du daemon est l'autorité (il retire une
@@ -951,7 +869,6 @@ final class SessionStore {
             // être un processus-hôte transitoire du daemon).
         }
         sessions.append(session)
-        if let path = session.transcriptPath { MemoryIndexer.shared.nudge(transcriptPath: path) }
     }
 
     /// Traduit un statut `agents --json` en phase, pour les sessions non-hook.
@@ -1036,27 +953,11 @@ final class SessionStore {
             "updatedAt": ISO8601DateFormatter().string(from: Date()),
             "eventCount": eventCount,
             "serverRunning": serverRunning,
-            "autonomy": InteractionCenter.shared.autonomyLevel.rawValue,
             "sessions": list + CodexService.shared.diagnosticSessions(),
             "codexServerRunning": CodexService.shared.serverRunning,
             "codexHome": CodexPaths.homeURL.path,
             "selectedProvider": ProviderPreferences.shared.selection.rawValue,
-            "pendingInteractions": InteractionCenter.shared.pending.map { request -> [String: Any] in
-                var entry: [String: Any] = ["id": request.id, "session": request.sessionID, "provider": "claude"]
-                switch request.kind {
-                case .permission: entry["kind"] = "permission"
-                case .plan: entry["kind"] = "plan"
-                case .questions: entry["kind"] = "questions"
-                }
-                if let tool = request.toolSummary ?? request.toolName { entry["tool"] = tool }
-                return entry
-            } + CodexInteractionCenter.shared.pending.map { request -> [String: Any] in
-                var entry: [String: Any] = ["id": request.id, "session": request.sessionID,
-                    "provider": "codex", "kind": "permission", "tool": request.permission.toolName]
-                entry["agentID"] = request.agentID
-                entry["turnID"] = request.turnID
-                return entry
-            },
+            "pendingInteractions": [],
         ]
         if let data = try? JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: directory.appendingPathComponent("state.json"), options: .atomic)

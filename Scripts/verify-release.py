@@ -83,15 +83,120 @@ def tree_manifest(root):
     return result
 
 
+def verify_components(full, run):
+    actual_machos = set()
+    for path in full.rglob("*"):
+        if path.is_file() and not path.is_symlink():
+            with path.open("rb") as stream:
+                if stream.read(4) in MACHO_MAGIC:
+                    actual_machos.add(path.relative_to(full).as_posix())
+    require(actual_machos == MACHOS, f"Inventaire Mach-O différent : {sorted(actual_machos ^ MACHOS)}")
+    component_checks = []
+    for index, relative in enumerate(sorted(MACHOS)):
+        binary = full / relative
+        label = f"component-{index}"
+        architecture = run(label + "-architecture", ["lipo", "-archs", binary]).stdout.decode().split()
+        require(set(architecture) == {"arm64", "x86_64"}, f"Binaire non universel : {relative}")
+        run(label + "-verify", ["codesign", "--verify", "--strict", binary])
+        signed = run(label + "-signature", ["codesign", "-dvvv", binary])
+        signed_text = (signed.stdout + signed.stderr).decode()
+        require("Authority=Developer ID Application:" in signed_text and f"TeamIdentifier={TEAM}" in signed_text, f"Signature incorrecte : {relative}")
+        require(re.search(r"flags=0x[0-9a-fA-F]+\([^\n)]*\bruntime\b", signed_text), f"Hardened runtime absent : {relative}")
+        entitlements = run(label + "-entitlements", ["codesign", "-d", "--entitlements", "-", "--xml", binary]).stdout
+        values = plistlib.loads(entitlements) if entitlements.strip() else {}
+        require("com.apple.security.get-task-allow" not in values, f"get-task-allow présent : {relative}")
+        if relative == "Contents/MacOS/Atoll":
+            require(values == {}, "Entitlements app inattendus : le bundle essentiel doit avoir un dictionnaire vide")
+        component_checks.append({"path": relative, "architectures": sorted(architecture), "developerID": True, "team": TEAM, "hardenedRuntime": True, "entitlements": values})
+    return component_checks
+
+
+def verify_local(args, dist, archive, dmg, work, evidence, report, report_path, run, verify_bundle):
+    """Recette du même paquet, sans prétendre qualifier une mise à jour Sparkle."""
+    paths = [archive, dmg, dist / "notary-app.log", dist / "notary-dmg.log"]
+    for path in paths:
+        require(path.is_file(), f"Artefact absent : {path}")
+    initial_hashes = {path: sha256(path) for path in paths}
+    report["assets"] = [{"name": path.name, "bytes": path.stat().st_size, "sha256": sha256(path)}
+                        for path in [archive, dmg]]
+    destination = work / "full"
+    destination.mkdir()
+    run("full-extract", ["ditto", "-xk", archive, destination], child_umask=0o022)
+    full = destination / "Atoll.app"
+    info = plistlib.loads((full / "Contents/Info.plist").read_bytes())
+    require((info["CFBundleShortVersionString"], info["CFBundleVersion"]) == (args.version, args.build),
+            "Version du ZIP local incorrecte")
+    require(info["CFBundleIdentifier"] == "dev.mehdiguiard.atoll" and not info.get("AtollPreviewOnly", False),
+            "Identité du bundle local incorrecte")
+    source_info = plistlib.loads((args.repo / "App/Info.plist").read_bytes())
+    require(info["SUPublicEDKey"] == source_info["SUPublicEDKey"], "Clé publique Sparkle différente du dépôt")
+    require(info["SUFeedURL"] == "https://mehdi7129.github.io/atoll/appcast.xml", "Flux Sparkle incorrect")
+    report["executableComponents"] = verify_components(full, run)
+    verify_bundle("full", full)
+    notary = {}
+    for label in ["app", "dmg"]:
+        text = (dist / f"notary-{label}.log").read_text()
+        statuses = re.findall(r"^\s*status:\s*(\w+)\s*$", text, re.MULTILINE)
+        ids = re.findall(r"^\s*id:\s*([0-9a-f-]{36})\s*$", text, re.MULTILINE)
+        require(bool(statuses) and statuses[-1] == "Accepted" and bool(ids), f"Notarisation {label} non acceptée")
+        notary[label] = {"submissionID": ids[-1], "status": statuses[-1]}
+    report["notarization"] = notary
+    run("dmg-codesign", ["codesign", "--verify", "--strict", dmg])
+    signed = run("dmg-signature", ["codesign", "-dvv", dmg])
+    text = (signed.stdout + signed.stderr).decode()
+    require("Authority=Developer ID Application:" in text and f"TeamIdentifier={TEAM}" in text,
+            "Signature Developer ID du DMG incorrecte")
+    run("dmg-staple", ["xcrun", "stapler", "validate", dmg])
+    run("dmg-gatekeeper", ["spctl", "--assess", "--type", "open", "--context",
+                           "context:primary-signature", "--verbose=2", dmg], timeout=180)
+    reference = tree_manifest(full)
+    dump(evidence / "full-tree.json", reference)
+    mountpoint = work / "mounted"
+    mountpoint.mkdir()
+    mounted = False
+    try:
+        attachment = run("dmg-attach", ["hdiutil", "attach", "-readonly", "-nobrowse", "-noautoopen",
+                                        "-plist", "-mountpoint", mountpoint, dmg], timeout=180)
+        mounted = True
+        attachment_info = plistlib.loads(attachment.stdout)
+        require(any(entity.get("mount-point") == str(mountpoint) for entity in attachment_info["system-entities"]),
+                "Point de montage DMG inattendu")
+        actual = tree_manifest(mountpoint / "Atoll.app")
+        dump(evidence / "dmg-tree.json", actual)
+        require(actual == reference, "App du DMG différente du ZIP complet")
+        report["dmgBundle"] = {"readOnlyMountComparedToFullZIP": True,
+                               "filesLinksModesAndSizesEqualFullArchive": True, "comparedObjects": len(reference)}
+    finally:
+        if mounted or os.path.ismount(mountpoint):
+            run("dmg-detach", ["hdiutil", "detach", mountpoint], timeout=120)
+            require(not os.path.ismount(mountpoint), "DMG toujours monté après detach")
+            if "dmgBundle" in report:
+                report["dmgBundle"]["detached"] = True
+    require(all(sha256(path) == digest for path, digest in initial_hashes.items()),
+            "Un artefact a changé pendant la vérification")
+    report["checks"] = {"app": "Developer ID verified", "helper": "Developer ID verified",
+                         "sparkleComponents": "5 Developer ID components verified",
+                         "hardenedRuntime": "all 7 executable components verified", "entitlements": "app empty; get-task-allow absent",
+                         "appStaple": "valid", "dmgStaple": "valid", "gatekeeper": "app and dmg accepted"}
+    report["notEvaluated"] = ["Sparkle EdDSA archive signatures", "appcast", "delta upgrade", "public assets"]
+    report.update(status="passed", architectures=["x86_64", "arm64"], finishedAt=datetime.now(timezone.utc).isoformat())
+    dump(report_path, report)
+    print(f"PASS local : sept binaires universels signés, notarisation et DMG identique au ZIP.\n{report_path}", flush=True)
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", type=Path, default=HERE.parent)
     parser.add_argument("--version", required=True)
     parser.add_argument("--build", required=True)
-    parser.add_argument("--sparkle-bin", type=Path, required=True)
-    parser.add_argument("--previous-record", type=Path, required=True)
+    parser.add_argument("--local", action="store_true", help="Vérifier uniquement le paquet local, sans appcast ni delta")
+    parser.add_argument("--sparkle-bin", type=Path)
+    parser.add_argument("--previous-record", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
+    if not args.local and (args.sparkle_bin is None or args.previous_record is None):
+        parser.error("--sparkle-bin et --previous-record sont requis sans --local")
     require(re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", args.version) and args.build.isdigit(), "Version/build invalides")
     os.umask(0o077)
     args.output.mkdir(parents=True, exist_ok=True)
@@ -102,7 +207,7 @@ def main():
     logs.mkdir()
     report = {"status": "running", "version": args.version, "build": args.build,
               "startedAt": datetime.now(timezone.utc).isoformat(), "workDirectory": str(work),
-              "appLaunched": False, "installedAppAccessed": False}
+              "appLaunched": False, "installedAppAccessed": False, "localOnly": args.local}
     report_path = evidence / "validation.json"
     dump(report_path, report)
     print(f"Dossier de preuve : {evidence}", flush=True)
@@ -140,6 +245,8 @@ def main():
         appcast = repo / "docs" / "appcast.xml"
         full_zip = dist / f"Atoll-{args.version}.zip"
         dmg = dist / f"Atoll-{args.version}.dmg"
+        if args.local:
+            return verify_local(args, dist, full_zip, dmg, work, evidence, report, report_path, run, verify_bundle)
         previous_record = json.loads(args.previous_record.read_text())
         previous_version, previous_build = previous_record["version"], str(previous_record["build"])
         require(re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", previous_version) and previous_build.isdigit()
@@ -213,31 +320,7 @@ def main():
             signatures.append({"name": name, "verified": True, "modifiedCopyRejected": True})
         report["sparkleEdDSA"] = {"publicKeySource": f"SHA256-verified published {previous_version} ZIP", "enclosures": signatures}
 
-        actual_machos = set()
-        for path in full.rglob("*"):
-            if path.is_file() and not path.is_symlink():
-                with path.open("rb") as stream:
-                    if stream.read(4) in MACHO_MAGIC:
-                        actual_machos.add(path.relative_to(full).as_posix())
-        require(actual_machos == MACHOS, f"Inventaire Mach-O différent : {sorted(actual_machos ^ MACHOS)}")
-        component_checks = []
-        for index, relative in enumerate(sorted(MACHOS)):
-            binary = full / relative
-            label = f"component-{index}"
-            architecture = run(label + "-architecture", ["lipo", "-archs", binary]).stdout.decode().split()
-            require(set(architecture) == {"arm64", "x86_64"}, f"Binaire non universel : {relative}")
-            run(label + "-verify", ["codesign", "--verify", "--strict", binary])
-            signed = run(label + "-signature", ["codesign", "-dvvv", binary])
-            signed_text = (signed.stdout + signed.stderr).decode()
-            require("Authority=Developer ID Application:" in signed_text and f"TeamIdentifier={TEAM}" in signed_text, f"Signature incorrecte : {relative}")
-            require(re.search(r"flags=0x[0-9a-fA-F]+\([^\n)]*\bruntime\b", signed_text), f"Hardened runtime absent : {relative}")
-            entitlements = run(label + "-entitlements", ["codesign", "-d", "--entitlements", "-", "--xml", binary]).stdout
-            values = plistlib.loads(entitlements) if entitlements.strip() else {}
-            require("com.apple.security.get-task-allow" not in values, f"get-task-allow présent : {relative}")
-            if relative == "Contents/MacOS/Atoll":
-                require(values == {"com.apple.security.automation.apple-events": True}, "Entitlements app inattendus")
-            component_checks.append({"path": relative, "architectures": sorted(architecture), "developerID": True, "team": TEAM, "hardenedRuntime": True, "entitlements": values})
-        report["executableComponents"] = component_checks
+        report["executableComponents"] = verify_components(full, run)
         verify_bundle("full", full)
 
         notary = {}
@@ -295,7 +378,7 @@ def main():
                              "allItemURLsUseTheirVersionTag": True, "newEnclosureCount": len(enclosures)}
         report["checks"] = {"app": "Developer ID verified", "helper": "Developer ID verified",
                             "sparkleComponents": "5 Developer ID components verified", "hardenedRuntime": "all 7 executable components verified",
-                            "entitlements": "get-task-allow absent; app automation.apple-events only",
+                            "entitlements": "get-task-allow absent; app entitlements empty",
                             "appStaple": "valid", "dmgStaple": "valid", "gatekeeper": "app, dmg and patched app accepted",
                             "sparkleEdDSA": f"{len(signatures)} enclosures verified; {len(signatures)} modified copies rejected"}
         report["architectures"] = ["x86_64", "arm64"]

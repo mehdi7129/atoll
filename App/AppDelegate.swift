@@ -38,207 +38,63 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         ThemeManager.applyStored()
-        InteractionCenter.migrateAutonomyIfNeeded()
-
-        // Config du recall proactif AVANT toute réinstallation des hooks
-        // (revue) : `repairIfInstalled` relit ce fichier pour décider si
-        // UserPromptSubmit est bloquant — l'écrire après faisait réécrire
-        // settings.json deux fois de suite, dans deux modes opposés.
-        Task { @MainActor in
-            await LearningSettings.shared.syncProactiveRecall()
-            // L'ordre config → réparation → réconciliation reste séquentiel.
-            await HookInstaller.repairIfInstalled()
-            await HookInstaller.syncDenyParking(level: InteractionCenter.shared.autonomyLevel)
-        }
-
-        // Le menu « Bienvenue… » demande l'onboarding via cette notif (le cast
-        // NSApp.delegate as? AppDelegate échoue avec @NSApplicationDelegateAdaptor).
-        NotificationCenter.default.addObserver(
-            forName: .atollShowOnboarding, object: nil, queue: .main
-        ) { [weak self] _ in
+        RetrospectiveRunner.shared.generationAllowed = { EssentialMigration.shared.isComplete }
+        NotificationCenter.default.addObserver(forName: .atollShowOnboarding, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.showOnboarding() }
         }
-        NotificationCenter.default.addObserver(
-            forName: .atollShowSkillReview, object: nil, queue: .main
-        ) { [weak self] _ in
+        NotificationCenter.default.addObserver(forName: .atollShowSkillReview, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.showSkillReview() }
         }
+        rebuildWindows()
+        registerDebugTriggers()
+        screenObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
+        ) { [weak self] _ in MainActor.assumeIsolated { self?.scheduleRebuild() } }
 
-        // Premier lancement : fenêtre de bienvenue (hooks, fail-open, autonomie).
-        if OnboardingWindowController.shouldShowAtLaunch {
-            showOnboarding()
+        Task { @MainActor in
+            // La migration capture l’héritage avant toute réconciliation de store.
+            let ready = await EssentialMigration.shared.run()
+            self.startObservation()
+            if ready {
+                SkillReviewCenter.shared.reconcileAndScan()
+                LearningSettings.shared.syncWithSettings()
+                RetrospectiveRunner.shared.recoverPendingDeliveries()
+            }
+            if OnboardingWindowController.shouldShowAtLaunch { self.showOnboarding() }
         }
+    }
 
-        // Jauges par modèle (opt-in) : démarre le poller si le réglage est actif.
+    private func startObservation() {
         ModelQuotaPoller.shared.syncWithSettings()
-
-        // Sons (OFF par défaut) : charge les bibliothèques et rend à
-        // l'utilisateur ses hooks `afplay` si un parking traîne alors que les
-        // sons d'Atoll sont coupés.
-        SoundCenter.shared.start()
-
-        // Démarre la réception des événements de hooks puis le suivi des sessions.
-        let store = SessionStore.shared
-        let server = BridgeServer(
-            onEvent: { event, requestID in
-                MainActor.assumeIsolated {
-                    // apply() AVANT register() : la machine à états pose d'abord
-                    // waitingPermission ; si register auto-approuve (rockstar/auto),
-                    // il ré-avance la phase — sinon la carte reste en attente.
-                    SessionStore.shared.apply(event)
-                    if let requestID {
-                        InteractionCenter.shared.register(event: event, requestID: requestID)
-                    }
-                }
-            },
-            onStatusline: { data in
-                Task { @MainActor in
-                    SessionStore.shared.applyStatusline(data)
-                }
-            },
-            onStateChange: { running in
-                Task { @MainActor in
-                    SessionStore.shared.serverRunning = running
-                }
-            },
-            onPendingExpired: { requestID in
-                MainActor.assumeIsolated { InteractionCenter.shared.pendingExpired(requestID) }
-            }
-        )
+        let server = BridgeServer(onEvent: { event, _ in
+            MainActor.assumeIsolated { SessionStore.shared.apply(event) }
+        }, onStatusline: { data in
+            Task { @MainActor in SessionStore.shared.applyStatusline(data) }
+        }, onStateChange: { running in
+            Task { @MainActor in SessionStore.shared.serverRunning = running }
+        })
         bridgeServer = server
-        InteractionCenter.shared.server = server
         try? server.start()
-        store.start()
+        SessionStore.shared.start()
 
-        // LE LANCEUR DES HOOKS CODEX EST REMIS EN ACCORD AVEC CETTE VERSION.
-        //
-        // Deux pannes que rien ne signale : un correctif du wrapper n'atteignait
-        // jamais un poste déjà installé (celui du superviseur, le 2026-09-09,
-        // serait resté un `exec` chez tout le monde) ; et une app DÉPLACÉE
-        // laissait l'intégration morte en silence, le wrapper portant le chemin
-        // absolu de l'ancien bundle. Idempotent : sans différence réelle, rien
-        // n'est écrit, et rien n'est posé si les hooks ne sont pas installés.
-        do {
-            let changed = try CodexHookInstallation.migrateIfInstalled(
-                settingsURL: CodexPaths.hooksURL,
-                binDirectory: BridgePaths.binDirectory,
-                helperURL: HookInstaller.helperURL)
-            if changed {
-                Logger(subsystem: "dev.mehdiguiard.atoll", category: "codex")
-                    .info("définitions de hooks Codex remises à jour — confiance native à vérifier")
-            }
-            if CodexPaths.configurationError == nil,
-               CodexHookSettingsEditor.hasManagedHooks(try? Data(contentsOf: CodexPaths.hooksURL)) {
-                try CodexRecallSkill.install(home: CodexPaths.homeURL, helperURL: HookInstaller.helperURL)
-            }
-        } catch {
-            // Fail-open (règle n° 1) : un lanceur qu'on n'a pas pu réécrire
-            // reste celui d'avant — Atoll ne doit pas refuser de démarrer pour
-            // ça.
-            Logger(subsystem: "dev.mehdiguiard.atoll", category: "codex")
-                .error("lanceur Codex non mis à jour: \(error.localizedDescription, privacy: .public)")
-        }
-
-        CodexService.shared.start()
         let codexServer = BridgeServer(onEvent: { _, _ in }, onStatusline: { _ in },
-                                      onStateChange: { running in
-            Task { @MainActor in CodexService.shared.serverRunning = running }
-        }, onCodexEvent: { event, requestID, helperPid in
-            Task { @MainActor in
-                guard CodexService.shared.accepts(event) else {
-                    if let requestID { CodexInteractionCenter.shared.handBack(requestID) }
-                    return
+            onStateChange: { running in
+                Task { @MainActor in CodexService.shared.serverRunning = running }
+            }, onCodexEvent: { event, _, _ in
+                Task { @MainActor in
+                    guard CodexService.shared.accepts(event) else { return }
+                    CodexService.shared.apply(event)
                 }
-                let applied = CodexService.shared.apply(event)
-                // Une demande d'autorisation laisse le helper BLOQUÉ sur son
-                // descripteur : elle va dans le centre Codex, jamais dans
-                // `InteractionCenter` — donc jamais dans Rockstar.
-                //
-                // ⚠️ SEULEMENT SI LA PROJECTION A RETENU L'ÉVÉNEMENT. Une
-                // permission retardataire d'un tour clos créait sinon une carte
-                // que plus personne n'attendait : le filtrage des tours
-                // protégeait l'état de session, pas l'interaction. La carte
-                // n'est pas perdue pour autant — le helper reçoit l'abstention
-                // du serveur et Codex demande lui-même à l'utilisateur.
-                // ⚠️ ON NE REND LA MAIN QUE SUR UNE CERTITUDE. Un tour
-                // seulement INCONNU n'est pas un tour clos : `UserPromptSubmit`
-                // étant async, une permission peut arriver AVANT le prompt qui
-                // ouvre son tour. Rendre la main là-dessus tuait une demande
-                // vivante, et rien ne la recrée quand le prompt arrive —
-                // régression trouvée par Codex dans la première version de ce
-                // correctif.
-                if applied.cardIsStale {
-                    if let requestID { CodexInteractionCenter.shared.handBack(requestID) }
-                    return
-                }
-                if let requestID {
-                    CodexInteractionCenter.shared.register(event: event, requestID: requestID,
-                                                          helperPid: helperPid)
-                }
-            }
-        }, onPendingExpired: { requestID in
-            // L'attente a expiré côté serveur : la carte n'a plus personne
-            // derrière elle. Sans ce rappel elle restait affichée, et un clic
-            // envoyait une décision dans le vide (constat de Codex en revue).
-            Task { @MainActor in CodexInteractionCenter.shared.handBack(requestID) }
-        }, socketPath: CodexPaths.socketPath)
+            }, socketPath: CodexPaths.socketPath)
         codexBridgeServer = codexServer
-        CodexInteractionCenter.shared.server = codexServer
         try? codexServer.start()
-
-        // Découverte de la flotte sur interface SUPPORTÉE (`claude agents --json`) :
-        // autorité de découverte des sessions, le scan de processus n'est plus
-        // qu'un repli (le daemon d'arrière-plan casse le scan).
-        FleetPoller.shared.start()
-
-        // Index mémoire (opt-out) : backfill + suivi incrémental des transcripts,
-        // entièrement hors bande — jamais dans le chemin des hooks.
-        MemoryIndexer.shared.syncWithSettings()
-
-        // Curation des notes (Milestone B) : les notes remplacées sont
-        // oubliées de l'index, les nouvelles indexées. Branché AVANT
-        // syncWithSettings, qui arme le planificateur hebdomadaire.
-        NotesCurationService.shared.onNotesReplaced = { forgotten, written in
-            MemoryIndexer.shared.replaceNotes(forgotten: forgotten, written: written)
-        }
-
-        // Apprentissage (opt-in, OFF par défaut) : rétrospectives de fin de
-        // session. Le store notifie le runner, le runner indexe ses notes.
-        LearningSettings.shared.syncWithSettings()
         SessionStore.shared.onSessionEnded = { snapshot, reason in
             RetrospectiveRunner.shared.sessionEnded(snapshot, reason: reason)
         }
-        SessionStore.shared.onSessionResumed = { sessionID in
-            RetrospectiveRunner.shared.sessionResumed(sessionID)
-        }
-        RetrospectiveRunner.shared.noteSink = { url, note in
-            MemoryIndexer.shared.indexNote(url: url, slug: note.slug)
-        }
-        // Rafraîchir la file de revue quand une rétrospective vient d'écrire.
-        RetrospectiveRunner.shared.onProposalsChanged = {
-            SkillReviewCenter.shared.refresh()
-        }
-        RetrospectiveRunner.shared.recoverPendingDeliveries()
-
-        // Curation : réconcilie le manifeste des skills appris avec le disque
-        // (orphelins, déplacements inachevés) puis découvre les propositions.
-        SkillReviewCenter.shared.reconcileAndScan()
-
-        rebuildWindows()
-        registerDebugTriggers()
-
-        // didChangeScreenParameters arrive souvent en rafale (réveil, branchement
-        // d'écran) : on débounce, et on ne reconstruit que si la configuration
-        // d'écrans a réellement changé — sinon un îlot épinglé serait perdu.
-        screenObserver = NotificationCenter.default.addObserver(
-            forName: NSApplication.didChangeScreenParametersNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated {
-                self?.scheduleRebuild()
-            }
-        }
+        SessionStore.shared.onSessionResumed = { id in RetrospectiveRunner.shared.sessionResumed(id) }
+        RetrospectiveRunner.shared.onProposalsChanged = { SkillReviewCenter.shared.refresh() }
+        CodexService.shared.start()
+        FleetPoller.shared.start()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -246,12 +102,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         CodexService.shared.stop()
         FleetPoller.shared.stop()
         RetrospectiveRunner.shared.terminateActive()
-        // Une curation en vol est un `claude -p` facturé : ne pas le laisser
-        // orphelin quand Atoll s'en va. La RECHERCHE de plugins l'est aussi —
-        // troisième émetteur, oublié jusqu'au 2026-08-14 alors que le
-        // raisonnement ci-dessus vaut mot pour mot pour elle.
-        NotesCurationService.shared.cancel()
-        PluginInventory.shared.cancel()
         bridgeServer?.stop()
         codexBridgeServer?.stop()
     }
@@ -277,9 +127,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func rebuildWindows() {
         controllers.forEach { $0.tearDown() }
         let screens = NSScreen.screens
-        // Un seul écran « primaire » pilote l'ouverture auto et le focus des
-        // cartes (évite que les panneaux se disputent le clavier). L'écran
-        // principal, ou à défaut le premier.
+        // Les actions de debug ciblent l’écran principal, ou le premier.
         let primaryScreen = NSScreen.main ?? screens.first
         controllers = screens.map { screen in
             NotchWindowController(screen: screen, isPrimary: screen == primaryScreen)
@@ -309,182 +157,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         debugTokens = [expandToken, compactToken]
 
-        // Les triggers qui PRENNENT une décision (approuver/refuser une permission)
-        // ne doivent JAMAIS exister en release : sans cela, n'importe quel processus
-        // local pourrait approuver silencieusement des permissions via une simple
-        // notification Darwin. Réservés aux builds Debug pour les tests scriptés.
         #if DEBUG
-        // Sons : reprendre les hooks `afplay` de l'utilisateur (copie des
-        // fichiers + parking) et les lui rendre. ÉCRIT dans settings.json →
-        // jamais en release.
-        var adoptSoundsToken: Int32 = 0
-        notify_register_dispatch("dev.mehdiguiard.atoll.debug.adoptSounds", &adoptSoundsToken, DispatchQueue.main) { _ in
-            MainActor.assumeIsolated {
-                let adopted = SoundCenter.shared.adoptDetectedSounds()
-                do {
-                    try SoundCenter.shared.parkUserSoundHooks()
-                    SoundCenter.shared.soundsEnabled = true
-                    NSLog("[atoll] sons repris : \(adopted) — hooks parqués")
-                } catch {
-                    NSLog("[atoll] échec du parking : \(error)")
-                }
-            }
-        }
-        var restoreSoundsToken: Int32 = 0
-        notify_register_dispatch("dev.mehdiguiard.atoll.debug.restoreSounds", &restoreSoundsToken, DispatchQueue.main) { _ in
-            MainActor.assumeIsolated {
-                do {
-                    try SoundCenter.shared.restoreUserSoundHooks()
-                    NSLog("[atoll] hooks sonores restitués")
-                } catch {
-                    NSLog("[atoll] échec de la restitution : \(error)")
-                }
-            }
-        }
-        // Écoute des deux sons, sans passer par l'interface.
-        var playSoundsToken: Int32 = 0
-        notify_register_dispatch("dev.mehdiguiard.atoll.debug.playSounds", &playSoundsToken, DispatchQueue.main) { _ in
-            MainActor.assumeIsolated {
-                SoundCenter.shared.preview(.decisionNeeded)
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                    MainActor.assumeIsolated { SoundCenter.shared.preview(.taskCompleted) }
-                }
-            }
-        }
-        debugTokens.append(contentsOf: [adoptSoundsToken, restoreSoundsToken, playSoundsToken])
-
-        // Rétrospective sur la dernière session terminée (bypass le gate —
-        // consomme du quota : jamais en release).
-        var retroToken: Int32 = 0
-        notify_register_dispatch("dev.mehdiguiard.atoll.debug.retro", &retroToken, DispatchQueue.main) { _ in
-            MainActor.assumeIsolated {
-                RetrospectiveRunner.shared.debugRunOnLastEnded()
-            }
-        }
-        debugTokens.append(retroToken)
-
-        // Rétrospective sur le plus gros transcript du projet Atoll : vérifie
-        // le pipeline complet (condensé → analyse → notes/skills) sur une vraie
-        // session riche, sans attendre qu'une session substantielle se termine.
-        var retroBigToken: Int32 = 0
-        notify_register_dispatch("dev.mehdiguiard.atoll.debug.retroBig", &retroBigToken, DispatchQueue.main) { _ in
-            MainActor.assumeIsolated {
-                RetrospectiveRunner.shared.debugRunOnLargestTranscript(
-                    projectDirectory: "-Users-mehdiguiard-Desktop-Dynamic-Island")
-            }
-        }
-        debugTokens.append(retroBigToken)
-
-        // MÊME run, sur l'abonnement CODEX : prouve le chemin complet
-        // `codex exec` → schéma → fichier de sortie → revalidation Swift, sans
-        // attendre que le quota Claude soit réellement épuisé. Le gate est
-        // court-circuité ; le quota Codex, lui, ne l'est pas — un compte plein
-        // rendra `failed(exit 1)`, ce qui est l'information qu'on cherche.
-        var retroCodexToken: Int32 = 0
-        notify_register_dispatch("dev.mehdiguiard.atoll.debug.retroCodex", &retroCodexToken, DispatchQueue.main) { _ in
-            MainActor.assumeIsolated {
-                RetrospectiveRunner.shared.debugRunOnLargestTranscript(
-                    projectDirectory: "-Users-mehdiguiard-Desktop-Dynamic-Island",
-                    provider: .codex)
-            }
-        }
-        debugTokens.append(retroCodexToken)
-
-        // Bilan forcé sur le PLUS GROS ROLLOUT CODEX : prouve la chaîne
-        // complète rollout → parseur Codex → condensé → analyse → notes, sans
-        // attendre qu'une vraie session Codex longue se termine.
-        var retroCodexRolloutToken: Int32 = 0
-        notify_register_dispatch("dev.mehdiguiard.atoll.debug.retroCodexRollout",
-                                 &retroCodexRolloutToken, DispatchQueue.main) { _ in
-            MainActor.assumeIsolated { RetrospectiveRunner.shared.debugRunOnLargestCodexRollout() }
-        }
-        debugTokens.append(retroCodexRolloutToken)
-
-        // Résolution de la première carte CODEX en attente, par les mêmes
-        // chemins que les boutons. Pendant de `allow`/`deny` côté Claude, et
-        // seul moyen de valider la matrice de fautes sans souris.
-        //
-        // ⚠️ NOMS ÉCRITS EN CLAIR, jamais construits par interpolation :
-        // `Scripts/check-docs.py` confronte cette liste à CLAUDE.md en cherchant
-        // des LITTÉRAUX. Une boucle rendrait ces triggers invisibles au
-        // contrôle — et un trigger qui échappe au contrôle finit par dériver.
-        var codexAllowToken: Int32 = 0
-        notify_register_dispatch("dev.mehdiguiard.atoll.debug.codexAllow",
-                                 &codexAllowToken, DispatchQueue.main) { _ in
-            MainActor.assumeIsolated {
-                guard let card = CodexInteractionCenter.shared.current else { return }
-                CodexInteractionCenter.shared.decide(card.id, .allow)
-            }
-        }
-        debugTokens.append(codexAllowToken)
-
-        var codexDenyToken: Int32 = 0
-        notify_register_dispatch("dev.mehdiguiard.atoll.debug.codexDeny",
-                                 &codexDenyToken, DispatchQueue.main) { _ in
-            MainActor.assumeIsolated {
-                guard let card = CodexInteractionCenter.shared.current else { return }
-                CodexInteractionCenter.shared.decide(card.id, .deny(message: "refusé depuis Atoll"))
-            }
-        }
-        debugTokens.append(codexDenyToken)
-
-        // Rendre la main à Codex sans décider — le chemin du bouton
-        // « DÉCIDER DANS CODEX », qui doit faire apparaître l'invite native.
-        var codexHandBackToken: Int32 = 0
-        notify_register_dispatch("dev.mehdiguiard.atoll.debug.codexHandBack",
-                                 &codexHandBackToken, DispatchQueue.main) { _ in
-            MainActor.assumeIsolated {
-                guard let card = CodexInteractionCenter.shared.current else { return }
-                CodexInteractionCenter.shared.handBack(card.id)
-            }
-        }
-        debugTokens.append(codexHandBackToken)
-
-        // Inventaire des plugins : rafraîchit et journalise ce que la CLI rend
-        // (vérification du chemin complet spawn → décodage → état observable).
-        var pluginsToken: Int32 = 0
-        notify_register_dispatch("dev.mehdiguiard.atoll.debug.plugins", &pluginsToken, DispatchQueue.main) { _ in
-            MainActor.assumeIsolated { PluginInventory.shared.refresh() }
-        }
-        debugTokens.append(pluginsToken)
-
-        // Inventaire FACTICE : permet de travailler le panneau des plugins
-        // (captures, états d'anomalie) sans réseau ni CLI. Le code existait
-        // mais aucun geste ne l'atteignait — 74 lignes injoignables.
-        var seedPluginsToken: Int32 = 0
-        notify_register_dispatch("dev.mehdiguiard.atoll.debug.seedPlugins", &seedPluginsToken, DispatchQueue.main) { _ in
-            MainActor.assumeIsolated { PluginInventory.shared.debugSeedSnapshot() }
-        }
-        debugTokens.append(seedPluginsToken)
-
-        // Recherche de plugin par besoin (consomme du quota : DEBUG only).
-        var pluginSearchToken: Int32 = 0
-        notify_register_dispatch("dev.mehdiguiard.atoll.debug.pluginSearch", &pluginSearchToken, DispatchQueue.main) { _ in
-            MainActor.assumeIsolated {
-                let task: Task<Void, Never> = Task { @MainActor in
-                    let outcome = await PluginInventory.shared.search(
-                        need: "relire et commenter mes pull requests GitHub")
-                    let message = outcome ?? "candidats trouvés"
-                    Logger(subsystem: "dev.mehdiguiard.atoll", category: "plugins")
-                        .info("recherche debug : \(message, privacy: .public)")
-                }
-                _ = task
-            }
-        }
-        debugTokens.append(pluginSearchToken)
-
-        // Curation des notes (consomme du quota ET réécrit la mémoire :
-        // jamais en release). Ignore l'échéance hebdomadaire, PAS les
-        // garde-fous (opt-in, budget, archive vérifiée).
-        var curationToken: Int32 = 0
-        notify_register_dispatch("dev.mehdiguiard.atoll.debug.curation", &curationToken, DispatchQueue.main) { _ in
-            MainActor.assumeIsolated {
-                NotesCurationService.shared.curateNow()
-            }
-        }
-        debugTokens.append(curationToken)
-
-        // Curation (décisions → DEBUG uniquement).
+        // Revue des skills (décisions → DEBUG uniquement).
         var seedToken: Int32 = 0
         notify_register_dispatch("dev.mehdiguiard.atoll.debug.seedSkill", &seedToken, DispatchQueue.main) { _ in
             MainActor.assumeIsolated { SkillReviewCenter.shared.debugSeedProposal() }
@@ -514,33 +188,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         debugTokens.append(contentsOf: [seedToken, skillReviewToken, approveSkillToken, rejectSkillToken])
 
-        var allowToken: Int32 = 0
-        notify_register_dispatch("dev.mehdiguiard.atoll.debug.allow", &allowToken, DispatchQueue.main) { _ in
-            MainActor.assumeIsolated {
-                let center = InteractionCenter.shared
-                guard let request = center.current else { return }
-                switch request.kind {
-                case .permission:
-                    center.allow(request.id)
-                case .plan:
-                    center.approvePlan(request.id, acceptEdits: false)
-                case .questions(let questions, _):
-                    var answers: [String: String] = [:]
-                    for question in questions {
-                        answers[question.question] = question.options.first?.label ?? "ok"
-                    }
-                    center.answerQuestions(request.id, answers: answers)
-                }
-            }
-        }
-        var denyToken: Int32 = 0
-        notify_register_dispatch("dev.mehdiguiard.atoll.debug.deny", &denyToken, DispatchQueue.main) { _ in
-            MainActor.assumeIsolated {
-                let center = InteractionCenter.shared
-                guard let request = center.current else { return }
-                center.deny(request.id, message: "Refus de test automatisé Atoll.")
-            }
-        }
         // Sélectionne la 1re session (test visuel de la vue détail).
         var selectToken: Int32 = 0
         notify_register_dispatch("dev.mehdiguiard.atoll.debug.select", &selectToken, DispatchQueue.main) { [weak self] _ in
@@ -550,27 +197,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 vm.isPinned = true
                 vm.open()
                 vm.selectSession(first.id)
-            }
-        }
-        // Jump-back de la 1re session (test visuel Phase 4).
-        var jumpToken: Int32 = 0
-        notify_register_dispatch("dev.mehdiguiard.atoll.debug.jump", &jumpToken, DispatchQueue.main) { _ in
-            MainActor.assumeIsolated {
-                let logger = Logger(subsystem: "dev.mehdiguiard.atoll", category: "jump")
-                // Choisir la 1re session dont l'ancre est résolvable (pas .unknown).
-                let anchors = SessionStore.shared.uiSessions.compactMap {
-                    SessionStore.shared.terminalAnchor(for: $0.id)
-                }
-                guard let anchor = anchors.first(where: {
-                    if case .unknown = TerminalResolver.resolve($0) { return false }
-                    return true
-                }) ?? anchors.first else {
-                    logger.info("debug.jump → aucune ancre")
-                    return
-                }
-                TerminalJumpService.jump(to: anchor) { result in
-                    logger.info("debug.jump → \(String(describing: result), privacy: .public)")
-                }
             }
         }
         // Ouvre la fenêtre Réglages (captures d'écran scriptées).
@@ -588,7 +214,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 NotificationCenter.default.post(name: .atollShowOnboarding, object: nil)
             }
         }
-        debugTokens.append(contentsOf: [allowToken, denyToken, selectToken, jumpToken, settingsToken, onboardingToken])
+        debugTokens.append(contentsOf: [selectToken, settingsToken, onboardingToken])
         #endif
     }
 

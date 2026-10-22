@@ -97,7 +97,7 @@ final class HookSettingsEditorMixedGroupsTests: XCTestCase {
         }
     }
 
-    func testMixedGroupRecallToggleLeavesExactlyOneHookInRequestedMode() throws {
+    func testMixedGroupLegacyRecallToggleLeavesOnePassiveHook() throws {
         let fixture = try fixture(event: "UserPromptSubmit")
         var current = fixture.input
         for enabled in [false, true, false] {
@@ -106,9 +106,9 @@ final class HookSettingsEditorMixedGroupsTests: XCTestCase {
             XCTAssertEqual(managed.count, 1, "A08-recall-single")
             let hook = try XCTUnwrap(managed.last)
             XCTAssertEqual(hook["command"] as? String, command)
-            XCTAssertEqual(hook["timeout"] as? Int, enabled ? 5 : 10, "A08-recall-timeout")
-            XCTAssertEqual((hook["async"] as? Bool) == true, !enabled, "A08-recall-async")
-            XCTAssertEqual(HookSettingsEditor.installedProactiveRecall(in: current), enabled,
+            XCTAssertEqual(hook["timeout"] as? Int, 3, "A08-recall-timeout")
+            XCTAssertEqual((hook["async"] as? Bool) == true, true, "A08-recall-async")
+            XCTAssertEqual(HookSettingsEditor.installedProactiveRecall(in: current), false,
                            "A08-recall-detection")
             XCTAssertTrue(HookSettingsEditor.isInstalled(in: current))
             let removed = try HookSettingsEditor.uninstall(from: current)

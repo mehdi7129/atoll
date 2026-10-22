@@ -14,10 +14,10 @@ repo = Path(__file__).resolve().parent.parent
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--output', type=Path, required=True)
 parser.add_argument('--build-dir', type=Path, required=True)
-parser.add_argument('--sabotage', choices=['heartbeat', 'serialization', 'coalescing', 'barrier', 'fleet-ownership', 'keychain-ownership'])
+parser.add_argument('--sabotage', choices=['heartbeat', 'serialization', 'coalescing', 'barrier', 'fleet-ownership', 'keychain-ownership', 'migration-exclusion', 'migration-home', 'migration-invalid-home', 'migration-repair'])
 args = parser.parse_args()
 args.output.mkdir(parents=True, exist_ok=True)
-inputs = ['App/FleetPoller.swift', 'App/ModelQuotaPoller.swift', 'App/HookInstaller.swift',
+inputs = ['App/FleetPoller.swift', 'App/ModelQuotaPoller.swift', 'App/HookInstaller.swift', 'App/EssentialMigration.swift',
           'App/ClaudeExecutable.swift', 'App/CodexExecutable.swift',
           'AtollCore/Sources/AtollCore/BoundedProcessRunner.swift']
 report = {'source_sha256': {p: hashlib.sha256((repo / p).read_bytes()).hexdigest() for p in inputs}, 'scenarios': []}
@@ -25,7 +25,7 @@ with tempfile.TemporaryDirectory(prefix='atoll-process-services-') as temporary:
     root = Path(temporary)
     source = root / 'HookInstaller.swift'
     text = (repo / 'App/HookInstaller.swift').read_text()
-    if args.sabotage and not args.sabotage.endswith('ownership'):
+    if args.sabotage and not args.sabotage.endswith('ownership') and args.sabotage not in ['migration-home', 'migration-invalid-home']:
         needle, replacement = {
             'heartbeat': ('let result = try await BoundedProcessRunner.run(process, timeout: timeout,',
                           'Thread.sleep(forTimeInterval: 0.4)\n            let result = try await BoundedProcessRunner.run(process, timeout: timeout,'),
@@ -34,6 +34,9 @@ with tempfile.TemporaryDirectory(prefix='atoll-process-services-') as temporary:
                            'if let (_, operation) = pending[key]'),
             'barrier': ('while let operation = tail {\n            let id = tailID\n            await operation.value\n            if tailID == id { break }\n        }',
                         'if let tail { await tail.value }'),
+            'migration-exclusion': ('guard !migrationIsRunning, unfinishedProcess?.isRunning != true else {',
+                                    'guard unfinishedProcess?.isRunning != true else {'),
+            'migration-repair': ('try requireNoActiveHelper()\n        let settings =', 'let settings ='),
         }[args.sabotage]
         assert text.count(needle) == 1
         text = text.replace(needle, replacement)
@@ -46,7 +49,23 @@ with tempfile.TemporaryDirectory(prefix='atoll-process-services-') as temporary:
     assert text.count(needle) == 1
     text = text.replace(needle, needle + '\n        HookFixtureProbe.barrierEntered = true')
     source.write_text(text)
+    migration = repo / 'App/EssentialMigration.swift'
+    if args.sabotage in ['migration-home', 'migration-invalid-home']:
+        text = migration.read_text()
+        needle, replacement = {
+            'migration-home': (' && completedHome == CodexPaths.homeURL', ''),
+            'migration-invalid-home': ('let home = try? CodexPaths.validatedHome()', 'let home: URL? = try CodexPaths.validatedHome()'),
+        }[args.sabotage]
+        assert text.count(needle) == 1
+        migration = root / 'EssentialMigration.swift'
+        migration.write_text(text.replace(needle, replacement))
     objects = sorted((args.build_dir / 'AtollCore.build').glob('*.o'))
+    module_directory = args.build_dir / 'Modules'
+    # SwiftPM/Xcode récent expose un objet agrégé ; le backend native garde
+    # les objets séparés. Les deux compilent les mêmes services réels.
+    if not objects and (args.build_dir / 'AtollCore.o').is_file():
+        objects = [args.build_dir / 'AtollCore.o']
+        module_directory = args.build_dir
     assert objects
     fleet, keychain = repo / 'App/FleetPoller.swift', repo / 'App/ModelQuotaPoller.swift'
     if args.sabotage in ['fleet-ownership', 'keychain-ownership']:
@@ -74,19 +93,20 @@ with tempfile.TemporaryDirectory(prefix='atoll-process-services-') as temporary:
         .replace('"/usr/local/bin/codex"', json.dumps(str(root / 'absent-local-codex'))))
     binary = root / 'process-services'
     result = subprocess.run(['swiftc', '-swift-version', '5', '-parse-as-library',
-        '-I', str(args.build_dir / 'Modules'), '-lsqlite3', str(source),
+        '-I', str(module_directory), '-lsqlite3', str(source),
         str(fleet), str(keychain), str(runner),
+        str(migration),
         str(repo / 'App/ClaudeExecutable.swift'), str(codex),
         str(repo / 'Scripts/process-tests/Stubs.swift'), str(repo / 'Scripts/process-tests/Main.swift'),
         *map(str, objects), '-o', str(binary)], capture_output=True, text=True, timeout=900)
     (args.output / 'compile.log').write_text(result.stdout + result.stderr)
     if result.returncode:
         raise SystemExit(result.stdout + result.stderr)
-    cases = ['fleet', 'keychain', 'heartbeat', 'large-stderr', 'serial', 'writer-exclusion', 'alternating', 'queue-barrier', 'precondition-order', 'interruption', 'nonzero']
+    cases = ['fleet', 'keychain', 'heartbeat', 'large-stderr', 'serial', 'writer-exclusion', 'migration-exclusion', 'essential-migration', 'essential-migration-retry', 'essential-migration-invalid-home', 'migration-repair-ownership', 'alternating', 'queue-barrier', 'precondition-order', 'interruption', 'nonzero']
     cases += ['resolve-claude', 'resolve-codex', 'resolve-claude-inherited', 'resolve-codex-inherited']
     cases += ['fleet-ownership', 'keychain-ownership']
     if args.sabotage:
-        cases = [{'heartbeat': 'heartbeat', 'serialization': 'serial', 'coalescing': 'alternating', 'barrier': 'queue-barrier', 'fleet-ownership': 'fleet-ownership', 'keychain-ownership': 'keychain-ownership'}[args.sabotage]]
+        cases = [{'heartbeat': 'heartbeat', 'serialization': 'serial', 'coalescing': 'alternating', 'barrier': 'queue-barrier', 'fleet-ownership': 'fleet-ownership', 'keychain-ownership': 'keychain-ownership', 'migration-exclusion': 'migration-exclusion', 'migration-home': 'essential-migration', 'migration-invalid-home': 'essential-migration-invalid-home', 'migration-repair': 'migration-repair-ownership'}[args.sabotage]]
     for scenario in cases:
         home = root / scenario
         home.mkdir(mode=0o700)
@@ -112,7 +132,11 @@ with tempfile.TemporaryDirectory(prefix='atoll-process-services-') as temporary:
                         'coalescing': 'A10 last intent coalesced with old operation',
                         'barrier': 'A10 state reread before queued writer ended',
                         'fleet-ownership': 'A09 probe lost live child ownership',
-                        'keychain-ownership': 'A09 probe lost live child ownership'}[args.sabotage]
+                        'keychain-ownership': 'A09 probe lost live child ownership',
+                        'migration-exclusion': 'EM-helper-started-during-migration',
+                        'migration-home': 'EM-changed-home-approved-without-migration',
+                        'migration-invalid-home': 'EM-invalid-home-left-claude-deny-parked',
+                        'migration-repair': 'EM-repair-overlapped-live-writer'}[args.sabotage]
             passed = result.returncode == 1 and expected in log
         else:
             passed = result.returncode == 0 and 'PASS ' + scenario in log

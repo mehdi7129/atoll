@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A09 : vrais services d’apprentissage, descendant privé gardant les deux pipes."""
+"""A09 : vrai générateur, descendant privé gardant les deux pipes."""
 import argparse
 import hashlib
 import json
@@ -12,25 +12,25 @@ repo = Path(__file__).resolve().parent.parent
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--output', type=Path, required=True)
 parser.add_argument('--build-dir', type=Path, required=True)
-parser.add_argument('--sabotage', choices=['retrospective', 'curation'])
+parser.add_argument('--sabotage', choices=['retrospective'])
 args = parser.parse_args()
 args.output.mkdir(parents=True, exist_ok=True)
 sources = ['App/' + file + '.swift' for file in
-           ['RetrospectiveRunner', 'NotesCurationService', 'AnalysisExecution', 'CodexInteractionCenter', 'PluginInventory']]
+           ['RetrospectiveRunner', 'AnalysisExecution']]
 report = {'source_sha256': {p: hashlib.sha256((repo / p).read_bytes()).hexdigest() for p in sources}, 'scenarios': []}
 with tempfile.TemporaryDirectory(prefix='atoll-analysis-processes-') as temporary:
     root = Path(temporary)
     binary = root / 'analysis-processes'
     compiled = []
     for path in sources:
-        if Path(path).stem in ['RetrospectiveRunner', 'NotesCurationService']:
+        if Path(path).stem == 'RetrospectiveRunner':
             text = (repo / path).read_text()
             # Délais seulement accélérés : les classes, leur ownership et les
             # gardes de budget restent ceux du produit. Le stub ProcessInspector
             # retourne volontairement une identité invalide pour refuser le kill.
             text = text.replace('let timeoutSeconds: TimeInterval = 600', 'let timeoutSeconds: TimeInterval = 1')
             text = text.replace('terminationGrace: 5)', 'terminationGrace: 0.1)')
-            target = {'retrospective': 'RetrospectiveRunner', 'curation': 'NotesCurationService'}.get(args.sabotage)
+            target = 'RetrospectiveRunner' if args.sabotage else None
             if Path(path).stem == target:
                 needle = 'if let process, process.isRunning {'
                 assert text.count(needle) == 1
@@ -49,7 +49,7 @@ with tempfile.TemporaryDirectory(prefix='atoll-analysis-processes-') as temporar
     (args.output / 'compile.log').write_text(result.stdout + result.stderr)
     if result.returncode:
         raise SystemExit(result.stdout + result.stderr)
-    cases = [(service, provider, survivor) for service in ['retrospective', 'curation']
+    cases = [(service, provider, survivor) for service in ['retrospective']
              for provider in ['claude', 'codex'] for survivor in [False, True]]
     if args.sabotage:
         cases = [(args.sabotage, 'claude', True)]

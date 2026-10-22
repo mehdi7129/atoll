@@ -4,29 +4,23 @@ import AtollCore
 struct LearningPane: View {
     var focusRequest: UUID? = nil
     @AppStorage(LearningSettings.enabledKey) private var learningEnabled = false
-    @AppStorage(LearningSettings.curationScheduledKey) private var curationScheduled = false
     @AppStorage(LearningSettings.skillDestinationKey) private var skillDestination = "origin"
     @State private var center = SkillReviewCenter.shared
-    @State private var curation = NotesCurationService.shared
     @State private var runner = RetrospectiveRunner.shared
-    @State private var notes: [LearningNoteSummary] = []
-    @State private var noteProjects: [(project: String, count: Int)] = []
-    @State private var noteVolume = 0
     @State private var attempts: [RetrospectiveRunner.AttemptRecord] = []
 
     var body: some View {
         ScrollViewReader { scroll in
             Form {
-                AnalysisSettingsSection(focusRequest: focusRequest).id("analyses")
-                Section("Bilans de session") {
-                    Toggle("Apprendre des sessions terminées", isOn: $learningEnabled)
+                Section("Création de skills") {
+                    Toggle("Créer automatiquement des propositions de skills", isOn: $learningEnabled)
+                        .accessibilityIdentifier("skill-generation-enabled")
                         .onChange(of: learningEnabled) { _, _ in
                             if !CodexPreview.enabled { LearningSettings.shared.syncWithSettings() }
                         }
-                    SettingsHelp("Après une session importante, Atoll peut en tirer des notes et proposer des skills à revoir. Désactiver arrête ces bilans ; le rangement des notes garde son propre réglage.")
+                    SettingsHelp("Analyse les sessions terminées pour proposer des procédures réutilisables. Utilise le quota du moteur choisi. Les skills existants restent disponibles quand cette option est désactivée.")
                 }
-                MemorySettingsSection()
-                notesSection
+                AnalysisSettingsSection(focusRequest: focusRequest).id("analyses")
                 skillsSection
                 Section {
                     DisclosureGroup("Journal des analyses") {
@@ -63,79 +57,10 @@ struct LearningPane: View {
         .onAppear {
             guard !CodexPreview.enabled else { return }
             center.refresh()
-            refreshNotes()
             attempts = runner.recentAttempts()
         }
         .onChange(of: runner.journalRevision) { _, _ in
             if !CodexPreview.enabled { attempts = runner.recentAttempts() }
-        }
-        .onChange(of: runner.notesRevision) { _, _ in
-            if !CodexPreview.enabled { refreshNotes() }
-        }
-        .onChange(of: curation.lastRunAt) { _, _ in
-            if !CodexPreview.enabled { refreshNotes() }
-        }
-    }
-
-    private var curationOutcome: String? {
-        if CodexPreview.enabled {
-            return CommandLine.arguments.contains("--preview-curation-blocked")
-                ? "Rangement bloqué : le volume des notes dépasse la capacité de cette analyse." : nil
-        }
-        return curation.lastOutcome
-    }
-
-    private var notesSection: some View {
-        Section("Notes et rangement") {
-            Toggle("Ranger les notes chaque semaine", isOn: $curationScheduled)
-                .onChange(of: curationScheduled) { _, _ in
-                    if !CodexPreview.enabled { curation.syncWithSettings() }
-                }
-            HStack {
-                Button(curation.phase == .running ? "Rangement en cours…" : "Ranger maintenant") {
-                    if !CodexPreview.enabled { curation.curateNow() }
-                }
-                .disabled(curation.phase == .running || notes.count < 2)
-                if curation.phase == .running { ProgressView().controlSize(.small) }
-            }
-            if let outcome = curationOutcome {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Dernier passage").font(.callout.weight(.medium))
-                    SettingsHelp(outcome)
-                }
-            }
-            ForEach(CodexPreview.enabled ? [] : curation.warnings, id: \.self) { warning in
-                Text(warning).font(.callout).foregroundStyle(.orange)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            SettingsHelp("Fusionne les doublons et signale les contradictions, en conservant une archive. Cette analyse utilise ton abonnement.")
-            DisclosureGroup("Voir les notes (\(notes.count))") {
-                if notes.isEmpty {
-                    Text("Aucune note — elles arrivent avec les rétrospectives.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else {
-                    // Les 5 plus récentes : un aperçu, pas un explorateur.
-                    ForEach(notes.prefix(5)) { note in
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(note.title)
-                            Text(noteSubtitle(note))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    if noteProjects.count > 1 {
-                        LabeledContent("Projets", value: projectsSummary)
-                            .font(.caption)
-                    }
-                    LabeledContent("Volume", value: volumeSummary)
-                        .font(.caption)
-                }
-
-                Button("Ouvrir les notes dans le Finder") {
-                    if !CodexPreview.enabled { NSWorkspace.shared.open(BridgePaths.learningDirectory) }
-                }
-            }
         }
     }
 
@@ -176,9 +101,9 @@ struct LearningPane: View {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(SkillSlug.dirName(for: row.skill.slug))
-                                Text(usageLabel(row))
+                                Text(row.skill.destination.label)
                                     .font(.caption)
-                                    .foregroundStyle(row.suggestedForArchive ? .orange : .secondary)
+                                    .foregroundStyle(.secondary)
                             }
                             Spacer()
                             if row.userModified {
@@ -190,61 +115,9 @@ struct LearningPane: View {
                     }
                 }
 
-                SettingsHelp("Les skills approuvés sont disponibles dans leur CLI de destination. L'usage Codex reste non mesuré.")
+                SettingsHelp("Les skills approuvés sont disponibles dans leur CLI de destination, même quand la création est désactivée.")
             }
         }
-    }
-
-    private func refreshNotes() {
-        let inventory = LearningInventory()
-        notes = inventory.notes()
-        noteProjects = inventory.projects()
-        // MÊME mesure que le garde-fou (`NotesCurationPrompt.fitsBudget`) :
-        // l'inventaire ne compte que les CORPS, sans front-matter ni noms de
-        // fichiers. Le panneau annonçait « 95 % du budget » là où la curation
-        // refusait pour dépassement — deux chiffres contradictoires pour la
-        // même grandeur (audit du 2026-07-27).
-        noteVolume = NotesCurationPrompt.corpusCharacterCount(
-            notes: NotesCurationService.readNotes())
-    }
-
-    /// « 12 400 caractères · 15 % du budget de rangement » — le budget est ce
-    /// qui décide si une curation est possible, autant le montrer.
-    private var volumeSummary: String {
-        let percent = Int(Double(noteVolume) / Double(NotesCurationPrompt.maxCorpusCharacters) * 100)
-        return "\(noteVolume) caractères · \(percent) % du budget de rangement"
-    }
-
-    /// « pitfall · Dynamic_Island · 20 juil. » — les champs absents disparaissent.
-    private func noteSubtitle(_ note: LearningNoteSummary) -> String {
-        var parts: [String] = []
-        if let category = note.category { parts.append(category) }
-        if let project = note.project, !project.isEmpty {
-            parts.append((project as NSString).lastPathComponent)
-        }
-        if let date = note.createdAt {
-            parts.append(date.formatted(date: .abbreviated, time: .omitted))
-        }
-        return parts.isEmpty ? note.fileName : parts.joined(separator: " · ")
-    }
-
-    /// « Dynamic_Island 12 · site-vitrine 3 » (3 premiers projets).
-    private var projectsSummary: String {
-        noteProjects.prefix(3).map { entry in
-            let name = entry.project.isEmpty
-                ? "sans projet"
-                : (entry.project as NSString).lastPathComponent
-            return "\(name) \(entry.count)"
-        }
-        .joined(separator: " · ")
-    }
-
-    private func usageLabel(_ row: InstalledSkillRow) -> String {
-        guard let count = row.usageCount else { return "\(row.skill.destination.label) · usage non mesuré" }
-        if let last = row.lastUsedAt {
-            return "\(row.skill.destination.label) · ≥ \(count) usage(s) observé(s) · dernier \(last.formatted(.relative(presentation: .named)))"
-        }
-        return "\(row.skill.destination.label) · ≥ \(count) usage(s) observé(s), date inconnue"
     }
 
     /// « 14:32 · lancée » ou « 14:32 · sautée : quota inconnu ».
@@ -262,7 +135,7 @@ struct LearningPane: View {
     /// Traduction des raisons du gate — l'utilisateur ne lit pas des rawValue.
     private func reasonLabel(_ raw: String) -> String {
         switch raw {
-        case "disabled": return "apprentissage désactivé"
+        case "disabled": return "création désactivée"
         case "sessionResumed": return "session encore vivante"
         case "sessionTooShort": return "session trop courte"
         case "transcriptMissing": return "transcript introuvable"
@@ -299,8 +172,7 @@ struct LearningPane: View {
     private func outcomeLabel(_ outcome: String, attempt: RetrospectiveRunner.AttemptRecord) -> String {
         if outcome == "nothing_learned" { return "rien de durable" }
         if outcome.hasPrefix("failed") { return "échec (\(outcome))" }
-        let notes = attempt.notesWritten ?? 0
         let skills = attempt.skillsProposed ?? 0
-        return "\(notes) note(s), \(skills) skill(s)"
+        return "\(skills) skill(s)"
     }
 }

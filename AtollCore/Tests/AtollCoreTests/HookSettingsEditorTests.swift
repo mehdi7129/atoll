@@ -52,12 +52,12 @@ final class HookSettingsEditorTests: XCTestCase {
         XCTAssertEqual(inner["async"] as? Bool, true)
         XCTAssertEqual(inner["timeout"] as? Int, 10)
 
-        // PermissionRequest est BLOQUANT : matcher *, timeout 24 h, pas d'async.
+        // PermissionRequest observe seulement : matcher *, timeout court et async.
         let permissions = try XCTUnwrap(hooks["PermissionRequest"] as? [[String: Any]])
         XCTAssertEqual(permissions.first?["matcher"] as? String, "*")
         let permissionHook = try XCTUnwrap(permissions.first?["hooks"] as? [[String: Any]]).first!
-        XCTAssertEqual(permissionHook["timeout"] as? Int, 86_400)
-        XCTAssertNil(permissionHook["async"])
+        XCTAssertEqual(permissionHook["timeout"] as? Int, 3)
+        XCTAssertEqual(permissionHook["async"] as? Bool, true)
     }
 
     func testInstallPreservesUserHooksAndSettings() throws {
@@ -190,28 +190,16 @@ final class HookSettingsEditorTests: XCTestCase {
         return try XCTUnwrap(inner.first)
     }
 
-    func testProactiveRecallMakesUserPromptSubmitBlocking() throws {
-        // OFF (défaut) : async, aucune latence ajoutée au CLI.
+    func testLegacyRecallOptInCannotReenableBlockingOrInjection() throws {
         let plain = try HookSettingsEditor.install(into: nil, command: command)
-        let plainHook = try managedHook(plain, event: "UserPromptSubmit")
-        XCTAssertEqual(plainHook["async"] as? Bool, true)
-        XCTAssertFalse(HookSettingsEditor.installedProactiveRecall(in: plain))
-
-        // ON : bloquant (pas de clé async) et timeout court — sinon la sortie
-        // du hook (additionalContext) ne serait jamais lue par le CLI.
-        let proactive = try HookSettingsEditor.install(into: nil, command: command,
-                                                      proactiveRecall: true)
-        let hook = try managedHook(proactive, event: "UserPromptSubmit")
-        XCTAssertNil(hook["async"])
-        XCTAssertEqual(hook["timeout"] as? Int, 5)
-        XCTAssertTrue(HookSettingsEditor.installedProactiveRecall(in: proactive))
-
-        // Les autres événements d'état restent async dans les deux modes.
-        XCTAssertEqual(try managedHook(proactive, event: "Stop")["async"] as? Bool, true)
-        // Et PermissionRequest reste bloquant avec son timeout de 24 h.
-        let permission = try managedHook(proactive, event: "PermissionRequest")
-        XCTAssertNil(permission["async"])
-        XCTAssertEqual(permission["timeout"] as? Int, 86_400)
+        let legacyOptIn = try HookSettingsEditor.install(into: nil, command: command, proactiveRecall: true)
+        XCTAssertEqual(plain, legacyOptIn)
+        for event in ["UserPromptSubmit", "PermissionRequest"] {
+            let hook = try managedHook(legacyOptIn, event: event)
+            XCTAssertEqual(hook["async"] as? Bool, true)
+            XCTAssertEqual(hook["timeout"] as? Int, 3)
+        }
+        XCTAssertFalse(HookSettingsEditor.installedProactiveRecall(in: legacyOptIn))
     }
 
     func testProactiveRecallModeIsReversibleAndInstallStaysDetected() throws {

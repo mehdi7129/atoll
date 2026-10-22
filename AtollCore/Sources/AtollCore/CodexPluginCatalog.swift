@@ -9,7 +9,7 @@ public struct CodexPluginCatalog: Decodable, Sendable {
         public let installed: Bool
         public let enabled: Bool
         public let availability: String?
-        public let disabledReason: String?
+        let disabledReason: String?
     }
     public struct Marketplace: Decodable, Sendable {
         public let name: String
@@ -17,9 +17,9 @@ public struct CodexPluginCatalog: Decodable, Sendable {
         public let plugins: [Plugin]
     }
     public struct LoadError: Decodable, Sendable {
-        public let marketplacePath: String
+        let marketplacePath: String
         public let message: String
     }
     public let marketplaces: [Marketplace]
-    public let marketplaceLoadErrors: [LoadError]?
+    let marketplaceLoadErrors: [LoadError]?
 }

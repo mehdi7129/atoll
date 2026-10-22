@@ -4,29 +4,28 @@ import AtollCore
 struct AnalysisSettingsSection: View {
     var focusRequest: UUID? = nil
     @AppStorage(LearningSettings.analysisProviderKey) private var provider = AgentProvider.claude.rawValue
-    @AppStorage(LearningSettings.failoverEnabledKey) private var fallback = false
     @AppStorage(LearningSettings.unknownQuotaKey) private var allowUnknown = true
     @AppStorage(LearningSettings.maxPerWindowKey) private var maximum = 2
     @AppStorage(LearningSettings.thresholdKey) private var threshold = 0.7
     @State private var optionsExpanded = false
 
     var body: some View {
-        Section("Analyses d'Atoll") {
+        Section("Moteur d’analyse") {
             VStack(alignment: .leading, spacing: 8) {
                 Picker("Moteur", selection: $provider) {
                     Text("Claude Code").tag(AgentProvider.claude.rawValue)
                     Text("Codex CLI").tag(AgentProvider.codex.rawValue)
                 }
                 .pickerStyle(.segmented)
-                SettingsHelp("Abonnement utilisé pour les bilans, le rangement des notes et la recherche IA de plugins.")
+                SettingsHelp("Abonnement utilisé uniquement pour proposer des skills. Le choix dans l’îlot ne change pas ce moteur.")
             }
-            if provider == AgentProvider.codex.rawValue || fallback {
+            if provider == AgentProvider.codex.rawValue {
                 CodexAnalysisModelPicker(focusRequest: focusRequest)
             }
-            if provider == AgentProvider.claude.rawValue || fallback {
+            if provider == AgentProvider.claude.rawValue {
                 ClaudeAnalysisModelPickers()
             }
-            DisclosureGroup("Limites et second abonnement", isExpanded: $optionsExpanded) {
+            DisclosureGroup("Limites de création", isExpanded: $optionsExpanded) {
                 VStack(alignment: .leading, spacing: 16) {
                     VStack(alignment: .leading, spacing: 6) {
                         Stepper("\(maximum) analyses maximum / 5 h / abonnement", value: $maximum, in: 1...10)
@@ -39,11 +38,6 @@ struct AnalysisSettingsSection: View {
                         Text("80 %").tag(0.8)
                     }
                     Toggle("Quota inconnu : une tentative par 5 h", isOn: $allowUnknown)
-                    VStack(alignment: .leading, spacing: 6) {
-                        Toggle("Utiliser l'autre abonnement si nécessaire", isOn: $fallback)
-                            .accessibilityIdentifier("analysis-fallback")
-                        SettingsHelp("Seulement si le premier est épuisé et si les quotas des deux comptes sont connus.")
-                    }
                 }
                 .padding(.vertical, 8)
             }
@@ -54,19 +48,11 @@ struct AnalysisSettingsSection: View {
 
 private struct ClaudeAnalysisModelPickers: View {
     @AppStorage(LearningSettings.modelKey) private var sessionModel = "sonnet"
-    @AppStorage(LearningSettings.curationModelKey) private var curationModel = ""
-    @AppStorage(LearningSettings.searchModelKey) private var searchModel = "haiku"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Modèles Claude Code").font(.callout.weight(.medium))
-            modelPicker("Bilan de session", selection: $sessionModel)
-            // Sans préférence dédiée, le service utilise le modèle du bilan.
-            modelPicker("Rangement des notes", selection: Binding(
-                get: { curationModel.isEmpty ? sessionModel : curationModel },
-                set: { curationModel = $0 }
-            ))
-            modelPicker("Recherche de plugins", selection: $searchModel)
+            modelPicker("Création de skills", selection: $sessionModel)
         }
         .padding(.vertical, 4)
     }

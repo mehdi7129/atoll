@@ -13,8 +13,17 @@
 #   - certificat « Developer ID Application » dans le Keychain ;
 #   - xcrun notarytool store-credentials "atoll-notary" \
 #       --apple-id <apple-id> --team-id X524H8XA4L ;
-#   - clés Sparkle générées (generate_keys → clé privée dans le Keychain).
+#   - hors --local, clés Sparkle (generate_keys → clé privée dans le Keychain).
 set -euo pipefail
+
+LOCAL_ONLY=false
+for argument in "$@"; do
+  case "$argument" in
+    --local) LOCAL_ONLY=true ;;
+    --help|-h) echo "Usage: Scripts/release.sh [--local] — app/DMG locaux, sans appcast avec --local"; exit 0 ;;
+    *) echo "Option inconnue : $argument" >&2; exit 2 ;;
+  esac
+done
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # DerivedData HORS du Bureau (iCloud tamponne des xattrs qui cassent CodeSign).
@@ -60,7 +69,8 @@ if ! python3 "$ROOT/Scripts/check-docs.py" --no-tests --preflight; then
 fi
 
 trash_owned_path "$DIST"
-mkdir -p "$DIST" "$UPDATES"
+mkdir -p "$DIST"
+if ! $LOCAL_ONLY; then mkdir -p "$UPDATES"; fi
 
 echo "── Atoll $VERSION — build Release signé"
 xcodegen generate
@@ -77,7 +87,7 @@ sign "$SPARKLE/Versions/B/Autoupdate"
 sign "$SPARKLE/Versions/B/Updater.app"
 sign "$SPARKLE"
 # La re-signature du framework invalide le sceau de l'app → re-signer l'app en
-# dernier, avec SES entitlements (apple-events pour le jump-back AppleScript).
+# dernier, avec ses entitlements actuels (aucun Apple Event dans Atoll essentiel).
 codesign --force --timestamp --options runtime \
   --entitlements "$ROOT/App/Atoll.entitlements" --sign "$IDENTITY" "$APP"
 
@@ -108,7 +118,7 @@ xcrun stapler staple "$APP"
 # Re-zip de l'app STAPLÉE : c'est l'artefact de mise à jour Sparkle.
 trash_owned_path "$ZIP"
 ditto -c -k --keepParent "$APP" "$ZIP"
-cp "$ZIP" "$UPDATES/"
+if ! $LOCAL_ONLY; then cp "$ZIP" "$UPDATES/"; fi
 
 echo "── DMG (glisser vers Applications) — staging hors iCloud"
 DMG="$DIST/Atoll-$VERSION.dmg"
@@ -121,6 +131,15 @@ codesign --sign "$IDENTITY" --timestamp "$DMG"
 xcrun notarytool submit "$DMG" --keychain-profile "$PROFILE" --wait | tee "$DIST/notary-dmg.log"
 grep -q "status: Accepted" "$DIST/notary-dmg.log" || { echo "✗ notarisation du DMG refusée"; exit 1; }
 xcrun stapler staple "$DMG"
+
+# Le paquet local n'a besoin ni de clé Sparkle ni d'un futur flux public.
+# Cette sortie précède toute génération/écriture d'appcast ou de delta.
+if $LOCAL_ONLY; then
+  echo "✓ Paquet local signé/notarisé : $DMG"
+  echo "                              $ZIP"
+  echo "Aucun appcast, archive de mise à jour ou publication modifié."
+  exit 0
+fi
 
 echo "── Appcast Sparkle (signatures EdDSA depuis le Keychain)"
 GENERATE_APPCAST=$(find "$DD/SourcePackages/artifacts" -name generate_appcast -type f -perm +111 2>/dev/null | head -1)

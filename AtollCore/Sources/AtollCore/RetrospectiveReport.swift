@@ -156,7 +156,7 @@ public struct RetrospectiveReport: Equatable, Sendable {
 
     // MARK: - Parsing
 
-    public static func parse(cliOutput: Data) -> Result<RetrospectiveReport, ParseError> {
+    public static func parse(cliOutput: Data, includeNotes: Bool = true) -> Result<RetrospectiveReport, ParseError> {
         // (1) L'enveloppe doit être un objet JSON.
         guard let rootAny = try? JSONSerialization.jsonObject(with: cliOutput),
               let root = rootAny as? [String: Any] else {
@@ -177,7 +177,7 @@ public struct RetrospectiveReport: Equatable, Sendable {
         guard let payload = structuredPayload(of: root) else {
             return .failure(.noStructuredPayload)
         }
-        return validate(payload: payload, envelope: root)
+        return validate(payload: payload, envelope: root, includeNotes: includeNotes)
     }
 
     /// Rapport rendu par `codex exec --output-last-message` : le fichier contient
@@ -192,7 +192,7 @@ public struct RetrospectiveReport: Equatable, Sendable {
     /// Ni coût ni ventilation par modèle : un abonnement ChatGPT ne facture pas
     /// à l'appel. Le journal d'apprentissage affichera donc une dépense vide
     /// pour ces runs — c'est exact, pas une donnée manquante.
-    public static func parse(codexOutput: Data) -> Result<RetrospectiveReport, ParseError> {
+    public static func parse(codexOutput: Data, includeNotes: Bool = true) -> Result<RetrospectiveReport, ParseError> {
         let text = String(decoding: codexOutput, as: UTF8.self)
         let stripped = strippedCodeFences(text)
         guard !stripped.isEmpty,
@@ -200,15 +200,17 @@ public struct RetrospectiveReport: Equatable, Sendable {
               let payload = object as? [String: Any] else {
             return .failure(.notJSON)
         }
-        return validate(payload: payload, envelope: [:])
+        return validate(payload: payload, envelope: [:], includeNotes: includeNotes)
     }
 
     /// (4) Revalidation Swift complète — indépendante du schéma demandé au CLI.
     private static func validate(payload: [String: Any],
-                                 envelope root: [String: Any]) -> Result<RetrospectiveReport, ParseError> {
+                                 envelope root: [String: Any], includeNotes: Bool) -> Result<RetrospectiveReport, ParseError> {
         let summary = truncated(payload["session_summary"] as? String ?? "", to: Limit.sessionSummary)
         let nothingLearned = (payload["nothing_learned"] as? Bool) ?? false
-        let notes = validatedNotes(payload["notes"])
+        // Les lecteurs historiques restent disponibles, mais le producteur
+        // courant neutralise les notes même si le modèle ignore son schéma.
+        let notes = includeNotes ? validatedNotes(payload["notes"]) : []
         let (skills, flags, rejectedSkills) = validatedSkills(payload["skills"])
         let costUSD = (root["total_cost_usd"] as? NSNumber)?.doubleValue
         // `modelUsage` : { "<modèle>": { costUSD, inputTokens, … } }. Décodage

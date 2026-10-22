@@ -165,13 +165,24 @@ final class CodexExecPlanTests: XCTestCase {
     /// Un enum rendu nullable doit accepter `null`, sinon la valeur qu'on vient
     /// d'autoriser n'est valide pour aucune branche.
     func testNullableEnumAcceptsNull() throws {
-        let json = try XCTUnwrap(CodexExecPlan.openAISchema(from: RetrospectivePrompt.jsonSchema))
+        // Le schéma skills-only ne porte plus les anciennes notes et sa
+        // confiance est obligatoire. Cette fixture couvre explicitement le
+        // contrat générique du convertisseur, sans rendre un champ produit
+        // artificiellement optionnel pour les besoins du test.
+        let schema = #"{"type":"object","properties":{"optional_confidence":{"type":"string","enum":["low","high"]},"required_confidence":{"type":"string","enum":["low","high"]}},"required":["required_confidence"]}"#
+        let json = try XCTUnwrap(CodexExecPlan.openAISchema(from: schema))
         let root = try XCTUnwrap((try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: Any])
-        let notes = try XCTUnwrap(((root["properties"] as? [String: Any])?["notes"] as? [String: Any]))
-        let item = try XCTUnwrap(notes["items"] as? [String: Any])
-        let confidence = try XCTUnwrap((item["properties"] as? [String: Any])?["confidence"] as? [String: Any])
+        let properties = try XCTUnwrap(root["properties"] as? [String: Any])
+        let confidence = try XCTUnwrap(properties["optional_confidence"] as? [String: Any])
         let options = try XCTUnwrap(confidence["enum"] as? [Any])
+        XCTAssertEqual(confidence["type"] as? [String], ["string", "null"])
+        XCTAssertEqual(options.compactMap { $0 as? String }, ["low", "high"])
         XCTAssertTrue(options.contains { $0 is NSNull })
+        XCTAssertEqual(options.count, 3)
+        let required = try XCTUnwrap(properties["required_confidence"] as? [String: Any])
+        XCTAssertEqual(required["type"] as? String, "string")
+        XCTAssertEqual(required["enum"] as? [String], ["low", "high"],
+                       "un enum déjà obligatoire ne devient pas nullable")
     }
 
     /// Mots-clés refusés par le mode strict. Les retirer est SANS DANGER : les

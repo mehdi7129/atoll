@@ -447,6 +447,17 @@ public struct CodexSessions: Sendable {
                 entry.closedTurns = Array(entry.closedTurns.suffix(Self.closedTurnMemory))
             }
         }
+        // L'événement reste reçu et peut enrichir les métadonnées, mais une
+        // activité d'outil non corrélée ne prouve pas la résolution de l'attente.
+        if case .awaitingPermission = entry.session.status {
+            switch event.kind {
+            case .sessionStart, .userPromptSubmit, .permissionRequest, .stop, .interrupt:
+                break
+            default:
+                entries[event.sessionID] = entry
+                return Applied(turn: .current)
+            }
+        }
         switch event.kind {
         case .sessionStart, .stop, .interrupt: entry.session.status = .awaitingInput
         case .userPromptSubmit:
@@ -549,48 +560,16 @@ public struct CodexSessions: Sendable {
     }
 }
 
-/// Définitions gérées par Atoll. Seule PermissionRequest attend une décision.
+/// Définitions d'observation : aucune décision n'est attendue dans Atoll.
 public enum CodexHookSettingsEditor {
     public static let command = "\"$HOME/.atoll/bin/atoll-codex-bridge\""
     public enum EditError: Error { case invalidSettings }
 
-    /// Les seuls événements posés en SYNCHRONE. Tous les autres sont `async`.
-    ///
-    /// ⚠️ MESURÉ LE 2026-09-09, ET C'ÉTAIT UNE GÊNE RÉELLE POUR L'UTILISATEUR.
-    /// Un hook synchrone est ANNONCÉ par Codex dans sa sortie : « hook: PreToolUse »
-    /// puis « hook: PreToolUse Completed ». La première version posait les dix
-    /// événements en synchrone — **dix lignes de bruit pour un tour d'un seul
-    /// outil**, infligées en permanence dès l'installation d'Atoll. C'est la
-    /// règle n° 1 du projet qui tranche : rien de ce qu'Atoll installe ne doit
-    /// gêner le CLI. Or Atoll n'attend RIEN de ces hooks — il observe.
-    ///
-    /// Pourquoi `Stop` reste synchrone malgré le bruit qu'il coûte : en `async`
-    /// il est fire-and-forget, et le process se termine avant que le hook n'ait
-    /// écrit. MESURÉ : tout en async ⇒ **`Stop` perdu**, donc l'îlot ne saurait
-    /// pas que le tour est fini et laisserait la session « en cours » jusqu'à sa
-    /// péremption de 15 min. Deux lignes de bruit valent mieux qu'un état faux.
-    /// `SessionEnd` est de toute façon FORCÉ synchrone par Codex lui-même
-    /// (vérifié : `hooks/list` rend `async: false` quoi qu'on écrive).
-    ///
-    /// Relevé des trois configurations, même prompt, même machine :
-    /// tout synchrone → 10 lignes / 6 événements ; tout async → 0 ligne /
-    /// 5 événements ; ce compromis → **2 lignes / 6 événements**.
-    /// ⚠️ `permissionRequest` EST REVENU DANS CETTE LISTE le 2026-09-09, et le
-    /// retirer casserait la carte de l'îlot : **un hook `async` ne peut pas
-    /// décider**. Codex ne l'attend pas, affiche donc son invite native, et on
-    /// se retrouverait avec DEUX interfaces concurrentes pour une seule
-    /// décision — pire que de ne rien faire.
-    static let synchronousEvents: Set<CodexHookEvent.Kind> = [.stop, .sessionEnd, .permissionRequest]
-
-    /// Délai laissé à une décision humaine. Défaut documenté des hooks Codex ;
-    /// le helper, lui, s'arrête AVANT (voir `CodexPermissionTiming`) pour que
-    /// Codex ne tue jamais le hook lui-même.
-    static let permissionTimeoutSeconds = Int(CodexPermissionTiming.codexTimeoutSeconds)
-
-    /// Message montré par la TUI pendant que le hook bloque. Ici le texte n'est
-    /// PAS du bruit — contrairement aux annonces « hook: … » qu'on a fait
-    /// taire : il explique pourquoi Codex attend et où agir.
-    static let permissionStatusMessage = "Waiting for approval in Atoll"
+    /// Stop doit rester synchrone court : sa forme async perdait la fin de tour
+    /// lors de la sortie du processus. SessionEnd est forcé synchrone par Codex.
+    /// PermissionRequest observe l'attente native ; il ne reçoit aucune réponse.
+    static let synchronousEvents: Set<CodexHookEvent.Kind> = [.stop, .sessionEnd]
+    static let legacyPermissionStatusMessage = "Waiting for approval in Atoll"
 
     public static func edit(_ data: Data?, install: Bool) throws -> Data {
         var root: [String: Any] = [:]
@@ -620,10 +599,6 @@ public enum CodexHookSettingsEditor {
             if install {
                 var handler: [String: Any] = ["type": "command", "command": command, "timeout": 3]
                 if !synchronousEvents.contains(kind) { handler["async"] = true }
-                if kind == .permissionRequest {
-                    handler["timeout"] = permissionTimeoutSeconds
-                    handler["statusMessage"] = permissionStatusMessage
-                }
                 groups.append(["hooks": [handler]])
             }
             if groups.isEmpty { hooks.removeValue(forKey: kind.rawValue) }
@@ -655,11 +630,14 @@ public enum CodexHookSettingsEditor {
         }
     }
 
-    /// Mise à niveau des formes livrées autrefois, sur place. Une absence est
-    /// un retrait, pas une invitation à réinstaller. Matchers, ordre et clés
-    /// personnelles restent intacts. Une valeur personnalisée n'est pas périmée.
-    static func migrate(_ data: Data) throws -> Data {
-        _ = try edit(data, install: false) // validation sans écriture
+    /// Ancienne entrée conservée pour les callers de migration existants.
+    static func migrate(_ data: Data) throws -> Data { try migratePassive(data) }
+
+    /// Ne réinstalle aucun événement retiré et conserve les personnalisations.
+    /// Seuls les contrats retirés (décision/recall) sont forcés en observation.
+    public static func migratePassive(_ data: Data) throws -> Data {
+        _ = try edit(data, install: false) // validation avant toute écriture
+        guard hasManagedHooks(data) else { return data }
         var root = try JSONSerialization.jsonObject(with: data) as! [String: Any]
         var hooks = root["hooks"] as? [String: Any] ?? [:]
         for kind in CodexHookEvent.Kind.allCases {
@@ -668,29 +646,21 @@ public enum CodexHookSettingsEditor {
                 var handlers = groups[groupIndex]["hooks"] as! [[String: Any]]
                 for index in handlers.indices where handlers[index]["command"] as? String == command {
                     var handler = handlers[index]
-                    let timeout = handler["timeout"] as? Int
-                    let telemetryFields: Set<String> = ["type", "command", "timeout", "async"]
-                    let oldTelemetryShape = Set(handler.keys).isSubset(of: telemetryFields)
-                        && (handler["type"] == nil || handler["type"] as? String == "command")
-                        && (handler["async"] == nil || (handler["async"] as? NSNumber)?.doubleValue == 1)
-                    // L'ancienne permission était un simple hook de télémétrie
-                    // (3 s), avant l'ajout des cartes. Un message, un async false
-                    // ou une clé personnelle distingue une personnalisation.
-                    if kind == .permissionRequest {
-                        if timeout == 3 && oldTelemetryShape {
-                            handler["timeout"] = permissionTimeoutSeconds
-                            handler.removeValue(forKey: "async")
-                            handler["statusMessage"] = permissionStatusMessage
+                    if kind == .permissionRequest || kind == .userPromptSubmit {
+                        handler["async"] = true
+                        if handler["timeout"] == nil || handler["timeout"] as? Int == 600 {
+                            handler["timeout"] = 3
                         }
-                    } else if timeout == 3 {
+                        if handler["statusMessage"] as? String == legacyPermissionStatusMessage {
+                            handler.removeValue(forKey: "statusMessage")
+                        }
+                    } else if handler["timeout"] as? Int == 3 {
                         if synchronousEvents.contains(kind), handler["async"] as? Bool == true {
                             handler.removeValue(forKey: "async")
                         } else if !synchronousEvents.contains(kind), handler["async"] == nil {
                             handler["async"] = true
                         }
                     }
-                    // Ancien booléen sérialisé comme 1 : réparer le type JSON,
-                    // sans confondre un false personnel avec une absence.
                     if let value = handler["async"] as? NSNumber, value.doubleValue == 1 {
                         handler["async"] = true
                     }
@@ -701,7 +671,8 @@ public enum CodexHookSettingsEditor {
             hooks[kind.rawValue] = groups
         }
         root["hooks"] = hooks
-        return try JSONSerialization.data(withJSONObject: root, options: [.prettyPrinted, .sortedKeys])
+        let edited = try JSONSerialization.data(withJSONObject: root, options: [.prettyPrinted, .sortedKeys])
+        return sameJSON(data, edited) ? data : edited
     }
 
     static func sameJSON(_ left: Data, _ right: Data) -> Bool {

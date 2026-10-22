@@ -25,18 +25,11 @@ final class NotchViewModel {
     var previewSessions: [AgentSession]?
     var previewUsage: UsageSnapshot?
 
-    /// Un seul écran (l'écran principal) pilote l'ouverture auto et le focus
-    /// clavier des cartes interactives, pour que les panneaux ne se disputent
-    /// pas le focus en multi-écrans.
+    /// Écran principal utilisé par les actions de debug ciblées.
     let isPrimary: Bool
 
-    /// Posé par le contrôleur : demande/rend le focus clavier du panneau
-    /// (nécessaire pour ⌘Y/⌘N et les champs texte des cartes interactives).
+    /// Rend le focus au terminal lorsque le panneau change d’état.
     @ObservationIgnored var onKeyFocusRequest: ((Bool) -> Void)?
-
-    /// L'îlot était-il épinglé par l'utilisateur AVANT qu'une carte l'ouvre ?
-    /// Si oui, on ne le referme pas quand la carte se résout.
-    @ObservationIgnored private var wasUserPinnedBeforeCard = false
 
     /// Source de vérité partagée entre tous les écrans.
     private let store: SessionStore
@@ -71,27 +64,6 @@ final class NotchViewModel {
         // Résolu ICI (init MainActor) et non en argument par défaut, qui
         // s'évalue en contexte nonisolated → warning d'isolation (erreur Swift 6).
         self.store = store ?? .shared
-    }
-
-    // MARK: - Cartes interactives
-
-    /// Applique l'état d'ouverture/focus en fonction du nombre de demandes en
-    /// attente. Appelé sur changement ET à l'apparition (reconstruction de fenêtre).
-    func syncInteractionState(pendingCount: Int, previousCount: Int) {
-        guard isPrimary else { return }
-        if pendingCount > 0, previousCount == 0 {
-            wasUserPinnedBeforeCard = isPinned
-            isPinned = true
-            open()
-            onKeyFocusRequest?(true)
-        } else if pendingCount == 0, previousCount > 0 {
-            onKeyFocusRequest?(false)
-            // Ne pas refermer un îlot que l'utilisateur avait épinglé lui-même.
-            if !wasUserPinnedBeforeCard {
-                close()
-            }
-            wasUserPinnedBeforeCard = false
-        }
     }
 
     var allSessions: [AgentSession] {
@@ -129,35 +101,18 @@ final class NotchViewModel {
     }
 
     /// Y a-t-il quelque chose à MONTRER dans les ailes ? Sessions uniquement.
-    var hasActivity: Bool { !allSessions.isEmpty || !InteractionPresentation.shared.items.isEmpty }
+    var hasActivity: Bool { !allSessions.isEmpty }
     var workingCount: Int { sessions.filter(\.isActive).count }
     var attentionCount: Int { sessions.filter(\.needsAttention).count }
 
-    /// `rockstar` élargit l'îlot MÊME AU REPOS.
-    ///
-    /// Arbitrage rendu le 2026-07-27 entre deux intentions du projet qui
-    /// s'opposaient : « au repos, l'îlot épouse l'encoche et reste invisible »
-    /// (`IslandGeometry.compactSize`) contre « le losange rouge est un
-    /// indicateur persistant » (`CompactView`). La première l'emporte pour tout
-    /// ce qui est simplement EN ATTENTE — un skill proposé sait attendre, et il
-    /// reste visible dans le menu et dès qu'une session tourne.
-    ///
-    /// Elle CÈDE pour Rockstar, et pour lui seul : ce mode ne se contente pas
-    /// d'auto-approuver, il SUSPEND les règles `permissions.deny` que
-    /// l'utilisateur a écrites dans son `settings.json`. Une garantie qu'il a
-    /// posée lui-même est levée ; ne rien afficher, c'est le laisser l'oublier.
-    /// Le silence est alors un défaut, pas une qualité.
-    ///
-    /// Le drapeau vient de la VUE (`@AppStorage`) et non d'ici : `autonomyLevel`
-    /// est calculé depuis UserDefaults, donc invisible à `@Observable` — l'îlot
-    /// ne se redessinerait pas à la bascule.
-    func islandSize(rockstar: Bool) -> CGSize {
+    /// Au repos, le compact retrouve sa taille discrète d’origine.
+    func islandSize() -> CGSize {
         switch state {
         case .compact:
             return IslandGeometry.compactSize(
                 notch: notchSize,
                 menuBarHeight: menuBarHeight,
-                hasActivity: hasActivity || rockstar,
+                hasActivity: hasActivity,
                 width: compactWidth
             )
         case .expanded:

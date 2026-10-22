@@ -27,12 +27,12 @@ final class RetrospectivePromptTests: XCTestCase {
         XCTAssertEqual(schema["additionalProperties"] as? Bool, false)
         XCTAssertEqual(
             Set(try XCTUnwrap(schema["required"] as? [String])),
-            ["session_summary", "nothing_learned", "notes", "skills"]
+            ["nothing_learned", "skills"]
         )
 
         let properties = try XCTUnwrap(schema["properties"] as? [String: Any])
-        let notes = try XCTUnwrap(properties["notes"] as? [String: Any])
-        XCTAssertEqual(notes["maxItems"] as? Int, 8)
+        XCTAssertNil(properties["notes"])
+        XCTAssertNil(properties["session_summary"])
         let skills = try XCTUnwrap(properties["skills"] as? [String: Any])
         XCTAssertEqual(skills["maxItems"] as? Int, 2)
     }
@@ -41,8 +41,8 @@ final class RetrospectivePromptTests: XCTestCase {
         // Le pattern est lu DANS le schéma (pas dupliqué ici) : c'est bien la
         // contrainte réellement envoyée au CLI qu'on vérifie.
         let properties = try XCTUnwrap(try parsedSchema()["properties"] as? [String: Any])
-        let notes = try XCTUnwrap(properties["notes"] as? [String: Any])
-        let items = try XCTUnwrap(notes["items"] as? [String: Any])
+        let skills = try XCTUnwrap(properties["skills"] as? [String: Any])
+        let items = try XCTUnwrap(skills["items"] as? [String: Any])
         let itemProperties = try XCTUnwrap(items["properties"] as? [String: Any])
         let slug = try XCTUnwrap(itemProperties["slug"] as? [String: Any])
         let pattern = try XCTUnwrap(slug["pattern"] as? String)
@@ -74,8 +74,7 @@ final class RetrospectivePromptTests: XCTestCase {
         let skillSlug = try slug(in: schema, collection: "skills")
         XCTAssertEqual(skillSlug["minLength"] as? Int, 2)
         XCTAssertEqual(skillSlug["maxLength"] as? Int, 40)
-        XCTAssertEqual(try slug(in: schema, collection: "notes")["maxLength"] as? Int, 60,
-                       "le contrat des notes reste distinct")
+        XCTAssertNil((schema["properties"] as? [String: Any])?["notes"])
         let description = try XCTUnwrap(skillSlug["description"] as? String)
         for constraint in ["2-40", "atoll-", "recall", "bridge", "bin"] {
             XCTAssertTrue(description.contains(constraint), "contrainte absente de l'explication envoyée à Codex : \(constraint)")
@@ -136,7 +135,7 @@ final class RetrospectivePromptTests: XCTestCase {
 
     // MARK: - Prompt système
 
-    func testDigestContextDistinguishesSummarizedNotesFromEmptyHistory() {
+    func testDigestContextExcludesLegacyNotesAndKeepsProcedureEvidence() {
         func prompt(_ slugs: [String], summarized: Bool) -> String {
             RetrospectivePrompt.userPrompt(
                 digest: "preuve complète, inchangée", projectPath: nil,
@@ -144,14 +143,13 @@ final class RetrospectivePromptTests: XCTestCase {
                 existingCapabilities: "capacité vérifiée",
                 existingNotesListedInSummary: summarized)
         }
-        XCTAssertTrue(prompt([], summarized: false).contains("(none yet)"))
-        let summarized = prompt([], summarized: true)
-        XCTAssertFalse(summarized.contains("(none yet)"))
-        XCTAssertTrue(summarized.contains("see existing notes summary"))
+        XCTAssertEqual(prompt([], summarized: false), prompt([], summarized: true))
         let partial = prompt(["omitted-from-summary"], summarized: true)
-        XCTAssertTrue(partial.contains("- omitted-from-summary"))
+        XCTAssertFalse(partial.contains("omitted-from-summary"))
         XCTAssertTrue(partial.contains("preuve complète, inchangée"))
         XCTAssertTrue(partial.contains("capacité vérifiée"))
+        XCTAssertTrue(partial.contains("outcome=unknown"))
+        XCTAssertTrue(partial.contains("command=incomplete"))
     }
 
     func testSystemPromptContainsUntrustedDataWarning() {

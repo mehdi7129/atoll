@@ -6,12 +6,8 @@ import AtollCore
 struct CompactView: View {
     let viewModel: NotchViewModel
     let colors: ThemeColors
-    @AppStorage(InteractionCenter.autonomyKey) private var autonomyRaw = AutonomyLevel.manual.rawValue
-    private var rockstar: Bool { AutonomyLevel(rawValue: autonomyRaw) == .rockstar }
-    private var activityIsRockstar: Bool { rockstar && viewModel.selectedProvider == .claude }
-
     var body: some View {
-        if viewModel.hasActivity || rockstar {
+        if viewModel.hasActivity {
             if let notch = viewModel.notchSize {
                 HStack(spacing: 0) {
                     activityLabel
@@ -66,12 +62,6 @@ struct CompactView: View {
     private var rightSide: some View {
         HStack(spacing: 4) {
             Spacer(minLength: 0)
-            if rockstar {
-                Text("◆")
-                    .foregroundStyle(Color(hex: 0xFF3B30))
-                    .accessibilityLabel("Claude Rockstar actif, y compris en arrière-plan")
-                    .help("Rockstar reste actif pour Claude ; Codex conserve ses autorisations")
-            }
             TimelineView(.periodic(from: .now, by: 30)) { _ in
                 if let quota = compactQuota {
                     HStack(spacing: 4) {
@@ -107,7 +97,7 @@ struct CompactView: View {
         if viewModel.attentionCount > 0 {
             Text("?").foregroundStyle(colors.warn)
         } else if viewModel.workingCount > 0 {
-            AsciiSpinnerView(color: activityIsRockstar ? Color(hex: 0xFF3B30) : colors.accent)
+            AsciiSpinnerView(color: colors.accent)
         } else { Text("·").foregroundStyle(colors.accent) }
         if !CodexPreview.enabled && SkillReviewCenter.shared.pendingCount > 0 {
             Text("+").foregroundStyle(colors.accent).accessibilityLabel("Skill proposé")

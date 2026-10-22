@@ -22,6 +22,20 @@ GROUPS = {
 }
 # Chaque mutation doit échouer dans son test témoin, et compiler auparavant.
 MUTATIONS = {
+    "skills-only-retention": ("delivery", "RetrospectiveDelivery", [
+        ('try verifyLegacyArchive(value)', '()')],
+        "testSkillsOnlyMissingLegacyArchiveKeepsLastCheckpoint"),
+    "skills-only-parser": ("retrospective-report", "RetrospectiveReport", [
+        ('let notes = includeNotes ? validatedNotes(payload["notes"]) : []',
+         'let notes = validatedNotes(payload["notes"])')],
+        "testSkillsOnlyParserIgnoresUnexpectedNotesWithoutLosingValidSkills"),
+    "skills-only-completion": ("delivery", "RetrospectiveDelivery", [
+        ('(notesDisposition == .retainedLegacy || notes.allSatisfy(\\.completed))',
+         'notes.allSatisfy(\\.completed)')],
+        "testSkillsOnlyRetainsLegacyNotesWithoutWritingOrCountingThem"),
+    "skills-only-backup": ("delivery", "RetrospectiveDelivery", [
+        ('try createOrVerify(original, at: backup, cap: 262_144)', '()')],
+        "testSkillsOnlyRetainsLegacyNotesWithoutWritingOrCountingThem"),
     "curation-checkpoint-match": ("curation-checkpoint", "CurationCheckpoint", [
         ("return fingerprint == sourceFingerprint ? .source : .changed", "return .source")],
         "testChangedAddedRemovedOrRenamedNoteCannotUseOldResult"),
@@ -98,7 +112,8 @@ def main():
             text = (repo / "AtollCore/Sources/AtollCore" / (source + ".swift")).read_text()
             if mutation and source == mutation[1]:
                 for needle, replacement in mutation[2]:
-                    if text.count(needle) != 1:
+                    expected_count = 2 if name == "skills-only-retention" else 1
+                    if text.count(needle) != expected_count:
                         raise SystemExit("Couture de sabotage absente ou ambiguë : " + name)
                     text = text.replace(needle, replacement)
             target = directory / (source + ".swift")

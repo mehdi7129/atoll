@@ -100,37 +100,18 @@ extension CodexHookInstallationTests {
         XCTAssertNil(all["SessionEnd"]?["async"])
     }
 
-    /// ⚠️ UN HOOK `async` NE PEUT PAS DÉCIDER. En laisser un sur
-    /// `PermissionRequest`, c'est faire afficher à Codex son invite native en
-    /// même temps que la carte d'Atoll : deux interfaces concurrentes pour une
-    /// seule décision, pire que de ne rien faire.
-    func testPermissionRequestIsSynchronousAndCanWaitForAHuman() throws {
+    func testPermissionRequestOnlyObservesNativeApprovalWithoutAHumanTimeout() throws {
         let all = try handlers(in: try CodexHookSettingsEditor.edit(nil, install: true))
         let handler = try XCTUnwrap(all["PermissionRequest"])
-        XCTAssertNil(handler["async"], "async ⇒ Codex n'attend pas et affiche sa propre invite")
-        // 3 s suffisent à observer ; décider demande une présence humaine.
-        XCTAssertEqual(handler["timeout"] as? Int, 600)
-        XCTAssertEqual(handler["statusMessage"] as? String, "Waiting for approval in Atoll")
-    }
-
-    /// Le helper doit s'arrêter AVANT Codex, sinon Codex tue le hook et affiche
-    /// un échec de timeout là où une abstention doit rendre la main en silence.
-    func testHelperDeadlineLeavesARealMarginBeforeCodexKillsTheHook() {
-        XCTAssertLessThan(CodexPermissionTiming.helperDeadlineSeconds,
-                          CodexPermissionTiming.codexTimeoutSeconds)
-        // La marge doit rester RÉELLE : un helper qui s'arrêterait après Codex
-        // ferait exactement ce que ces deux constantes existent pour empêcher.
-        // (Elle se calcule ici plutôt que d'exister comme propriété du type :
-        // celle-ci n'avait aucun appelant hors tests, et `check-docs` la
-        // signalait comme morte.)
-        XCTAssertGreaterThanOrEqual(
-            CodexPermissionTiming.codexTimeoutSeconds - CodexPermissionTiming.helperDeadlineSeconds, 20)
+        XCTAssertEqual(handler["async"] as? Bool, true)
+        XCTAssertEqual(handler["timeout"] as? Int, 3)
+        XCTAssertNil(handler["statusMessage"])
     }
 
     /// Les autres hooks gardent un timeout court : ils n'attendent personne.
-    func testOnlyPermissionRequestGetsTheLongTimeout() throws {
+    func testEveryHookHasAShortObservationTimeout() throws {
         let all = try handlers(in: try CodexHookSettingsEditor.edit(nil, install: true))
-        for (event, handler) in all where event != "PermissionRequest" {
+        for (event, handler) in all {
             XCTAssertEqual(handler["timeout"] as? Int, 3, event)
             XCTAssertNil(handler["statusMessage"], event)
         }

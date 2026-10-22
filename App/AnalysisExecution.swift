@@ -21,11 +21,7 @@ struct AnalysisExecution {
         let claude = LearningGate.QuotaFacts(usedFraction: store.realQuota?.fiveHour.usedFraction,
             receivedAt: store.rawQuotaReceivedAt, resetsAt: store.realQuota?.fiveHour.resetsAt,
             bucket: "claude", window: "fiveHour")
-        let choice = ProviderFailover.choose(claude: claude, codex: CodexService.shared.quota,
-                                             config: settings.failoverConfig)
-        guard let provider = forcedProvider ?? choice.provider else {
-            throw Failure("Aucun abonnement disponible (\(choice.reason.rawValue)).")
-        }
+        let provider = forcedProvider ?? settings.analysisProvider
         let model: String
         if provider == .codex { model = settings.codexModel }
         else {
@@ -36,9 +32,9 @@ struct AnalysisExecution {
             }
         }
         if provider == .codex && model.isEmpty {
-            throw Failure("Choisis le modèle des analyses Codex dans Réglages → Codex.")
+            throw Failure("Choisis le modèle des analyses Codex dans Réglages → Skills.")
         }
-        return Self(provider: provider, reason: forcedProvider == nil ? choice.reason.rawValue : "debug",
+        return Self(provider: provider, reason: forcedProvider == nil ? "preferred" : "debug",
                     model: model, home: provider == .codex ? try CodexPaths.validatedHome() : CodexPaths.cliHomeURL,
                     executableOverride: UserDefaults.standard.string(forKey: CodexExecutable.overrideKey) ?? "",
                     quota: provider == .codex ? ProviderFailover.quotaFacts(of: CodexService.shared.quota) : claude,

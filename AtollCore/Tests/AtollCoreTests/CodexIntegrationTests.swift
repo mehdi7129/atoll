@@ -48,7 +48,7 @@ final class CodexIntegrationTests: XCTestCase {
         try apply("PermissionRequest", extra: ["tool_name": "Bash", "tool_input": ["command": "git push"]])
         XCTAssertEqual(sessions.sessions(now: now).first?.status, .awaitingPermission(tool: "Bash(git push)"))
         try apply("PostToolUse")
-        XCTAssertTrue(try XCTUnwrap(sessions.sessions(now: now).first).isActive)
+        XCTAssertEqual(sessions.sessions(now: now).first?.status, .awaitingPermission(tool: "Bash(git push)"))
         try apply("Stop")
         XCTAssertEqual(sessions.sessions(now: now).first?.status, .awaitingInput)
         try apply("SessionEnd")
@@ -135,11 +135,8 @@ final class CodexIntegrationTests: XCTestCase {
         XCTAssertEqual(hooks.count, CodexHookEvent.Kind.allCases.count)
         for (event, groups) in hooks {
             let handler = try XCTUnwrap((groups.first?["hooks"] as? [[String: Any]])?.first)
-            // Les hooks d'OBSERVATION restent bornés à 3 s — ils ne demandent
-            // rien à personne. Seul `PermissionRequest` attend une décision
-            // HUMAINE : lui imposer 3 s reviendrait à ne jamais laisser à Mehdi
-            // le temps de cliquer, donc à toujours s'abstenir (2026-09-09).
-            XCTAssertEqual(handler["timeout"] as? Int, event == "PermissionRequest" ? 600 : 3, event)
+            // Tous les hooks, permissions comprises, ne font qu'observer.
+            XCTAssertEqual(handler["timeout"] as? Int, 3, event)
             // Aucun handler ne réclame de sortie ni de décision : le contrat
             // d'observation de la PR est intact.
             XCTAssertNil(handler["decision"], event)

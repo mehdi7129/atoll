@@ -84,7 +84,6 @@ public enum SoundChoice: Equatable, Hashable, Sendable {
         return true
     }
 
-    public var isSilent: Bool { self == .silent }
 }
 
 private extension String {

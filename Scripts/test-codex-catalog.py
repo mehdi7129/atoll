@@ -65,8 +65,9 @@ import AtollCore
         let plugins = CodexReadClient.read(.plugins(cwd: args[3]), executable: URL(fileURLWithPath: args[1]),
                                           home: URL(fileURLWithPath: args[2]))
         guard case .available(let raw) = plugins,
-              let catalog = try? JSONDecoder().decode(CodexPluginCatalog.self, from: raw),
-              catalog.marketplaceLoadErrors?.isEmpty != false else {
+              (try? JSONDecoder().decode(CodexPluginCatalog.self, from: raw)) != nil,
+              let object = try? JSONSerialization.jsonObject(with: raw) as? [String: Any],
+              (object["marketplaceLoadErrors"] as? [Any])?.isEmpty != false else {
             print("plugin/list local unavailable"); exit(1)
         }
         print("PASS plugin/list : marketplaces locales, aucune mutation ni génération.")
