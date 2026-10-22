@@ -64,25 +64,6 @@ public struct LearningNoteHistory: Sendable {
         renderedSummary(project: project, query: query, maxCharacters: maxCharacters).text
     }
 
-    public struct PromptContext: Sendable {
-        public let summary: String
-        public let additionalSlugs: [String]
-        public let hasSummarizedNotes: Bool
-    }
-
-    /// Évite de répéter les identifiants DÉJÀ rendus dans le résumé. Ceux dont
-    /// la ligne est écartée par le plafond restent dans la liste historique.
-    /// Ni le classement, ni les bornes, ni le texte des résumés ne changent.
-    public func promptContext(project: String?, query: String, slugLimit: Int = 60,
-                              slugMaxCharacters: Int = 4_000,
-                              summaryMaxCharacters: Int = 6_000) -> PromptContext {
-        let rendered = renderedSummary(project: project, query: query, maxCharacters: summaryMaxCharacters)
-        let originalSlugs = slugs(project: project, query: query, limit: slugLimit, maxCharacters: slugMaxCharacters)
-        return PromptContext(summary: rendered.text,
-            additionalSlugs: originalSlugs.filter { !rendered.slugs.contains($0) },
-            hasSummarizedNotes: !rendered.slugs.isEmpty)
-    }
-
     private func renderedSummary(project: String?, query: String, maxCharacters: Int) -> (text: String, slugs: Set<String>) {
         let selected = relevant(project: project, query: query)
         let lines = selected.map {

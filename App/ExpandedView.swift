@@ -9,9 +9,6 @@ struct ExpandedView: View {
     var rippleEnabled = false
     @Environment(\.openSettings) private var openSettings
 
-    @AppStorage(InteractionCenter.autonomyKey) private var autonomyRaw = AutonomyLevel.manual.rawValue
-    private var level: AutonomyLevel { AutonomyLevel(rawValue: autonomyRaw) ?? .manual }
-
     /// Projets dépliés (racines de projet). Les dossiers multi-sessions sont
     /// repliés par défaut : on voit un dossier par projet, on déplie pour voir
     /// les sessions — clarifie « 3 sessions pour 2 projets » (une nichée dans
@@ -41,33 +38,7 @@ struct ExpandedView: View {
             }
             .expansionRipple(trigger: rippleTrigger, active: rippleEnabled)
 
-            if let selected = InteractionPresentation.shared.current {
-                // Une demande en attente prend toute la place (priorité maximale).
-                if selected.provider == .claude,
-                   let request = InteractionCenter.shared.pending.first(where: { $0.id == selected.requestID }) {
-                    InteractionCardView(request: request, colors: colors).id(selected)
-                        .disabled(!InteractionPresentation.shared.mayDecide)
-                } else if selected.provider == .codex,
-                          let request = CodexInteractionCenter.shared.pending.first(where: { $0.id == selected.requestID }) {
-                    CodexInteractionCardView(request: request, colors: colors).id(selected)
-                        .disabled(!InteractionPresentation.shared.mayDecide)
-                }
-                if InteractionPresentation.shared.items.count > 1 {
-                    HStack {
-                        AsciiButton(label: "← DEMANDE", color: colors.dim, shortcut: nil) {
-                            InteractionPresentation.shared.move(-1)
-                        }
-                        Spacer()
-                        Text("\(InteractionPresentation.shared.items.count) demandes · Claude / Codex")
-                            .foregroundStyle(colors.dim)
-                        Spacer()
-                        AsciiButton(label: "DEMANDE →", color: colors.dim, shortcut: nil) {
-                            InteractionPresentation.shared.move(1)
-                        }
-                    }
-                    .font(AtollFont.mono(9))
-                }
-            } else if let session = viewModel.selectedSession {
+            if let session = viewModel.selectedSession {
                 // Détail d'une session (clic sur une ligne).
                 SessionDetailView(session: session, colors: colors) {
                     viewModel.clearSelection()
@@ -112,13 +83,6 @@ struct ExpandedView: View {
             Text("ATOLL")
                 .fontWeight(.bold)
                 .foregroundStyle(colors.fg)
-            switch level {
-            case .rockstar:
-                Text("[ CLAUDE ROCKSTAR ]")
-                    .foregroundStyle(Color(hex: 0xFF3B30))
-            case .manual:
-                EmptyView()
-            }
             Spacer()
             Text("\(viewModel.sessions.count) session\(viewModel.sessions.count > 1 ? "s" : "")")
                 .foregroundStyle(colors.dim)
@@ -150,7 +114,7 @@ struct ExpandedView: View {
                     .foregroundStyle(colors.dim)
                 Button("Configurer \(viewModel.selectedProvider.label)…") {
                     guard !CodexPreview.enabled else { return }
-                    UserDefaults.standard.set(viewModel.selectedProvider.rawValue, forKey: "settingsTab")
+                    UserDefaults.standard.set("connexions", forKey: "settingsTab")
                     openSettings()
                 }
                 .buttonStyle(.plain)

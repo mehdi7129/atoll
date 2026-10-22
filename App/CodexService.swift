@@ -46,13 +46,11 @@ final class CodexService {
                 for session in ended {
                     self.scanGeneration = UUID()
                     self.records.removeAll { $0.sessionID == session.sessionID }
-                    CodexInteractionCenter.shared.cancelAll(forSession: session.sessionID, process: session.process)
                     RetrospectiveRunner.shared.codexSessionEnded(session)
                 }
                 if !ended.isEmpty { self.saveRecords() }
                 self.observed.prune()
                 // Un helper mort ne doit pas laisser sa carte à l'écran.
-                CodexInteractionCenter.shared.dropCardsOfDeadHelpers()
                 self.adoptRunningSessions()
                 self.sessions = self.observed.sessions()
                 self.refreshMetadata()
@@ -91,7 +89,7 @@ final class CodexService {
     }
 
     func contains(_ sessionID: String) -> Bool {
-        observed.contains(sessionID) || CodexInteractionCenter.shared.pending.contains { $0.sessionID == sessionID }
+        observed.contains(sessionID)
     }
 
     func accepts(_ event: CodexHookEvent) -> Bool {
@@ -108,15 +106,11 @@ final class CodexService {
         try HookInstaller.requireNoActiveHelper()
         try CodexPaths.selectHome(path)
         stop()
-        for card in CodexInteractionCenter.shared.pending { CodexInteractionCenter.shared.handBack(card.id) }
         RetrospectiveRunner.shared.codexConfigurationChanged()
-        NotesCurationService.shared.cancelIfCodex()
-        PluginInventory.shared.cancelIfCodex()
         observed = CodexSessions()
         sessions = []
         lastEventAt = nil
         CodexExecutable.invalidateCache()
-        SkillReviewCenter.shared.reconcileAndScan()
         start()
     }
 
@@ -183,14 +177,7 @@ final class CodexService {
         // une fin de tâche qui a déjà eu lieu.
         guard applied.accepted else { return applied }
         lastEventAt = Date()
-        if event.agentID != nil {
-            if let child = applied.childClosed {
-                CodexInteractionCenter.shared.cancelAll(forAgent: child, inSession: event.sessionID,
-                    turn: applied.childClosedTurn,
-                    process: event.process ?? observed.process(for: event.sessionID))
-            }
-            return applied
-        }
+        if event.agentID != nil { return applied }
         if event.kind == .sessionStart || event.kind == .userPromptSubmit {
             RetrospectiveRunner.shared.sessionResumed(event.sessionID)
         }
@@ -204,29 +191,6 @@ final class CodexService {
             records.append(record)
             records = Array(records.suffix(256))
             saveRecords()
-        }
-        playSound(for: event)
-        // Une session qui se termine emporte ses cartes : le helper est mort
-        // avec elle, répondre sur ces descripteurs n'atteindrait personne.
-        if event.kind == .sessionEnd {
-            CodexInteractionCenter.shared.cancelAll(forSession: event.sessionID,
-                                                    process: applied.ended?.process ?? event.process)
-        }
-        // Un TOUR interrompu ou terminé emporte les siennes : plus personne
-        // n'attend la réponse à une demande de ce tour. `SessionEnd` avait son
-        // nettoyage, pas l'interruption — une carte y survivait jusqu'au reaper
-        // ou aux 600 s d'expiration.
-        switch applied.closure {
-        case .none: break
-        case .named(let turn):
-            CodexInteractionCenter.shared.cancelAll(forSession: event.sessionID, turn: turn,
-                                                    process: event.process ?? observed.process(for: event.sessionID))
-        case .unnamed:
-            // Clôture sans tour identifiable : on ne peut retirer que les cartes
-            // qui n'en portent pas non plus. Retirer les autres reviendrait à
-            // tuer les demandes d'un tour qu'on n'a pas prouvé clos.
-            CodexInteractionCenter.shared.cancelUnattributedCards(forSession: event.sessionID,
-                                                                  process: event.process ?? observed.process(for: event.sessionID))
         }
         if let ended = applied.ended { RetrospectiveRunner.shared.codexSessionEnded(ended) }
         if event.kind == .sessionStart || event.kind == .stop || event.kind == .postCompact { refreshMetadata() }
@@ -251,24 +215,6 @@ final class CodexService {
             row["contextWindowTokens"] = session.contextTokenUsage?.windowTokens
             row["contextMeasuredAt"] = session.contextMeasuredAt.map { ISO8601DateFormatter().string(from: $0) }
             return row
-        }
-    }
-
-    /// Les DEUX sons d'Atoll valent pour Codex comme pour Claude.
-    ///
-    /// Demande explicite de Mehdi le 2026-09-09 (« pour la partie son, je veux
-    /// qu'on ait du son, c'est hyper important »), et le besoin est identique :
-    /// il a mis ces sons pour être APPELÉ plutôt que surveiller un écran. Que
-    /// la carte d'autorisation s'affiche dans Codex plutôt que dans l'îlot ne
-    /// change rien à ce besoin — l'îlot dit d'ailleurs où la traiter.
-    ///
-    /// Table VOLONTAIREMENT étroite, comme celle du helper : `permissionRequest`
-    /// → décision attendue, `stop` → tour terminé, et RIEN d'autre. Sonner sur
-    /// `preToolUse` ou `sessionStart` ferait tinter chaque outil.
-    private func playSound(for event: CodexHookEvent) {
-        switch event.kind {
-        case .stop: SoundCenter.shared.play(.taskCompleted)
-        default: break
         }
     }
 

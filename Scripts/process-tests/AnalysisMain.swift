@@ -11,7 +11,6 @@ import AtollCore
         func check(_ value: @autoclosure () -> Bool, _ message: String) {
             if !value() { fputs("FAIL: \(message)\n", stderr); exit(1) }
         }
-        try fm.createDirectory(at: BridgePaths.learningNotesDirectory, withIntermediateDirectories: true)
         LearningSettings.shared.failoverConfig = .init(enabled: false, preferred: provider)
         CodexService.shared.quota = CodexQuota(result: ["rateLimits": ["limitId": "codex",
             "primary": ["usedPercent": 10, "windowDurationMins": 300,
@@ -42,8 +41,8 @@ import AtollCore
         func releaseChild() async throws {
             check(AnalysisBudget.shared.active != nil, "A09 live child lost analysis ownership")
             do {
-                let context = try AnalysisExecution.capture(kind: .curation)
-                _ = try AnalysisBudget.shared.begin(context, kind: .curation)
+                let context = try AnalysisExecution.capture(kind: .retrospective)
+                _ = try AnalysisBudget.shared.begin(context, kind: .retrospective)
                 check(false, "A09 another service acquired live child budget")
             } catch {}
             try Data().write(to: root.appendingPathComponent("release"))
@@ -80,28 +79,6 @@ import AtollCore
                 try await releaseChild()
                 await runner.evaluateAndRun(job)
                 check(launches() == 2, "A09 retrospective did not resume after child exit")
-            }
-        } else {
-            for name in ["one.md", "two.md"] {
-                try String(repeating: "Connaissance vérifiée et utile au projet. ", count: 20)
-                    .write(to: BridgePaths.learningNotesDirectory.appendingPathComponent(name), atomically: true, encoding: .utf8)
-            }
-            let runner = NotesCurationService.shared
-            runner.curateNow()
-            while runner.phase != .idle {
-                check(start.duration(to: .now) < .seconds(5), "A09 curation did not finish")
-                try await Task.sleep(for: .milliseconds(10))
-            }
-            check(runner.lastOutcome?.contains("dépassé son délai") == true, "A09 curation inherited pipe not reported")
-            check(NotesCurationService.readNotes().count == 2, "A09 curation changed notes on interrupted output")
-            if survivor {
-                check(launches() == 1, "A09 survivor fixture did not spawn")
-                runner.curateNow()
-                check(launches() == 1, "A09 second curation overlapped live child")
-                try await releaseChild()
-                runner.curateNow()
-                while runner.phase != .idle { try await Task.sleep(for: .milliseconds(10)) }
-                check(launches() == 2, "A09 curation did not resume after child exit")
             }
         }
         check(fm.fileExists(atPath: root.appendingPathComponent("launched").path), "A09 analysis fixture did not spawn")

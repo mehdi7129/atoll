@@ -3,34 +3,28 @@
 from pathlib import Path
 import argparse
 import os
+import shutil
 import subprocess
 import tempfile
 
 repo = Path(__file__).resolve().parent.parent
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument("--sabotage", choices=["checkpoint", "counts", "material", "dedup", "recovery-progress", "recovery-independent", "reader", "usage", "digest-metrics", "journal-revision", "notes-revision"])
+parser.add_argument("--sabotage", choices=["checkpoint", "counts", "material", "dedup", "reader", "usage", "digest-metrics", "journal-revision", "off", "migration", "recovery-after-stop"])
 parser.add_argument("--build-dir", type=Path, help="Réutiliser un produit Core Debug existant.")
 args = parser.parse_args()
 mutations = {
-    "journal-revision": ("journalRevision &+= 1", "journalRevision &+= 0", "A16 journal non notifié", 1),
-    "notes-revision": ("self?.notesRevision &+= 1", "self?.notesRevision &+= 0", "A16 notes non notifiées", 2),
-    "usage": ("AnalysisBudget.shared.recordUsage(lease, stdout: output)", "()",
-              "usage du runner absent du journal", 1),
+    "journal-revision": ("journalRevision &+= 1", "journalRevision &+= 0", "journal non notifié", 1),
+    "usage": ("AnalysisBudget.shared.recordUsage(lease, stdout: output)", "()", "usage du runner absent du journal", 1),
     "digest-metrics": ("AnalysisBudget.shared.updateMetrics(lease, digestFragmentsShortened: digest.fragmentsShortened,\n            digestEntriesDropped: digest.entriesDropped, digestSourceReadStopped: digest.sourceReadStopped)",
                        "()", "mesures du lecteur absentes du journal", 1),
-    "recovery-progress": ("try persistReceipt(delivery, failure: reason)", "()",
-                          "compteurs de reprise partielle perdus", 1),
-    "recovery-independent": ("for var delivery in pending {", "for var delivery in pending.prefix(1) {",
-                             "reprise indépendante bloquée par le premier reçu", 1),
-    "reader": ("sourceReadStopped: readBytes >= byteCap || lines.count >= lineCap", "sourceReadStopped: false",
-               "bornes du lecteur non signalées", 1),
+    "reader": ("sourceReadStopped: readBytes >= byteCap || lines.count >= lineCap", "sourceReadStopped: false", "bornes du lecteur non signalées", 1),
     "checkpoint": ("try deliveryStore.save(delivery)", "()", "sortie payée non sauvegardée", 1),
-    "counts": ("pendingAttempt?.notesWritten = delivery.notesWritten", "pendingAttempt?.notesWritten = report.notes.count",
-               "compteurs de succès inventés après échec", 2),
-    "material": ("if !job.forced, loadState().materials.contains(where:", "if false, loadState().materials.contains(where:",
-                 "matière identique réanalysée", 1),
-    "dedup": ("let filtered = novelReport(report, project: job.snapshot.cwd, destination: destination)", "let filtered = report",
-              "doublons de sortie non filtrés", 1),
+    "counts": ("pendingAttempt?.skillsProposed = delivery.skillsProposed", "pendingAttempt?.skillsProposed = report.skills.count", "compteurs de succès inventés après échec", 2),
+    "material": ("if !job.forced, loadState().materials.contains(where:", "if false, loadState().materials.contains(where:", "matière identique réanalysée", 1),
+    "dedup": ("let filtered = novelReport(report, project: job.snapshot.cwd, destination: destination)", "let filtered = report", "doublons de sortie non filtrés", 1),
+    "recovery-after-stop": ("self.recoverPendingDeliveries()", "()", "ON pendant arrêt", 1),
+    "off": ("LearningSettings.shared.isEnabled && generationAllowed()", "generationAllowed()", "OFF ou migration", 1),
+    "migration": ("LearningSettings.shared.isEnabled && generationAllowed()", "LearningSettings.shared.isEnabled", "OFF ou migration", 1),
 }
 if args.build_dir:
     build = args.build_dir.resolve()
@@ -53,20 +47,22 @@ with tempfile.TemporaryDirectory(prefix="atoll-retrospective-regression-") as na
     binary = root / "retrospective-tests"
     command = ["swiftc", "-swift-version", "5", "-D", "DEBUG", "-parse-as-library",
                "-I", str(build / "Modules"), "-lsqlite3", str(source),
-               *[str(repo / ("App/" + file + ".swift")) for file in
-                 ["NotesCurationService", "CodexInteractionCenter", "AnalysisExecution", "PluginInventory"]],
+               str(repo / "App/AnalysisExecution.swift"),
                str(repo / "Scripts/runtime-tests/Stubs.swift"), str(repo / "Scripts/learning-tests/RetrospectiveMain.swift"),
                *[str(p) for p in sorted((build / "AtollCore.build").glob("*.o"))], "-o", str(binary)]
     subprocess.run(command, check=True)
-    scenarios = ["nominal", "blocked", "partial", "checkpoint", "unchanged", "changed", "corrupt-state", "independent", "digest-reader"]
+    scenarios = ["off-before", "migration-before", "off-wait", "off-digest", "migration-digest", "off-catalog", "migration-catalog", "off-cli",
+                 "off-running", "on-while-stopping", "session-resumed", "legacy-mixed", "legacy-notes", "nominal", "note-context",
+                 "blocked", "checkpoint", "unchanged", "changed", "corrupt-state", "digest-reader"]
+    total = 0
     for provider in ["claude", "codex"]:
         for scenario in scenarios:
             fixture = root / (provider + "-" + scenario)
             fixture.mkdir()
-            env = dict(os.environ, ATOLL_RUNTIME_TEST_ROOT=str(fixture), ZDOTDIR=str(fixture))
-            steps = {"blocked": ["recover-partial", "recover"], "partial": ["recover"],
-                     "independent": ["recover-independent"]}.get(scenario, [])
-            for step in [scenario] + steps:
+            env = dict(os.environ, ATOLL_RUNTIME_TEST_ROOT=str(fixture), ZDOTDIR=str(fixture),
+                       CFFIXED_USER_HOME=str(fixture), CODEX_HOME=str(fixture / ".codex"))
+            steps = [scenario] + (["recover"] if scenario == "blocked" else [])
+            for step in steps:
                 result = subprocess.run([str(binary), step, provider], env=env, capture_output=True, text=True, timeout=20)
                 if result.returncode:
                     if expected and expected in result.stderr:
@@ -74,6 +70,10 @@ with tempfile.TemporaryDirectory(prefix="atoll-retrospective-regression-") as na
                         raise SystemExit(0)
                     raise SystemExit(result.stdout + result.stderr)
                 print(result.stdout, end="")
+                total += 1
+            # Chaque scénario est indépendant ; conserver seulement sa sortie
+            # évite de cumuler les gros transcripts de course digest sur disque.
+            shutil.rmtree(fixture)
     if expected:
         raise SystemExit("Sabotage non détecté : " + expected)
-    print("PASS 26 scénarios rétrospectives, aucun CLI génératif réel")
+    print(f"PASS {total} scénarios skills-only, aucun CLI génératif réel")

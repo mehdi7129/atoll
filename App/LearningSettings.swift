@@ -2,12 +2,11 @@ import Foundation
 import Observation
 import AtollCore
 
-/// Réglages du mode apprentissage (rétrospectives de fin de session).
+/// Réglages de la création de propositions de skills en fin de session.
 ///
-/// OPT-IN STRICT : OFF par défaut — contrairement à l'indexation mémoire
-/// (passive, locale), la rétrospective consomme du quota de souscription.
+/// OPT-IN STRICT : OFF par défaut, la génération consomme du quota de souscription.
 /// Le toggle est aussi le kill-switch : OFF purge la file et SIGTERM le
-/// processus en cours en moins d'une seconde.
+/// processus en cours, avec escalade SIGKILL après cinq secondes si nécessaire.
 @MainActor
 @Observable
 final class LearningSettings {
@@ -158,17 +157,9 @@ final class LearningSettings {
     /// Appelé au lancement et à CHAQUE bascule du toggle (pattern
     /// ModelQuotaPoller.syncWithSettings).
     func syncWithSettings() {
-        if isEnabled {
-            // Les répertoires n'existent qu'à l'activation (opt-in respecté).
-            for url in [BridgePaths.learningNotesDirectory,
-                        BridgePaths.learningProposedDirectory,
-                        BridgePaths.learningArchiveDirectory] {
-                try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
-            }
-        } else {
-            RetrospectiveRunner.shared.disable()
-        }
-        NotesCurationService.shared.syncWithSettings()
+        // La reprise des sorties payées n'a besoin ni du modèle ni du quota.
+        // Le runner applique aussi la barrière de migration avant tout effet.
+        RetrospectiveRunner.shared.settingsChanged()
     }
 
     /// Écrit `~/.atoll/proactive-recall.json` (source de vérité LUE PAR LE

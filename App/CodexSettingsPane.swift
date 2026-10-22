@@ -7,7 +7,6 @@ struct CodexSettingsPane: View {
     @AppStorage(CodexService.quotaEnabledKey) private var quotaEnabled = false
     @AppStorage(CodexService.executableKey) private var executablePath = ""
     @AppStorage(LearningSettings.analysisProviderKey) private var analysisProvider = AgentProvider.claude.rawValue
-    @AppStorage(LearningSettings.failoverEnabledKey) private var analysisFallback = false
     @AppStorage(LearningSettings.codexModelKey) private var analysisModel = ""
     @AppStorage("codexDiagnosticProjectPath") private var projectPath = ""
     @State private var installed = false
@@ -37,7 +36,7 @@ struct CodexSettingsPane: View {
                         SettingsHelp(error)
                         Button("Ouvrir le dépannage") { advancedExpanded = true }
                     } else if !installed {
-                        SettingsHelp("Relie Codex à Atoll pour voir tes sessions et leurs demandes d'autorisation dans l'îlot.")
+                        SettingsHelp("Relie Codex à Atoll pour voir tes sessions et leurs états dans l'îlot.")
                         Button("Installer l'intégration Codex") { configure(install: true) }
                             .buttonStyle(.borderedProminent)
                     } else if lastEvent == nil {
@@ -81,19 +80,16 @@ struct CodexSettingsPane: View {
             }
             Section("Analyses d'Atoll") {
                 LabeledContent("Moteur", value: analysisProvider == AgentProvider.codex.rawValue ? "Codex CLI" : "Claude Code")
-                if analysisProvider == AgentProvider.codex.rawValue || analysisFallback {
+                if analysisProvider == AgentProvider.codex.rawValue {
                     LabeledContent("Modèle Codex", value: analysisModel.isEmpty ? "À choisir" : analysisModel)
                 }
                 VStack(alignment: .leading, spacing: 8) {
-                    Button((analysisProvider == AgentProvider.codex.rawValue || analysisFallback) && analysisModel.isEmpty
+                    Button((analysisProvider == AgentProvider.codex.rawValue) && analysisModel.isEmpty
                            ? "Choisir le modèle…" : "Régler les analyses…", action: onShowAnalyses)
-                    SettingsHelp("Le moteur, les modèles et les limites se règlent dans Apprentissage.")
+                    SettingsHelp("Le moteur, les modèles et les limites se règlent dans Skills.")
                 }
             }
             quotaSection
-            CodexCatalogSection(projectPath: projectPath, executableOverride: executablePath,
-                                home: catalogHome,
-                                chooseProject: chooseProject)
             advancedSettings
         }
         .formStyle(.grouped)
@@ -185,7 +181,7 @@ struct CodexSettingsPane: View {
                 guard CodexPaths.homeURL == requestedHome else { return }
                 diagnostic = nil
                 message = install ? "Définitions à jour. Approuve les hooks Atoll dans /hooks."
-                    : "Intégration retirée. Tes autres hooks et la mémoire commune sont conservés."
+                    : "Intégration retirée. Tes autres hooks et les skills installés sont conservés."
             } catch {
                 if CodexPaths.homeURL == requestedHome { message = error.localizedDescription }
             }
@@ -209,6 +205,12 @@ struct CodexSettingsPane: View {
                                 refreshInstalled()
                                 diagnostic = nil
                                 message = nil
+                                Task { @MainActor in
+                                    if await EssentialMigration.shared.run() {
+                                        SkillReviewCenter.shared.reconcileAndScan()
+                                        LearningSettings.shared.syncWithSettings()
+                                    }
+                                }
                             } catch { message = error.localizedDescription }
                         }
                         SettingsHelp("Home utilisé : \(CodexPreview.enabled ? "/compte-codex" : CodexPaths.homeURL.path)\nFichier des hooks : \(CodexPreview.enabled ? "/compte-codex/hooks.json" : CodexPaths.hooksURL.path)")

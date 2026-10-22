@@ -3,6 +3,23 @@ import XCTest
 
 final class RetrospectiveReportTests: XCTestCase {
 
+    func testSkillsOnlyParserIgnoresUnexpectedNotesWithoutLosingValidSkills() throws {
+        let payload = Data(richPayload.utf8)
+        let envelope = try JSONSerialization.data(withJSONObject: [
+            "type": "result", "subtype": "success", "structured_output":
+                JSONSerialization.jsonObject(with: payload)
+        ])
+        for result in [RetrospectiveReport.parse(codexOutput: payload, includeNotes: false),
+                       RetrospectiveReport.parse(cliOutput: envelope, includeNotes: false)] {
+            let report = try result.get()
+            XCTAssertTrue(report.notes.isEmpty, "le chemin skills-only conserve une note inattendue")
+            XCTAssertEqual(report.skills.map(\.slug), ["verify-visual"])
+            XCTAssertEqual(report.skills[0].skillMD, "# Vérification visuelle\n\nnotifyutil -p dev.mehdiguiard.atoll.debug.expand\nscreencapture -x f.png")
+        }
+        XCTAssertEqual(try RetrospectiveReport.parse(codexOutput: payload).get().notes.count, 2,
+                       "la lecture legacy demeure explicite et compatible")
+    }
+
     /// Le préfixe `atoll-` appartient au dossier d'installation : un modèle qui
     /// analyse une session sur Atoll le colle spontanément à son slug (vu en
     /// vrai : `atoll-dmg-release-pipeline`), et la proposition devenait

@@ -200,15 +200,6 @@ public final class MemoryIndex {
         }
     }
 
-    /// Prépare la reprise SANS modifier l'index : l'appelant ouvre, cherche
-    /// et lit d'abord le fichier. Une erreur IO ne doit pas purger l'ancienne
-    /// version ni réinitialiser son offset avant la première lecture réussie.
-    public func resumeOffset(path: String, inode: UInt64, size: Int64) throws -> Int64 {
-        guard let existing = try selectFile(path: path),
-              existing.inode == inode, size >= existing.offset else { return 0 }
-        return existing.offset
-    }
-
     /// Marque un fichier disparu du disque. Ses messages restent cherchables
     /// (la mémoire survit au ménage dans `~/.claude/projects/`) ; le flag sert
     /// au diagnostic et à un éventuel ménage explicite futur.

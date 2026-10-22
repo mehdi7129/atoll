@@ -23,35 +23,22 @@ public enum HookSettingsEditor {
         }
     }
 
-    /// Les événements d'état sont async (jamais de latence CLI) ; PermissionRequest
-    /// est BLOQUANT (timeout 86400 = l'îlot peut répondre pendant 24 h — même
-    /// valeur que Vibe Island/open-vibe-island) et fail-open : si l'app ne répond
-    /// pas, le helper sort en silence et le prompt terminal reprend la main.
+    /// Observation seule : les décisions restent dans le CLI, tous les hooks
+    /// Claude sont async. Aucun ancien réglage de recall ne change ce contrat.
     public static let managedEvents: [ManagedEvent] = managedEvents(proactiveRecall: false)
 
-    /// Jeu d'événements gérés pour un mode donné.
-    ///
-    /// `proactiveRecall` (Milestone B, OPT-IN, OFF par défaut) rend
-    /// **UserPromptSubmit BLOQUANT** : un hook `async` est fire-and-forget, sa
-    /// sortie n'est jamais lue — or c'est précisément par sa sortie
-    /// (`additionalContext`) que le helper injecte les souvenirs liés au
-    /// prompt. Timeout court (5 s) : la recherche locale se compte en
-    /// millisecondes, et le helper sort en silence à la moindre anicroche
-    /// (fail-open). Réglage OFF ⇒ on retombe sur `async: true`, zéro latence
-    /// ajoutée au CLI — c'est le comportement historique.
+    /// Argument conservé pour lire les anciens callers : le recall est retiré.
     public static func managedEvents(proactiveRecall: Bool) -> [ManagedEvent] {
         [
             ManagedEvent("SessionStart"),
-            proactiveRecall
-                ? ManagedEvent("UserPromptSubmit", async: false, timeout: 5)
-                : ManagedEvent("UserPromptSubmit"),
+            ManagedEvent("UserPromptSubmit", timeout: 3),
             ManagedEvent("PreToolUse"), ManagedEvent("PostToolUse"),
             ManagedEvent("PostToolUseFailure"), ManagedEvent("PermissionDenied"),
             ManagedEvent("Notification"), ManagedEvent("Stop"),
             ManagedEvent("StopFailure"), ManagedEvent("SubagentStart"),
             ManagedEvent("SubagentStop"), ManagedEvent("PreCompact"),
             ManagedEvent("PostCompact"), ManagedEvent("SessionEnd"),
-            ManagedEvent("PermissionRequest", async: false, timeout: 86_400, matcher: "*"),
+            ManagedEvent("PermissionRequest", timeout: 3, matcher: "*"),
         ]
     }
 
@@ -66,8 +53,8 @@ public enum HookSettingsEditor {
     /// Installe (ou réinstalle) nos hooks. `data` = contenu actuel du fichier, nil si absent.
     /// Un événement géré dont la valeur a une structure inattendue fait ÉCHOUER
     /// l'opération (aucune écriture) plutôt que de perdre des hooks utilisateur.
-    /// `proactiveRecall` : voir `managedEvents(proactiveRecall:)` — passer le
-    /// mode voulu, l'installation est idempotente et remplace nos entrées.
+    /// L'argument legacy proactiveRecall ne peut plus activer d'injection.
+    /// L'installation explicite est idempotente et remplace nos entrées.
     public static func install(into data: Data?, command: String,
                                proactiveRecall: Bool = false) throws -> Data {
         var settings = try parse(data)
@@ -123,14 +110,60 @@ public enum HookSettingsEditor {
         return try serialize(settings)
     }
 
+    /// Migre uniquement les handlers Atoll déjà présents. Les événements retirés
+    /// ne reviennent pas ; commandes, groupes, matchers et champs tiers restent
+    /// intacts. Seul le contrat de PermissionRequest/UserPromptSubmit change.
+    public static func migratePassive(_ data: Data) throws -> Data {
+        var settings = try parse(data)
+        guard let raw = settings["hooks"] else { return data }
+        guard var hooks = raw as? [String: Any] else { throw EditorError.unparseableSettings }
+        var changed = false
+        for name in ["PermissionRequest", "UserPromptSubmit"] {
+            guard let rawEntries = hooks[name] else { continue }
+            var entries = try strictEntries(rawEntries)
+            for index in entries.indices {
+                guard var handlers = entries[index]["hooks"] as? [[String: Any]] else {
+                    throw EditorError.unparseableSettings
+                }
+                for handlerIndex in handlers.indices where isManagedHook(handlers[handlerIndex]) {
+                    let previous = try JSONSerialization.data(withJSONObject: handlers[handlerIndex], options: [.sortedKeys])
+                    handlers[handlerIndex]["async"] = true
+                    let timeout = handlers[handlerIndex]["timeout"] as? Int
+                    let oldTimeouts = name == "PermissionRequest" ? [10, 86_400] : [5, 10]
+                    if handlers[handlerIndex]["timeout"] == nil || oldTimeouts.contains(timeout ?? Int.min) {
+                        handlers[handlerIndex]["timeout"] = 3
+                    }
+                    if handlers[handlerIndex]["statusMessage"] as? String == "Waiting for approval in Atoll" {
+                        handlers[handlerIndex].removeValue(forKey: "statusMessage")
+                    }
+                    if previous != (try JSONSerialization.data(withJSONObject: handlers[handlerIndex], options: [.sortedKeys])) { changed = true }
+                }
+                entries[index]["hooks"] = handlers
+            }
+            hooks[name] = entries
+        }
+        guard changed else { return data }
+        settings["hooks"] = hooks
+        return try serialize(settings)
+    }
+
     /// Nos hooks sont-ils installés (tous les événements gérés couverts) ?
-    /// Insensible au MODE : la liste des événements est la même avec ou sans
-    /// recall proactif (seul le caractère bloquant d'UserPromptSubmit change).
+    /// La présence est distincte du contrat passif et de la confiance native.
     public static func isInstalled(in data: Data?) -> Bool {
         guard let settings = try? parse(data),
               let hooks = settings["hooks"] as? [String: Any] else { return false }
         return managedEvents.allSatisfy { event in
             (hooks[event.name] as? [[String: Any]] ?? []).contains { isManagedEntry($0) }
+        }
+    }
+
+    /// Détecte aussi une installation partielle, sans exiger ni recréer les
+    /// événements que l'utilisateur a retirés.
+    public static func hasManagedHooks(in data: Data?) -> Bool {
+        guard let settings = try? parse(data),
+              let hooks = settings["hooks"] as? [String: Any] else { return false }
+        return hooks.values.contains { value in
+            (value as? [[String: Any]] ?? []).contains(where: containsManagedHook)
         }
     }
 

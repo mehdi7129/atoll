@@ -12,8 +12,6 @@ struct NotchRootView: View {
     @AppStorage("hoverDelay") private var hoverDelay = 0.15
     @AppStorage(VisualEffects.enabledKey) private var visualEffects = true
     @AppStorage(VisualEffects.glassIntensityKey) private var glassIntensity = VisualEffects.defaultGlassIntensity
-    /// Rockstar élargit l'îlot même sans session : voir `islandSize(rockstar:)`.
-    @AppStorage(InteractionCenter.autonomyKey) private var autonomyRaw = AutonomyLevel.manual.rawValue
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     private var reduceMotion: Bool { CodexPreview.enabled ? (previewReduceMotion ?? systemReduceMotion) : systemReduceMotion }
@@ -31,7 +29,7 @@ struct NotchRootView: View {
     }
 
     private var displayedPalette: String {
-        let provider = InteractionPresentation.shared.current?.provider ?? viewModel.selectedProvider
+        let provider = viewModel.selectedProvider
         return provider == .codex ? codexPaletteID : paletteID
     }
 
@@ -42,7 +40,6 @@ struct NotchRootView: View {
         viewModel.hasNotch ? ThemeColors(variant: Palette.named(displayedPalette).dark) : colors
     }
 
-    private var rockstar: Bool { AutonomyLevel(rawValue: autonomyRaw) == .rockstar }
 
     private var isCompactCap: Bool {
         viewModel.hasNotch && viewModel.state == .compact
@@ -154,15 +151,6 @@ struct NotchRootView: View {
         return viewModel.state == .expanded ? 1 : 0.55
     }
 
-    private var pendingCount: Int {
-        InteractionPresentation.shared.items.count
-    }
-
-    /// L'îlot doit-il rester ouvert + prendre le clavier ? (carte en attente).
-    private var wantsFocus: Bool {
-        pendingCount > 0
-    }
-
     var body: some View {
         VStack(spacing: 0) {
             island
@@ -184,20 +172,9 @@ struct NotchRootView: View {
             }
         }
         #endif
-        .onChange(of: InteractionPresentation.shared.items) { _, _ in
-            InteractionPresentation.shared.refresh()
-        }
-        .onChange(of: wantsFocus) { oldValue, newValue in
-            // Carte en attente → l'îlot s'ouvre tout seul (écran principal) et
-            // prend le clavier ; plus rien → il se replie et rend le focus au
-            // terminal.
-            viewModel.syncInteractionState(pendingCount: newValue ? 1 : 0,
-                                           previousCount: oldValue ? 1 : 0)
-        }
         .onChange(of: viewModel.state) { _, newState in
-            // Le focus clavier suit l'état visible : replié → rendu au terminal,
-            // déployé avec carte → repris.
-            viewModel.onKeyFocusRequest?(viewModel.isPrimary && newState == .expanded && wantsFocus)
+            // L’îlot de suivi ne reprend pas le focus clavier au terminal.
+            viewModel.onKeyFocusRequest?(false)
             // Rejoue l'onde à chaque ouverture (débordement volontairement ignoré).
             if newState == .expanded {
                 rippleTrigger &+= 1
@@ -245,32 +222,13 @@ struct NotchRootView: View {
             }
         }
         .onAppear {
-            InteractionPresentation.shared.refresh()
-            // L'état est lu AVANT d'ouvrir quoi que ce soit.
-            //
-            // Le rattrapage ci-dessous existe pour le cas « la vue réapparaît
-            // alors que l'îlot était DÉJÀ déployé » : `glassReveal` repart à 0
-            // (c'est un `@State`) et seule une TRANSITION vers `.expanded` le
-            // remonte — le panneau resterait en fond plein pour toujours.
-            // Mais `syncInteractionState` juste en dessous APPELLE `open()` :
-            // le lire après, c'est voir `.expanded` sur le chemin d'une carte
-            // qui vient de s'ouvrir, poser `glassReveal = 1` séance tenante, et
-            // annuler précisément le dévoilement qu'on voulait protéger.
-            let wasExpanded = viewModel.state == .expanded
-
-            // Fenêtre reconstruite pendant une carte active : réappliquer.
-            if wantsFocus {
-                viewModel.syncInteractionState(pendingCount: 1, previousCount: 0)
-            }
-            if wasExpanded {
-                glassReveal = 1
-            }
+            if viewModel.state == .expanded { glassReveal = 1 }
         }
     }
 
     @ViewBuilder
     private var island: some View {
-        let size = viewModel.islandSize(rockstar: rockstar)
+        let size = viewModel.islandSize()
         let shape = NotchShape(bottomRadius: bottomRadius, sideInset: sideInset)
 
         ZStack(alignment: .top) {

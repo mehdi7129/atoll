@@ -19,21 +19,12 @@ final class BridgeServer: @unchecked Sendable {
     private var boundNode: (dev_t, ino_t)?
     private var acceptSource: DispatchSourceRead?
     private var readers: [Int32: (source: DispatchSourceRead, buffer: Data)] = [:]
-    /// Connexions PermissionRequest gardées ouvertes en attendant la décision
-    /// de l'îlot (requestID → fd du helper bloqué).
-    private var pendingReplies: [String: Int32] = [:]
-    private var pendingHelpers: [String: DispatchSourceProcess] = [:]
-
-    /// Appelés sur la main queue. requestID non-nil = PermissionRequest en
-    /// attente de décision via reply()/cancelPending().
+    /// Callbacks sur la main queue. Les arguments legacy sont toujours nil/0 :
+    /// une permission est un événement observé, jamais une demande de décision.
     private let onEvent: (ParsedHookEvent, _ requestID: String?) -> Void
     private let onStatusline: (Data) -> Void
-    /// `requestID` non-nil = le helper Codex ATTEND une décision sur ce fd.
     private let onCodexEvent: (CodexHookEvent, _ requestID: String?, _ helperPid: pid_t) -> Void
     private let onStateChange: (Bool) -> Void
-    /// Prévenu sur la main queue quand une attente expire — voir
-    /// `pendingRepliesTimeout`.
-    private let onPendingExpired: (_ requestID: String) -> Void
 
     init(
         onEvent: @escaping (ParsedHookEvent, String?) -> Void,
@@ -47,47 +38,7 @@ final class BridgeServer: @unchecked Sendable {
         self.onStatusline = onStatusline
         self.onStateChange = onStateChange
         self.onCodexEvent = onCodexEvent
-        self.onPendingExpired = onPendingExpired
         self.socketPath = socketPath
-    }
-
-    // MARK: - Réponses aux PermissionRequest
-
-    /// Envoie la décision au helper bloqué puis ferme la connexion.
-    func reply(_ requestID: String, decision: Data) {
-        queue.async { [weak self] in
-            guard let self, let fd = self.pendingReplies.removeValue(forKey: requestID) else { return }
-            self.pendingHelpers.removeValue(forKey: requestID)?.cancel()
-            // Le helper est garanti bloqué en lecture : on repasse le fd en
-            // bloquant pour ne jamais tronquer la décision sur EAGAIN.
-            let flags = fcntl(fd, F_GETFL)
-            _ = fcntl(fd, F_SETFL, flags & ~O_NONBLOCK)
-            decision.withUnsafeBytes { raw in
-                var offset = 0
-                while offset < raw.count {
-                    let written = write(fd, raw.baseAddress!.advanced(by: offset), raw.count - offset)
-                    if written < 0 {
-                        if errno == EINTR { continue }
-                        break // EPIPE (helper mort) etc. — SO_NOSIGPIPE évite le crash.
-                    }
-                    if written == 0 { break }
-                    offset += written
-                }
-            }
-            close(fd)
-            log.info("décision envoyée pour \(requestID, privacy: .public)")
-        }
-    }
-
-    /// Ferme la connexion SANS décision : le helper sort en silence et le
-    /// prompt du terminal garde la main (course perdue, îlot fermé, etc.).
-    func cancelPending(_ requestID: String) {
-        queue.async { [weak self] in
-            guard let self, let fd = self.pendingReplies.removeValue(forKey: requestID) else { return }
-            self.pendingHelpers.removeValue(forKey: requestID)?.cancel()
-            close(fd)
-            log.info("requête \(requestID, privacy: .public) rendue au terminal")
-        }
     }
 
     enum ServerError: Error {
@@ -164,13 +115,6 @@ final class BridgeServer: @unchecked Sendable {
                 close(fd)
             }
             readers.removeAll()
-            // Les helpers bloqués repartent en silence → prompts terminal intacts.
-            for (_, fd) in pendingReplies {
-                close(fd)
-            }
-            pendingReplies.removeAll()
-            for watcher in pendingHelpers.values { watcher.cancel() }
-            pendingHelpers.removeAll()
             acceptSource?.cancel()
             acceptSource = nil
             listenFD = -1
@@ -218,9 +162,8 @@ final class BridgeServer: @unchecked Sendable {
             source.setEventHandler { [weak self] in
                 self?.readAvailable(clientFD)
             }
-            // Pas de fermeture dans le cancel handler : le fd d'une PermissionRequest
-            // survit à l'annulation de sa source (on lui répondra plus tard).
-            // La fermeture est toujours explicite (finish / reply / stop).
+            // Fermeture explicite dans finish/stop pour éviter un double close
+            // après réutilisation du numéro de descripteur.
             readers[clientFD] = (source, Data())
             source.resume()
         }
@@ -266,45 +209,12 @@ final class BridgeServer: @unchecked Sendable {
             return
         }
 
-        // Les fournisseurs étrangers sont dispatchés AVANT tout chemin Claude :
-        // une permission Codex n'entre JAMAIS dans `InteractionCenter`, donc
-        // jamais dans Rockstar.
+        // Fournisseurs dispatchés séparément ; le fd est fermé immédiatement,
+        // y compris pour un ancien helper qui attend encore une décision.
         if let envelope, let provider = envelope["provider"], provider as? String != "claude" {
             entry.source.cancel()
-            guard let event = CodexHookEvent(envelope: envelope) else { close(fd); return }
-
-            // Une demande d'autorisation Codex laisse le fd OUVERT : le helper
-            // attend notre décision. La corrélation se fait par cet UUID lié au
-            // descripteur — jamais par le nom d'outil, qui ne distingue pas deux
-            // demandes simultanées identiques (spécifié par Codex).
-            if event.kind == .permissionRequest {
-                let requestID = UUID().uuidString
-                pendingReplies[requestID] = fd
-
-                // ⚠️ ON NE PEUT PAS DÉTECTER LA MORT DU HELPER PAR EOF.
-                // Il fait `shutdown(SHUT_WR)` juste après avoir envoyé son
-                // payload — un half-close NORMAL et systématique. Un détecteur
-                // d'EOF confond donc « a fini d'écrire » et « est mort », et
-                // referme la carte AUSSITÔT : mesuré le 2026-09-09, le chemin
-                // nominal rendait la main en 0 s avec une réponse vide.
-                //
-                // La seule preuve fiable est le PROCESSUS. `LOCAL_PEERPID` le
-                // donne à la connexion ; `CodexInteractionCenter` le vérifie
-                // ensuite périodiquement.
-                var peer: pid_t = 0
-                var size = socklen_t(MemoryLayout<pid_t>.size)
-                let helperPid = getsockopt(fd, SOL_LOCAL, LOCAL_PEERPID, &peer, &size) == 0
-                    ? peer : 0
-                // Filet : jamais de fd orphelin. Posé APRÈS la deadline du
-                // helper — c'est lui qui doit rendre la main le premier.
-                queue.asyncAfter(deadline: .now() + CodexPermissionTiming.codexTimeoutSeconds) {
-                    [weak self] in self?.pendingRepliesTimeout(requestID)
-                }
-                log.info("permission Codex en attente \(requestID, privacy: .public)")
-                DispatchQueue.main.async { self.onCodexEvent(event, requestID, helperPid) }
-                return
-            }
             close(fd)
+            guard let event = CodexHookEvent(envelope: envelope) else { return }
             DispatchQueue.main.async { self.onCodexEvent(event, nil, 0) }
             return
         }
@@ -321,21 +231,7 @@ final class BridgeServer: @unchecked Sendable {
 
         let event = envelope.flatMap { ParsedHookEvent(envelope: $0) }
 
-        if let event, event.kind == .permissionRequest {
-            // Le helper attend la décision : le fd reste OUVERT (non fermé ici).
-            let requestID = UUID().uuidString
-            pendingReplies[requestID] = fd
-            // Filet de sécurité : jamais de fd orphelin au-delà du timeout du hook.
-            queue.asyncAfter(deadline: .now() + 86_400) { [weak self] in
-                self?.pendingRepliesTimeout(requestID)
-            }
-            log.info("permission en attente \(requestID, privacy: .public) — \(event.toolSummary ?? event.toolName ?? "?", privacy: .public)")
-            DispatchQueue.main.async { self.onEvent(event, requestID) }
-            watchPendingHelper(requestID, fd: fd)
-            return
-        }
-
-        // Tous les autres cas : fermeture explicite du fd.
+        // Une fermeture sans octets rend aussi la main aux helpers legacy.
         close(fd)
         guard parse, !entry.buffer.isEmpty else { return }
         if let event {
@@ -344,51 +240,6 @@ final class BridgeServer: @unchecked Sendable {
         } else {
             log.warning("enveloppe illisible (\(entry.buffer.count) octets)")
         }
-    }
-
-    /// Le half-close du socket est normal : seul le processus client peut
-    /// prouver la fin de CETTE demande. Aucun timer ni signal n'est nécessaire.
-    private func watchPendingHelper(_ requestID: String, fd: Int32) {
-        var pid: pid_t = 0
-        var size = socklen_t(MemoryLayout<pid_t>.size)
-        let peerResult = getsockopt(fd, SOL_LOCAL, LOCAL_PEERPID, &pid, &size)
-        guard peerResult == 0, pid > 1 else {
-            // Un client déjà sorti peut avoir fermé la connexion avant cette
-            // lecture : ENOTCONN prouve sa fermeture, contrairement à l'EOF
-            // du half-close normal ou à une autre erreur d'identification.
-            if peerResult == -1, errno == ENOTCONN { pendingRepliesTimeout(requestID) }
-            return
-        }
-        guard let identity = ProcessIdentity.current(of: pid) else {
-            if kill(pid, 0) == -1, errno == ESRCH { pendingRepliesTimeout(requestID) }
-            return
-        }
-        let watcher = DispatchSource.makeProcessSource(identifier: pid, eventMask: .exit, queue: queue)
-        watcher.setEventHandler { [weak self] in self?.pendingRepliesTimeout(requestID) }
-        pendingHelpers[requestID] = watcher
-        watcher.resume()
-        // Fermer la course où le helper meurt entre la lecture et l'abonnement.
-        if let current = ProcessIdentity.current(of: pid) {
-            if current != identity { pendingRepliesTimeout(requestID) }
-        } else if kill(pid, 0) == -1, errno == ESRCH {
-            pendingRepliesTimeout(requestID)
-        }
-    }
-
-    /// Le helper est sorti ou son délai a expiré : personne n'attend derrière ce
-    /// descripteur.
-    ///
-    /// ⚠️ FERMER LE FD NE SUFFIT PAS, et c'est le trou que Codex a relevé en
-    /// revue : la carte restait affichée dans l'îlot après l'expiration, et
-    /// un clic envoyait alors une décision dans le vide. Le serveur PRÉVIENT
-    /// donc le centre d'interaction, qui la retire.
-    private func pendingRepliesTimeout(_ requestID: String) {
-        guard let fd = pendingReplies.removeValue(forKey: requestID) else { return }
-        pendingHelpers.removeValue(forKey: requestID)?.cancel()
-        close(fd)
-        log.info("attente \(requestID, privacy: .public) expirée — descripteur fermé")
-        let notify = onPendingExpired
-        DispatchQueue.main.async { notify(requestID) }
     }
 
 }

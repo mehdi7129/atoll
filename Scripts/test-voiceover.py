@@ -3,7 +3,7 @@
 
 Prérequis : VoiceOver et son contrôle AppleScript déjà autorisés et activés.
 Ce script ne change aucune permission ni préférence VoiceOver. Il ouvre des
-cartes fictives, parcourt le curseur natif et vérifie les phrases réellement
+sessions et contrôles de skills fictifs, parcourt le curseur natif et vérifie les phrases réellement
 émises ; la synthèse audio elle-même n'est pas enregistrée.
 """
 import argparse
@@ -16,7 +16,6 @@ from pathlib import Path
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--app", required=True, type=Path)
 parser.add_argument("--output", required=True, type=Path)
-parser.add_argument("--expect-decorations", action="store_true")
 args = parser.parse_args()
 app = args.app.resolve()
 with (app / "Contents/Info.plist").open("rb") as f:
@@ -51,9 +50,13 @@ def collect():
     return phrases
 
 results = []
-for provider in ["codex", "claude"]:
-    options = ["--codex-preview", "--preview-cards"] + (["--preview-codex-card"] if provider == "codex" else [])
-    with (args.output / f"{provider}.log").open("w") as log:
+for name, options, expected in [
+    ("codex-detail", ["--preview-detail"], ["retour", "modèle", "contexte", "lecture seule"]),
+    ("claude-detail", ["--preview-detail", "--preview-claude"], ["retour", "modèle", "Action attendue dans le CLI"]),
+    ("skills", ["--preview-settings=learning"], ["Créer automatiquement des propositions de skills", "Moteur"]),
+]:
+    options = ["--codex-preview", *options]
+    with (args.output / f"{name}.log").open("w") as log:
         process = subprocess.Popen([str(app / "Contents/MacOS/Atoll"), *options], stdout=log, stderr=log)
         try:
             time.sleep(2)
@@ -62,28 +65,10 @@ for provider in ["codex", "claude"]:
             assert osa('tell application "System Events" to return name of first process whose frontmost is true') == "Atoll", "La recette a perdu le focus"
             phrases = collect()
             text = "\n".join(phrases)
-            expected = ["Claude Code", "Codex", "Sélectionné", "DEMANDE"]
-            expected += ["apply_patch", "REFUSER", "AUTORISER", "DÉCIDER DANS CODEX", "exemple.txt"] if provider == "codex" else ["plan", "feedback", "REVISE", "APPROVE"]
             assert all(word.lower() in text.lower() for word in expected), "Annonce utile manquante : " + str([w for w in expected if w.lower() not in text.lower()])
-            decorated = any(character in text for character in "░▒▓─")
-            assert decorated == args.expect_decorations, "Séparateurs décoratifs annoncés" if decorated else "Sabotage non reproduit"
-            (args.output / f"{provider}-phrases.json").write_text(json.dumps(phrases, ensure_ascii=False, indent=2))
-            if provider == "codex":
-                move("to first item")
-                for _ in range(35):
-                    if "DÉCIDER DANS CODEX" in read():
-                        break
-                    move("right")
-                else:
-                    raise AssertionError("Décision inaccessible au curseur VoiceOver")
-                osa('tell application "VoiceOver" to tell vo cursor to perform action')
-                time.sleep(0.6)
-                after = collect()
-                after_text = "\n".join(after)
-                assert "REVISE" in after_text and "DÉCIDER DANS CODEX" not in after_text, "VoiceOver n'a pas résolu la carte Codex"
-                (args.output / "after-handback.json").write_text(json.dumps(after, ensure_ascii=False, indent=2))
-            results.append({"provider": provider, "passed": True, "announcements": len(phrases), "decorationsExpected": args.expect_decorations})
-            print("PASS VoiceOver " + provider + " : annonces, navigation et contrôles accessibles", flush=True)
+            (args.output / f"{name}-phrases.json").write_text(json.dumps(phrases, ensure_ascii=False, indent=2))
+            results.append({"case": name, "passed": True, "announcements": len(phrases)})
+            print("PASS VoiceOver " + name + " : annonces et navigation", flush=True)
         finally:
             process.terminate()
             try:

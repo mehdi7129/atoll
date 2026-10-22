@@ -17,8 +17,7 @@ args = parser.parse_args()
 mutations = {
     "review-position": ("SkillProposal.swift", "current[min(index, current.count - 1)]", "current[0]",
                         "SkillReviewSelectionTests/testDecisionInTheMiddleContinuesAtSameRankThenPreviousAtEnd"),
-    "replacement-grace": ("RequestPresentation.swift", "decisionAfter = now.addingTimeInterval(0.4)", "decisionAfter = now",
-                          "RequestPresentationTests/testExternalResolutionCannotRetargetAnImmediateDecision"),
+
     "identity-retry": ("ProcessIdentity.swift", "for attempt in 0..<3 {", "for attempt in 0..<1 {",
                        "ProcessIdentityTests/testCaptureRetriesTransientFailureWithoutAdoptingRecycledPID"),
     "identity-birth": ("ProcessIdentity.swift", "startedBetween.contains(identity.startedAt)", "true",
@@ -29,18 +28,23 @@ mutations = {
                          "CodexModelTests/testPaginationRequiresAllPagesAndRejectsRepeatedCursor"),
     "finder-metadata": ("LearnedSkillStore.swift", 'return $0 == ".DS_Store" &&', 'return $0 == ".never-allowed" &&',
                         "SkillDestinationTests/testFinderMetadataDoesNotBlockApprovalButIsNeverInstalled"),
-    "quota-freshness": ("ProviderFailover.swift", "freshnessSeconds: TimeInterval = 600,", "freshnessSeconds: TimeInterval = 900,",
-                        "ProviderFailoverTests/testDefaultFailoverRejectsClaudeMeasurementsOlderThanTheAnalysisGate"),
+
     "row-budget": ("SessionGrouping.swift", " - (providerSelectorShown ? 1 : 0)", "",
                    "IslandRowPlanTests/testProviderSelectorReservesSpaceAndAnnouncesOverflow"),
     "anonymous-resume": ("CodexIntegration.swift", "certainlyClosed ? .closed : .unknown", "certainlyClosed ? .closed : .closed",
                          "CodexReliabilityTests/testSessionEndKeepsAnonymousActivityUnknownWithoutResurrectingState"),
     "closure-expiry": ("CodexIntegration.swift", "now.timeIntervalSince($0.value.at) < Self.closedSessionRetention", "now.timeIntervalSince($0.value.at) < .infinity",
                        "CodexReliabilityTests/testAnonymousClosureExpiresWithoutResurrectingASessionByItself"),
-    "hook-customizations": ("CodexIntegration.swift", "if timeout == 3 && oldTelemetryShape {", "if true {",
-                            "CodexSetupTests/testMigrationPreservesRemovedEventsCustomTimeoutAndFormatting"),
-    "hook-short-customization": ("CodexIntegration.swift", "if timeout == 3 && oldTelemetryShape {", "if timeout == 3 {",
-                                "CodexSetupTests/testMigrationPreservesShortTimeoutWhenHandlerIsCustomized"),
+    "hook-customizations": ("CodexIntegration.swift", 'if handler["statusMessage"] as? String == legacyPermissionStatusMessage {', 'if handler["statusMessage"] != nil {',
+                            "PassiveHookMigrationTests/testCustomTimeoutAndMessageSurvivePassiveContractChangeForBothProviders"),
+    "hook-short-customization": ("CodexIntegration.swift", 'if handler["timeout"] == nil || handler["timeout"] as? Int == 600 {', 'if true {',
+                                "PassiveHookMigrationTests/testCustomTimeoutAndMessageSurvivePassiveContractChangeForBothProviders"),
+    "claude-permission-passive": ("HookSettingsEditor.swift", 'handlers[handlerIndex]["async"] = true', 'handlers[handlerIndex]["async"] = false',
+                                  "PassiveHookMigrationTests/testClaudeMigrationKeepsRemovedEventsMixedGroupsAndPersonalFields"),
+    "codex-passive-wait": ("CodexIntegration.swift", 'if case .awaitingPermission = entry.session.status {', 'if false {',
+                            "PassiveHookMigrationTests/testCodexPassiveWaitSurvivesUncorrelatedToolsUntilNativeProgress"),
+    "claude-passive-wait": ("SessionPhase.swift", 'if case .waitingPermission = phase {', 'if false {',
+                            "SessionReducerTests/testPassiveWaitCannotBeClearedByAnUnrelatedOrHomonymousTool"),
     "hook-removals": ("CodexHookInstallation.swift", "CodexHookSettingsEditor.migrate(data)", "CodexHookSettingsEditor.edit(data, install: true)",
                       "CodexSetupTests/testMigrationPreservesRemovedEventsCustomTimeoutAndFormatting"),
     "client-envelopes": ("CodexTranscriptParser.swift", '"<task-notification>", "<realtime_delegation>",', "",
@@ -49,9 +53,7 @@ mutations = {
                          "CodexMemoryTests/testClientEnvelopesPreserveHumanSuffixAndQuotes"),
     "partial-snapshot": ("MemoryIndex.swift", "if !complete {", "if false {",
                          "CodexMemoryTests/testIncompleteSnapshotIsRemovedAndExistingDestinationNeverOverwritten"),
-    "handoff-installation": ("SessionHandoff.swift", 'let executable, executable.hasPrefix("/") else { return false }',
-                             'let executable, executable.hasPrefix("/") else { return false }; return true; /*',
-                             "SessionHandoffTests/testHandoffRequiresExistingDirectoryAndExecutableAndRechecksRemoval"),
+
 }
 selected = args.only or list(mutations)
 if any(key not in mutations for key in selected):

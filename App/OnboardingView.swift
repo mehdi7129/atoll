@@ -122,32 +122,17 @@ struct OnboardingView: View {
                 }
             }
 
-            step(
-                number: "2",
-                title: provider == .claude ? "CHOISIR L'AUTONOMIE" : "GARDER LA MAIN",
-                body: provider == .claude
-                    ? "Dans ≋ → Réglages : Manuel ou Rockstar. Rockstar désactive les protections Claude."
-                    : "Les commandes, patchs et outils MCP peuvent demander une décision dans l'îlot. Les questions et les plans restent dans le terminal. Rockstar concerne uniquement Claude."
-            ) {
-                Button("Choisir le moteur des analyses dans les réglages…") {
-                    UserDefaults.standard.set("apprentissage", forKey: "settingsTab")
+            step(number: "2", title: "SUIVRE LES SESSIONS ET LES QUOTAS",
+                 body: "L’îlot montre l’activité des deux CLI. Les autorisations et les questions se traitent dans leur terminal.") { EmptyView() }
+            step(number: "3", title: "GARDER LES PROCÉDURES UTILES",
+                 body: "La création de propositions de skills est facultative. Tu peux la couper sans perdre les skills installés.") {
+                Button("Régler les skills…") {
                     guard !CodexPreview.enabled else { return }
+                    UserDefaults.standard.set("apprentissage", forKey: "settingsTab")
                     openSettings()
                 }
-                .buttonStyle(.plain)
-                .font(AtollFont.mono(10))
-                .foregroundStyle(colors.accent)
+                .buttonStyle(.plain).font(AtollFont.mono(10)).foregroundStyle(colors.accent)
             }
-
-            step(
-                number: "3",
-                title: "REVENIR AU TERMINAL",
-                body: """
-                Cliquez une session dans l'îlot puis « ALLER AU TERMINAL » : sa \
-                fenêtre remonte (Cursor/VS Code : direct ; Terminal/iTerm2 : macOS \
-                demandera une fois l'autorisation d'automatisation).
-                """
-            ) { EmptyView() }
 
             Spacer(minLength: 0)
 
@@ -199,11 +184,6 @@ struct OnboardingView: View {
             }
             refreshInstalled()
             if CodexPreview.enabled { hooksInstalled = true }
-            // Même chemin que les Réglages : le parking des règles deny suit la
-            // disponibilité des hooks (ex. niveau Rockstar déjà choisi).
-            if requestedProvider == .claude {
-                await HookInstaller.syncDenyParking(level: InteractionCenter.shared.autonomyLevel)
-            }
         }
     }
 

@@ -48,12 +48,13 @@ def main():
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--sabotage", action="store_true")
     parser.add_argument("--build-dir", type=Path, help="Réutiliser un produit Core Debug existant.")
-    parser.add_argument("--lifecycle", action="store_true", help="Exercer aussi installation/recall/retrait Codex privés.")
+    parser.add_argument("--lifecycle", action="store_true", help="Exercer aussi installation/retrait Codex privés sans recall ni suppression de skills.")
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
     inputs = ["AtollCore/Sources/AtollCore/HookSettingsEditor.swift",
               "AtollCore/Sources/AtollCore/SoundHookEditor.swift", "Bridge/main.swift",
-              "Scripts/test-hook-installation.py", "Scripts/test-claude-uninstall.py"]
+              "Scripts/test-hook-installation.py", "Scripts/test-claude-uninstall.py",
+              "Scripts/test-codex-install-recall.py"]
 
     def hashes():
         return {path: hashlib.sha256((REPO / path).read_bytes()).hexdigest() for path in inputs}
@@ -142,11 +143,12 @@ def main():
                 run("install")
                 updated = json.loads(settings.read_text())
                 prompt = hooks_for(updated, "UserPromptSubmit")
-                assert len(prompt) == 1 and (prompt[0].get("async") is True) == (not enabled)
-                assert prompt[0]["timeout"] == (5 if enabled else 10)
+                assert len(prompt) == 1 and prompt[0].get("async") is True, "Legacy recall changed passive prompt"
+                assert prompt[0]["timeout"] == 3
                 permission = hooks_for(updated, "PermissionRequest")
-                assert len(permission) == 1 and permission[0].get("async") is not True
-                assert permission[0]["timeout"] == 86400
+                assert len(permission) == 1 and permission[0].get("async") is True, "PermissionRequest still blocks"
+                assert permission[0]["timeout"] == 3
+                assert not (path / ".claude/skills/atoll-recall/SKILL.md").exists(), "Recall réinstallé"
                 assert all(updated["hooks"][event][0] == repaired["hooks"][event][0] for event in EVENTS)
             before, modified = settings.read_bytes(), settings.stat().st_mtime_ns
             run("install")
@@ -162,7 +164,7 @@ def main():
             return True
 
         repair_duplicate("repair-existing")
-        summary["scenarios"].append("réparation existante, tiers, recall ON/OFF, backup et absence de réécriture")
+        summary["scenarios"].append("réparation existante, tiers, legacy recall ON/OFF sans effet, backup et absence de réécriture")
         sound = {"type": "command", "command": "afplay /tmp/atoll-fixture.aiff", "async": True}
         foreign = {"type": "command", "command": "printf retained-fixture"}
         original = {"hooks": {"PreToolUse": [
@@ -220,7 +222,7 @@ def main():
             summary["codex_lifecycle"] = "passed"
         if args.sabotage:
             source = (REPO / "Bridge/main.swift").read_text()
-            guard = "                || HookSettingsEditor.hasDuplicateManagedHooks(in: current)\n"
+            guard = "                || HookSettingsEditor.hasDuplicateManagedHooks(in: current)"
             assert source.count(guard) == 1
             fixture_source.write_text(source.replace(guard, ""))
             mutant = compile_helper(fixture_source, "atoll-bridge-mutant")
@@ -231,6 +233,10 @@ def main():
                 summary["sabotage"] = {"compiled_and_detected": True, "assertion": str(error)}
             else:
                 raise AssertionError("Sabotage non détecté")
+            command(["python3", REPO / "Scripts/test-claude-uninstall.py", helper,
+                     "--sabotage-manifest", "--build-dir", build], "uninstall-skill-preservation-sabotage")
+            summary["uninstall_skill_sabotage"] = {"compiled_and_detected": True,
+                "assertion": "skill/ressource/manifeste modifié par la déconnexion"}
         assert hashes() == summary["source_sha256"], "Sources modifiées pendant la recette : relancer"
         (args.output / "results.json").write_text(json.dumps(summary, indent=2, ensure_ascii=False) + "\n")
         print(json.dumps(summary, indent=2, ensure_ascii=False))

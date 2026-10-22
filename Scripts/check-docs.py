@@ -169,8 +169,14 @@ def check_debug_triggers() -> None:
 
     claude = read("CLAUDE.md")
     section = re.search(
-        r"Triggers debug \(.*?\n(.*?)(?=\n\*\*|\nDebug des interactions)", claude, re.S
+        r"^## Triggers debug\s*\n(.*?)(?=^## |\Z)", claude, re.S | re.M
     )
+    if not section:
+        # Les anciennes copies de CLAUDE.md restent lisibles pour les recettes
+        # de migration ; la section courante a désormais son propre titre.
+        section = re.search(
+            r"Triggers debug \(.*?\n(.*?)(?=\n\*\*|\nDebug des interactions)", claude, re.S
+        )
     if not section:
         fail("triggers", "section « Triggers debug » introuvable dans CLAUDE.md")
         return
@@ -373,7 +379,7 @@ def check_readme_ascii() -> None:
     global checked
     readme = read("README.md")
     ascii_art = read("AtollCore/Sources/AtollCore/AsciiArt.swift")
-    card = read("App/InteractionCardView.swift")
+    controls = "\n".join(read(str(p.relative_to(ROOT))) for p in (ROOT / "App").glob("*.swift"))
     checked += 1
 
     badges = set(re.findall(r'return "(\[ [^"]+ \])"', ascii_art))
@@ -381,10 +387,10 @@ def check_readme_ascii() -> None:
         if shown not in badges:
             fail("README", f"le bloc ASCII montre le badge « {shown} », qu'AsciiArt ne produit pas")
 
-    buttons = set(re.findall(r'AsciiButton\(label:\s*"([^"]+)"', card))
+    buttons = set(re.findall(r'AsciiButton\(label:\s*"([^"]+)"', controls))
     for shown in set(re.findall(r"[A-Z]{4,}\s+⌘[A-Z]", readme)):
         if shown not in buttons:
-            fail("README", f"le bloc ASCII montre le bouton « {shown} », qui n'existe pas dans InteractionCardView")
+            fail("README", f"le bloc ASCII montre le bouton « {shown} », qui n'existe pas dans les vues actives")
 
 
 def check_readme_links() -> None:

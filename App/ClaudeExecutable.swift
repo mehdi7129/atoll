@@ -19,9 +19,7 @@ import AtollCore
 /// app GUI. Seul le nom nu `claude` cède la place à un chemin absolu déjà
 /// vérifié exécutable.
 ///
-/// `FleetPoller`, `FleetLauncher` et `PluginInventory` portent chacun leur propre
-/// copie de cette résolution. Elles FONCTIONNENT et ne sont pas touchées ici :
-/// les fusionner est un remaniement, pas un correctif.
+/// FleetPoller conserve sa résolution dédiée pour les sessions natives.
 @MainActor
 enum ClaudeExecutable {
     /// Retenu une fois trouvé : l'installeur natif ne déplace que le lien

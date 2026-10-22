@@ -18,7 +18,11 @@ struct SkillDestination {
         .init(learningRoot: BridgePaths.learningDirectory,
               skillsRoot: BridgePaths.root.appendingPathComponent("skills/\(provider.rawValue)"), destination: provider)
     }
-    func catalog(project: URL?) async throws -> [CatalogEntry] { [] }
+    @MainActor func catalog(project: URL?) async throws -> [CatalogEntry] {
+        CatalogProbe.entered = true
+        if CatalogProbe.blocked { await withCheckedContinuation { CatalogProbe.continuation = $0 } }
+        return []
+    }
     static func summary(_ entries: [CatalogEntry]) -> String { "fixture catalog" }
 }
 
@@ -47,6 +51,7 @@ enum BridgePaths {
     var allowUnknownQuota = true
     var quotaThreshold = 0.70
     var failoverConfig = ProviderFailover.Config()
+    var analysisProvider: AgentProvider { failoverConfig.preferred }
     var gateConfig = LearningGate.Config(enabled: true)
 }
 
@@ -98,6 +103,13 @@ enum MemoryIndexer {
     static func noteSlug(for url: URL) -> String? { url.deletingPathExtension().lastPathComponent }
 }
 
+@MainActor enum CatalogProbe {
+    static var blocked = false
+    static var entered = false
+    static var continuation: CheckedContinuation<Void, Never>?
+    static func release() { continuation?.resume(); continuation = nil }
+}
+
 @MainActor enum Resolver {
     static var blocked = false
     static var entered = false
@@ -124,6 +136,7 @@ enum CodexExecutable {
     static let overrideKey = "testCodexExecutable"
 }
 enum CodexRun {
+    @MainActor static var lastPrompt = ""
     static let lastFailure: String? = nil
     struct Launch {
         let shellCommand: String
@@ -133,11 +146,13 @@ enum CodexRun {
     }
     @MainActor static func prepare(schema: String, prompt: String, label: String,
                                   home: URL = CodexPaths.homeURL, model: String, executableOverride: String) async -> Launch? {
+        lastPrompt = prompt
         await Resolver.resolve(.codex)
         return Launch(shellCommand: "exec " + FleetLaunch.shellQuote(BridgePaths.root.appendingPathComponent("fake-cli").path),
                       outputFile: BridgePaths.root.appendingPathComponent("output.json"), workspace: nil)
     }
     @MainActor static func prepareClaude(arguments: [String], label: String) async -> Launch? {
+        lastPrompt = arguments.last ?? ""
         guard let path = await ClaudeExecutable.resolve() else { return nil }
         return Launch(shellCommand: "exec " + FleetLaunch.shellQuote(path), outputFile: nil, workspace: nil)
     }

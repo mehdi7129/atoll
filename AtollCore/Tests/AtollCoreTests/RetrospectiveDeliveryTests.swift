@@ -51,6 +51,91 @@ final class RetrospectiveDeliveryTests: XCTestCase {
         XCTAssertTrue(try store.pending().isEmpty)
     }
 
+    func testSkillsOnlyRetainsLegacyNotesWithoutWritingOrCountingThem() throws {
+        var value = result()
+        value.notes[0].started = true // une intention ancienne n'autorise plus une note
+        try store.save(value)
+        let checkpoint = store.directory.appendingPathComponent(value.id.uuidString + ".json")
+        let original = try Data(contentsOf: checkpoint)
+        let identity = value.id, artifact = value.skills[0].dirname
+        try store.applySkillsOnly(&value, proposals: proposals)
+        XCTAssertEqual(value.id, identity)
+        XCTAssertEqual(value.skills[0].dirname, artifact)
+        XCTAssertEqual(value.notesDisposition, .retainedLegacy)
+        XCTAssertTrue(value.notes[0].started == true)
+        XCTAssertFalse(value.notes[0].completed)
+        XCTAssertEqual(value.notesWritten, 0, "une note conservée n'est pas une écriture réussie")
+        XCTAssertEqual(value.skillsProposed, 1)
+        XCTAssertTrue(value.isComplete)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: notes.path), "la reprise skills-only écrit une note")
+        XCTAssertEqual(try Data(contentsOf: store.directory.appendingPathComponent("legacy-notes/\(identity.uuidString).json")), original,
+                       "l'original legacy doit être conservé avant adaptation")
+        value = try XCTUnwrap(store.pending().first)
+        try store.applySkillsOnly(&value, proposals: proposals)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: proposals.path).count, 1)
+        try store.acknowledge(value)
+        XCTAssertTrue(try store.pending().isEmpty)
+    }
+
+    func testSkillsOnlyNoteOnlyResultCompletesWithNoNewArtifact() throws {
+        var value = result()
+        value.skills = []
+        try store.save(value)
+        try store.applySkillsOnly(&value, proposals: proposals)
+        XCTAssertTrue(value.isComplete)
+        XCTAssertEqual(value.notesWritten, 0)
+        XCTAssertFalse(value.notes[0].completed)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: notes.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: proposals.path))
+    }
+
+    func testSkillsOnlyMissingLegacyArchiveKeepsLastCheckpoint() throws {
+        var value = result()
+        try store.save(value)
+        try store.applySkillsOnly(&value, proposals: proposals)
+        let checkpoint = store.directory.appendingPathComponent(value.id.uuidString + ".json")
+        let retained = try Data(contentsOf: checkpoint)
+        try FileManager.default.removeItem(at: store.directory.appendingPathComponent("legacy-notes/\(value.id.uuidString).json"))
+        value = try XCTUnwrap(store.pending().first)
+        XCTAssertThrowsError(try store.applySkillsOnly(&value, proposals: proposals), "sans preuve d'archive la reprise doit conserver le checkpoint")
+        XCTAssertThrowsError(try store.acknowledge(value), "la dernière copie des notes ne doit pas être acquittée")
+        XCTAssertEqual(try Data(contentsOf: checkpoint), retained)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: notes.path))
+    }
+
+    func testSkillsOnlyArchiveFailurePreservesOriginalAndBlocksDelivery() throws {
+        var value = result()
+        try store.save(value)
+        let checkpoint = store.directory.appendingPathComponent(value.id.uuidString + ".json")
+        let original = try Data(contentsOf: checkpoint)
+        try Data("obstacle humain".utf8).write(to: store.directory.appendingPathComponent("legacy-notes"))
+        XCTAssertThrowsError(try store.applySkillsOnly(&value, proposals: proposals))
+        XCTAssertNil(value.notesDisposition)
+        XCTAssertEqual(try Data(contentsOf: checkpoint), original)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: proposals.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: notes.path))
+    }
+
+    func testSkillsOnlyMixedRecoveryRecognizesReviewedEditedSkillWithoutReproposal() throws {
+        var value = result()
+        try store.save(value)
+        try store.apply(&value, notesDirectory: notes, proposals: proposals) { _, _ in }
+        let skills = LearnedSkillStore(learningRoot: root, skillsRoot: root.appendingPathComponent("installed"))
+        let edited = proposals.appendingPathComponent(value.skills[0].dirname).appendingPathComponent("SKILL.md")
+        try Data("# Correction humaine déjà approuvée\n".utf8).write(to: edited)
+        _ = try skills.approve(XCTUnwrap(skills.discoverProposals().first))
+        value = try restoreInterruptedCheckpoint(value)
+        try FileManager.default.removeItem(at: notes)
+        try store.applySkillsOnly(&value, proposals: proposals)
+        XCTAssertTrue(value.isComplete)
+        XCTAssertEqual(value.notesWritten, 0)
+        XCTAssertEqual(value.skillsProposed, 1)
+        XCTAssertTrue(skills.discoverProposals().isEmpty)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: notes.path))
+        XCTAssertEqual(try String(contentsOf: root.appendingPathComponent("installed/atoll-verified-skill/SKILL.md")),
+                       "# Correction humaine déjà approuvée\n")
+    }
+
     func testBlockedWritesKeepOutputAndResumeWithoutDuplicates() throws {
         var value = result()
         try store.save(value)

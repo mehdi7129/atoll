@@ -18,6 +18,10 @@ public struct RetrospectiveDelivery: Codable, Sendable {
     public let createdAt: Date
     public var notes: [Note]
     public var skills: [Skill]
+    /// Les notes d'une sortie payée ancienne sont conservées sans être livrées.
+    /// nil reste le contrat historique, décodable sans migration destructive.
+    public var notesDisposition: NotesDisposition?
+    public enum NotesDisposition: String, Codable, Sendable { case retainedLegacy }
 
     public struct Note: Codable, Sendable {
         public let value: RetrospectiveReport.Note
@@ -35,7 +39,9 @@ public struct RetrospectiveDelivery: Codable, Sendable {
         public var completed: Bool
         public var started: Bool? = false
     }
-    public var isComplete: Bool { notes.allSatisfy(\.completed) && skills.allSatisfy(\.completed) }
+    public var isComplete: Bool {
+        (notesDisposition == .retainedLegacy || notes.allSatisfy(\.completed)) && skills.allSatisfy(\.completed)
+    }
     public var notesWritten: Int { notes.filter(\.completed).count }
     public var skillsProposed: Int { skills.filter(\.completed).count }
 
@@ -124,6 +130,54 @@ public struct RetrospectiveDelivery: Codable, Sendable {
             try fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
         }
 
+        /// Reprise du périmètre actuel. L'original est archivé AVANT de marquer
+        /// les notes hors périmètre ; identités et progression restent intactes.
+        /// Aucun callback mémoire ni aucune écriture de note n'est effectué.
+        public func applySkillsOnly(_ value: inout RetrospectiveDelivery, proposals: URL) throws {
+            try validate(value)
+            guard value.destinationScope == RetrospectiveDelivery.scope(for: proposals) else {
+                throw Failure("La destination a changé : le résultat reste sauvegardé.")
+            }
+            if !value.notes.isEmpty, value.notesDisposition == nil {
+                let originalURL = directory.appendingPathComponent(value.id.uuidString + ".json")
+                guard !isSymlink(originalURL),
+                      let original = BoundedProcessOutput.file(at: originalURL, cap: 262_144),
+                      let persisted = try? JSONDecoder().decode(RetrospectiveDelivery.self, from: original),
+                      persisted.id == value.id else { throw Failure("Original de livraison indisponible : résultat conservé.") }
+                let archive = directory.appendingPathComponent("legacy-notes", isDirectory: true)
+                try ensureDirectory(archive)
+                let backup = archive.appendingPathComponent(value.id.uuidString + ".json")
+                try createOrVerify(original, at: backup, cap: 262_144)
+                value.notesDisposition = .retainedLegacy
+                do { try save(value) }
+                catch { value.notesDisposition = nil; throw error }
+            }
+            try verifyLegacyArchive(value)
+            try apply(&value, notesDirectory: directory, proposals: proposals) { _, _ in
+                preconditionFailure("Une livraison skills-only ne doit jamais écrire de note.")
+            }
+        }
+
+        /// Un marqueur de migration n'est pas une preuve de conservation. Si
+        /// l'archive disparaît hors bande, le checkpoint reste la dernière
+        /// copie et ne doit pas être acquitté ni supprimé.
+        private func verifyLegacyArchive(_ value: RetrospectiveDelivery) throws {
+            guard value.notesDisposition == .retainedLegacy else { return }
+            let archive = directory.appendingPathComponent("legacy-notes", isDirectory: true)
+            let backup = archive.appendingPathComponent(value.id.uuidString + ".json")
+            guard !isSymlink(archive), !isSymlink(backup),
+                  let data = BoundedProcessOutput.file(at: backup, cap: 262_144),
+                  let original = try? JSONDecoder().decode(RetrospectiveDelivery.self, from: data),
+                  original.id == value.id, original.analysisID == value.analysisID,
+                  original.destinationScope == value.destinationScope,
+                  original.notes.count == value.notes.count,
+                  zip(original.notes, value.notes).allSatisfy({
+                      $0.0.filename == $0.1.filename && $0.0.contents == $0.1.contents
+                  }) else {
+                throw Failure("Archive des notes historiques indisponible : le résultat reste sauvegardé.")
+            }
+        }
+
         /// Progression persistée après chaque artefact complet. Une reprise ne
         /// recrée pas une note rangée, ni une proposition déjà approuvée/rejetée.
         public func apply(_ value: inout RetrospectiveDelivery, notesDirectory: URL, proposals: URL,
@@ -133,7 +187,7 @@ public struct RetrospectiveDelivery: Codable, Sendable {
                 throw Failure("La destination a changé : le résultat reste sauvegardé.")
             }
             var failures = false
-            for index in value.notes.indices where !value.notes[index].completed {
+            for index in value.notes.indices where value.notesDisposition != .retainedLegacy && !value.notes[index].completed {
                 let note = value.notes[index]
                 do {
                     let url = notesDirectory.appendingPathComponent(note.filename)
@@ -255,13 +309,14 @@ public struct RetrospectiveDelivery: Codable, Sendable {
         /// Appelé uniquement APRÈS persistance du reçu dans retrospectives.json.
         public func acknowledge(_ value: RetrospectiveDelivery) throws {
             guard value.isComplete else { throw Failure("Résultat encore incomplet.") }
+            try verifyLegacyArchive(value)
             try fm.removeItem(at: directory.appendingPathComponent(value.id.uuidString + ".json"))
         }
 
-        private func createOrVerify(_ data: Data, at url: URL) throws {
+        private func createOrVerify(_ data: Data, at url: URL, cap: Int = 131_072) throws {
             guard !isSymlink(url) else { throw Failure("Artefact remplacé par un lien.") }
             if fm.fileExists(atPath: url.path) {
-                guard BoundedProcessOutput.file(at: url, cap: 131_072) == data else {
+                guard BoundedProcessOutput.file(at: url, cap: cap) == data else {
                     throw Failure("Un fichier différent occupe la destination ; il est préservé.")
                 }
                 return

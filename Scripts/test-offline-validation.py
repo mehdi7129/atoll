@@ -143,11 +143,16 @@ class OfflineValidationTests(unittest.TestCase):
             if step.name in ["codex-exec", "skill-generation"]:
                 self.assertIn("--prepare-only", step.command)
             self.assertNotIn(Path(step.command[1]).name, validation.EXCLUDED)
-        selection = validation.plan("standard", root, root / "core/debug", ["runtime"])
-        self.assertEqual([s.name for s in selection], ["core", "runtime"])
-        mutation = validation.plan("full", root, root / "core/debug", ["runtime/launch-search"])
-        self.assertEqual([s.name for s in mutation], ["core", "runtime", "runtime/launch-search"])
-        self.assertEqual(mutation[-1].baseline, "runtime")
+        selection = validation.plan("standard", root, root / "core/debug", ["learning-retrospective"])
+        self.assertEqual([s.name for s in selection], ["core", "learning-retrospective"])
+        for profile in ["standard", "full"]:
+            trigger_check = validation.plan(profile, root, root / "core/debug", ["doc-triggers"])
+            self.assertEqual([s.name for s in trigger_check], ["doc-triggers"])
+            self.assertFalse(trigger_check[0].needs_core)
+            self.assertEqual(Path(trigger_check[0].command[1]).name, "test-doc-triggers.py")
+        mutation = validation.plan("full", root, root / "core/debug", ["learning-retrospective/off"])
+        self.assertEqual([s.name for s in mutation], ["core", "learning-retrospective", "learning-retrospective/off"])
+        self.assertEqual(mutation[-1].baseline, "learning-retrospective")
         with self.assertRaises(ValueError):
             validation.plan("standard", root, root / "core/debug", ["codex-live"])
         described = {Path(step.command[1]).name for step in full}

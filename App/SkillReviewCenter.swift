@@ -5,21 +5,11 @@ import AtollCore
 
 private let log = Logger(subsystem: "dev.mehdiguiard.atoll", category: "learning")
 
-/// Une ligne « skill appris » pour le pane Réglages : l'entrée du manifeste
-/// enrichie de son usage (compté depuis l'index mémoire) et de drapeaux d'état.
+/// Une installation gérée, indépendante de l'ancien index mémoire.
 struct InstalledSkillRow: Identifiable {
     let skill: InstalledSkill
-    var usageCount: Int?
-    var lastUsedAt: Date?
     var userModified: Bool
     var id: String { "\(skill.destination.rawValue):\(skill.slug)" }
-
-    /// Suggestion d'archivage : installé depuis > 30 j et jamais/plus utilisé.
-    var suggestedForArchive: Bool {
-        // L'index n'atteste pas encore une couverture exhaustive de 30 jours.
-        // Un zéro observé, ou Codex non instrumenté, ne prouve aucun abandon.
-        false
-    }
 }
 
 /// Centre de revue des skills appris (Phase 7c). Découvre les propositions en
@@ -77,18 +67,14 @@ final class SkillReviewCenter {
             .sorted { ($0.createdAt, $0.id) < ($1.createdAt, $1.id) }
         similarByProposal = similarByProposal.filter { id, _ in proposals.contains { $0.id == id } }
         similarByProposal.merge(computeSimilarities(for: proposals.filter { $0.destination == .claude })) { _, new in new }
-        let usage = loadUsage()
         installed = AgentProvider.allCases.flatMap { provider in
             let store = store(for: provider)
             let report = store.reconcile()
             problems += report.accessProblems.map { "\(provider.label) : \($0)" }
             let userModified = Set(report.userModified)
             return store.installedSkills().map { skill in
-            let stat = provider == .claude ? (usage[skill.dirName] ?? usage[skill.slug]) : nil
             return InstalledSkillRow(
                 skill: skill,
-                usageCount: stat?.count,
-                lastUsedAt: stat?.lastUsed,
                 userModified: userModified.contains(skill.slug)
             )
             }
@@ -279,13 +265,6 @@ final class SkillReviewCenter {
 
     func requestReviewWindow() {
         NotificationCenter.default.post(name: .atollShowSkillReview, object: nil)
-    }
-
-    private func loadUsage() -> [String: MemoryIndex.SkillUsageStat] {
-        guard let index = try? MemoryIndex(url: BridgePaths.memoryDatabaseURL, mode: .readOnly),
-              let stats = try? index.skillUsage(prefix: SkillSlug.managedPrefix) else { return [:] }
-        index.close()
-        return Dictionary(uniqueKeysWithValues: stats.map { ($0.skill, $0) })
     }
 
     #if DEBUG

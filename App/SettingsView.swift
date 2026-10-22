@@ -2,8 +2,7 @@ import SwiftUI
 import ServiceManagement
 import AtollCore
 
-/// Réglages en ONGLETS (standard macOS) : huit volets plutôt qu'une seule
-/// colonne plus haute que l'écran (vécu).
+/// Cinq volets redimensionnables : apparence, connexions, skills et maintenance.
 ///
 /// La fenêtre garde une taille STABLE d'un onglet à l'autre et se
 /// redimensionne librement — chaque volet remplit la fenêtre et son Form
@@ -23,20 +22,11 @@ struct SettingsView: View {
             GeneralPane()
                 .tabItem { Label("Général", systemImage: "paintpalette") }
                 .tag("general")
-            ClaudeCodePane(onShowAnalyses: showAnalyses)
-                .tabItem { Label("Claude Code", systemImage: "terminal") }
-                .tag("claude")
-            CodexSettingsPane(onShowAnalyses: showAnalyses)
-                .tabItem { Label("Codex", systemImage: "terminal.fill").accessibilityIdentifier("settings-tab-codex") }
-                .tag("codex")
-            AutonomyPane()
-                .tabItem { Label("Autonomie", systemImage: "bolt") }
-                .tag("autonomie")
-            AlertsPane()
-                .tabItem { Label("Alertes", systemImage: "bell") }
-                .tag("alertes")
+            ConnectionsPane(onShowAnalyses: showAnalyses)
+                .tabItem { Label("Connexions", systemImage: "link") }
+                .tag("connexions")
             LearningPane(focusRequest: analysisFocusRequest)
-                .tabItem { Label("Apprentissage", systemImage: "graduationcap") }
+                .tabItem { Label("Skills", systemImage: "graduationcap") }
                 .tag("apprentissage")
             UpdatesPane(updaterModel: updaterModel)
                 .tabItem { Label("Mises à jour", systemImage: "arrow.triangle.2.circlepath") }
@@ -52,11 +42,13 @@ struct SettingsView: View {
         // d'étirer), et chaque volet imposait sa propre hauteur — les uns par
         // `fixedSize` (fenêtre riquiqui sur « À propos »), les autres par un
         // plafond à 620 (impossible d'agrandir « Claude Code »). Le plancher
-        // de 640 reste : en deçà, la barre à 8 onglets déborde et macOS en
-        // replie derrière un chevron.
+        // de 640 conserve une largeur lisible pour les formulaires.
         .frame(minWidth: 640, idealWidth: 700, maxWidth: .infinity,
                minHeight: 520, idealHeight: 640, maxHeight: .infinity)
         .background(ResizableWindow())
+        .onAppear {
+            if ["claude", "codex", "autonomie", "alertes"].contains(selectedTab) { selectedTab = "connexions" }
+        }
         .disclosureGroupStyle(SettingsDisclosureStyle())
     }
 
@@ -71,9 +63,7 @@ struct SettingsView: View {
     @ViewBuilder static func previewPane(_ pane: String) -> some View {
         Group {
             if pane == "general" { GeneralPane() }
-            else if pane == "claude" { ClaudeCodePane(onShowAnalyses: {}) }
-            else if pane == "autonomy" { AutonomyPane() }
-            else if pane == "alerts" { AlertsPane() }
+            else if ["claude", "codex", "connections"].contains(pane) { ConnectionsPane(onShowAnalyses: {}) }
             else if pane == "about" { AboutPane() }
             else { LearningPane() }
         }
@@ -244,118 +234,6 @@ private struct GeneralPane: View {
             launchError = "Le lancement au démarrage n'a pas été modifié : " + error.localizedDescription
         }
     }
-}
-
-// MARK: - Autonomie
-
-private struct AutonomyPane: View {
-    @AppStorage(InteractionCenter.autonomyKey) private var autonomyRaw = AutonomyLevel.manual.rawValue
-    @State private var confirmingRockstar = false
-    @State private var denyParkingError: String?
-    @State private var previewParked = CommandLine.arguments.contains("--preview-parked-deny")
-
-    private var center: InteractionCenter { .shared }
-    private var denyRulesParked: Bool { CodexPreview.enabled ? previewParked : HookInstaller.denyRulesParked }
-    private var currentLevel: AutonomyLevel { AutonomyLevel.resolve(autonomyRaw) }
-
-    var body: some View {
-        Form {
-            Section("Autonomie de Claude Code") {
-                // Un seul réglage exclusif : Manuel ou Rockstar. Le niveau « Auto »
-                // a été retiré le 2026-08-03 — `claude auto-mode` le fait mieux,
-                // par défaut, et notre allowlist était une dette de sécurité.
-                Picker("Niveau", selection: Binding(
-                    get: { AutonomyLevel.resolve(autonomyRaw) },
-                    set: { newLevel in
-                        if newLevel == .rockstar {
-                            confirmingRockstar = true // confirmer avant d'activer
-                        } else {
-                            autonomyRaw = newLevel.rawValue
-                            // Quitter Rockstar restaure les règles deny parquées.
-                            Task { denyParkingError = await syncParking(level: newLevel) }
-                        }
-                    }
-                )) {
-                    ForEach(AutonomyLevel.allCases, id: \.self) { level in
-                        Text(level.displayName).tag(level)
-                    }
-                }
-                .pickerStyle(.segmented)
-
-                Text(currentLevel.summary)
-                    .font(.caption)
-                    .foregroundStyle(currentLevel == .rockstar ? .red : .secondary)
-
-                if !CodexPreview.enabled, currentLevel != .manual, center.autoAcceptedCount > 0 {
-                    LabeledContent("Auto-approuvées", value: "\(center.autoAcceptedCount)")
-                }
-
-                if currentLevel == .rockstar, denyRulesParked {
-                    LabeledContent("Règles deny", value: "suspendues")
-                }
-
-                if currentLevel != .rockstar, denyRulesParked {
-                    // État le plus dangereux : parqué HORS Rockstar (restauration
-                    // échouée ?). Toujours visible, jamais silencieux.
-                    Text("⚠ Vos règles deny sont encore suspendues — restauration à retenter (relancez Atoll ou rechangez de niveau).")
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                }
-
-                if let denyParkingError {
-                    Text(denyParkingError)
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                }
-
-                SettingsHelp("Rockstar approuve automatiquement les autorisations, questions et plans de Claude Code. Les règles deny sont suspendues pendant ce mode.")
-                DisclosureGroup("Ce que change Rockstar") {
-                    VStack(alignment: .leading, spacing: 12) {
-                        SettingsHelp("Les règles restent suspendues même si Atoll est fermé. Quitter Rockstar les restaure.")
-                        SettingsHelp("Les sessions déjà ouvertes gardent les règles qu'elles ont lues : redémarre-les pour appliquer le changement.")
-                        SettingsHelp("Tes propres hooks bloquants restent actifs.")
-                    }
-                }
-            }
-            Section("Codex") {
-                SettingsHelp("Les autorisations de Codex se règlent dans son terminal. Rockstar ne s'y applique pas.")
-            }
-        }
-        .formStyle(.grouped)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onAppear {
-            // Auto-réparation : si un état incohérent subsiste (règles parquées
-            // hors Rockstar après un échec), on retente en ouvrant les Réglages.
-            if !CodexPreview.enabled { Task { denyParkingError = await syncParking(level: currentLevel) } }
-        }
-        .alert("Activer le mode Rockstar ?", isPresented: $confirmingRockstar) {
-            Button("Annuler", role: .cancel) { }
-            Button("Activer", role: .destructive) {
-                autonomyRaw = AutonomyLevel.rockstar.rawValue
-                // Entrer en Rockstar suspend (parque) les règles deny et
-                // résout les cartes déjà en attente.
-                Task {
-                    denyParkingError = await syncParking(level: .rockstar)
-                    if !CodexPreview.enabled, currentLevel == .rockstar {
-                        InteractionCenter.shared.resolvePendingAsRockstar()
-                    }
-                }
-            }
-        } message: {
-            Text("""
-            Plus AUCUNE protection : Claude approuvera TOUTES les demandes (y compris \
-            destructrices) et répondra seul aux questions et plans — effet immédiat, \
-            sessions en cours comprises. Vos règles deny (rm -rf, sudo, .env…) sont \
-            suspendues jusqu'à la sortie de ce mode ; les sessions déjà ouvertes les \
-            ayant déjà lues, redémarrez-les pour en profiter.
-            """)
-        }
-    }
-    private func syncParking(level: AutonomyLevel) async -> String? {
-        if CodexPreview.enabled { previewParked = level == .rockstar; return nil }
-        return await HookInstaller.syncDenyParking(level: level)
-    }
-
 }
 
 // MARK: - Mises à jour

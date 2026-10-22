@@ -35,9 +35,8 @@ public struct CodexHookDiagnostics: Equatable, Sendable {
                   }) else { return true }
             let synchronous = CodexHookSettingsEditor.synchronousEvents.contains(kind)
             return (hook["async"] as? Bool ?? false) == synchronous
-                || hook["timeoutSec"] as? Int != (kind == .permissionRequest ? 600 : 3)
-                || (kind == .permissionRequest && hook["statusMessage"] as? String
-                    != CodexHookSettingsEditor.permissionStatusMessage)
+                || hook["timeoutSec"] as? Int != 3
+                || (hook["statusMessage"] as? String == CodexHookSettingsEditor.legacyPermissionStatusMessage)
         }.count
         errorCount = entries.reduce(0) { $0 + ($1["errors"] as? [[String: Any]] ?? []).count }
     }

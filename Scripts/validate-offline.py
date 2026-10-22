@@ -17,9 +17,6 @@ EXCLUDED = {
     "test-codex-catalog.py": "Recette du CLI Codex installé ; validation native séparée.",
     "test-codex-read-storage.py": "Exige un binaire Codex natif ; mesure séparée, jamais implicite.",
     "test-ui.py": "Lance un aperçu GUI protégé ; captures à lire séparément.",
-    "test-ui-refresh.py": "Exerce les vues montées dans une copie GUI instrumentée et protégée.",
-    "test-ui-sabotage.py": "Compile et lance des aperçus GUI protégés.",
-    "test-settings-sabotage.py": "Compile et lance des aperçus GUI protégés.",
     "test-voiceover.py": "Exige une app et VoiceOver déjà autorisé.",
 }
 
@@ -35,7 +32,9 @@ class Step:
 
 def plan(profile, output, build, only=()):
     """Liste fermée : aucune option utilisateur ne devient un argument de CLI."""
-    scratch = output / "core"
+    # Swift embarque les chemins des modules Clang : un même cache réutilisé
+    # via plusieurs liens doit conserver une identité canonique unique.
+    scratch = (output / "core").resolve()
     core = Step("core", ["swift", "test", "--package-path", str(REPO / "AtollCore"),
                         "--scratch-path", str(scratch), "--build-system", "native", "--jobs", "4"], timeout=1200)
     steps = [core]
@@ -46,21 +45,15 @@ def plan(profile, output, build, only=()):
 
     add("offline-validation", core=False, timeout=30)
     if profile != "core":
-        for name in ["runtime", "skill-review", "curation", "curation-recovery", "curation-state",
-                     "learning-note-context", "learning-retrospective"]:
+        add("doc-triggers", core=False, timeout=30)
+        for name in ["skill-review", "learning-retrospective"]:
             add(name, "--build-dir", build)
         add("learning-digest", "--output", output / "digest", core=False)
         add("learning-metrics", "--scratch-path", scratch)
         add("learning-usage-replay", "--synthetic", "--build-dir", build, "--output", output / "usage")
-        add("memory-indexer", "--build-dir", build, "--output", output / "memory-indexer.json")
-        add("feedback", "--build-dir", build, "--output", output / "feedback",
-            *(["--sabotage"] if profile == "full" else []))
-        add("plugin-services", "--skip-core-build", "--core-build", scratch, "--output", output / "plugins",
-            *(["--sabotage"] if profile == "full" else []))
         for name in ["process-services", "analysis-processes", "codex-stdout"]:
             add(name, "--build-dir", build, "--output", output / name,
                 *(["--sabotage"] if profile == "full" and name == "codex-stdout" else []))
-        add("claude-permissions", "--build-dir", build, "--output", output / "claude-permissions.json")
         add("codex-quota-poller", core=False)
         add("codex-exec", "--prepare-only", "--build-dir", build,
             *(["--sabotage-instructions-file"] if profile == "full" else []))
@@ -69,44 +62,35 @@ def plan(profile, output, build, only=()):
         add("release-trash", core=False)
         add("hook-installation", "--build-dir", build, "--lifecycle", "--output", output / "hooks",
             *(["--sabotage"] if profile == "full" else []))
+        add("passive-hooks", "--build-dir", build)
     if profile == "full":
+        add("essential-migration", "--output", output / "migration", core=False)
         variants = {
-            "curation": "cancellation unchanged post-write archive-uniqueness",
-            "curation-recovery": "checkpoint fingerprint swap-recovery swap-proof swap-marker swap-marker-write collision-preflight collision-preservation",
-            "curation-state": "empty-fallback spawn-guard write-guard apply-guard reload-cadence repaired-absent",
             "learning-digest": "head-only command-marker shortened-count dropped-count read-stop",
             "learning-metrics": "unknown duration late-usage writes cache latest json cold-metrics cold-usage",
-            "learning-retrospective": "checkpoint counts material dedup recovery-progress recovery-independent reader usage digest-metrics journal-revision notes-revision",
-            "memory-indexer": "document empty cwd open seek read batch-offset",
+            "learning-retrospective": "checkpoint counts material dedup reader usage digest-metrics journal-revision off migration recovery-after-stop",
             "codex-quota-poller": "overlap stop-reference before-fetch stale child-cancel",
             "process-services": "heartbeat serialization coalescing barrier fleet-ownership keychain-ownership",
-            "analysis-processes": "retrospective curation",
-            "claude-permissions": "card phase helper-exit disconnected-helper",
+            "analysis-processes": "retrospective",
         }
-        flags = {
-            "runtime": "cancellation quota-projection oversize-diagnostic launch-retro launch-curation launch-search curation-retry curation-journal budget-recovery budget-admission capture-journal",
-            "skill-review": "stale-catalog stale-error loading access-error access-recovery access-clear",
-            "learning-note-context": "",
-        }
+        flags = {"skill-review": "stale-catalog stale-error loading access-error access-recovery access-clear"}
         originals = {step.name: step for step in steps}
         for name, options in {**variants, **flags}.items():
             baseline = originals[name]
-            for option in options.split() or [""]:
-                key = name + "/" + (option or "sabotage")
+            for option in options.split():
+                key = name + "/" + option
                 arguments = baseline.command.copy()
                 if "--output" in arguments:
                     index = arguments.index("--output") + 1
                     suffix = Path(arguments[index]).suffix
                     arguments[index] = str(output / (key.replace("/", "-") + suffix))
-                arguments += (["--sabotage", option] if name in variants
-                              else ["--sabotage" + ("-" + option if option else "")])
+                arguments += (["--sabotage", option] if name in variants else ["--sabotage-" + option])
                 steps.append(Step(key, arguments, baseline.needs_core, baseline.timeout, name))
         add("learning-core", "--all", "--build-dir", build, timeout=1200)
         add("review-regressions", core=False, timeout=1800)
         for name in ["bounded-process-sabotage", "hook-settings-sabotage", "sound-hook-sabotage",
                      "skill-archive-sabotage", "skill-reconciliation-sabotage", "island-context-sabotage"]:
             add(name, "--output", output / name, core=False, timeout=1800)
-        add("memory-document-sabotage", "--output", output / "memory-document.json", core=False, timeout=1800)
     # Les sources peuvent précéder l'appcast public pendant une préparation de release.
     steps.append(Step("docs", [sys.executable, str(REPO / "Scripts/check-docs.py"),
                                "--no-tests", "--preflight"], timeout=600))
@@ -211,7 +195,7 @@ def main():
         cache.mkdir(parents=True, exist_ok=True)
         output = Path(tempfile.mkdtemp(prefix="run-", dir=cache))
     # SwiftPM native expose ce lien indépendamment de l'architecture du Mac.
-    build = output / "core/debug"
+    build = (output / "core/debug").resolve()
     try:
         steps = plan(args.profile, output, build, args.only or ())
     except ValueError as error:
