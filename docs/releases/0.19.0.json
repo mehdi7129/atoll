@@ -1,0 +1,277 @@
+{
+  "status": "passed",
+  "version": "0.19.0",
+  "build": "43",
+  "startedAt": "2026-10-22T17:06:23.951066+00:00",
+  "appLaunched": false,
+  "installedAppAccessed": false,
+  "localOnly": false,
+  "assets": [
+    {
+      "name": "Atoll-0.19.0.zip",
+      "bytes": 7855793,
+      "sha256": "110643c2c4244d6e06d50b60c49380ed5429c877ebcd0ca06e7bb6aa5c415e12",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.19.0/Atoll-0.19.0.zip"
+    },
+    {
+      "name": "Atoll43-42.delta",
+      "bytes": 1871786,
+      "sha256": "321bd4f5bd62431ae28b330ef542fe90c6855cc7888d7d06f5e094dc19f887b7",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.19.0/Atoll43-42.delta"
+    },
+    {
+      "name": "Atoll43-41.delta",
+      "bytes": 1898590,
+      "sha256": "9c59a477a2e4585f803b98c7d2152c174637c8a38a5db6abe212f9132b157f10",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.19.0/Atoll43-41.delta"
+    },
+    {
+      "name": "Atoll43-40.delta",
+      "bytes": 2083614,
+      "sha256": "ff6e31754c2e8452b745e507abd967ee311369c20a30f2bd97dab5659132dacd",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.19.0/Atoll43-40.delta"
+    },
+    {
+      "name": "Atoll43-39.delta",
+      "bytes": 2082042,
+      "sha256": "f740bd9d706731c7cc1b465814679a52f3eb339e33f19f169403fb51be02d956",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.19.0/Atoll43-39.delta"
+    },
+    {
+      "name": "Atoll43-38.delta",
+      "bytes": 2101358,
+      "sha256": "e7158dc9cdc4e323b2b20f8280dfd5dd411c31ab9aecb0db122022d886e4dbbb",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.19.0/Atoll43-38.delta"
+    },
+    {
+      "name": "Atoll-0.19.0.dmg",
+      "bytes": 8677337,
+      "sha256": "31769f040e7c085c1f538b557b2114d8990c1d8f8926d6abe8af7bbac84a6365",
+      "url": "https://github.com/mehdi7129/atoll/releases/download/v0.19.0/Atoll-0.19.0.dmg"
+    }
+  ],
+  "sparkleEdDSA": {
+    "publicKeySource": "SHA256-verified published 0.18.7 ZIP",
+    "enclosures": [
+      {
+        "name": "Atoll-0.19.0.zip",
+        "verified": true,
+        "modifiedCopyRejected": true
+      },
+      {
+        "name": "Atoll43-42.delta",
+        "verified": true,
+        "modifiedCopyRejected": true
+      },
+      {
+        "name": "Atoll43-41.delta",
+        "verified": true,
+        "modifiedCopyRejected": true
+      },
+      {
+        "name": "Atoll43-40.delta",
+        "verified": true,
+        "modifiedCopyRejected": true
+      },
+      {
+        "name": "Atoll43-39.delta",
+        "verified": true,
+        "modifiedCopyRejected": true
+      },
+      {
+        "name": "Atoll43-38.delta",
+        "verified": true,
+        "modifiedCopyRejected": true
+      }
+    ]
+  },
+  "executableComponents": [
+    {
+      "path": "Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate",
+      "architectures": [
+        "arm64",
+        "x86_64"
+      ],
+      "developerID": true,
+      "team": "X524H8XA4L",
+      "hardenedRuntime": true,
+      "entitlements": {}
+    },
+    {
+      "path": "Contents/Frameworks/Sparkle.framework/Versions/B/Sparkle",
+      "architectures": [
+        "arm64",
+        "x86_64"
+      ],
+      "developerID": true,
+      "team": "X524H8XA4L",
+      "hardenedRuntime": true,
+      "entitlements": {}
+    },
+    {
+      "path": "Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app/Contents/MacOS/Updater",
+      "architectures": [
+        "arm64",
+        "x86_64"
+      ],
+      "developerID": true,
+      "team": "X524H8XA4L",
+      "hardenedRuntime": true,
+      "entitlements": {}
+    },
+    {
+      "path": "Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Downloader.xpc/Contents/MacOS/Downloader",
+      "architectures": [
+        "arm64",
+        "x86_64"
+      ],
+      "developerID": true,
+      "team": "X524H8XA4L",
+      "hardenedRuntime": true,
+      "entitlements": {}
+    },
+    {
+      "path": "Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Installer.xpc/Contents/MacOS/Installer",
+      "architectures": [
+        "arm64",
+        "x86_64"
+      ],
+      "developerID": true,
+      "team": "X524H8XA4L",
+      "hardenedRuntime": true,
+      "entitlements": {}
+    },
+    {
+      "path": "Contents/Helpers/atoll-bridge",
+      "architectures": [
+        "arm64",
+        "x86_64"
+      ],
+      "developerID": true,
+      "team": "X524H8XA4L",
+      "hardenedRuntime": true,
+      "entitlements": {
+        "com.apple.application-identifier": "X524H8XA4L.dev.mehdiguiard.atoll-bridge"
+      }
+    },
+    {
+      "path": "Contents/MacOS/Atoll",
+      "architectures": [
+        "arm64",
+        "x86_64"
+      ],
+      "developerID": true,
+      "team": "X524H8XA4L",
+      "hardenedRuntime": true,
+      "entitlements": {}
+    }
+  ],
+  "notarization": {
+    "app": {
+      "submissionID": "fdd82cb5-ca26-4c54-905c-693046a1d2d9",
+      "status": "Accepted"
+    },
+    "dmg": {
+      "submissionID": "658bc9b8-4979-4ffd-9860-bf78253e667b",
+      "status": "Accepted"
+    }
+  },
+  "deltaUpgrade": {
+    "fromBuild": "42",
+    "toBuild": "43",
+    "patch": "Atoll43-42.delta",
+    "sourceArchiveMatchesPublishedSHA256": true,
+    "filesLinksModesAndSizesEqualFullArchive": true,
+    "comparedObjects": 134,
+    "codesign": "verified",
+    "staple": "valid",
+    "gatekeeper": "accepted",
+    "appLaunched": false
+  },
+  "dmgBundle": {
+    "readOnlyMountComparedToFullZIP": true,
+    "filesLinksModesAndSizesEqualFullArchive": true,
+    "comparedObjects": 134,
+    "detached": true
+  },
+  "appcast": {
+    "sha256": "3f1099f9bed5b22b7f3b532142fecc24cc6c1178bf1bf091621312ce499c5f30",
+    "itemCount": 4,
+    "allItemURLsUseTheirVersionTag": true,
+    "newEnclosureCount": 6,
+    "expectedServedSHA256": "3f1099f9bed5b22b7f3b532142fecc24cc6c1178bf1bf091621312ce499c5f30"
+  },
+  "checks": {
+    "app": "Developer ID verified",
+    "helper": "Developer ID verified",
+    "sparkleComponents": "5 Developer ID components verified",
+    "hardenedRuntime": "all 7 executable components verified",
+    "entitlements": "get-task-allow absent; app entitlements empty",
+    "appStaple": "valid",
+    "dmgStaple": "valid",
+    "gatekeeper": "app, dmg and patched app accepted",
+    "sparkleEdDSA": "6 enclosures verified; 6 modified copies rejected"
+  },
+  "architectures": [
+    "x86_64",
+    "arm64"
+  ],
+  "finishedAt": "2026-10-22T17:06:31.157264+00:00",
+  "temporaryArtifactsRemoved": true,
+  "sourceCommit": "172ff8963d601cd23a673bba1215566ee7586754",
+  "packageSourceCommit": "9e1325b75980816b47de0c9ee926a519745205d2",
+  "featureCommit": "95b9d4f62899bc5c8d2589afae96647555bccc6d",
+  "mergeCommit": "172ff8963d601cd23a673bba1215566ee7586754",
+  "packageAndTagSourceTreesIdentical": true,
+  "pullRequest": "https://github.com/mehdi7129/atoll/pull/21",
+  "releaseURL": "https://github.com/mehdi7129/atoll/releases/tag/v0.19.0",
+  "publishedAt": "2026-10-22T17:11:41Z",
+  "tagCommitVerified": "172ff8963d601cd23a673bba1215566ee7586754",
+  "publicDownloads": {
+    "checkedAt": "2026-10-22T17:11:56.700744+00:00",
+    "urlsChecked": 15,
+    "downloadedSHA256Matches": 7,
+    "oldFeedPreservedUntilAssetVerification": true
+  },
+  "validation": {
+    "ci": {
+      "runURL": "https://github.com/mehdi7129/atoll/actions/runs/39819481498",
+      "headSHA": "9e1325b75980816b47de0c9ee926a519745205d2",
+      "status": "passed",
+      "passedSteps": 20,
+      "totalSteps": 20,
+      "coreTests": 1157,
+      "coreSkipped": 2,
+      "coreFailures": 0
+    },
+    "implementationUI": {
+      "cases": 24,
+      "capturesRead": true,
+      "scope": "Earlier implementation qualification"
+    },
+    "nativeCodex": {
+      "version": "0.163.0",
+      "generationCases": 3,
+      "skillCounts": [
+        0,
+        0,
+        1
+      ],
+      "noteCounts": [
+        0,
+        0,
+        0
+      ],
+      "permissionApproval": "native client accept",
+      "stop": "sync completed",
+      "scope": "Private app-server fixture with unchanged Debug app and helper"
+    },
+    "generationCallsForPublication": 0,
+    "limits": [
+      "Authenticated Claude Code validation deferred after user approval; no account fallback.",
+      "VoiceOver and TUI/IDE attachment not qualified by this release.",
+      "Only delta42to43 applied; all six new archive/delta signatures verified.",
+      "Publishing does not install the update."
+    ]
+  }
+}

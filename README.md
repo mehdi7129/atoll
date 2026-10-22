@@ -7,7 +7,7 @@
 
 Atoll est une app macOS native, gratuite et open source. Elle montre l’activité des CLI pendant que tu travailles ailleurs et peut transformer les procédures utiles de tes sessions en propositions de skills.
 
-> Version préparée : **v0.19.0**, build 43, paquet local signé, notarisé et vérifié. Cette branche contient le recentrage essentiel ; voir la [qualification locale](docs/QUALIFICATION-2026-10-22-essential-local.md). La dernière version publiée reste **v0.18.7, build 42** ; les téléchargements publics existants ne contiennent pas encore ce changement.
+> Version publiée : **v0.19.0**, build 43. Le recentrage essentiel est disponible dans la [release GitHub](https://github.com/mehdi7129/atoll/releases/tag/v0.19.0). Voir le [relevé de distribution](docs/releases/0.19.0.json) et les preuves de [qualification locale](docs/QUALIFICATION-2026-10-22-essential-local.md).
 
 macOS 14+ · Swift/SwiftUI · Apple Silicon et Intel · GPL-3.0-or-later · aucune télémétrie
 
