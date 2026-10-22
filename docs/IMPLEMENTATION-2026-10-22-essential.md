@@ -4,6 +4,10 @@
 Développement approuvé par Mehdi. App stable 0.18.7/build 42 et configurations
 personnelles intactes ; aucune publication ni installation.
 
+Ce relevé décrit l’implémentation au commit 95b9d4f. La [qualification locale
+ultérieure](QUALIFICATION-2026-10-22-essential-local.md) ajoute les recettes
+Codex natives et le paquet 0.19.0/build 43 signé et notarisé.
+
 ## Périmètre réalisé
 
 L’îlot conserve ses sessions Claude Code et Codex CLI, leurs regroupements,

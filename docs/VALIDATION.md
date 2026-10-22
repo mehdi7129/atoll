@@ -24,8 +24,8 @@ groupe de processus ; aucun processus n'est recherché ou arrêté par son nom.
 | Profil | Contenu |
 |---|---|
 | `core` | Tests Swift du Core, contre-tests du verdict commun, cohérence documentaire sans réseau |
-| `standard` (défaut) | Core, générateur de skills et revue, digest/métriques, processus, quotas, cycle du helper, hooks passifs, préparation Codex/générateur, contre-épreuves du verdict Codex, nettoyage simulé de release, documentation |
-| `full` | Standard, migration essentielle, variantes nommées des services et campagnes de sabotage Core/hooks/archives/réconciliation, stdout Codex et installation |
+| `standard` (défaut) | Core, générateur de skills et revue, digest/métriques, processus, quotas, cycle du helper, hooks passifs, préparation Codex/générateur, contre-épreuves du verdict Codex, nettoyage réversible de release, packaging local factice (`local-release`), documentation |
+| `full` | Standard (dont `local-release`), migration essentielle, variantes nommées des services et campagnes de sabotage Core/hooks/archives/réconciliation, stdout Codex et installation |
 
 Les variantes nommées sont bloquées si leur nominal échoue. Les campagnes
 autonomes conservent aussi leur propre nominal obligatoire. Une compilation
@@ -38,6 +38,7 @@ python3 Scripts/validate-offline.py --profile core
 python3 Scripts/validate-offline.py --profile full --list
 python3 Scripts/validate-offline.py --only learning-retrospective skill-review
 python3 Scripts/validate-offline.py --only offline-validation release-trash
+python3 Scripts/validate-offline.py --only local-release
 ```
 
 `--list` décrit les commandes sans exécution. `--only` conserve la dépendance
@@ -45,14 +46,20 @@ Core lorsqu'elle est nécessaire ; le rapport porte alors `scope: selected`.
 Un nom inconnu est refusé. Le test du plan exige que chaque harness du dépôt
 soit classé, pour qu'un nouveau script ne soit pas oublié silencieusement.
 
+L'étape `local-release` exécute `test-local-release.py` avec des outils factices
+et des fichiers privés. Elle vérifie l'arrêt avant l'appcast, la préservation
+des archives et les gardes du vérificateur local, avec sabotages ciblés. La
+construction, la signature et la notarisation sont simulées ; la qualification
+des artefacts d'une distribution reste séparée.
+
 L'étape documentaire utilise `check-docs.py --no-tests --preflight` dans tous
 les profils : elle valide les sources pendant qu'une release peut encore
-conserver l'ancien appcast public. Seule l'égalité entre la version préparée
-et la première entrée du flux est différée ; les autres contrôles restent
+conserver l'ancien appcast public. Une version préparée déclarée doit correspondre
+au projet ; le flux peut encore annoncer la version publiée. Les autres contrôles restent
 actifs, notamment les tags des URL présentes dans l'appcast. Ce résultat ne
 qualifie pas une distribution. Après packaging, exécuter le contrôle
-strict `check-docs.py --no-tests`, puis les [vérifications des artefacts et
-octets publics](RELEASE-VALIDATION.md). Après publication du flux, exécuter
+documentaire `check-docs.py --no-tests`, puis les [vérifications du paquet local
+ou de la mise à jour publique](RELEASE-VALIDATION.md). Après publication du flux, exécuter
 `check-docs.py --no-tests --network`. Les assets précèdent toujours l'appcast ;
 aucun contrôle réseau ni accès authentifié n'est ajouté à la CI offline.
 
@@ -60,6 +67,10 @@ aucun contrôle réseau ni accès authentifié n'est ajouté à la CI offline.
 
 - `test-codex-catalog.py` et `test-codex-read-storage.py` nécessitent un vrai
   binaire Codex. Ils restent des recettes natives explicites.
+- `test-native-passive-hooks.py` utilise le Codex installé pour qualifier les
+  définitions de hooks ou un tour passif natif coordonné. Cette recette reste
+  volontairement séparée des profils offline, y compris `full` ; elle n'est
+  jamais déclenchée implicitement par `local-release`.
 - `test-ui.py` exerce les sessions, détails en lecture seule, connexions, revue de skills et bouton ON/OFF dans un aperçu protégé. Les captures sont à lire. `test-voiceover.py` exige VoiceOver déjà activé et autorisé ; il ne change pas ces réglages.
 - Les modes `--live` de `test-codex-exec.py` et `test-skill-generation.py` ne
   sont jamais utilisés ici. Les modes de préparation compilent les vrais

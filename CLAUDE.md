@@ -2,7 +2,9 @@
 
 Lire ensuite [docs/HANDOFF.md](docs/HANDOFF.md). Les incidents et décisions historiques restent dans les [archives](docs/archive/CLAUDE-2026-10-08.md) et les [règles avant recentrage](docs/archive/CLAUDE-2026-10-22-before-essential.md).
 
-Version publiée : **v0.18.7**, build 42. La branche essentielle est un développement approuvé, pas une nouvelle release ni une app installée.
+Version publiée : **v0.18.7**, build 42.
+
+Version préparée : **v0.19.0**, build 43, paquet local signé, notarisé et vérifié. La préparation ne publie rien et ne remplace pas l’app installée. Voir docs/QUALIFICATION-2026-10-22-essential-local.md.
 
 ## Produit et périmètre approuvé
 

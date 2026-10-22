@@ -1,7 +1,9 @@
 # Vérifier une distribution Atoll
 
-`Scripts/release.sh` construit, signe, notarise et prépare l'appcast. Les deux
-vérificateurs ci-dessous sont en lecture seule sur ces artefacts : ils ne lancent
+`Scripts/release.sh` construit, signe et notarise le ZIP et le DMG. Sans option,
+il prépare aussi l'appcast et les archives Sparkle. Avec `--local`, il s'arrête
+après le DMG notarisé : `docs/appcast.xml` et `dist/updates` restent intacts.
+Les vérificateurs ci-dessous sont en lecture seule sur ces artefacts : ils ne lancent
 pas l'app, ne l'installent pas et ne publient rien. Les clés privées ne sont pas
 nécessaires à la vérification.
 
@@ -14,7 +16,34 @@ ATOLL_RELEASE_DERIVED_DATA="$HOME/Library/Caches/AtollRelease-DerivedData" \
 
 Sans cette variable, le chemin historique du script reste utilisé.
 
-## Artefacts locaux
+## Paquet local sans publication
+
+Pour préparer un candidat à installer localement, sans appcast ni clé privée
+Sparkle, utiliser un DerivedData privé puis vérifier les artefacts :
+
+```sh
+ATOLL_RELEASE_DERIVED_DATA="$HOME/Library/Caches/AtollRelease-DerivedData" \
+  Scripts/release.sh --local
+python3 Scripts/verify-release.py --local \
+  --version VERSION --build BUILD --output /chemin/preuves-locales
+```
+
+Le mode local vérifie les sept binaires universels et leurs signatures Developer
+ID/Hardened Runtime, les entitlements de l'app exactement vides, l'absence de
+`get-task-allow` dans tous les exécutables, les identités et versions, les
+notarisations, staples, Gatekeeper et l'identité des arbres ZIP/DMG. Il ne lance
+ni n'installe l'app. L'appcast, les signatures d'archives EdDSA, les deltas et les
+assets publics ne sont pas évalués ; le rapport les annonce dans `notEvaluated`.
+Ce rapport local ne qualifie donc pas une mise à jour publique.
+
+Pendant cette préparation, `project.yml` porte le candidat ; `CLAUDE.md` distingue
+« Version préparée » et « Version publiée ». Le flux peut rester à cette dernière
+version publiée. Le préflight refuse une version préparée différente du projet.
+Le certificat Developer ID et le profil Keychain `atoll-notary` sont nécessaires
+au packaging dans les deux modes. Aucun de ces scripts ne publie sur GitHub ni ne
+remplace la copie stable installée.
+
+## Mise à jour Sparkle complète
 
 Après le packaging, indiquer la version/build à contrôler, le relevé JSON de la
 release précédente et les outils du Sparkle employé pour le build :
@@ -31,7 +60,8 @@ python3 Scripts/verify-release.py \
 
 - un ZIP précédent conforme à l'empreinte et à la taille publiées ;
 - tous les binaires Mach-O attendus, universels arm64/x86_64, signés Developer ID
-  avec Hardened Runtime, sans entitlement `get-task-allow` ;
+  avec Hardened Runtime, sans entitlement `get-task-allow`, et entitlements de
+  l'app exactement vides ;
 - les signatures Sparkle EdDSA du ZIP et de chaque delta ; une copie dont un octet
   est changé doit échouer pour chaque signature ;
 - notarisation, staples et évaluation Gatekeeper ;

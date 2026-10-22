@@ -18,6 +18,7 @@ EXCLUDED = {
     "test-codex-read-storage.py": "Exige un binaire Codex natif ; mesure séparée, jamais implicite.",
     "test-ui.py": "Lance un aperçu GUI protégé ; captures à lire séparément.",
     "test-voiceover.py": "Exige une app et VoiceOver déjà autorisé.",
+    "test-native-passive-hooks.py": "Recette native du Codex installé ; compte et app isolée selon le mode.",
 }
 
 
@@ -60,6 +61,7 @@ def plan(profile, output, build, only=()):
         add("codex-exec-verdict", "--build-dir", build, timeout=1800)
         add("skill-generation", "--prepare-only", "--build-dir", build, "--output", output / "generation")
         add("release-trash", core=False)
+        add("local-release", core=False)
         add("hook-installation", "--build-dir", build, "--lifecycle", "--output", output / "hooks",
             *(["--sabotage"] if profile == "full" else []))
         add("passive-hooks", "--build-dir", build)
