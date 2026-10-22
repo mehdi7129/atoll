@@ -5,9 +5,11 @@ pour l'état du travail, les preuves et les limites. L'[archive intégrale du
 2026-10-08](docs/archive/CLAUDE-2026-10-08.md) conserve les incidents, versions et
 arbitrages détaillés ; elle n'est pas un état courant.
 
-Version publiée : **v0.18.6**, build 41.
-[Preuves de livraison](docs/releases/0.18.6.json) : artefacts signés, notarisés
-et flux Sparkle servi vérifiés. La publication n'installe pas l'app sur ce poste.
+Version en préparation : **v0.18.7**, build 42, autorisée par Mehdi le 22 octobre.
+Elle corrige le délai restant du quota Codex ; [validation ciblée](docs/REVIEW-2026-10-22-codex-quota-days.md).
+La dernière version publiée reste **v0.18.6**, build 41, avec ses
+[preuves de livraison](docs/releases/0.18.6.json). La publication de 0.18.7 et
+son flux servi restent à vérifier ; une publication n'installe pas l'app sur ce poste.
 
 ## Produit et façon de travailler
 

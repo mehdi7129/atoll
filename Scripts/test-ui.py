@@ -159,6 +159,8 @@ cases = {
     "preview-preferences": (["--preview-skills"], ["APPROUVER"]),
     "skills": (["--preview-skills"], ["PROPOSITION", "SKILL.MD", "mots", "INSTALLÉ ACTUELLEMENT", "APPROUVER"]),
     "skills-position": (["--preview-skills"], ["conversion-3", "2/2", "APPROUVER"]),
+    "quota-codex-countdown": ([], ["Codex", "2j", "43%"]),
+    "settings-codex-quota-countdown": (["--preview-codex-settings"], ["codex · 2j"]),
     "provider-expanded": ([], ["CLAUDE CODE", "CODEX", "27%"]),
     "list-codex": (["--preview-many"], ["projet-", "autres", "QUOTAS"]),
     "list-claude": (["--preview-many", "--preview-claude"], ["projet-", "autres", "QUOTAS"]),

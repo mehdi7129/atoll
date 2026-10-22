@@ -182,7 +182,12 @@ Si la session n'apparaît pas, ouvre « Vérifier la connexion », choisis le
 Le home Codex (`~/.codex` par défaut) est son dossier de configuration. Son choix,
 la réparation et le chemin de l'exécutable sont regroupés dans « Dépannage ».
 
-**Version publiée : [v0.18.6, build 41](https://github.com/mehdi7129/atoll/releases/tag/v0.18.6).**
+**Version courante : v0.18.7.** Build 42 en préparation, publication autorisée.
+Le quota Codex affiche le temps restant jusqu'au reset : **5j** lorsqu'il reste
+cinq jours, au lieu de répéter la durée totale **7j**.
+[Validation du correctif](docs/REVIEW-2026-10-22-codex-quota-days.md).
+
+Dernière version publiée : **[v0.18.6, build 41](https://github.com/mehdi7129/atoll/releases/tag/v0.18.6)**.
 App universelle Apple Silicon / Intel, signée et notarisée ; disponible dans
 le DMG de la release. La mise à jour intégrée est également disponible.
 

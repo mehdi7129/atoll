@@ -48,4 +48,27 @@ final class CodexQuotaTests: XCTestCase {
         ]))
         XCTAssertEqual(quota.primaryBucket?.windows.first?.usedFraction, 0.01)
     }
+    func testWeeklyLabelCountsDownToResetRatherThanRepeatingSevenDays() throws {
+        let reset = now.addingTimeInterval(5 * 86400).timeIntervalSince1970
+        let quota = try XCTUnwrap(CodexQuota(result: ["rateLimits": [
+            "primary": window(), "secondary": window(75, minutes: 10080, reset: reset)
+        ]], receivedAt: now))
+        let weekly = try XCTUnwrap(quota.primaryBucket?.windows.last)
+        XCTAssertEqual(weekly.label, "7j")
+        XCTAssertEqual(weekly.displayLabel(at: now), "5j")
+        XCTAssertEqual(weekly.displayLabel(at: now.addingTimeInterval(86400)), "4j")
+        XCTAssertEqual(weekly.displayLabel(at: now.addingTimeInterval(60)), "5j")
+        XCTAssertEqual(weekly.displayLabel(at: now.addingTimeInterval(4 * 86400 + 3600)), "23h")
+        XCTAssertEqual(weekly.displayLabel(at: now.addingTimeInterval(5 * 86400 - 60)), "1min")
+        XCTAssertFalse(weekly.isCurrent(at: Date(timeIntervalSince1970: reset)))
+        XCTAssertEqual(quota.primaryBucket?.windows.first?.displayLabel(at: now), "5h")
+    }
+
+    func testRemainingLabelDoesNotInventAMissingReset() throws {
+        let quota = try XCTUnwrap(CodexQuota(result: ["rateLimits": [
+            "secondary": window(75, minutes: 10080, reset: NSNull())
+        ]]))
+        XCTAssertEqual(quota.primaryBucket?.windows.first?.displayLabel(at: now), "7j")
+    }
+
 }

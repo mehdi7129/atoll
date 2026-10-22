@@ -127,7 +127,7 @@ struct CodexSettingsPane: View {
                             ForEach(quota.buckets) { bucket in
                                 ForEach(bucket.windows) { window in
                                     HStack(alignment: .firstTextBaseline) {
-                                        Text("\(bucket.label) · \(window.label)")
+                                        Text("\(bucket.label) · \(window.displayLabel(at: context.date))")
                                         Spacer()
                                         if quota.isFresh(at: context.date), window.isCurrent(at: context.date) {
                                             Text("\(Int(window.usedFraction * 100)) % utilisés").monospacedDigit()
